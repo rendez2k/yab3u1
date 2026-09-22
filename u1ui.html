@@ -62,6 +62,7 @@
   h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: .01em; }
   h1 span { color: var(--accent); }
   .sub { color: var(--dim); margin: 0 0 26px; font-size: 14px; }
+  .sub .acro { font-weight: 700; color: var(--text); }
 
   #drop {
     border: 2px dashed var(--line); border-radius: 14px;
@@ -216,9 +217,11 @@
   <div class="head">
     <div>
       <h1>3MF &rarr; <span>Snapmaker U1</span> <span class="ver" id="ver"></span></h1>
-      <p class="sub">Local version of yab3u1 &mdash; keeps multi-colour painting intact, rebuilds the
-         U1 profile, can fill the plate, and can check the result by slicing it. Tested with
-         <b>Snapmaker Orca</b>.</p>
+      <p class="sub">Local version of yab3u1 &mdash; <span class="acro">Y</span>et
+         <span class="acro">A</span>nother <span class="acro">B</span>loody
+         <span class="acro">3</span>MF-to-<span class="acro">U1</span> converter. Keeps
+         multi-colour painting intact, rebuilds the U1 profile, can fill the plate, and can
+         check the result by slicing it. Tested with <b>Snapmaker Orca</b>.</p>
     </div>
     <button id="theme" class="theme" type="button" aria-label="Switch theme">Light</button>
   </div>
