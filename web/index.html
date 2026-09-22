@@ -201,11 +201,13 @@
     border: 1px solid var(--bad); border-radius: 10px;
     background: var(--panel); color: var(--text);
   }
-  footer .made { font-size: 12px; }
-  footer .made a {
+  footer .made, footer .more { font-size: 12px; }
+  footer .made a, footer .more a {
     color: var(--dim); text-decoration: none; border-bottom: 1px solid var(--line);
   }
-  footer .made a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  footer .made a:hover, footer .more a:hover {
+    color: var(--accent); border-bottom-color: var(--accent);
+  }
 
   @media (max-width: 620px) {
     body { padding: 22px 14px; }
@@ -303,6 +305,11 @@
   <span class="made">Made by
     <a href="https://productkit.digital/" target="_blank" rel="noopener noreferrer">Product Kit</a>
     &middot; <a href="mailto:hello@productkit.digital">hello@productkit.digital</a></span>
+  <span class="more">More 3D tools:
+    <a href="https://strata3mf.uk/" target="_blank" rel="noopener noreferrer">Strata</a>
+    &mdash; multi-colour styles for a plain model &middot;
+    <a href="https://spool-studio.uk/" target="_blank" rel="noopener noreferrer">Spool Studio</a>
+    &mdash; keep track of your filament</span>
   <span class="based">Based on
     <a href="https://github.com/josuanbn/bl2u1" target="_blank" rel="noopener noreferrer">bl2u1</a>
     by josuanbn &mdash; the Snapmaker U1 settings baseline comes from that project,
@@ -328,7 +335,7 @@ const APP_VERSION = "1.1.0";
 const CHANGES = [
   "Light and dark themes, following your system setting until you pick one.",
   "Keyboard accessible: tab to the file picker and open it with enter, with visible focus rings throughout.",
-  "Footer links to Product Kit, a contact address, and the GitHub repo.",
+  "Footer links to Product Kit, a contact address, the GitHub repo, and two more 3D tools.",
   "Link previews when the page is shared, a no-JavaScript notice, and roomier spacing on phones.",
 ];
 

@@ -11,7 +11,8 @@ footer. Bump that constant and add a section here together.
 - The file picker is reachable from the keyboard. It was `display: none`, which
   hid it from the tab order entirely; it is now visually hidden but still
   focusable, and there are visible focus rings throughout.
-- Footer links: Product Kit, a contact address, and the renamed GitHub repo.
+- Footer links: Product Kit, a contact address, the renamed GitHub repo, and two
+  more 3D tools by the same author (Strata, Spool Studio).
 - `og:` tags so a shared link gets a proper preview, a `<noscript>` notice, and
   roomier spacing on narrow screens.
 - The log panel and button hover state now come from the theme variables, so
