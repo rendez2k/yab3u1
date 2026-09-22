@@ -649,8 +649,12 @@ export function layoutCopies(transform, bounds, cfg, reposition, copies, gap,
      would. Orca reports it as "conflicts of G-code paths ... please separate the
      conflicted objects farther". Grow the footprint by the support's reach so the
      spacing still means what it says. */
+  /* Only when supports are generated automatically. With "(manual)" they exist only
+     where the model was painted, which is inside the footprint already, so inflating
+     the footprint there just costs plate space. */
   if (String(firstScalar(cfg, "enable_support", "0")).trim() !== "0" &&
-      String(firstScalar(cfg, "enable_support", "0")).trim() !== "") {
+      String(firstScalar(cfg, "enable_support", "0")).trim() !== "" &&
+      String(firstScalar(cfg, "support_type", "")).includes("auto")) {
     const raw = firstScalar(cfg, "tree_support_brim_width", 3);
     const n = Number(raw);
     const reach = Number.isFinite(n) ? Math.max(3, n) : 3;

@@ -1076,7 +1076,11 @@ def layout_copies(transform, bounds, cfg, reposition, copies, gap, avoid_tower=T
     # would. Orca reports it as "conflicts of G-code paths ... please separate the
     # conflicted objects farther". Grow the footprint by the support's reach so the
     # spacing still means what it says.
-    if str(cfg.get("enable_support", "0")).strip() not in ("", "0"):
+    # Only when supports are generated automatically. With "(manual)" they exist
+    # only where the model was painted, which is inside the footprint already, so
+    # inflating the footprint there just costs platespace.
+    if (str(cfg.get("enable_support", "0")).strip() not in ("", "0")
+            and "auto" in str(cfg.get("support_type", ""))):
         raw = cfg.get("tree_support_brim_width", 3)
         if isinstance(raw, list):
             raw = raw[0] if raw else 3
