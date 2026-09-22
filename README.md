@@ -13,6 +13,11 @@ A local replacement for [bl2u1.nbn.cat](https://bl2u1.nbn.cat) /
 PrusaSlicer-family files, actually keeps the painted colours, and can fill the
 plate without producing a file that refuses to slice.
 
+**Built and tested against Snapmaker Orca (SnOrca).** That is not the same thing as
+testing against OrcaSlicer generally: the setting *names* and *values* move between
+versions, and a 3MF written by a newer build can carry enums or ranges an older one
+rejects outright. Snapmaker Orca is what the U1 ships with, so that is the target.
+
 ## The browser version (`web/`)
 
 The conversion is pure byte-shuffling — unzip, rename attributes, rewrite a JSON,

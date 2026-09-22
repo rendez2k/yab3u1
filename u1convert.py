@@ -1453,7 +1453,8 @@ def _acceptable(key: str, value: str) -> bool:
     if key in ENUM_VALUES:
         return value in ENUM_VALUES[key]
     try:
-        return float(value) >= 0
+        # Orca writes percentages as "400%", so the suffix is part of the value
+        return float(value.rstrip("%")) >= 0
     except ValueError:
         return False
 

@@ -829,7 +829,8 @@ const ENUM_VALUES = {
 /** Would this Orca accept the value as it stands? */
 function acceptable(key, value) {
   if (ENUM_VALUES[key]) return ENUM_VALUES[key].includes(value);
-  const n = Number(value);
+  // Orca writes percentages as "400%", so the suffix is part of the value
+  const n = Number(String(value).replace(/%$/, ""));
   return Number.isFinite(n) && n >= 0;
 }
 
