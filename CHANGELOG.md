@@ -13,6 +13,12 @@ footer. Bump that constant and add a section here together.
   focusable, and there are visible focus rings throughout.
 - Footer links: Product Kit, a contact address, the renamed GitHub repo, and two
   more 3D tools by the same author (Strata, Spool Studio).
+- The output carries the source's preview image, written as both `Metadata/thumbnail.png`
+  (what Windows and PrusaSlicer look for) and `Metadata/plate_1.png` (Bambu Studio and
+  Orca), so the file shows a thumbnail rather than a generic icon.
+- A full-size Save button replaces the small link that used to appear in the log.
+- The `Supports: Off` option now says so when the model carries painted support
+  enforcers, because that combination is the one Orca warns about.
 - `og:` tags so a shared link gets a proper preview, a `<noscript>` notice, and
   roomier spacing on narrow screens.
 - The log panel and button hover state now come from the theme variables, so

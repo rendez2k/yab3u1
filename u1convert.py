@@ -370,6 +370,8 @@ class Source:
         self.paint_undecodable = False
         self.subdivided = 0
         self.mesh_bounds = None
+        self.preview = None
+        self.preview_from = ""
         self.support = None
         self.volume_matrix = [row[:] for row in IDENTITY]
         self.build_transform = "1 0 0 0 1 0 0 0 1 0 0 0"
@@ -516,6 +518,17 @@ def read_source(zf: zipfile.ZipFile) -> Source:
         src.build_transform = placement_scan["transform"]
 
     src.placement = _source_placement(zf, src)
+
+    # Preview image, so the output shows a thumbnail in Explorer and Orca rather
+    # than a generic icon. Prefer the plate render Bambu/Orca write, and fall back
+    # to PrusaSlicer's model thumbnail.
+    names = set(zf.namelist())
+    for name in ("Metadata/plate_1.png", "Metadata/thumbnail.png", "Metadata/top_1.png"):
+        if name in names:
+            src.preview = zf.read(name)
+            src.preview_from = name
+            break
+
     return src
 
 
@@ -1432,6 +1445,11 @@ def convert(src_path: str, out_path: str, profile_root: str | None,
 
         log(f"input        : {os.path.basename(src_path)}  [{src.kind} project]")
         log(f"object       : {src.object_name}  ({src.paint_count} painted triangles)")
+        if src.preview:
+            log("thumbnail    : carried over from %s (%d KB)"
+                % (src.preview_from, len(src.preview) // 1024))
+        else:
+            log("thumbnail    : none in the source to carry over")
         if src.paint_states:
             log("paint        : " + ", ".join(
                 f"extruder {k} on {v} tris" for k, v in sorted(src.paint_states.items())))
@@ -1501,6 +1519,11 @@ def convert(src_path: str, out_path: str, profile_root: str | None,
                                        src.source_file, len(transforms)))
                 zout.writestr(SRC_BBL_PROJECT,
                               json.dumps(cfg, indent=4, ensure_ascii=False))
+                # Written under both names on purpose: Windows and PrusaSlicer look
+                # for thumbnail.png, Bambu Studio and Orca look for plate_1.png.
+                if src.preview:
+                    zout.writestr("Metadata/thumbnail.png", src.preview)
+                    zout.writestr("Metadata/plate_1.png", src.preview)
                 zout.writestr(object_file, object_bytes)
                 zout.writestr(MODEL_FILE,
                               main_model_xml(object_file, src.object_name,

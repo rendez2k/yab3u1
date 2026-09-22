@@ -165,8 +165,14 @@
     vertical-align: -2px; margin-right: 8px;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
-  a.dl { color: var(--accent); font-weight: 600; text-decoration: none; }
-  a.dl:hover { text-decoration: underline; }
+  a.save {
+    display: inline-flex; align-items: center; gap: 9px; margin-top: 14px;
+    padding: 13px 22px; border-radius: 10px; font-size: 15px; font-weight: 600;
+    background: var(--accent); color: var(--on-accent);
+    text-decoration: none; border: 1px solid var(--accent);
+  }
+  a.save:hover { filter: brightness(1.08); }
+  a.save .size { font-weight: 500; opacity: .85; }
 
   footer {
     max-width: 860px; margin: 40px auto 0; width: 100%;
@@ -293,6 +299,7 @@
       <button id="again">Choose another file</button>
     </div>
     <div id="log" class="hidden"></div>
+    <a id="save" class="save hidden" download></a>
   </div>
 
 </div>
@@ -334,9 +341,10 @@ const state = { name: null, entries: null, src: null, info: null };
 const APP_VERSION = "1.1.0";
 const CHANGES = [
   "Light and dark themes, following your system setting until you pick one.",
-  "Keyboard accessible: tab to the file picker and open it with enter, with visible focus rings throughout.",
-  "Footer links to Product Kit, a contact address, the GitHub repo, and two more 3D tools.",
-  "Link previews when the page is shared, a no-JavaScript notice, and roomier spacing on phones.",
+  "The output carries the source's preview image, so the file shows a thumbnail instead of a generic icon.",
+  "A proper Save button, rather than a small link buried in the log.",
+  "Keyboard accessible throughout, with visible focus rings and a reachable file picker.",
+  "Footer links to Product Kit, the GitHub repo, and two more 3D tools.",
 ];
 
 $("ver").textContent = "v" + APP_VERSION;
@@ -403,6 +411,12 @@ async function load(file) {
     state.name = file.name;
     state.entries = entries;
     state.src = src;
+    /* Painted support enforcers with support switched off is a contradiction Orca
+       refuses to let pass, so flag it on the option rather than only in the log. */
+    const offOpt = $("supports").querySelector('option[value="off"]');
+    offOpt.textContent = src.hasSupports
+      ? "Off (model has painted support enforcers \u2014 Orca will warn)"
+      : "Off";
     state.info = info;
     render(info, file.size);
   } catch (err) {
@@ -553,6 +567,7 @@ $("go").addEventListener("click", async () => {
       types: [...document.querySelectorAll("select[data-type]")].map((s) => s.value),
       log: onLog,
     };
+    $("save").classList.add("hidden");
     const res = await convert(state.entries, options);
     onLog("packing      : building the archive\u2026");
     const bytes = await writeZip(res.items);
@@ -560,9 +575,15 @@ $("go").addEventListener("click", async () => {
     const base = state.name.replace(/\.3mf$/i, "");
     const blob = new Blob([bytes], { type: "application/octet-stream" });
     const url = URL.createObjectURL(blob);
+    const name = base + "-U1.3mf";
+    const mb = (bytes.length / 1048576).toFixed(1);
+    const save = $("save");
+    save.href = url;
+    save.download = name;
+    save.innerHTML = "\u2b07 Save " + esc(name) + ' <span class="size">' + mb + " MB</span>";
+    save.classList.remove("hidden");
     $("log").innerHTML = lines.map(esc).join("\n") +
-      `\n\n<a class="dl" href="${url}" download="${esc(base)}-U1.3mf">` +
-      `\u2b07 save ${esc(base)}-U1.3mf (${(bytes.length / 1048576).toFixed(1)} MB)</a>`;
+      "\n\nready \u2014 " + esc(name) + " (" + mb + " MB)";
   } catch (err) {
     console.error(err);
     $("log").innerHTML = lines.map(esc).join("\n") +

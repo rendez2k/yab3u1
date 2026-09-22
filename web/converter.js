@@ -258,6 +258,7 @@ export function readSource(entries) {
     baseExtruder: 1, usedExtruders: new Set(), support: null, objectName: "object",
     sourceFile: "", volumeMatrix: null, paintStates: new Map(), painted: 0,
     undecodable: 0, subdivided: 0, hasSupports: false, meshBounds: null, meshFile: null,
+    preview: null, previewFrom: "",
     placement: null, buildTransform: "1 0 0 0 1 0 0 0 1 0 0 0",
   };
 
@@ -365,6 +366,13 @@ export function readSource(entries) {
       }
     }
     if (lo[0] !== Infinity) src.meshBounds = [lo, hi];
+  }
+  /* Preview image, so the output shows a thumbnail in Explorer and Orca rather
+     than a generic icon. Prefer the plate render Bambu/Orca write, and fall back
+     to PrusaSlicer's model thumbnail. */
+  for (const n of ["Metadata/plate_1.png", "Metadata/thumbnail.png",
+                   "Metadata/top_1.png"]) {
+    if (entries.has(n)) { src.preview = entries.get(n); src.previewFrom = n; break; }
   }
   return src;
 }
@@ -946,6 +954,9 @@ export async function convert(entries, options = {}) {
 
   say(`input        : ${src.kind === "bambu" ? "Bambu Studio / Orca" : "PrusaSlicer"} project`);
   say(`object       : ${src.objectName}  (${src.painted.toLocaleString()} painted triangles)`);
+  say("thumbnail    : " + (src.preview
+    ? `carried over from ${src.previewFrom} (${Math.round(src.preview.length / 1024)} KB)`
+    : "none in the source to carry over"));
   if (src.paintStates.size) {
     say("paint        : " + [...src.paintStates].sort((a, b) => a[0] - b[0])
       .map(([k, v]) => `extruder ${k} on ${v.toLocaleString()} tris`).join(", "));
@@ -1000,6 +1011,12 @@ export async function convert(entries, options = {}) {
         modelSettingsXml(src.objectName, mapping.get(src.baseExtruder) || 1,
                          src.sourceFile, transforms.length)) },
     { name: SRC_BBL_PROJECT, data: encoder.encode(JSON.stringify(cfg, null, 4)) },
+    /* Written under both names on purpose: Windows/PrusaSlicer look for
+       thumbnail.png, Bambu Studio and Orca look for plate_1.png. */
+    ...(src.preview ? [
+      { name: "Metadata/thumbnail.png", data: src.preview },
+      { name: "Metadata/plate_1.png", data: src.preview },
+    ] : []),
     { name: objectFile, data: encoder.encode(objectXml) },
     { name: MODEL_FILE, data: encoder.encode(
         mainModelXml(objectFile, src.objectName, itemTransforms)) },
