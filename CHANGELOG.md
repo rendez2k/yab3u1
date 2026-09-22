@@ -10,6 +10,10 @@ footer. Bump that constant and add a section here together.
   downloads and plates someone arranged and saved. The first placement carries the
   scale and orientation and the layout is rebuilt from the copies/spacing controls.
   A plate of several *different* models still cannot be handled.
+- The local UI page (`u1ui.py`) catches up with the browser version: same version
+  badge, light/dark themes, full-size Save button and footer links. Its `.sub` line
+  now also says what it does that the browser version cannot (your installed Orca
+  profiles, and checking a plate by slicing it).
 - Light and dark themes. The page follows your system setting until you use the
   toggle in the header, after which your choice is remembered.
 - The file picker is reachable from the keyboard. It was `display: none`, which
