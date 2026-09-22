@@ -158,13 +158,48 @@
     color: var(--log-fg);
   }
   .err { color: var(--bad); }
-  .spinner {
-    width: 15px; height: 15px; border-radius: 50%;
-    border: 2px solid var(--line); border-top-color: var(--accent);
-    animation: spin .8s linear infinite; display: inline-block;
-    vertical-align: -2px; margin-right: 8px;
+  /* Loading / working indicator.
+     Ported from the React + styled-components original (components/ui/loader-4):
+     styled-components only hosted the stylesheet, so the 3x3 ripple needs no
+     dependency and no build step here. Cell size is turned down from 52px so it
+     sits inline with the log rather than dominating the card. */
+  .busy { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .ripple-loader {
+    --cell-size: 9px;
+    --cell-spacing: 1px;
+    --cells: 3;
+    --total-size: calc(var(--cells) * (var(--cell-size) + 2 * var(--cell-spacing)));
+    display: flex; flex-wrap: wrap;
+    width: var(--total-size); height: var(--total-size);
+    flex: 0 0 auto;
   }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  .ripple-loader .cell {
+    flex: 0 0 var(--cell-size);
+    margin: var(--cell-spacing);
+    background-color: transparent;
+    box-sizing: border-box;
+    border-radius: 2px;
+    animation: ripple 1.5s ease infinite;
+  }
+  .ripple-loader .cell.d-1 { animation-delay: 100ms; }
+  .ripple-loader .cell.d-2 { animation-delay: 200ms; }
+  .ripple-loader .cell.d-3 { animation-delay: 300ms; }
+  .ripple-loader .cell.d-4 { animation-delay: 400ms; }
+  .ripple-loader .cell:nth-child(1) { --cell-color: #00FF87; }
+  .ripple-loader .cell:nth-child(2) { --cell-color: #0CFD95; }
+  .ripple-loader .cell:nth-child(3) { --cell-color: #17FBA2; }
+  .ripple-loader .cell:nth-child(4) { --cell-color: #23F9B2; }
+  .ripple-loader .cell:nth-child(5) { --cell-color: #30F7C3; }
+  .ripple-loader .cell:nth-child(6) { --cell-color: #3DF5D4; }
+  .ripple-loader .cell:nth-child(7) { --cell-color: #45F4DE; }
+  .ripple-loader .cell:nth-child(8) { --cell-color: #53F1F0; }
+  .ripple-loader .cell:nth-child(9) { --cell-color: #60EFFF; }
+  @keyframes ripple {
+    0% { background-color: transparent; }
+    30% { background-color: var(--cell-color); }
+    60% { background-color: transparent; }
+    100% { background-color: transparent; }
+  }
   a.save {
     display: inline-flex; align-items: center; gap: 9px; margin-top: 14px;
     padding: 13px 22px; border-radius: 10px; font-size: 15px; font-weight: 600;
@@ -301,6 +336,20 @@
       <button id="again">Choose another file</button>
     </div>
     <div id="log" class="hidden"></div>
+    <div id="busy" class="busy hidden">
+      <div class="ripple-loader">
+        <div class="cell d-0"></div>
+        <div class="cell d-1"></div>
+        <div class="cell d-2"></div>
+        <div class="cell d-1"></div>
+        <div class="cell d-2"></div>
+        <div class="cell d-2"></div>
+        <div class="cell d-3"></div>
+        <div class="cell d-3"></div>
+        <div class="cell d-4"></div>
+      </div>
+      <span class="hint" id="busytext">working&hellip;</span>
+    </div>
     <a id="save" class="save hidden" download></a>
   </div>
 
@@ -548,12 +597,13 @@ $("go").addEventListener("click", async () => {
   if (!state.entries) return;
   $("go").disabled = true;
   show("log");
-  $("log").innerHTML = '<span class="spinner"></span>working\u2026';
+  $("busy").classList.remove("hidden");
+  $("log").innerHTML = "working\u2026";
 
   const lines = [];
   const onLog = (line) => {
     lines.push(line);
-    $("log").innerHTML = '<span class="spinner"></span>' + lines.map(esc).join("\n");
+    $("log").innerHTML = lines.map(esc).join("\n");
     $("log").scrollTop = $("log").scrollHeight;
   };
 
@@ -586,10 +636,12 @@ $("go").addEventListener("click", async () => {
     save.download = name;
     save.innerHTML = "\u2b07 Save " + esc(name) + ' <span class="size">' + mb + " MB</span>";
     save.classList.remove("hidden");
+    $("busy").classList.add("hidden");
     $("log").innerHTML = lines.map(esc).join("\n") +
       "\n\nready \u2014 " + esc(name) + " (" + mb + " MB)";
   } catch (err) {
     console.error(err);
+    $("busy").classList.add("hidden");
     $("log").innerHTML = lines.map(esc).join("\n") +
       '<span class="err">\n' + esc(err.message || String(err)) + "</span>";
   } finally {

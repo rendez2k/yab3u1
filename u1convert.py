@@ -1356,6 +1356,36 @@ def slices_cleanly(orca: str, path: str, timeout: int = 2400):
         shutil.rmtree(outdir, ignore_errors=True)
 
 
+def _norm_setting(value) -> str:
+    if isinstance(value, (list, tuple)):
+        return "|".join(str(v) for v in value)
+    return "" if value is None else str(value)
+
+
+def different_settings(cfg: dict, profiles, machine: str, process: str,
+                       slots: int) -> list[str]:
+    """Build the project-override list Orca reads its tick marks from.
+
+    Orca does not work out which settings a project overrides by comparing values
+    against the preset -- it trusts this list in project_settings.config. A
+    project without it shows every box as the preset default, unticked, even where
+    the project value genuinely differs, which is exactly what our output did.
+
+    Format follows what Orca itself writes: one entry for the global settings,
+    then one (usually empty) entry per filament.
+    """
+    system: dict = {}
+    if profiles is not None:
+        for kind, name in (("machine", machine), ("process", process)):
+            try:
+                system.update(profiles.resolve(kind, name) or {})
+            except Exception:
+                pass
+    changed = [k for k in sorted(cfg)
+               if k in system and _norm_setting(cfg[k]) != _norm_setting(system[k])]
+    return [";".join(changed)] + [""] * max(0, slots)
+
+
 def plan_slots(src: Source):
     """Which source extruders are really in play, and where they land on the U1."""
     used = set(src.used_extruders) | set(src.paint_states) | {src.base_extruder}
@@ -1723,6 +1753,13 @@ def convert(src_path: str, out_path: str, profile_root: str | None,
                     SRC_BBL_MODEL,
                     model_settings_xml(src.object_name, mapping.get(src.base_extruder, 1),
                                        src.source_file, len(transforms)))
+                overrides = different_settings(cfg, profiles, machine, process,
+                                               len(out_colors))
+                cfg["different_settings_to_system"] = overrides
+                keys = overrides[0].split(";") if overrides[0] else []
+                detail = ", ".join(keys[:8]) + (" ..." if len(keys) > 8 else "")
+                log(f"overrides    : {len(keys)} project settings flagged as changed"
+                    + (f" ({detail})" if keys else ""))
                 zout.writestr(SRC_BBL_PROJECT,
                               json.dumps(cfg, indent=4, ensure_ascii=False))
                 # Written under both names on purpose: Windows and PrusaSlicer look
