@@ -1313,9 +1313,20 @@ def slices_cleanly(orca: str, path: str, timeout: int = 2400):
         for line in text.splitlines():
             if "conflicts found between" in line:
                 return "conflict", line.split("]")[-1].strip()
-        for line in text.splitlines():
-            if "error" in line.lower() and "calc_exclude" not in line:
-                return "error", line.split("]")[-1].strip()
+        # Report what actually went wrong, not the wrapper. The top-level handler
+        # prints "Slic3r::CLI::run found error, exit" for any failure -- a crash, a
+        # bad_alloc from a plate that is too big for the machine's memory -- so
+        # prefer the last meaningful line and skip the logging noise.
+        if "Param values in 3mf/config error" in text:
+            return "error", ("the slicer could not read its own configuration -- that "
+                             "usually means Orca is open and holding it; close Orca and "
+                             "try again")
+        noise = ("found error, exit", "calc_exclude", "Initializing StaticPrintConfigs",
+                 "sentry_init", "Starting Sentry")
+        causes = [ln.split("]")[-1].strip() for ln in text.splitlines()
+                  if ln.strip() and not any(n in ln for n in noise)]
+        if causes:
+            return "error", " / ".join(causes[-2:])
         return "error", "the slicer produced no G-code"
     except subprocess.TimeoutExpired:
         return "error", "the slicer timed out"
@@ -1580,8 +1591,8 @@ def convert(src_path: str, out_path: str, profile_root: str | None,
         if src.paint_states:
             log("paint        : " + ", ".join(
                 f"extruder {k} on {v} tris" for k, v in sorted(src.paint_states.items())))
-        if src.paint_undecodable:
-            log(f"paint        : {src.paint_undecodable} sub-divided triangles "
+        if src.subdivided:
+            log(f"paint        : {src.subdivided} sub-divided triangles "
                 "(copied through unchanged)")
 
         # ---- which extruders are in play, and where do they land on the U1? ----
@@ -1699,6 +1710,11 @@ def convert(src_path: str, out_path: str, profile_root: str | None,
                                     "and slice normally there.")
                             break
                         log(f"verify       : {trial} copies rejected ({reason})")
+                        if "conflicts found between" not in reason:
+                            log("verify       : that is not a prime-tower conflict, so a "
+                                "smaller plate is unlikely to help -- keeping the "
+                                "geometric layout as it is")
+                            break
                     if chosen is None:
                         chosen = min(copies, capacity)
                         log("verify       : nothing sliced, keeping the geometric layout")
