@@ -519,6 +519,21 @@ export function applySupport(cfg, support, mode = "auto", painted = false) {
 // project settings
 // ---------------------------------------------------------------------------
 
+export function differentSettings(cfg, base, slots = 4) {
+  // Orca takes its "this project overrides that" ticks from this list rather than
+  // by comparing values against the preset, so a project without it shows every
+  // setting as the preset default -- unticked -- even where the project value
+  // genuinely differs. The page has no installed presets, so the bundled base
+  // settings are the baseline. Format follows what Orca writes: one entry for the
+  // global settings, then one (usually empty) entry per filament.
+  const norm = (v) => Array.isArray(v) ? v.join("|") : (v === null || v === undefined ? "" : String(v));
+  const changed = Object.keys(cfg)
+    .filter((k) => k !== "different_settings_to_system" && k in base &&
+                   norm(cfg[k]) !== norm(base[k]))
+    .sort();
+  return [changed.join(";"), ...Array(Math.max(0, slots)).fill("")];
+}
+
 export function buildProjectConfig(base, colors, types, filament, machine, process) {
   const cfg = { ...base };
   for (const key of Object.keys(cfg)) {
@@ -1113,6 +1128,15 @@ export async function convert(entries, options = {}) {
     : "settings     : all print settings come from the U1 profile");
   const supportNote = applySupport(cfg, src.support, options.supports || "auto",
                                   src.hasSupports);
+
+  const overrides = differentSettings(cfg, BASE_SETTINGS, ordered.length);
+  cfg.different_settings_to_system = overrides;
+  const overrideKeys = overrides[0] ? overrides[0].split(";") : [];
+  say(`overrides    : ${overrideKeys.length} project setting` +
+      `${overrideKeys.length === 1 ? "" : "s"} flagged as changed` +
+      (overrideKeys.length
+        ? ` (${overrideKeys.slice(0, 8).join(", ")}${overrideKeys.length > 8 ? " ..." : ""})`
+        : ""));
 
   say(`input        : ${src.kind === "bambu" ? "Bambu Studio / Orca" : "PrusaSlicer"} project`);
   say(`object       : ${src.objectName}  (${src.painted.toLocaleString()} painted triangles)`);
