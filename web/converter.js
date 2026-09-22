@@ -1098,6 +1098,28 @@ function fillTriangle(data, W, H, x1, y1, x2, y2, x3, y3, r, g, b) {
   }
 }
 
+/**
+ * Encode a rendered plate as PNG through a canvas. Browser only, and best-effort:
+ * any failure returns null so the caller can fall back to the source's image
+ * rather than shipping a broken one.
+ */
+async function platePng(body, transforms, opts, size) {
+  try {
+    if (typeof document === "undefined") return null;
+    const r = renderPlate(body, transforms, { ...opts, size });
+    if (!r) return null;
+    const cv = document.createElement("canvas");
+    cv.width = r.width;
+    cv.height = r.height;
+    cv.getContext("2d").putImageData(new ImageData(r.data, r.width, r.height), 0, 0);
+    const blob = await new Promise((res) => cv.toBlob(res, "image/png"));
+    if (!blob) return null;
+    return new Uint8Array(await blob.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
 function mainModelXml(objectFile, title, transforms) {
   const n = Math.max(1, transforms.length);
   let resources = "";
@@ -1303,6 +1325,25 @@ export async function convert(entries, options = {}) {
     say(`note         : asked for ${requested}, only ${capacity} fit at this spacing`);
   }
 
+  // The source's thumbnail shows the source's plate, so it is wrong as soon as we
+  // rebuild the layout. Draw ours from the geometry we are about to write, and
+  // fall back to the source's image if the draw fails.
+  const [bx0, bx1, by0, by1] = printableBounds(cfg);
+  const previewOpts = {
+    bed: { x: bx1 - bx0, y: by1 - by0 },
+    palette: colors,
+    baseSlot: mapping.get(src.baseExtruder) || 1,
+    bounds: src.meshBounds,
+  };
+  const drawnAt = Date.now();
+  const plateBig = await platePng(rewritten.text, transforms, previewOpts, 300);
+  const plateSmall = plateBig ? await platePng(rewritten.text, transforms, previewOpts, 48) : null;
+  const plateMid = plateBig ? (plateSmall || plateBig) : null;
+  say(plateBig
+    ? `thumbnail    : drawn from this layout, ${transforms.length} ` +
+      `cop${transforms.length === 1 ? "y" : "ies"} (${Date.now() - drawnAt} ms)`
+    : "thumbnail    : could not be drawn, carrying the source's image over instead");
+
   const items = [
     { name: "[Content_Types].xml", data: encoder.encode(CONTENT_TYPES) },
     { name: "_rels/.rels", data: encoder.encode(ROOT_RELS) },
@@ -1312,12 +1353,19 @@ export async function convert(entries, options = {}) {
         modelSettingsXml(src.objectName, mapping.get(src.baseExtruder) || 1,
                          src.sourceFile, transforms.length)) },
     { name: SRC_BBL_PROJECT, data: encoder.encode(JSON.stringify(cfg, null, 4)) },
-    /* Written under both names on purpose: Windows/PrusaSlicer look for
-       thumbnail.png, Bambu Studio and Orca look for plate_1.png. */
-    ...(src.preview ? [
+    /* thumbnails: plate_1/thumbnail are what Windows and PrusaSlicer look for,
+       and the Auxiliaries pair is where Bambu/Orca take the file-list preview. */
+    ...(plateBig ? [
+      { name: "Metadata/plate_1.png", data: plateBig },
+      { name: "Metadata/thumbnail.png", data: plateBig },
+      { name: "Metadata/plate_1_small.png", data: plateSmall || plateBig },
+      { name: "Auxiliaries/.thumbnails/thumbnail_3mf.png", data: plateBig },
+      { name: "Auxiliaries/.thumbnails/thumbnail_middle.png", data: plateMid },
+      { name: "Auxiliaries/.thumbnails/thumbnail_small.png", data: plateSmall || plateBig },
+    ] : (src.preview ? [
       { name: "Metadata/thumbnail.png", data: src.preview },
       { name: "Metadata/plate_1.png", data: src.preview },
-    ] : []),
+    ] : [])),
     { name: objectFile, data: encoder.encode(objectXml) },
     { name: MODEL_FILE, data: encoder.encode(
         mainModelXml(objectFile, src.objectName, itemTransforms)) },
