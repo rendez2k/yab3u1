@@ -65,6 +65,12 @@ SRC_BBL_MODEL = "Metadata/model_settings.config"
 OUT_OBJECT_ID = 5           # id used for the object in 3dmodel.model / model_settings.config
 TARGET_SLOTS = 4            # U1 tool heads
 
+# Orca warns "Model too close to bed boundary ... keep at least 3.5mm gap to avoid
+# collision" when a model sits closer than that to the plate edge, because spiral
+# lifting can swing the toolhead into the frame.  The brim is part of the printed
+# footprint, so it is added on top of this rather than counted inside it.
+BED_MARGIN = 4.0
+
 PAINT_ATTRS = (
     ("slic3rpe:mmu_segmentation", "paint_color"),
     ("slic3rpe:custom_supports", "paint_supports"),
@@ -1063,13 +1069,20 @@ def layout_copies(transform, bounds, cfg, reposition, copies, gap, avoid_tower=T
     sy = max(whi[1] - wlo[1], 1e-3)
 
     gap = max(0.0, float(gap))
-    cols = max(1, int((bed_w + gap) // (sx + gap)))
-    rows = max(1, int((bed_h + gap) // (sy + gap)))
+
+    # a copy occupies its bounding box, its brim, and the clearance Orca wants
+    pad = brim_allowance(cfg) + BED_MARGIN
+    # Strip the margin before counting columns.  Counting against the whole bed
+    # lets the block come out too wide to fit *with* the margin, and the fallback
+    # below then centres it over the plate edge -- which is exactly what makes Orca
+    # warn that a model is too close to the bed boundary.
+    usable_w = max(0.0, bed_w - 2 * pad)
+    usable_h = max(0.0, bed_h - 2 * pad)
+    cols = max(1, int((usable_w + gap) // (sx + gap)))
+    rows = max(1, int((usable_h + gap) // (sy + gap)))
     block_w = cols * sx + (cols - 1) * gap
     block_h = rows * sy + (rows - 1) * gap
     box = tower_box(cfg, margin=4.0) if avoid_tower else None
-    # a copy occupies its bounding box plus its brim
-    pad = brim_allowance(cfg) + 1.0
 
     def clashes(ox, oy):
         """How many grid cells sit on the tower, or None if the block leaves the plate."""

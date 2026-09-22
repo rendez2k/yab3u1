@@ -6,6 +6,14 @@ footer. Bump that constant and add a section here together.
 
 ## 1.1.0
 
+- Fix the plate layout running over the bed edge, which is what produces Orca's
+  "Model too close to bed boundary" warning. The column and row counts were
+  measured against the whole bed and then the block was required to fit *with* a
+  margin, so a wide grid had no valid position, and the fallback centred it over
+  the edge instead. The margin — the brim, plus 4 mm for the clearance spiral
+  lifting needs — is now subtracted before counting, so the grid comes out a
+  little smaller and stays inside. A 15-piece plate of ghosts now fits 45 copies
+  with the brim edge ~27 mm from the boundary, rather than 52 hanging off it.
 - Plates holding several copies of one model now convert, which covers MakerWorld
   downloads and plates someone arranged and saved. The first placement carries the
   scale and orientation and the layout is rebuilt from the copies/spacing controls.

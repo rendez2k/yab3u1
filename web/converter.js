@@ -584,6 +584,12 @@ export function printableBounds(cfg) {
   return [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
 }
 
+/* Orca warns "Model too close to bed boundary ... keep at least 3.5mm gap to avoid
+   collision" when a model sits closer than that to the plate edge, because spiral
+   lifting can swing the toolhead into the frame. The brim is part of the printed
+   footprint, so it is added on top of this rather than counted inside it. */
+const BED_MARGIN = 4;
+
 function brimAllowance(cfg) {
   const type = String(firstScalar(cfg, "brim_type", "")).trim().toLowerCase();
   if (!type || ["no_brim", "none"].includes(type)) return 0;
@@ -637,13 +643,21 @@ export function layoutCopies(transform, bounds, cfg, reposition, copies, gap,
   const sy = Math.max(whi[1] - wlo[1], 1e-3);
 
   gap = Math.max(0, Number(gap) || 0);
-  const cols = Math.max(1, Math.floor((bedW + gap) / (sx + gap)));
-  const rows = Math.max(1, Math.floor((bedH + gap) / (sy + gap)));
+
+  // a copy occupies its bounding box, its brim, and the clearance Orca wants
+  const pad = brimAllowance(cfg) + BED_MARGIN;
+  /* Strip the margin before counting columns. Counting against the whole bed lets
+     the block come out too wide to fit *with* the margin, and the fallback below
+     then centres it over the plate edge -- which is exactly what makes Orca warn
+     that a model is too close to the bed boundary. */
+  const usableW = Math.max(0, bedW - 2 * pad);
+  const usableH = Math.max(0, bedH - 2 * pad);
+  const cols = Math.max(1, Math.floor((usableW + gap) / (sx + gap)));
+  const rows = Math.max(1, Math.floor((usableH + gap) / (sy + gap)));
   const blockW = cols * sx + (cols - 1) * gap;
   const blockH = rows * sy + (rows - 1) * gap;
 
   const box = avoidTower ? towerBox(cfg) : null;
-  const pad = brimAllowance(cfg) + 1;
 
   const clashes = (ox, oy) => {
     if (ox - pad < ax0 - 1e-6 || ox + blockW + pad > ax1 + 1e-6 ||
