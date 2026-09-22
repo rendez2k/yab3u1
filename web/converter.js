@@ -258,7 +258,7 @@ export function readSource(entries) {
     baseExtruder: 1, usedExtruders: new Set(), support: null, objectName: "object",
     sourceFile: "", volumeMatrix: null, paintStates: new Map(), painted: 0,
     undecodable: 0, subdivided: 0, hasSupports: false, meshBounds: null, meshFile: null,
-    preview: null, previewFrom: "",
+    preview: null, previewFrom: "", plateObjects: 0,
     placement: null, buildTransform: "1 0 0 0 1 0 0 0 1 0 0 0",
   };
 
@@ -386,10 +386,27 @@ function sourcePlacement(entries, src) {
   // <item> and <component> live in the main model document, not the mesh file
   const doc = decoder.decode(entries.get(MODEL_FILE));
   const items = doc.match(/<item\b[^>]*>/g) || [];
-  if (items.length !== 1) {
-    throw new Error(`the project places ${items.length} objects on the plate; only ` +
-                    "single-object models are supported");
+  if (!items.length) throw new Error("the project has no objects on the plate");
+
+  const meshOf = new Map();
+  for (const om of doc.matchAll(/<object\b([^>]*)>([\s\S]*?)<\/object>/g)) {
+    const id = /id="([^"]*)"/.exec(om[1])?.[1];
+    const comps = om[2].match(/<component\b[^>]*>/g) || [];
+    meshOf.set(id, comps.length ? (/p:path="([^"]*)"/.exec(comps[0])?.[1] ?? null) : null);
   }
+  /* A plate of several objects is fine as long as they are all the same mesh: that
+     is a MakerWorld-style download, or a plate someone arranged and saved. The first
+     placement carries the scale and orientation and the rest are rebuilt from the
+     copies/spacing controls, so the result matches the single-object path. Several
+     *different* models still cannot be handled. */
+  const paths = new Set(items.map((it) => meshOf.get(/objectid="([^"]*)"/.exec(it)?.[1])));
+  if (paths.size > 1 || paths.has(undefined) || paths.has(null)) {
+    throw new Error(`the project places ${items.length} objects on the plate and ` +
+      "they are not all the same model; only plates built from one repeated mesh " +
+      "are supported");
+  }
+  src.plateObjects = items.length;
+
   const objId = /objectid="([^"]*)"/.exec(items[0]);
   const itemTf = /transform="([^"]*)"/.exec(items[0]);
   let compTf = null;
@@ -954,6 +971,10 @@ export async function convert(entries, options = {}) {
 
   say(`input        : ${src.kind === "bambu" ? "Bambu Studio / Orca" : "PrusaSlicer"} project`);
   say(`object       : ${src.objectName}  (${src.painted.toLocaleString()} painted triangles)`);
+  if (src.plateObjects > 1) {
+    say(`plate        : ${src.plateObjects} copies of that one model on the source ` +
+        "plate; the original layout is dropped and rebuilt from the copies/spacing settings");
+  }
   say("thumbnail    : " + (src.preview
     ? `carried over from ${src.previewFrom} (${Math.round(src.preview.length / 1024)} KB)`
     : "none in the source to carry over"));

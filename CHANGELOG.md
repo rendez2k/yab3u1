@@ -6,6 +6,10 @@ footer. Bump that constant and add a section here together.
 
 ## 1.1.0
 
+- Plates holding several copies of one model now convert, which covers MakerWorld
+  downloads and plates someone arranged and saved. The first placement carries the
+  scale and orientation and the layout is rebuilt from the copies/spacing controls.
+  A plate of several *different* models still cannot be handled.
 - Light and dark themes. The page follows your system setting until you use the
   toggle in the header, after which your choice is remembered.
 - The file picker is reachable from the keyboard. It was `display: none`, which

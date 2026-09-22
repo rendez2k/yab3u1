@@ -372,6 +372,7 @@ class Source:
         self.mesh_bounds = None
         self.preview = None
         self.preview_from = ""
+        self.plate_objects = 0
         self.support = None
         self.volume_matrix = [row[:] for row in IDENTITY]
         self.build_transform = "1 0 0 0 1 0 0 0 1 0 0 0"
@@ -540,11 +541,32 @@ def _source_placement(zf: zipfile.ZipFile, src: Source):
         return matmul(src.volume_matrix, item)
 
     doc = zf.read(MODEL_FILE).decode("utf-8", "replace")
+
+    def component_path(object_id: str):
+        """The mesh file an object's single component points at, if any."""
+        for m in re.finditer(r'<object\b([^>]*)>(.*?)</object>', doc, re.S):
+            if _attr("<object " + m.group(1), "id") == object_id:
+                comps = _xml_pairs(m.group(2), "component")
+                return _attr(comps[0], "p:path") if comps else None
+        return None
+
     items = _xml_pairs(doc, "item")
-    if len(items) != 1:
+    if not items:
+        raise ConvertError("the project has no objects on the plate")
+
+    # A plate of several objects is fine as long as they are all the same mesh:
+    # that is a MakerWorld-style download, or a plate someone arranged and saved.
+    # The first placement carries the scale and orientation, and the rest are
+    # rebuilt from the copies/spacing controls, so the result is consistent with
+    # the single-object path. Several *different* models still cannot be handled.
+    paths = {component_path(_attr(it, "objectid") or "") for it in items}
+    if len(paths) > 1 or None in paths:
         raise ConvertError(
-            f"the project places {len(items)} objects on the plate; only "
-            "single-object models are supported")
+            f"the project places {len(items)} objects on the plate and they are not "
+            "all the same model; only plates built from one repeated mesh are "
+            "supported")
+
+    src.plate_objects = len(items)
     obj_id = _attr(items[0], "objectid")
     item_tf = _attr(items[0], "transform")
 
@@ -1445,6 +1467,10 @@ def convert(src_path: str, out_path: str, profile_root: str | None,
 
         log(f"input        : {os.path.basename(src_path)}  [{src.kind} project]")
         log(f"object       : {src.object_name}  ({src.paint_count} painted triangles)")
+        if src.plate_objects > 1:
+            log(f"plate        : {src.plate_objects} copies of that one model on the "
+                "source plate; the original layout is dropped and rebuilt from the "
+                "copies/spacing settings")
         if src.preview:
             log("thumbnail    : carried over from %s (%d KB)"
                 % (src.preview_from, len(src.preview) // 1024))
