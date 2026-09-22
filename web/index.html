@@ -393,8 +393,12 @@ const state = { name: null, entries: null, src: null, info: null };
 /* ---------- version ----------
    Bump APP_VERSION here and add an entry to CHANGELOG.md. The badges below
    read from this constant so there is one place to change. */
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.2.0";
 const CHANGES = [
+  "The source's support setting comes across, and so do painted support enforcers \u2014 the output no longer quietly prints without the supports the file asked for.",
+  "The project-override list is written, so Orca's panel shows which settings this project changes instead of everything looking like an untouched preset.",
+  "A part matrix with the translation in the last column is read correctly, which previously could scale a model to metres.",
+  "The plate thumbnail is drawn from the layout actually being written when it can be, falling back to the source's image \u2014 which showed one model for a twelve-up plate.",
   "Light and dark themes, following your system setting until you pick one.",
   "Plates holding several copies of one model now convert \u2014 MakerWorld downloads included, not just single-object files.",
   "The output carries the source's preview image, so the file shows a thumbnail instead of a generic icon.",

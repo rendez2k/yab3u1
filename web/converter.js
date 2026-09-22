@@ -1108,6 +1108,14 @@ async function platePng(body, transforms, opts, size) {
     if (typeof document === "undefined") return null;
     const r = renderPlate(body, transforms, { ...opts, size });
     if (!r) return null;
+    // An untouched plate means the projection never landed. Treat that as a
+    // failure too, so the caller falls back to the source's image rather than
+    // handing Orca a grey rectangle where a preview should be.
+    let painted = false;
+    for (let i = 0; i < r.data.length && !painted; i += 4) {
+      if (r.data[i] !== 226 || r.data[i + 1] !== 227 || r.data[i + 2] !== 230) painted = true;
+    }
+    if (!painted) return null;
     const cv = document.createElement("canvas");
     cv.width = r.width;
     cv.height = r.height;
