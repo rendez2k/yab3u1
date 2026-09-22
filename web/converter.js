@@ -987,6 +987,117 @@ const OBJECT_CLOSE = "   </mesh>\n  </object>\n </resources>\n <build/>\n</model
 
 // One <object> per copy, all sharing the same mesh -- what Orca itself produces
 // when you copy a model.
+function hexToRgb(hex) {
+  const s = normColor(hex).slice(1);
+  return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+}
+
+/**
+ * Draw the plate we are about to write, top-down, into a plain RGBA buffer.
+ *
+ * The source's thumbnail shows the source's plate -- one model, one plate -- so
+ * carrying it through for a twelve-up layout would be a lie. This projects the
+ * real geometry through the real per-copy transforms instead. Flat colours from
+ * the slots, shaded by each triangle's world normal so it reads as a solid rather
+ * than a silhouette. Returns { width, height, data } with no canvas involved, so
+ * it can be exercised outside a browser.
+ */
+export function renderPlate(body, transforms, opts = {}) {
+  const size = Math.max(16, Math.round(opts.size || 300));
+  const bed = opts.bed || { x: 270, y: 270 };
+  const palette = (opts.palette || ["#888888"]).map(hexToRgb);
+  const baseSlot = Math.max(1, opts.baseSlot || 1);
+
+  const vx = [], vy = [], vz = [];
+  const vre = /<vertex\s+x="([^"]+)"\s+y="([^"]+)"\s+z="([^"]+)"/g;
+  let m;
+  while ((m = vre.exec(body)) !== null) {
+    vx.push(+m[1]); vy.push(+m[2]); vz.push(+m[3]);
+  }
+
+  const tri = [];
+  const tre = /<triangle\b([^>]*)>/g;
+  while ((m = tre.exec(body)) !== null) {
+    const a = m[1];
+    const i0 = /\bv1="(\d+)"/.exec(a), i1 = /\bv2="(\d+)"/.exec(a), i2 = /\bv3="(\d+)"/.exec(a);
+    if (!i0 || !i1 || !i2) continue;
+    const pc = /\bpaint_color="([0-9A-Fa-f]*)"/.exec(a);
+    const state = pc && pc[1] ? decodeLeafState(pc[1]) : "";
+    tri.push(+i0[1], +i1[1], +i2[1], state ? +state : baseSlot);
+  }
+  if (!tri.length) return null;
+
+  const W = size, H = size;
+  const data = new Uint8ClampedArray(W * H * 4);
+  for (let i = 0; i < W * H; i++) {
+    data[i * 4] = 226; data[i * 4 + 1] = 227; data[i * 4 + 2] = 230; data[i * 4 + 3] = 255;
+  }
+
+  const pad = Math.max(2, Math.round(size * 0.02));
+  const scale = (size - 2 * pad) / Math.max(bed.x, bed.y);
+  const ox = pad + ((size - 2 * pad) - bed.x * scale) / 2;
+  const oy = pad + ((size - 2 * pad) - bed.y * scale) / 2;
+
+  const bounds = opts.bounds;
+  const bbox = [
+    Math.floor(ox + bounds[0][0] * scale), Math.floor(oy + (bed.y - bounds[1][1]) * scale),
+    Math.ceil(ox + bounds[1][0] * scale), Math.ceil(oy + (bed.y - bounds[0][1]) * scale),
+  ];
+
+  for (const tf of transforms) {
+    const px = new Float64Array(vx.length);
+    const py = new Float64Array(vx.length);
+    const pz = new Float64Array(vx.length);
+    for (let i = 0; i < vx.length; i++) {
+      const p = applyMatrix(tf, [vx[i], vy[i], vz[i]]);
+      px[i] = ox + p[0] * scale;
+      py[i] = oy + (bed.y - p[1]) * scale;
+      pz[i] = p[2];
+    }
+    for (let t = 0; t < tri.length; t += 4) {
+      const a = tri[t], b = tri[t + 1], c = tri[t + 2];
+      const col = palette[Math.min(palette.length, Math.max(1, tri[t + 3])) - 1] || [136, 136, 136];
+      // shade by how flat the face is, using the world normal
+      const ux = vx[b] - vx[a], uy = vy[b] - vy[a], uz = vz[b] - vz[a];
+      const wx = vx[c] - vx[a], wy = vy[c] - vy[a], wz = vz[c] - vz[a];
+      const nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
+      const len = Math.hypot(nx, ny, nz) || 1;
+      const shade = 0.62 + 0.38 * Math.abs(nz / len);
+      fillTriangle(data, W, H, px[a], py[a], px[b], py[b], px[c], py[c],
+                   Math.round(col[0] * shade), Math.round(col[1] * shade), Math.round(col[2] * shade));
+    }
+  }
+  return { width: W, height: H, data, bbox };
+}
+
+function fillTriangle(data, W, H, x1, y1, x2, y2, x3, y3, r, g, b) {
+  if (Math.abs((x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1)) < 1e-9) return;
+  const yStart = Math.max(0, Math.floor(Math.min(y1, y2, y3)));
+  const yEnd = Math.min(H - 1, Math.ceil(Math.max(y1, y2, y3)));
+  const ex = [x1, x2, x3], ey = [y1, y2, y3];
+  for (let y = yStart; y <= yEnd; y++) {
+    const yc = y + 0.5;
+    let lo = Infinity, hi = -Infinity;
+    for (let e = 0; e < 3; e++) {
+      const ax = ex[e], ay = ey[e], bx = ex[(e + 1) % 3], by = ey[(e + 1) % 3];
+      if ((ay <= yc && by > yc) || (by <= yc && ay > yc)) {
+        const t = (yc - ay) / (by - ay);
+        const x = ax + t * (bx - ax);
+        if (x < lo) lo = x;
+        if (x > hi) hi = x;
+      }
+    }
+    if (lo > hi) continue;
+    const from = Math.max(0, Math.round(lo - 0.5));
+    const to = Math.min(W - 1, Math.round(hi - 0.5));
+    let o = (y * W + from) * 4;
+    for (let x = from; x <= to; x++) {
+      data[o] = r; data[o + 1] = g; data[o + 2] = b; data[o + 3] = 255;
+      o += 4;
+    }
+  }
+}
+
 function mainModelXml(objectFile, title, transforms) {
   const n = Math.max(1, transforms.length);
   let resources = "";
