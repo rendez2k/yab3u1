@@ -644,6 +644,20 @@ export function layoutCopies(transform, bounds, cfg, reposition, copies, gap,
   const sx = Math.max(whi[0] - wlo[0], 1e-3);
   const sy = Math.max(whi[1] - wlo[1], 1e-3);
 
+  /* Tree supports flare outwards at their base and reach past the model's bounding
+     box, so neighbouring copies collide there long before the models themselves
+     would. Orca reports it as "conflicts of G-code paths ... please separate the
+     conflicted objects farther". Grow the footprint by the support's reach so the
+     spacing still means what it says. */
+  if (String(firstScalar(cfg, "enable_support", "0")).trim() !== "0" &&
+      String(firstScalar(cfg, "enable_support", "0")).trim() !== "") {
+    const raw = firstScalar(cfg, "tree_support_brim_width", 3);
+    const n = Number(raw);
+    const reach = Number.isFinite(n) ? Math.max(3, n) : 3;
+    sx += 2 * reach;
+    sy += 2 * reach;
+  }
+
   gap = Math.max(0, Number(gap) || 0);
 
   // a copy occupies its bounding box, its brim, and the clearance Orca wants

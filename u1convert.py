@@ -1071,6 +1071,22 @@ def layout_copies(transform, bounds, cfg, reposition, copies, gap, avoid_tower=T
     sx = max(whi[0] - wlo[0], 1e-3)
     sy = max(whi[1] - wlo[1], 1e-3)
 
+    # Tree supports flare outwards at their base and reach past the model's bounding
+    # box, so neighbouring copies collide there long before the models themselves
+    # would. Orca reports it as "conflicts of G-code paths ... please separate the
+    # conflicted objects farther". Grow the footprint by the support's reach so the
+    # spacing still means what it says.
+    if str(cfg.get("enable_support", "0")).strip() not in ("", "0"):
+        raw = cfg.get("tree_support_brim_width", 3)
+        if isinstance(raw, list):
+            raw = raw[0] if raw else 3
+        try:
+            reach = max(3.0, float(raw))
+        except (TypeError, ValueError):
+            reach = 3.0
+        sx += 2 * reach
+        sy += 2 * reach
+
     gap = max(0.0, float(gap))
 
     # a copy occupies its bounding box, its brim, and the clearance Orca wants
