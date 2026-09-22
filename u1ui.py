@@ -192,6 +192,7 @@ class Handler(BaseHTTPRequestHandler):
                 process=str(req.get("process") or u1.DEFAULT_PROCESS),
                 filament_profile=str(req.get("filament") or u1.DEFAULT_FILAMENT),
                 supports=str(req.get("supports") or "auto"),
+                carry=bool(req.get("carry", True)),
             )
         except u1.ConvertError as exc:
             return self._fail(str(exc))
@@ -261,6 +262,7 @@ class Handler(BaseHTTPRequestHandler):
             "reposition": bool(req.get("reposition", True)),
             "avoid_tower": bool(req.get("avoid_tower", True)),
             "supports": str(req.get("supports") or "auto"),
+            "carry": bool(req.get("carry", True)),
             "verify": bool(req.get("verify", False)),
         }
         name = os.path.splitext(os.path.basename(sess["name"]))[0] or "model"
@@ -289,6 +291,7 @@ class Handler(BaseHTTPRequestHandler):
                         avoid_tower=settings["avoid_tower"],
                         supports=settings["supports"],
                         verify=settings["verify"],
+                        carry=settings["carry"],
                     )
                 with _sessions_lock:
                     sess["out"] = out

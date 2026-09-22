@@ -269,6 +269,7 @@
       <div class="field">
         <label>&nbsp;</label>
         <label class="check"><input type="checkbox" id="tower" checked> Leave room for the prime tower</label>
+        <label class="check"><input type="checkbox" id="carry" checked> Keep the source's print settings where they're safe</label>
       </div>
       <div class="field">
         <label>&nbsp;</label>
@@ -465,6 +466,7 @@ async function replan() {
         id: state.id,
         gap: parseFloat($('gap').value) || 0,
         avoid_tower: $('tower').checked,
+        carry: $('carry').checked,
         supports: $('supports').value,
         filament: $('filament').value,
         process: $('process').value
@@ -498,6 +500,7 @@ $('go').addEventListener('click', async () => {
     gap: parseFloat($('gap').value) || 0,
     reposition: $('repos').checked,
     avoid_tower: $('tower').checked,
+    carry: $('carry').checked,
     supports: $('supports').value,
     verify: $('verify').checked
   };

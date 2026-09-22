@@ -6,6 +6,16 @@ footer. Bump that constant and add a section here together.
 
 ## 1.1.0
 
+- Carry the source's print-intent settings instead of discarding them. Layer
+  heights, shells, infill density *and pattern*, ironing, fuzzy skin, elephant
+  foot, brim/raft and the painted-region knobs now come from the file, and
+  PrusaSlicer's names for the same settings are mapped across so a Prusa project
+  carries as much as a Bambu one. On the pumpkin that means `ironing_type = top`
+  survives instead of becoming "no ironing".
+  Machine and filament settings still come from the U1 profile — bed and filament
+  temperatures, speeds, accelerations, retraction, purge and prime-tower numbers,
+  toolchange g-code, and the bed geometry all describe the printer that wrote the
+  file. The log says how many settings were carried, and a checkbox turns it off.
 - Fix the plate layout running over the bed edge, which is what produces Orca's
   "Model too close to bed boundary" warning. The column and row counts were
   measured against the whole bed and then the block was required to fit *with* a

@@ -379,6 +379,7 @@ class Source:
         self.preview = None
         self.preview_from = ""
         self.plate_objects = 0
+        self.source_settings = None
         self.support = None
         self.volume_matrix = [row[:] for row in IDENTITY]
         self.build_transform = "1 0 0 0 1 0 0 0 1 0 0 0"
@@ -616,6 +617,7 @@ def _read_prusa(zf: zipfile.ZipFile) -> Source:
     src = Source()
     src.kind = "prusa"
     cfg = parse_prusa_ini(zf.read(SRC_PRUSA_PRINT).decode("utf-8", "replace"))
+    src.source_settings = cfg
 
     tool_colors = [norm_color(c) for c in split_list(cfg.get("extruder_colour", ""))]
     fil_colors = [norm_color(c) for c in split_list(cfg.get("filament_colour", ""))]
@@ -679,6 +681,7 @@ def _read_bambu(zf: zipfile.ZipFile) -> Source:
     src = Source()
     src.kind = "bambu"
     cfg = json.loads(zf.read(SRC_BBL_PROJECT).decode("utf-8", "replace"))
+    src.source_settings = cfg
     src.colors = [norm_color(c) for c in cfg.get("filament_colour", [])]
     src.types = [str(t).upper() for t in cfg.get("filament_type", [])]
     src.palette_count = max(len(src.colors), len(src.types))
@@ -1346,9 +1349,93 @@ def analyze(src_path: str, profile_root: str | None = None,
     with zipfile.ZipFile(src_path) as zf:
         src = read_source(zf)
 
+CARRY_KEYS = (
+    # geometry and shells
+    "layer_height", "initial_layer_print_height",
+    "wall_loops", "top_shell_layers", "top_shell_thickness",
+    "bottom_shell_layers", "bottom_shell_thickness",
+    "ensure_vertical_shell_thickness",
+    # infill
+    "sparse_infill_density", "sparse_infill_pattern",
+    "internal_solid_infill_pattern", "top_surface_pattern", "bottom_surface_pattern",
+    "infill_anchor", "infill_anchor_max",
+    # surface finish
+    "ironing_type", "ironing_pattern", "ironing_spacing", "ironing_speed",
+    "ironing_inset", "ironing_angle",
+    "fuzzy_skin", "fuzzy_skin_thickness", "fuzzy_skin_point_distance",
+    "fuzzy_skin_first_layer",
+    # first layer and adhesion
+    "brim_type", "brim_width", "brim_object_gap",
+    "elefant_foot_compensation", "elefant_foot_compensation_layers",
+    "raft_first_layer_expansion",
+    # seams, resolution, and the painted-region knobs
+    "seam_position", "resolution",
+    "mmu_segmented_region_max_width", "mmu_segmented_region_interlocking_depth",
+    # support geometry -- the on/off decision is handled by apply_support
+    "support_style", "support_threshold_overlap", "support_on_build_plate_only",
+)
+
+
+# PrusaSlicer calls several of the same settings something else.  Without these a
+# Prusa project carries far less than a Bambu one, because the names simply do not
+# match the Orca config.
+PRUSA_ALIASES = {
+    "initial_layer_print_height": ("first_layer_height",),
+    "wall_loops": ("perimeters",),
+    "top_shell_layers": ("top_solid_layers",),
+    "bottom_shell_layers": ("bottom_solid_layers",),
+    "top_shell_thickness": ("top_solid_min_thickness",),
+    "bottom_shell_thickness": ("bottom_solid_min_thickness",),
+    "sparse_infill_density": ("fill_density",),
+    "sparse_infill_pattern": ("fill_pattern",),
+    "internal_solid_infill_pattern": ("solid_infill_pattern",),
+    "top_surface_pattern": ("top_fill_pattern",),
+    "bottom_surface_pattern": ("bottom_fill_pattern",),
+}
+
+
+def carry_print_settings(cfg: dict, source_settings, enabled: bool = True) -> list:
+    """Overlay the source's print-intent settings onto the U1 config.
+
+    Settings describing the *print* travel; settings describing the *printer* or the
+    *filament* do not, and stay with the U1 profile -- bed and filament
+    temperatures, speeds, accelerations, retraction, purge and prime-tower numbers,
+    toolchange and machine g-code, and the bed geometry are all properties of the
+    machine that wrote the file, and copying them onto a U1 prints worse than the
+    U1 profile does.
+
+    Returns the list of keys actually carried, for the log.
+    """
+    if not source_settings or not enabled:
+        return []
+
+    carried = []
+    for key in CARRY_KEYS:
+        name = key
+        if name not in source_settings:
+            name = next((a for a in PRUSA_ALIASES.get(key, ())
+                         if a in source_settings), None)
+            if name is None:
+                continue
+        value = source_settings[name]
+        if isinstance(value, (list, tuple)):
+            value = value[0] if value else None
+        if value is None or value == "":
+            continue
+        value = str(value)
+        current = cfg.get(key)
+        if isinstance(current, list):
+            cfg[key] = [value] * len(current) if current else [value]
+        else:
+            cfg[key] = value
+        carried.append(key)
+    return carried
+
+
 def plate_inputs(src: Source, profile_root=None, machine: str = DEFAULT_MACHINE,
                  process: str = DEFAULT_PROCESS, filament_profile=None,
-                 colors=None, types=None, supports: str = "auto"):
+                 colors=None, types=None, supports: str = "auto",
+                 carry: bool = True):
     """Everything the plate layout needs, from an already-parsed source.
 
     Split out so the capacity can be recomputed for a new spacing without
@@ -1361,6 +1448,7 @@ def plate_inputs(src: Source, profile_root=None, machine: str = DEFAULT_MACHINE,
         colors if colors is not None else [src.color_for(e) for e in ordered],
         types if types is not None else [src.type_for(e) for e in ordered],
         filament_profile or DEFAULT_FILAMENT, machine, process)
+    carry_print_settings(cfg, src.source_settings, carry)
     apply_support(cfg, src.support, supports, painted=src.has_supports)
     placement = src.placement or matrix_from_text(src.build_transform)
     return cfg, placement, src.mesh_bounds
@@ -1449,7 +1537,7 @@ def convert(src_path: str, out_path: str, profile_root: str | None,
             colors_override: list[str], types_override: list[str],
             reposition: bool, copies: int = 1, gap: float = 5.0,
             avoid_tower: bool = True, supports: str = "auto",
-            verify: bool = False) -> dict:
+            verify: bool = False, carry: bool = True) -> dict:
 
     with zipfile.ZipFile(src_path) as zf:
         src = read_source(zf)
@@ -1521,6 +1609,14 @@ def convert(src_path: str, out_path: str, profile_root: str | None,
             load_base_template(), profiles,
             out_colors, out_types, filament_profile, machine, process,
         )
+        carried = carry_print_settings(cfg, src.source_settings, carry)
+        if carried:
+            shown = ", ".join(carried[:8]) + (" ..." if len(carried) > 8 else "")
+            log(f"settings     : carried {len(carried)} print setting"
+                f"{'' if len(carried) == 1 else 's'} from the source ({shown}); "
+                "machine and filament settings come from the U1 profile")
+        else:
+            log("settings     : all print settings come from the U1 profile")
         log("supports     : " + apply_support(cfg, src.support, supports,
                                               painted=src.has_supports))
 

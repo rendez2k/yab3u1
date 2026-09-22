@@ -285,6 +285,7 @@
       <div class="field">
         <label>&nbsp;</label>
         <label class="check"><input type="checkbox" id="tower" checked> Leave room for the prime tower</label>
+        <label class="check"><input type="checkbox" id="carry" checked> Keep the source's print settings where they're safe</label>
       </div>
       <div class="field">
         <label>&nbsp;</label>
@@ -560,6 +561,7 @@ $("go").addEventListener("click", async () => {
       copies: Math.max(1, parseInt($("copies").value) || 1),
       gap: parseFloat($("gap").value) || 0,
       supports: $("supports").value,
+      carry: $("carry").checked,
       avoidTower: $("tower").checked,
       reposition: $("repos").checked,
       filament: $("filament").value,

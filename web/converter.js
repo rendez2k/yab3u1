@@ -258,7 +258,7 @@ export function readSource(entries) {
     baseExtruder: 1, usedExtruders: new Set(), support: null, objectName: "object",
     sourceFile: "", volumeMatrix: null, paintStates: new Map(), painted: 0,
     undecodable: 0, subdivided: 0, hasSupports: false, meshBounds: null, meshFile: null,
-    preview: null, previewFrom: "", plateObjects: 0,
+    preview: null, previewFrom: "", plateObjects: 0, sourceSettings: null,
     placement: null, buildTransform: "1 0 0 0 1 0 0 0 1 0 0 0",
   };
 
@@ -266,6 +266,7 @@ export function readSource(entries) {
   if (has(SRC_PRUSA_MODEL)) {
     src.kind = "prusa";
     prusaCfg = parsePrusaIni(decoder.decode(entries.get(SRC_PRUSA_PRINT)));
+    src.sourceSettings = prusaCfg;
     const tool = splitList(prusaCfg.extruder_colour).map(normColor);
     const fil = splitList(prusaCfg.filament_colour).map(normColor);
     const types = splitList(prusaCfg.filament_type).map((t) => t.toUpperCase());
@@ -307,6 +308,7 @@ export function readSource(entries) {
   } else if (has(SRC_BBL_PROJECT)) {
     src.kind = "bambu";
     const cfg = JSON.parse(decoder.decode(entries.get(SRC_BBL_PROJECT)));
+    src.sourceSettings = cfg;
     src.colors = (cfg.filament_colour || []).map(normColor);
     src.types = (cfg.filament_type || []).map((t) => String(t).toUpperCase());
     src.paletteCount = Math.max(src.colors.length, src.types.length);
@@ -737,6 +739,76 @@ export function layoutCopies(transform, bounds, cfg, reposition, copies, gap,
   return { transforms, cols: imax + 1, rows: jmax + 1, capacity };
 }
 
+/* Settings that describe the print the user asked for, rather than the printer or
+   the filament that produced the file. Everything else stays with the U1 profile:
+   bed and filament temperatures, speeds, accelerations, retraction, purge and
+   prime-tower numbers, toolchange and machine g-code and the bed geometry are
+   properties of the machine that wrote the file, and copying them onto a U1
+   prints worse than the U1 profile does. */
+export const CARRY_KEYS = [
+  // geometry and shells
+  "layer_height", "initial_layer_print_height",
+  "wall_loops", "top_shell_layers", "top_shell_thickness",
+  "bottom_shell_layers", "bottom_shell_thickness",
+  "ensure_vertical_shell_thickness",
+  // infill
+  "sparse_infill_density", "sparse_infill_pattern",
+  "internal_solid_infill_pattern", "top_surface_pattern", "bottom_surface_pattern",
+  "infill_anchor", "infill_anchor_max",
+  // surface finish
+  "ironing_type", "ironing_pattern", "ironing_spacing", "ironing_speed",
+  "ironing_inset", "ironing_angle",
+  "fuzzy_skin", "fuzzy_skin_thickness", "fuzzy_skin_point_distance",
+  "fuzzy_skin_first_layer",
+  // first layer and adhesion
+  "brim_type", "brim_width", "brim_object_gap",
+  "elefant_foot_compensation", "elefant_foot_compensation_layers",
+  "raft_first_layer_expansion",
+  // seams, resolution, and the painted-region knobs
+  "seam_position", "resolution",
+  "mmu_segmented_region_max_width", "mmu_segmented_region_interlocking_depth",
+  // support geometry -- the on/off decision is handled by applySupport
+  "support_style", "support_threshold_overlap", "support_on_build_plate_only",
+];
+
+/* PrusaSlicer names for several of the same settings. Without these a Prusa
+   project carries far less than a Bambu one, because the names do not match. */
+const PRUSA_ALIASES = {
+  initial_layer_print_height: ["first_layer_height"],
+  wall_loops: ["perimeters"],
+  top_shell_layers: ["top_solid_layers"],
+  bottom_shell_layers: ["bottom_solid_layers"],
+  top_shell_thickness: ["top_solid_min_thickness"],
+  bottom_shell_thickness: ["bottom_solid_min_thickness"],
+  sparse_infill_density: ["fill_density"],
+  sparse_infill_pattern: ["fill_pattern"],
+  internal_solid_infill_pattern: ["solid_infill_pattern"],
+  top_surface_pattern: ["top_fill_pattern"],
+  bottom_surface_pattern: ["bottom_fill_pattern"],
+};
+
+/** Overlay the source's print-intent settings onto the U1 config; returns the keys carried. */
+export function carryPrintSettings(cfg, sourceSettings, enabled = true) {
+  if (!sourceSettings || !enabled) return [];
+  const carried = [];
+  for (const key of CARRY_KEYS) {
+    let name = key;
+    if (!(name in sourceSettings)) {
+      name = (PRUSA_ALIASES[key] || []).find((a) => a in sourceSettings);
+      if (!name) continue;
+    }
+    let value = sourceSettings[name];
+    if (Array.isArray(value)) value = value.length ? value[0] : null;
+    if (value === null || value === undefined || value === "") continue;
+    value = String(value);
+    cfg[key] = Array.isArray(cfg[key])
+      ? new Array(cfg[key].length || 1).fill(value)
+      : value;
+    carried.push(key);
+  }
+  return carried;
+}
+
 export function plateInputs(src, options = {}) {
   const { ordered, mapping } = planSlots(src);
   const cfg = buildProjectConfig(
@@ -748,6 +820,7 @@ export function plateInputs(src, options = {}) {
     options.process || DEFAULT_PROCESS,
   );
   const note = applySupport(cfg, src.support, options.supports || "auto", src.hasSupports);
+  carryPrintSettings(cfg, src.sourceSettings, options.carry !== false);
   return { cfg, mapping, ordered, note, placement: src.placement, bounds: src.meshBounds };
 }
 
@@ -980,6 +1053,12 @@ export async function convert(entries, options = {}) {
   const process = options.process || DEFAULT_PROCESS;
 
   const cfg = buildProjectConfig(BASE_SETTINGS, colors, types, filament, machine, process);
+  const carried = carryPrintSettings(cfg, src.sourceSettings, options.carry !== false);
+  say(carried.length
+    ? `settings     : carried ${carried.length} print setting${carried.length === 1 ? "" : "s"} ` +
+      `from the source (${carried.slice(0, 8).join(", ")}${carried.length > 8 ? " ..." : ""}); ` +
+      "machine and filament settings come from the U1 profile"
+    : "settings     : all print settings come from the U1 profile");
   const supportNote = applySupport(cfg, src.support, options.supports || "auto",
                                   src.hasSupports);
 
