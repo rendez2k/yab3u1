@@ -4,6 +4,19 @@ The version shown on the page comes from `APP_VERSION` in `web/index.html`, and 
 surfaced as a badge in the header and in the collapsed "What's new" block in the
 footer. Bump that constant and add a section here together.
 
+## 1.1.0
+
+- Light and dark themes. The page follows your system setting until you use the
+  toggle in the header, after which your choice is remembered.
+- The file picker is reachable from the keyboard. It was `display: none`, which
+  hid it from the tab order entirely; it is now visually hidden but still
+  focusable, and there are visible focus rings throughout.
+- Footer links: Product Kit, a contact address, and the renamed GitHub repo.
+- `og:` tags so a shared link gets a proper preview, a `<noscript>` notice, and
+  roomier spacing on narrow screens.
+- The log panel and button hover state now come from the theme variables, so
+  nothing stays dark-on-dark in light mode.
+
 ## 1.0.0
 
 First release.

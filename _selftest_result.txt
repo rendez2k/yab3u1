@@ -1,0 +1,2 @@
+PASS
+fetched selftest-fixture-bambu.3mf (3,142 bytes) | read 8 members: [Content_Types].xml, _rels/.rels, 3D/3dmodel.model, 3D/_rels/3dmodel.model.rels, 3D/Objects/cube.model, Metadata/project_settings.config, Metadata/model_settings.config, Metadata/slice_info.config | source: kind=bambu object=cube palette= colours=#FF8000 #008000 #000000 #FFFFFF baseExtruder=2 | paint: 8 triangles, states [[1,4],[2,4]] | describe: footprint {"x":20,"y":20,"z":20} bed {"x":270,"y":270} capacity 109 | capacity by spacing: 5->109, 10->75, 20->45, 7777->1 | RESULT: PASS in 13 ms
