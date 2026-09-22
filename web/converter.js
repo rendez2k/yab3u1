@@ -746,29 +746,31 @@ export function layoutCopies(transform, bounds, cfg, reposition, copies, gap,
    properties of the machine that wrote the file, and copying them onto a U1
    prints worse than the U1 profile does. */
 export const CARRY_KEYS = [
-  // geometry and shells
+  // geometry and shells -- numbers only. Enum spellings change between Orca
+  // versions (a Bambu file says ensure_vertical_shell_thickness = "enabled",
+  // this Orca only knows "ensure_all"), and carrying one makes Orca pop up a
+  // "some values have been replaced" warning on load. The U1 profile's own value
+  // is right for a U1, so those keys are left alone.
   "layer_height", "initial_layer_print_height",
   "wall_loops", "top_shell_layers", "top_shell_thickness",
   "bottom_shell_layers", "bottom_shell_thickness",
-  "ensure_vertical_shell_thickness",
   // infill
-  "sparse_infill_density", "sparse_infill_pattern",
-  "internal_solid_infill_pattern", "top_surface_pattern", "bottom_surface_pattern",
+  "sparse_infill_density",
   "infill_anchor", "infill_anchor_max",
   // surface finish
-  "ironing_type", "ironing_pattern", "ironing_spacing", "ironing_speed",
-  "ironing_inset", "ironing_angle",
-  "fuzzy_skin", "fuzzy_skin_thickness", "fuzzy_skin_point_distance",
-  "fuzzy_skin_first_layer",
+  "ironing_spacing", "ironing_speed", "ironing_inset", "ironing_angle",
+  "fuzzy_skin_thickness", "fuzzy_skin_point_distance",
   // first layer and adhesion
-  "brim_type", "brim_width", "brim_object_gap",
+  "brim_width", "brim_object_gap",
   "elefant_foot_compensation", "elefant_foot_compensation_layers",
-  "raft_first_layer_expansion",
-  // seams, resolution, and the painted-region knobs
-  "seam_position", "resolution",
+  // resolution and the painted-region knobs
+  "resolution",
   "mmu_segmented_region_max_width", "mmu_segmented_region_interlocking_depth",
   // support geometry -- the on/off decision is handled by applySupport
-  "support_style", "support_threshold_overlap", "support_on_build_plate_only",
+  "support_threshold_overlap",
+  // reviewed enums, whose spellings are stable across versions
+  "sparse_infill_pattern", "top_surface_pattern", "bottom_surface_pattern",
+  "ironing_type", "ironing_pattern", "brim_type",
 ];
 
 /* PrusaSlicer names for several of the same settings. Without these a Prusa
@@ -787,6 +789,36 @@ const PRUSA_ALIASES = {
   bottom_surface_pattern: ["bottom_fill_pattern"],
 };
 
+/* Values this Orca will accept. There is no schema to check against, so these are
+   the spellings known to work; anything else keeps the U1 profile's value. A newer
+   Orca writes values this one does not know -- "enabled" for an enum, -1 for
+   raft_first_layer_expansion meaning "auto" -- and Orca either warns about them or
+   refuses to open the file, so carrying them unchecked is worse than not carrying. */
+const ENUM_VALUES = {
+  sparse_infill_pattern: [
+    "grid", "line", "concentric", "honeycomb", "3dhoneycomb", "gyroid",
+    "crosshatch", "cubic", "triangles", "tri-hexagon", "star", "supportcubic",
+    "lightning", "zig-zag", "cross-zag", "rectilinear", "monotonic",
+    "monotonicline", "alignedrectilinear"],
+  top_surface_pattern: [
+    "monotonic", "monotonicline", "rectilinear", "concentric", "zig-zag",
+    "cross-zag", "alignedrectilinear"],
+  bottom_surface_pattern: [
+    "monotonic", "monotonicline", "rectilinear", "concentric", "zig-zag",
+    "cross-zag", "alignedrectilinear"],
+  ironing_type: ["no ironing", "top", "topmost", "solid"],
+  ironing_pattern: ["rectilinear", "concentric", "zig-zag"],
+  brim_type: ["auto_brim", "outer_only", "inner_only", "no_brim",
+              "outer_and_inner", "brim_ears"],
+};
+
+/** Would this Orca accept the value as it stands? */
+function acceptable(key, value) {
+  if (ENUM_VALUES[key]) return ENUM_VALUES[key].includes(value);
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0;
+}
+
 /** Overlay the source's print-intent settings onto the U1 config; returns the keys carried. */
 export function carryPrintSettings(cfg, sourceSettings, enabled = true) {
   if (!sourceSettings || !enabled) return [];
@@ -801,6 +833,7 @@ export function carryPrintSettings(cfg, sourceSettings, enabled = true) {
     if (Array.isArray(value)) value = value.length ? value[0] : null;
     if (value === null || value === undefined || value === "") continue;
     value = String(value);
+    if (!acceptable(key, value)) continue;
     cfg[key] = Array.isArray(cfg[key])
       ? new Array(cfg[key].length || 1).fill(value)
       : value;
