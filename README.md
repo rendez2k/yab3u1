@@ -1,4 +1,4 @@
-# u1convert — 3MF → Snapmaker U1 converter
+# yab3u1 — Yet Another Bloody 3MF → U1 converter
 
 Three ways to run it, sharing the same conversion logic:
 

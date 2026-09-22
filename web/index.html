@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>3MF &rarr; Snapmaker U1</title>
+<title>yab3u1 &mdash; 3MF to Snapmaker U1</title>
 <link rel="icon" type="image/x-icon" href="icon.ico">
 <meta name="description" content="Convert Bambu Studio, OrcaSlicer or PrusaSlicer 3MF projects into Snapmaker U1 projects, keeping the multi-colour painting. Runs entirely in your browser.">
 <style>
@@ -28,7 +28,16 @@
   .wrap { max-width: 860px; margin: 0 auto; width: 100%; flex: 1 0 auto; }
   h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: .01em; }
   h1 span { color: var(--accent); }
+  h1 span.ver {
+    font-size: 11px; font-weight: 600; color: var(--dim);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 2px 9px; vertical-align: 3px; margin-left: 6px;
+  }
   .sub { color: var(--dim); margin: 0 0 26px; font-size: 14px; }
+  .sub .name {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-weight: 600; color: var(--text);
+  }
 
   #drop {
     border: 2px dashed var(--line); border-radius: 14px;
@@ -128,14 +137,19 @@
   footer .based a { color: var(--dim); text-decoration: underline; }
   footer .based a:hover { color: var(--accent); }
   footer .note { font-size: 12px; opacity: .8; }
+  details.whatsnew { font-size: 12px; opacity: .85; max-width: 46em; }
+  details.whatsnew summary { cursor: pointer; color: var(--dim); }
+  details.whatsnew summary:hover { color: var(--accent); }
+  details.whatsnew ul { margin: 8px 0 0; padding-left: 18px; text-align: left; }
+  details.whatsnew li { margin: 3px 0; }
 </style>
 </head>
 <body>
 <div class="wrap">
 
-  <h1>3MF &rarr; <span>Snapmaker U1</span></h1>
-  <p class="sub">Keeps multi-colour painting intact and rebuilds the U1 profile. Runs entirely
-     in your browser &mdash; your model is never uploaded.</p>
+  <h1>3MF &rarr; <span>Snapmaker U1</span> <span class="ver" id="ver"></span></h1>
+  <p class="sub"><span class="name">yab3u1</span> &mdash; keeps multi-colour painting intact and
+     rebuilds the U1 profile. Runs entirely in your browser &mdash; your model is never uploaded.</p>
 
   <div id="drop">
     <strong>Drop a .3mf here</strong>
@@ -213,6 +227,7 @@
     which is GPL-3.0 licensed.</span>
   <span class="note">The conversion runs entirely in your browser &mdash; your model is
     never uploaded anywhere.</span>
+  <details class="whatsnew" id="whatsnew"></details>
 </footer>
 
 <script type="module">
@@ -223,6 +238,21 @@ import { readSource, describe, convert, plateCapacity,
 
 const $ = (id) => document.getElementById(id);
 const state = { name: null, entries: null, src: null, info: null };
+
+/* ---------- version ----------
+   Bump APP_VERSION here and add an entry to CHANGELOG.md. The badges below
+   read from this constant so there is one place to change. */
+const APP_VERSION = "1.0.0";
+const CHANGES = [
+  "Multi-colour painting, support painting and the source's support setting all survive the conversion.",
+  "Fill the plate: a prime-tower aware layout, reporting the geometric count and optionally checking by slicing.",
+  "All of it runs in your browser &mdash; nothing is uploaded, and there is no server.",
+  "Same converter ships as a Python CLI and a local web UI if you would rather run it offline.",
+];
+
+$("ver").textContent = "v" + APP_VERSION;
+$("whatsnew").innerHTML = "<summary>What's new in " + APP_VERSION + "</summary><ul>"
+  + CHANGES.map((c) => "<li>" + c + "</li>").join("") + "</ul>";
 
 const show = (id) => $(id).classList.remove("hidden");
 const hide = (id) => $(id).classList.add("hidden");
