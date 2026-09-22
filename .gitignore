@@ -9,3 +9,7 @@ Flippin Pumpkin*.3mf
 
 # local editor/agent state
 .commandcode/
+
+# scratch written by serve.py when running the browser self-test
+_selftest_result.txt
+_selftest_output.3mf
