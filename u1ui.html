@@ -413,11 +413,13 @@ function fact(label, value) {
   return '<div class="fact"><b>' + label + '</b><span>' + value + '</span></div>';
 }
 
+const LABELS = { auto: "Match the source\u2019s layer height" };
+
 function fillSelect(id, options, selected) {
   const el = $(id);
   if (!options || !options.length) options = [selected];
   el.innerHTML = options.map(o =>
-    '<option' + (o === selected ? ' selected' : '') + '>' + esc(o) + '</option>').join('');
+    '<option' + (o === selected ? ' selected' : '') + '>' + esc(LABELS[o] || o) + '</option>').join('');
 }
 
 /* ---------- plate fitting ---------- */

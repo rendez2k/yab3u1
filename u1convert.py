@@ -381,6 +381,7 @@ class Source:
         self.plate_objects = 0
         self.source_settings = None
         self.support = None
+        self.layer_height = None
         self.volume_matrix = [row[:] for row in IDENTITY]
         self.build_transform = "1 0 0 0 1 0 0 0 1 0 0 0"
         self.placement = None
@@ -643,6 +644,7 @@ def _read_prusa(zf: zipfile.ZipFile) -> Source:
     src.types = types or ["PLA"] * len(palette)
     src.palette_count = max(len(src.colors), len(src.types))
     src.support = prusa_support(cfg)
+    src.layer_height = _as_float(cfg.get("layer_height"))
 
     blob = zf.read(SRC_PRUSA_MODEL).decode("utf-8", "replace")
     objects = re.findall(r"<object\b[^>]*>(.*?)</object>", blob, re.S)
@@ -686,6 +688,7 @@ def _read_bambu(zf: zipfile.ZipFile) -> Source:
     src.types = [str(t).upper() for t in cfg.get("filament_type", [])]
     src.palette_count = max(len(src.colors), len(src.types))
     src.support = bambu_support(cfg)
+    src.layer_height = _as_float(_first_scalar(cfg, "layer_height"))
 
     names = set(zf.namelist())
     if SRC_BBL_MODEL in names:
@@ -1595,6 +1598,7 @@ def describe(src: Source, profile_root: str | None = None,
         "subdivided_triangles": src.subdivided,
         "supports_painted": src.has_supports,
         "support": src.support,
+        "layer_height": src.layer_height,
         "footprint": footprint,
         "capacity": capacity,
         "bed": {"x": round(ax1 - ax0, 2), "y": round(ay1 - ay0, 2)},
