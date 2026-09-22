@@ -1,0 +1,11 @@
+# generated output, plus scratch
+*-U1.3mf
+*.partial
+__pycache__/
+u1convert-preview.png
+
+# the sample model used for testing; not part of the tool
+Flippin Pumpkin*.3mf
+
+# local editor/agent state
+.commandcode/

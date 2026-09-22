@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3MF &rarr; Snapmaker U1</title>
+<link rel="icon" type="image/x-icon" href="icon.ico">
+<meta name="description" content="Convert Bambu Studio, OrcaSlicer or PrusaSlicer 3MF projects into Snapmaker U1 projects, keeping the multi-colour painting. Runs entirely in your browser.">
+<style>
+  :root {
+    --bg: #14161a;
+    --panel: #1c1f25;
+    --panel2: #22262e;
+    --line: #2e333d;
+    --text: #e6e9ef;
+    --dim: #939aa8;
+    --accent: #f7a33c;
+    --ok: #4ec98a;
+    --bad: #ef6f6c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 20px 28px;
+    background: var(--bg); color: var(--text);
+    font: 15px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif;
+    display: flex; flex-direction: column; min-height: 100vh;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; width: 100%; flex: 1 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: .01em; }
+  h1 span { color: var(--accent); }
+  .sub { color: var(--dim); margin: 0 0 26px; font-size: 14px; }
+
+  #drop {
+    border: 2px dashed var(--line); border-radius: 14px;
+    padding: 44px 20px; text-align: center; cursor: pointer;
+    background: var(--panel); transition: border-color .15s, background .15s;
+  }
+  #drop:hover, #drop.over { border-color: var(--accent); background: var(--panel2); }
+  #drop strong { display: block; font-size: 17px; margin-bottom: 6px; }
+  #drop span { color: var(--dim); font-size: 13px; }
+  #drop input { display: none; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 20px; margin-top: 20px;
+  }
+  .card h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .07em;
+             color: var(--dim); margin: 0 0 14px; font-weight: 600; }
+  .hidden { display: none !important; }
+
+  .facts { display: flex; flex-wrap: wrap; gap: 10px 28px; margin-bottom: 4px; }
+  .fact b { display: block; font-size: 13px; color: var(--dim); font-weight: 500; }
+  .fact span { font-size: 15px; }
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 999px;
+          font-size: 12px; background: var(--panel2); border: 1px solid var(--line);
+          color: var(--dim); }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+       color: var(--dim); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  td.num { color: var(--dim); font-variant-numeric: tabular-nums; }
+  td.use { color: var(--dim); font-size: 13px; }
+
+  input[type=color] {
+    width: 46px; height: 30px; padding: 0; border: 1px solid var(--line);
+    border-radius: 6px; background: none; cursor: pointer;
+  }
+  select, input[type=number] {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 14px;
+  }
+  select { max-width: 100%; }
+  input[type=number] { width: 80px; }
+
+  .row { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 12px; color: var(--dim); text-transform: uppercase;
+                 letter-spacing: .06em; }
+  .field.grow { flex: 1 1 240px; }
+  .field select { width: 100%; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .check input { width: 16px; height: 16px; accent-color: var(--accent); }
+
+  button {
+    font: inherit; font-weight: 600; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--panel2); color: var(--text);
+    padding: 9px 16px;
+  }
+  button:hover:not(:disabled) { border-color: #454c59; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); color: #201703; border-color: var(--accent); }
+  button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+  .actions { display: flex; gap: 12px; align-items: center; margin-top: 20px;
+             flex-wrap: wrap; }
+
+  .hint { color: var(--dim); font-size: 13px; }
+  #log {
+    font: 12px/1.6 Consolas, "Cascadia Mono", monospace; white-space: pre-wrap;
+    background: #0f1114; border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; max-height: 260px; overflow: auto; margin-top: 16px;
+    color: #b9c2d0;
+  }
+  .err { color: var(--bad); }
+  .spinner {
+    width: 15px; height: 15px; border-radius: 50%;
+    border: 2px solid var(--line); border-top-color: var(--accent);
+    animation: spin .8s linear infinite; display: inline-block;
+    vertical-align: -2px; margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  a.dl { color: var(--accent); font-weight: 600; text-decoration: none; }
+  a.dl:hover { text-decoration: underline; }
+
+  footer {
+    max-width: 860px; margin: 40px auto 0; width: 100%;
+    border-top: 1px solid var(--line); padding-top: 16px;
+    color: var(--dim); font-size: 13px; text-align: center;
+    display: flex; flex-direction: column; gap: 6px; align-items: center;
+  }
+  footer a.repo {
+    color: var(--text); text-decoration: none; font-weight: 600;
+    border-bottom: 1px solid var(--line);
+  }
+  footer a.repo:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  footer .based { font-size: 12px; opacity: .85; max-width: 46em; }
+  footer .based a { color: var(--dim); text-decoration: underline; }
+  footer .based a:hover { color: var(--accent); }
+  footer .note { font-size: 12px; opacity: .8; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>3MF &rarr; <span>Snapmaker U1</span></h1>
+  <p class="sub">Keeps multi-colour painting intact and rebuilds the U1 profile. Runs entirely
+     in your browser &mdash; your model is never uploaded.</p>
+
+  <div id="drop">
+    <strong>Drop a .3mf here</strong>
+    <span>or click to choose a file &mdash; Bambu Studio, OrcaSlicer or PrusaSlicer projects</span>
+    <input type="file" id="file" accept=".3mf">
+  </div>
+
+  <div class="card hidden" id="source">
+    <h2>Source</h2>
+    <div class="facts" id="facts"></div>
+    <div id="slotarea"></div>
+  </div>
+
+  <div class="card hidden" id="options">
+    <h2>Plate &amp; profiles</h2>
+    <div class="row">
+      <div class="field grow">
+        <label for="filament">Filament profile</label>
+        <select id="filament"></select>
+      </div>
+      <div class="field grow">
+        <label for="process">Process profile</label>
+        <select id="process"></select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:18px">
+      <div class="field">
+        <label for="copies">Copies</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="number" id="copies" min="1" value="1">
+          <button id="fill">Fill bed</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="gap">Spacing (mm)</label>
+        <input type="number" id="gap" min="0" step="0.5" value="5">
+      </div>
+      <div class="field">
+        <label for="supports">Supports</label>
+        <select id="supports">
+          <option value="auto" selected>From the source file</option>
+          <option value="on">On</option>
+          <option value="off">Off</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <label class="check"><input type="checkbox" id="tower" checked> Leave room for the prime tower</label>
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <label class="check"><input type="checkbox" id="repos" checked> Centre if off the plate</label>
+      </div>
+    </div>
+    <p class="hint" id="supporthint" style="margin:16px 0 0"></p>
+    <p class="hint" id="fithint" style="margin:8px 0 0"></p>
+
+    <div class="actions">
+      <button class="primary" id="go">Convert and download</button>
+      <button id="again">Choose another file</button>
+    </div>
+    <div id="log" class="hidden"></div>
+  </div>
+
+</div>
+
+<footer>
+  <script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script>
+  <script type='text/javascript'>kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'X8X8JM9AA');kofiwidget2.draw();</script>
+  <a class="repo" href="https://github.com/rendez2k/3mf-to-u1"
+     target="_blank" rel="noopener noreferrer">Want to run it locally? Get the tool on GitHub</a>
+  <span class="based">Based on
+    <a href="https://github.com/josuanbn/bl2u1" target="_blank" rel="noopener noreferrer">bl2u1</a>
+    by josuanbn &mdash; the Snapmaker U1 settings baseline comes from that project,
+    which is GPL-3.0 licensed.</span>
+  <span class="note">The conversion runs entirely in your browser &mdash; your model is
+    never uploaded anywhere.</span>
+</footer>
+
+<script type="module">
+import { readZip, writeZip } from "./zip.js";
+import { readSource, describe, convert, plateCapacity,
+         FILAMENT_PRESETS, PROCESS_PRESETS, MATERIALS,
+         DEFAULT_FILAMENT, DEFAULT_PROCESS } from "./converter.js";
+
+const $ = (id) => document.getElementById(id);
+const state = { name: null, entries: null, src: null, info: null };
+
+const show = (id) => $(id).classList.remove("hidden");
+const hide = (id) => $(id).classList.add("hidden");
+const esc = (s) => String(s).replace(/[&<>"]/g,
+  (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/* ---------- drop zone ---------- */
+const drop = $("drop"), picker = $("file");
+drop.addEventListener("click", () => picker.click());
+picker.addEventListener("change", () => { if (picker.files[0]) load(picker.files[0]); });
+["dragenter", "dragover"].forEach((e) => drop.addEventListener(e, (ev) => {
+  ev.preventDefault(); drop.classList.add("over");
+}));
+["dragleave", "drop"].forEach((e) => drop.addEventListener(e, (ev) => {
+  ev.preventDefault(); drop.classList.remove("over");
+}));
+drop.addEventListener("drop", (ev) => {
+  const f = ev.dataTransfer.files[0];
+  if (f) load(f);
+});
+
+async function load(file) {
+  if (!/\.3mf$/i.test(file.name)) return fail("that is not a .3mf file");
+  clearLog();
+  const restore = "Drop a .3mf here";
+  drop.querySelector("strong").textContent = "Reading " + file.name + "\u2026";
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const entries = await readZip(bytes);
+    const src = readSource(entries);
+    const info = describe(src);
+    state.name = file.name;
+    state.entries = entries;
+    state.src = src;
+    state.info = info;
+    render(info, file.size);
+  } catch (err) {
+    console.error(err);
+    fail(err.message || String(err));
+  } finally {
+    drop.querySelector("strong").textContent = restore;
+    picker.value = "";
+  }
+}
+
+function fail(msg) {
+  show("log");
+  $("log").innerHTML = '<span class="err">' + esc(msg) + "</span>";
+}
+
+/* ---------- render ---------- */
+const KIND = {
+  prusa: "PrusaSlicer / Orca project",
+  bambu: "Bambu Studio / Orca project",
+  plain: "plain 3MF (no project settings)",
+};
+
+function render(d, size) {
+  show("source"); show("options"); hide("log");
+
+  $("facts").innerHTML = [
+    fact("file", esc(d.filename || state.name)),
+    fact("format", KIND[d.kind] || d.kind),
+    fact("object", esc(d.object || "?")),
+    fact("painted", d.paintedTriangles
+      ? d.paintedTriangles.toLocaleString() + " triangles"
+      : '<span class="err">none found</span>'),
+    fact("size", `${d.footprint.x.toFixed(1)} &times; ${d.footprint.y.toFixed(1)} ` +
+                 `&times; ${d.footprint.z.toFixed(1)} mm`),
+    fact("plate", `${d.bed.x.toFixed(0)} &times; ${d.bed.y.toFixed(0)} mm`),
+  ].join("");
+
+  let html = "<table><thead><tr><th>Slot</th><th>Colour</th><th>Material</th>" +
+             "<th>From</th><th>Painted</th></tr></thead><tbody>";
+  d.slots.forEach((s, i) => {
+    html += "<tr>" +
+      `<td class="num">${s.slot}</td>` +
+      `<td><input type="color" data-slot="${i}" value="${(s.color || "#ffffff").toLowerCase()}"></td>` +
+      `<td><select data-type="${i}">` +
+        MATERIALS.map((t) => `<option${t === s.type ? " selected" : ""}>${t}</option>`).join("") +
+      "</select></td>" +
+      `<td class="use">extruder ${s.sourceExtruder}` +
+        (s.isBase ? ' <span class="pill">base</span>' : "") + "</td>" +
+      `<td class="use">${s.paintedTriangles
+          ? s.paintedTriangles.toLocaleString() + " tris" : "&mdash;"}</td>` +
+    "</tr>";
+  });
+  $("slotarea").innerHTML = html + "</tbody></table>";
+
+  const sup = d.support;
+  if (sup) {
+    let s = "source file: supports <b>" + (sup.enabled ? "on" : "off") + "</b>";
+    if (sup.enabled && sup.type) {
+      s += " &mdash; " + esc(sup.type) + (sup.angle ? " at " + sup.angle + "&deg;" : "");
+    }
+    if (d.supportsPainted) s += " &middot; support painting present";
+    $("supporthint").innerHTML = s;
+  } else {
+    $("supporthint").innerHTML = "the source file carries no support setting; the " +
+      "profile default is used";
+  }
+
+  fillSelect("filament", FILAMENT_PRESETS, DEFAULT_FILAMENT);
+  fillSelect("process", PROCESS_PRESETS, DEFAULT_PROCESS);
+  $("copies").value = 1;
+  updateFit();
+}
+
+const fact = (label, value) =>
+  `<div class="fact"><b>${label}</b><span>${value}</span></div>`;
+
+function fillSelect(id, options, selected) {
+  $(id).innerHTML = options.map((o) =>
+    `<option${o === selected ? " selected" : ""}>${esc(o)}</option>`).join("");
+}
+
+/* ---------- plate fitting (instant: it is all local) ---------- */
+function updateFit() {
+  const d = state.info;
+  if (!d || !state.src) return;
+  const gap = parseFloat($("gap").value) || 0;
+  const capacity = plateCapacity(state.src, gap, $("tower").checked, {
+    filament: $("filament").value,
+    process: $("process").value,
+  });
+  d.capacity = capacity;
+
+  const copies = Math.max(1, parseInt($("copies").value) || 1);
+  let msg = `${d.footprint.x.toFixed(1)} \u00d7 ${d.footprint.y.toFixed(1)} mm object on a ` +
+            `${d.bed.x.toFixed(0)} \u00d7 ${d.bed.y.toFixed(0)} mm plate`;
+  if (capacity > 1) {
+    msg += ` \u2014 with ${gap} mm spacing the plate holds <b>${capacity}</b>` +
+           ($("tower").checked ? " (prime tower kept clear)" : " (tower reservation off)");
+  } else {
+    msg += " \u2014 only one fits";
+  }
+  if (copies > capacity) {
+    msg += ` <span class="err">\u2014 you asked for ${copies}, it will be capped</span>`;
+  }
+  $("fithint").innerHTML = msg;
+  $("fill").disabled = capacity <= 1;
+}
+["copies", "gap"].forEach((id) => $(id).addEventListener("input", updateFit));
+$("tower").addEventListener("change", updateFit);
+$("supports").addEventListener("change", () => {
+  const sup = state.info && state.info.support;
+  if (!sup) return;
+  const note = $("supports").value === "off" && state.info.supportsPainted
+    ? "supports will be off, but the model has painted enforcers that Orca will warn about"
+    : "";
+  $("supporthint").dataset.note = note;
+});
+$("fill").addEventListener("click", () => {
+  $("copies").value = state.info ? state.info.capacity : 1;
+  updateFit();
+});
+
+/* ---------- convert ---------- */
+$("go").addEventListener("click", async () => {
+  if (!state.entries) return;
+  $("go").disabled = true;
+  show("log");
+  $("log").innerHTML = '<span class="spinner"></span>working\u2026';
+
+  const lines = [];
+  const onLog = (line) => {
+    lines.push(line);
+    $("log").innerHTML = '<span class="spinner"></span>' + lines.map(esc).join("\n");
+    $("log").scrollTop = $("log").scrollHeight;
+  };
+
+  try {
+    const options = {
+      copies: Math.max(1, parseInt($("copies").value) || 1),
+      gap: parseFloat($("gap").value) || 0,
+      supports: $("supports").value,
+      avoidTower: $("tower").checked,
+      reposition: $("repos").checked,
+      filament: $("filament").value,
+      process: $("process").value,
+      colors: [...document.querySelectorAll("input[type=color]")].map((i) => i.value.toUpperCase()),
+      types: [...document.querySelectorAll("select[data-type]")].map((s) => s.value),
+      log: onLog,
+    };
+    const res = await convert(state.entries, options);
+    onLog("packing      : building the archive\u2026");
+    const bytes = await writeZip(res.items);
+
+    const base = state.name.replace(/\.3mf$/i, "");
+    const blob = new Blob([bytes], { type: "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+    $("log").innerHTML = lines.map(esc).join("\n") +
+      `\n\n<a class="dl" href="${url}" download="${esc(base)}-U1.3mf">` +
+      `\u2b07 save ${esc(base)}-U1.3mf (${(bytes.length / 1048576).toFixed(1)} MB)</a>`;
+  } catch (err) {
+    console.error(err);
+    $("log").innerHTML = lines.map(esc).join("\n") +
+      '<span class="err">\n' + esc(err.message || String(err)) + "</span>";
+  } finally {
+    $("go").disabled = false;
+  }
+});
+
+$("again").addEventListener("click", () => {
+  hide("source"); hide("options"); hide("log");
+  state.entries = null; state.src = null; state.info = null;
+  picker.click();
+});
+function clearLog() { hide("log"); $("log").innerHTML = ""; }
+
+/* drag a file anywhere on the page */
+window.addEventListener("dragover", (e) => e.preventDefault());
+window.addEventListener("drop", (e) => {
+  e.preventDefault();
+  const f = e.dataTransfer && e.dataTransfer.files[0];
+  if (f) load(f);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>converter self-test</title>
+<style>
+  body { background: #14161a; color: #e6e9ef; font: 13px/1.6 Consolas, monospace; padding: 24px; }
+  pre { white-space: pre-wrap; }
+  .ok { color: #4ec98a; } .bad { color: #ef6f6c; }
+</style>
+</head>
+<body>
+<h1 style="font:600 15px system-ui">converter self-test</h1>
+<p style="font:13px system-ui;color:#939aa8">
+  Runs the real converter against a file, in this browser, and reports what happened.
+  Use <code>?file=some.3mf</code> to point it at something bigger.
+</p>
+<pre id="out">running&hellip;</pre>
+
+<!-- if the module script never runs (a bad import path, say), this marker stays -->
+<script>window.__moduleStarted = false;</script>
+<script>
+// report anything that blows up before or outside the try/catch below
+window.addEventListener("error", (e) => {
+  fetch("/__selftest__/JSERR?d=" + encodeURIComponent(
+    (e.message || "resource error") + " @ " + (e.filename || "?") + ":" + (e.lineno || 0)),
+    { cache: "no-store" }).catch(() => {});
+});
+window.addEventListener("unhandledrejection", (e) => {
+  fetch("/__selftest__/REJECT?d=" + encodeURIComponent(
+    String((e.reason && e.reason.message) || e.reason)), { cache: "no-store" }).catch(() => {});
+});
+</script>
+
+<script type="module">
+import { readZip, writeZip } from "./zip.js";
+import { readSource, describe, convert, plateCapacity } from "./converter.js";
+
+window.__moduleStarted = true;
+const lines = [];
+const out = (s) => { lines.push(s); document.getElementById("out").textContent = lines.join("\n"); };
+const t0 = performance.now();
+
+try {
+  const target = new URLSearchParams(location.search).get("file") || "selftest-fixture.3mf";
+  const res = await fetch(target, { cache: "no-store" });
+  if (!res.ok) throw new Error(`could not fetch ${target}: HTTP ${res.status}`);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  out(`fetched ${target} (${bytes.length.toLocaleString()} bytes)`);
+
+  const entries = await readZip(bytes);
+  out(`read ${entries.size} members: ${[...entries.keys()].join(", ")}`);
+
+  const src = readSource(entries);
+  out(`source: kind=${src.kind} object=${src.objectName} palette=${src.paletteSource} ` +
+      `colours=${src.colors.join(" ")} baseExtruder=${src.baseExtruder}`);
+  out(`paint: ${src.painted} triangles, states ` +
+      `${JSON.stringify([...src.paintStates].sort((a, b) => a[0] - b[0]))}`);
+
+  const info = describe(src);
+  out(`describe: footprint ${JSON.stringify(info.footprint)} bed ${JSON.stringify(info.bed)} ` +
+      `capacity ${info.capacity}`);
+  out(`slots: ${JSON.stringify(info.slots.map((s) => [s.slot, s.color, s.paintedTriangles]))}`);
+  out(`capacity by spacing: ${[5, 10, 20, 7777].map((g) => `${g}->${plateCapacity(src, g)}`).join(", ")}`);
+
+  const first = await convert(entries, { copies: 1, gap: 5, supports: "auto" });
+  out(`convert(1 copy): ${first.items.length} items`);
+  out(first.log.join("\n"));
+
+  // A single-copy output is a valid *input*, so this genuinely round-trips the
+  // reader against the writer.
+  const oneBack = await readSource(await readZip(await writeZip(first.items)));
+  out(`round trip: painted=${oneBack.painted} ` +
+      `states=${JSON.stringify([...oneBack.paintStates].sort((a, b) => a[0] - b[0]))} ` +
+      `colours=${oneBack.colors.join(" ")}`);
+
+  const fill = await convert(entries, { copies: 1e6, gap: 5, supports: "auto" });
+  const outBytes = await writeZip(fill.items);
+  out(`convert(fill): ${fill.info.copies} copies -> ${outBytes.length.toLocaleString()} bytes`);
+
+  // A multi-copy output is deliberately not valid input (it holds N objects), so
+  // check its structure directly: one object and one item per copy, every painted
+  // triangle renamed, nothing left in the Prusa spelling.
+  const back = await readZip(outBytes);
+  const dec = new TextDecoder();
+  const doc = dec.decode(back.get("3D/3dmodel.model"));
+  const items = (doc.match(/<item\b/g) || []).length;
+  const objects = (doc.match(/<object id=/g) || []).length;
+  const objFile = [...back.keys()].find((n) => n.startsWith("3D/Objects/"));
+  const objText = dec.decode(back.get(objFile));
+  const renamed = (objText.match(/paint_color="/g) || []).length;
+  const stale = (objText.match(/mmu_segmentation="/g) || []).length;
+  const cfg = JSON.parse(dec.decode(back.get("Metadata/project_settings.config")));
+  out(`output: ${back.size} members, ${items} items, ${objects} objects, ` +
+      `paint_color=${renamed}, stale=${stale}, slots=${JSON.stringify(cfg.filament_colour)}`);
+
+  const ok = items === fill.info.copies
+    && objects === fill.info.copies
+    && renamed === src.painted
+    && stale === 0
+    && back.size === fill.items.length
+    && oneBack.painted === src.painted
+    && cfg.filament_colour.length === 4;
+  out(`RESULT: ${ok ? "PASS" : "FAIL"} in ${Math.round(performance.now() - t0)} ms`);
+  document.title = ok ? "selftest PASS" : "selftest FAIL";
+
+  // hand the archive back so the slicer itself can be pointed at what the
+  // browser produced (only meaningful when the test server is listening)
+  try {
+    const r = await fetch("/__upload__", { method: "POST", body: outBytes });
+    out(r.status === 204 ? "uploaded the output for slicing" : "upload declined");
+  } catch { /* no test server: fine */ }
+
+  beacon(ok ? "PASS" : "FAIL", lines);
+} catch (err) {
+  const msg = "ERR: " + (err && err.message ? err.message : String(err));
+  out("RESULT: FAIL " + msg);
+  out(String(err && err.stack || ""));
+  document.title = "selftest FAIL";
+  lines.push(msg);
+  beacon("FAIL", lines);
+}
+
+function beacon(verdict, all) {
+  let picked = all.filter((l) =>
+    /RESULT|fetched|read |source:|paint:|describe:|capacity|ERR/.test(l));
+  if (picked.length < 2) picked = all.slice(-5);
+  const detail = picked.join(" | ").slice(0, 900);
+  // a 404 is fine; the point is the request reaching the test server
+  fetch(`/__selftest__/${verdict}?d=${encodeURIComponent(detail)}`, { cache: "no-store" })
+    .catch(() => {});
+}
+</script>
+
+<script>
+setTimeout(() => {
+  if (!window.__moduleStarted) {
+    document.getElementById("out").textContent =
+      "RESULT: FAIL module script never started (bad import path?)";
+    document.title = "selftest FAIL";
+  }
+}, 15000);
+</script>
+</body>
+</html>
