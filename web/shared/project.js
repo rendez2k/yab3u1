@@ -17,7 +17,7 @@ import { SLOTS, arrange, bijectionProblem, completeRule, isIdentity }
   from "./assignment.js";
 import { COLOUR_NS, colourOf, colourGroupXml, leafTriangles, parseColourGroups } from "./standard.js";
 import { relationshipXml, thumbnailPlan } from "./thumbnail.js";
-import { SOURCE_KEYS, applySupport, carryPrintSettings, normaliseSupportMode, supportOf, transferSettings, planningAllowance }
+import { SOURCE_KEYS, applySupport, carryPrintSettings, normaliseSupportMode, supportOf, transferSettings, planningAllowance, setProcessOverrides }
   from "./printSettings.js";
 import { addBox, addPoint, boxSize, boxValid, emptyBox, layoutOffsets, planLayout,
          transformBox, targetLayout }
@@ -2340,8 +2340,9 @@ export function exportProject(project, plateId, objectIds, options) {
     const support = supportOf(project.sourceSettings);
     const supportNote = applySupport(cfg, support, mode, painted);
     const carried = carryPrintSettings(cfg, project.sourceSettings, carry);
+    const overrides = setProcessOverrides(cfg, carried, recipes.length > 0);
     settingNotes = { carry, supportMode: mode, carried, support: supportNote,
-                     supportsPainted: painted };
+                     supportsPainted: painted, overrides };
     members.set(SRC_BBL_PROJECT, encoder.encode(JSON.stringify(cfg, null, 4)));
   } else if (target === "bambu" || target === "orca") {
     if (standard) {

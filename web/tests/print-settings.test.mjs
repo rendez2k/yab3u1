@@ -13,7 +13,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { readZip } from "../zip.js";
 import { BASE_SETTINGS } from "../base_settings.js";
 import * as project from "../shared/project.js";
-import { CARRY_KEYS, appliedSettings, supportOf, planningAllowance, transferSettings } from "../shared/printSettings.js";
+import { CARRY_KEYS, appliedSettings, supportOf, planningAllowance, transferSettings, setProcessOverrides } from "../shared/printSettings.js";
 import { ConvertSession } from "../shared/convertSession.js";
 
 const encoder = new TextEncoder();
@@ -194,6 +194,63 @@ await ok("only reviewed keys with acceptable values are offered to the user", ()
 });
 
 /* ------------------------------------------ carrying onto the U1 profile --- */
+
+await ok("U1 preset overrides retain designer quality, strength and supports on load", () => {
+  const settings = {
+    layer_height: "0.28", wall_loops: "4", top_shell_layers: "6",
+    seam_position: "back", sparse_infill_density: "7%", sparse_infill_pattern: "gyroid",
+    enable_support: "1", support_type: "tree(auto)", support_threshold_angle: "30",
+    support_on_build_plate_only: "1", support_critical_regions_only: "1",
+    raft_layers: "2", brim_width: "8",
+  };
+  const { cfg, built } = u1ConfigOf(bambuSource({ settings: {
+    ...settings,
+    different_settings_to_system: ["machine_start_gcode;skeleton_infill_density"],
+  } }));
+  const list = cfg.different_settings_to_system;
+  assert.equal(list.length, cfg.filament_colour.length + 2);
+  assert.ok(list.slice(1).every((entry) => entry === ""), "no foreign filament/printer overrides");
+  const keys = list[0].split(";");
+  assert.deepEqual(keys, built.settings.overrides);
+  assert.ok(!keys.includes("machine_start_gcode"));
+  assert.ok(!keys.includes("skeleton_infill_density"));
+  // Orca's matching-preset importer uses the explicit different-keys list.
+  // Exercise that boundary: checking the JSON values alone missed this bug.
+  const loaded = { ...BASE_SETTINGS };
+  for (const key of keys) loaded[key] = cfg[key];
+  for (const [key, value] of Object.entries(settings)) {
+    assert.ok(keys.includes(key), `${key} must be declared even if equal to bundled defaults`);
+    assert.equal(loaded[key], value, `${key} survives matching-preset import`);
+  }
+});
+
+await ok("Prusa aliases use destination names in U1 preset override metadata", () => {
+  const { cfg } = u1ConfigOf(prusaSource({ perimeters: "5", fill_density: "7%",
+    support_material: "1", support_material_buildplate_only: "1" }));
+  const keys = cfg.different_settings_to_system[0].split(";");
+  for (const key of ["wall_loops", "sparse_infill_density", "enable_support", "support_on_build_plate_only"])
+    assert.ok(keys.includes(key), key);
+  assert.ok(!keys.includes("perimeters"));
+  assert.ok(!keys.includes("support_material"));
+});
+
+await ok("disabled carry and explicit support Off do not restore source overrides", () => {
+  const { cfg } = u1ConfigOf(bambuSource({ settings: {
+    wall_loops: "5", enable_support: "1", sparse_infill_density: "7%",
+  } }), { carrySettings: false, supportMode: "off" });
+  assert.deepEqual(cfg.different_settings_to_system[0].split(";"),
+    ["enable_support", "support_threshold_angle", "support_type"]);
+  assert.equal(cfg.enable_support, "0");
+});
+
+await ok("blend override metadata has process, each configured filament, then printer", () => {
+  const cfg = { filament_colour: Array(6).fill("#FFFFFF"), enable_support: "1",
+    adaptive_layer_height: "0", mixed_filament_definitions: "test recipe" };
+  setProcessOverrides(cfg, [], true);
+  assert.equal(cfg.different_settings_to_system.length, 8);
+  assert.ok(cfg.different_settings_to_system[0].includes("mixed_filament_definitions"));
+  assert.ok(cfg.different_settings_to_system[0].includes("adaptive_layer_height"));
+});
 
 await ok("a Bambu source carries the allowlisted print settings, not its machine", () => {
   const { cfg, built } = u1ConfigOf(bambuSource({ settings: {

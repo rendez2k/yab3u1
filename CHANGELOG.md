@@ -5,6 +5,21 @@ The version shown on the page comes from `VERSION` in `web/convert-page.js` (and
 the collapsed "What's new" block in the footer. Bump those constants and add a
 section here together.
 
+## 2.5.1 — retain custom settings when Snapmaker loads its preset
+
+Restored the process override metadata required by Snapmaker Orca's preset
+importer. The shared exporter wrote the correct values but omitted this list,
+allowing a matching installed preset to replace transferred quality, strength,
+support and adhesion settings. This applies to single-file, bulk and Full Spectrum
+Snapmaker exports. The list is rebuilt from reviewed destination settings; foreign
+machine or filament overrides are not imported. Explicit support Off still wins.
+
+Regression checks cover supports, seam, infill, shells, layer height, rafts,
+Prusa aliases and settings opt-out. A real six-copy Frankenstein browser export
+contains both the designer values and their override declarations. Native
+Snapmaker GUI confirmation is still required; archive checks alone do not prove
+the slicer's final loaded state. Previously downloaded files need re-exporting.
+
 ## 2.5.0 — bulk conversion
 
 Added Bulk conversion alongside Single file on the existing homepage. Add files

@@ -51,6 +51,32 @@ export const CARRY_KEYS = [
   "ironing_type", "ironing_pattern", "brim_type",
 ];
 
+/** Orca loads a matching preset using this list of explicit process overrides.
+ * Writing values into project_settings.config alone is not sufficient. Mark
+ * reviewed, deliberately applied values even when they equal our bundled
+ * baseline: the user's installed preset may have different defaults.
+ * Order is process, one entry per configured filament, then printer.
+ * Never reuse the source's list: it can contain foreign machine settings.
+ */
+export function setProcessOverrides(cfg, carried, blends = false) {
+  const keys = new Set([
+    ...carried.filter((key) => CARRY_KEYS.includes(key)),
+    "enable_support", "support_type", "support_threshold_angle",
+  ]);
+  if (blends) {
+    for (const key of ["mixed_filament_definitions", "mixed_color_layer_height_a",
+      "mixed_color_layer_height_b", "mixed_filament_gradient_mode",
+      "mixed_filament_advanced_dithering", "mixed_filament_height_lower_bound",
+      "mixed_filament_height_upper_bound", "dithering_z_step_size",
+      "dithering_local_z_mode", "dithering_step_painted_zones_only",
+      "adaptive_layer_height"]) keys.add(key);
+  }
+  const process = [...keys].filter((key) => cfg[key] !== undefined).sort();
+  cfg.different_settings_to_system = [process.join(";"),
+    ...Array(cfg.filament_colour.length + 1).fill("")];
+  return process;
+}
+
 /* PrusaSlicer names for several of the same settings.  Without these a Prusa
    project carries far less than a Bambu one, because the names do not match. */
 export const PRUSA_ALIASES = {

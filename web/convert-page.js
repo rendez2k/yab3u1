@@ -15,7 +15,7 @@ import { planLayout } from "./shared/layout.js";
 import { supportOf, transferSettings } from "./shared/printSettings.js";
 import { initBatch } from "./batch-page.js";
 
-const VERSION = "2.5.0";
+const VERSION = "2.5.1";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -28,6 +28,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "Fixed Snapmaker Orca reverting transferred quality, strength and support settings to preset defaults on opening an export. Download a fresh conversion to apply this fix to older files.",
   "Bulk conversion: add several projects, choose one destination and download a ZIP with one 3MF per plate plus a conversion report. Files run one at a time; stopping keeps completed outputs.",
   "Compatible designer quality, strength and support settings now travel to every target by default, with a transfer-details list.",
   "U1 Fill plate reserves a tower corner instead of full side strips. Clone spacing includes explicit brims/rafts and an estimated support allowance; check automatic contours after slicing.",
