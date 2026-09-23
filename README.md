@@ -17,7 +17,7 @@ Three ways to use the project, with different workflows:
 | --- | --- | --- |
 | **`U1 Converter` shortcut** | this machine | local web UI (`u1ui.py` + `u1ui.html`), reads your installed Orca profiles and can verify a plate by slicing |
 | **`u1convert.py`** | any machine with Python | the command line tool; `--fill-bed`, `--verify`, `--supports`, `--colors` |
-| **`web/`** | any static host — live at <https://yab3u1.netlify.app> | [browser version](#the-browser-version-web) — v2.4.0, the whole conversion in the page, nothing uploaded |
+| **`web/`** | any static host — live at <https://yab3u1.netlify.app> | [browser version](#the-browser-version-web) — v2.4.1, the whole conversion in the page, nothing uploaded |
 
 A local replacement for [bl2u1.nbn.cat](https://bl2u1.nbn.cat) /
 [josuanbn/bl2u1](https://github.com/josuanbn/bl2u1) that actually works on
@@ -53,10 +53,9 @@ There are two routes, both static:
   to the filament you pick — the colour already in that slot takes the vacated
   one, so nothing is merged and the model looks exactly as it did — and
   **Repaint colours** prints a source colour in another filament's colour, where
-  two colours sent to one filament merge. The exchange control swaps two
-  colours' filaments in one step in either mode, every row and option names its
-  colour in plain words beside the hex, and a rearranged file says so in its own
-  metadata. Projects carrying native Full Spectrum blends are refused rather
+  two colours sent to one filament merge. Choose directly in each colour's row;
+  **Reset assignments** restores the original mapping. Every row and option
+  names its colour beside the hex, and a rearranged file says so in its metadata. Projects carrying native Full Spectrum blends are refused rather
   than flattened.
   An optional **Show preview** draws Original and Output views of the model
   (prepared only when you ask), and every download carries a thumbnail rendered
@@ -97,7 +96,7 @@ web/
 ```
 
 The pages report their own version (`VERSION` in `web/convert-page.js` and
-`web/recolour.js`); the live deployment is **v2.4.0**.
+`web/recolour.js`); the live deployment is **v2.4.1**.
 
 **Deploying.** The Python UI cannot go on a static host — it needs your Orca
 install and the slicer — but the browser converter can, and that is what

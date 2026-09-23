@@ -15,7 +15,7 @@ import { RecolourWorker } from "./shared/workerClient.js";
 import { readZip } from "./zip.js";
 
 const REEL_KEY = "yab3u1-web-reels";
-const VERSION = "2.4.0";
+const VERSION = "2.4.1";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({

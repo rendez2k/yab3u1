@@ -455,28 +455,11 @@
             <span class="role">print in another filament's colour</span></span>
         </label>
       </div>
-      <p class="hint" id="convertmaphint">Every colour keeps its own appearance.
-        Send a colour to another filament and the colour already in that slot
-        moves back to the one this colour leaves, so nothing is merged and nothing
-        is lost. Exchange swaps two colours' filaments in one step.</p>
+      <p class="hint" id="convertmaphint">Choose the slot where each colour is loaded.
+        The other colour moves automatically. Your model keeps the same colours.</p>
       <div id="convertmap"></div>
       <div class="row" style="margin-top:12px">
-        <div class="field">
-          <label for="convertswapa">Exchange</label>
-          <select id="convertswapa" aria-label="First filament to exchange"></select>
-        </div>
-        <div class="field">
-          <label for="convertswapb">&nbsp;</label>
-          <select id="convertswapb" aria-label="Second filament to exchange"></select>
-        </div>
-        <div class="field">
-          <label>&nbsp;</label>
-          <button type="button" id="convertswap">Exchange these two</button>
-        </div>
-        <div class="field">
-          <label>&nbsp;</label>
-          <button type="button" id="convertreset">Reset assignments</button>
-        </div>
+        <button type="button" id="convertreset">Reset assignments</button>
       </div>
     </fieldset>
 

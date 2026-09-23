@@ -5,6 +5,12 @@ The version shown on the page comes from `VERSION` in `web/convert-page.js` (and
 the collapsed "What's new" block in the footer. Bump those constants and add a
 section here together.
 
+## 2.4.1 — simpler filament assignment
+
+Removed the separate Exchange row. Choose a slot beside each colour and the
+other colour moves automatically; Reset assignments restores the original mapping.
+Shortened the instructions for arranging slots and repainting colours.
+
 ## 2.4.0 — arrange filament slots without changing a colour
 
 The assignment table could only repaint: sending green to filament 3 printed

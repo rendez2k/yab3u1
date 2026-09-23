@@ -14,7 +14,7 @@ import { thumbnailSizes } from "./shared/thumbnail.js";
 import { planLayout } from "./shared/layout.js";
 import { appliedSettings, supportOf } from "./shared/printSettings.js";
 
-const VERSION = "2.4.0";
+const VERSION = "2.4.1";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -30,7 +30,8 @@ const CHANGES = [
   "The homepage converts a painted 3MF between Snapmaker Orca, Bambu Studio, OrcaSlicer and PrusaSlicer, in any direction.",
   "Every source filament definition, the paint and the geometry travel unchanged; there is no four-slot limit and no colour substitution.",
   "Filament assignment has two modes. Arrange slots (the default) keeps every colour and moves it to the filament you pick, displacing the colour that was there; Repaint colours prints a source colour in another filament's colour.",
-  "Every row, option and exchange control names its colour in plain words beside the hex, and the file says which kind of assignment wrote it.",
+  "Choose a slot beside each colour; the other colour moves automatically. The separate Exchange controls have been removed.",
+  "Every row and option names its colour in plain words beside the hex.",
   "A project carrying native Full Spectrum blends is refused with a sentence rather than quietly written as a solid colour.",
   "Optional Show preview with Original/Output views, drawn only when you ask for it.",
   "Every download carries a thumbnail rendered from the output colours, so Windows Explorer and the slicers show the model you actually saved.",
@@ -282,12 +283,6 @@ function renderChoices(state) {
   // the plain name, then the hex that tells two similar shades apart.
   const options = optionsFor(state.colours);
   const signature = paletteSignature(state.colours);
-  $("convertswapa").innerHTML = options;
-  $("convertswapb").innerHTML = options;
-  $("convertswapa").dataset.palette = signature;
-  $("convertswapb").dataset.palette = signature;
-  $("convertswapa").value = "1";
-  $("convertswapb").value = String(Math.min(3, state.colours.length));
 
   const rows = state.colours.map((colour, index) => {
     const source = index + 1;
@@ -525,18 +520,15 @@ function syncLayout() {
 /* ---------- the two assignment modes ----------
  *
  * The same table drives both, so switching the mode keeps the rows, the selects
- * and the exchange control where they are and only changes what they mean.  Each
+ * where they are and only changes what they mean. Each
  * mode owns its own map in the session, so a look at one never loses the other.
  */
 
 const MODE_HINT = {
-  slots: "Every colour keeps its own appearance. Send a colour to another "
-    + "filament and the colour already in that slot moves back to the one this "
-    + "colour leaves, so nothing is merged and nothing is lost. Exchange swaps "
-    + "two colours' filaments in one step.",
-  repaint: "The source colour is printed in the colour of the filament you send "
-    + "it to, so the model's colours change: two colours sent to one filament are "
-    + "merged into it. Exchange swaps two of them in one step.",
+  slots: "Choose the slot where each colour is loaded. The other colour moves "
+    + "automatically. Your model keeps the same colours.",
+  repaint: "Choose a replacement colour for each original colour. This changes "
+    + "the model's colours; several original colours can use the same replacement.",
 };
 
 /** The mode radios, the hint under them and the "what it means" line above the
@@ -580,9 +572,6 @@ function syncRule() {
         || colours[destination - 1]);
     }
   }
-  // The exchange pickers name filaments too, so they follow the same palette.
-  syncOptions($("convertswapa"), labels, signature);
-  syncOptions($("convertswapb"), labels, signature);
   const changes = session.changes();
   const slots = plan.mode === SLOTS;
   $("convertplan").innerHTML = changes.length
@@ -762,15 +751,6 @@ drop.addEventListener("drop", (event) => {
 $("convertmap").addEventListener("change", (event) => {
   const select = event.target.closest("select[data-source]");
   if (select) session.setSource(select.dataset.source, select.value);
-});
-$("convertswap").addEventListener("click", () => {
-  if (!session.state) return;
-  // These pickers show the current slot occupants. Resolve their source rows
-  // before exchanging; after an earlier move, source IDs and slot IDs differ.
-  const sourceAt = (slot) => session.assignmentMode === SLOTS
-    ? Object.keys(session.rule).find((source) => session.rule[source] === Number(slot))
-    : slot;
-  session.swap(sourceAt($("convertswapa").value), sourceAt($("convertswapb").value));
 });
 // The two mode radios are native inputs in one group: arrow keys move between
 // them, and the label is the whole target.
