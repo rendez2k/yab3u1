@@ -314,6 +314,216 @@ await ok("a source colour outside the palette is refused, not written", () => {
                 /palette (does not describe|describes)/);
 });
 
+/* ---------- arranging slots: every colour keeps its appearance ---------- */
+
+// The four colours the user reported, in the order their project lists them:
+// green in filament 1, black in 2, white in 3, grey in 4.  Codes are
+// "4" -> state 1, "8" -> state 2, "0C" -> state 3, plus one unpainted facet that
+// prints in the part's own default filament.
+const USER = {
+  colours: ["#3F8E43", "#000000", "#FFFFFF", "#8E9089"],
+  types: ["PLA", "PETG", "ABS", "TPU"],
+  codes: ["4", "8", "0C", ""],
+  base: 1,
+};
+
+/** The slot colours an archive declares, whatever the target keeps them in. */
+function paletteOf(entries, target) {
+  if (target === "bambu") {
+    const model = memberText(entries, project.MODEL_FILE);
+    return [...model.matchAll(/<m:color color="#([0-9A-F]{6,8})"/g)]
+      .map((match) => `#${match[1].slice(0, 6)}`);
+  }
+  if (target === "prusa") {
+    const spec = JSON.parse(memberText(entries,
+                                       "Metadata/Prusa_Slicer_full_spectrum.json"));
+    return spec.physical_extruders.map((entry) => entry.color);
+  }
+  return configOf(entries).filament_colour.map((value) => value.slice(0, 7));
+}
+
+/** The same, for the material of each slot. */
+function slotTypesOf(entries, target) {
+  if (target === "prusa") {
+    const spec = JSON.parse(memberText(entries,
+                                       "Metadata/Prusa_Slicer_full_spectrum.json"));
+    return spec.physical_extruders.map((entry) => entry.type);
+  }
+  return configOf(entries).filament_type;
+}
+
+const MOVE_GREEN_TO_3 = { 1: 3, 2: 2, 3: 1, 4: 4 };
+
+await ok("the reported four colours move green to filament 3 and keep every colour",
+         () => {
+  const parsed = project.readProject(source(USER));
+  const built = project.convertProject(parsed, 1, null, {
+    target: "snapmaker", assignmentMode: "slots", mapping: MOVE_GREEN_TO_3,
+  });
+  assert.deepEqual(built.problems, []);
+  const cfg = configOf(built.entries);
+  // Slot 1 now holds the white that was in 3, slot 3 holds the green that was in
+  // 1, and black and grey never moved.
+  assert.deepEqual(cfg.filament_colour,
+                   ["#FFFFFFFF", "#000000FF", "#3F8E43FF", "#8E9089FF"],
+                   "the palette is written in slot order");
+  assert.deepEqual(paletteOf(built.entries, "snapmaker"),
+                   ["#FFFFFF", "#000000", "#3F8E43", "#8E9089"]);
+  assert.deepEqual(cfg.extruder_colour, ["#FFFFFF", "#000000", "#3F8E43", "#8E9089"]);
+  // Black stays in 2, which is the one thing the user asked for by name.
+  assert.equal(paletteOf(built.entries, "snapmaker")[1], "#000000");
+  assert.equal(cfg.filament_colour[1], "#000000FF");
+  // The paint names the slot the colour moved to, so the printed appearance is
+  // exactly the source's: green facets in 3, black in 2, white in 1.
+  assert.deepEqual(statesOf(built.entries), [3, 2, 1]);
+  const settings = decoder.decode(built.entries.get("Metadata/model_settings.config"));
+  assert.ok(settings.includes('key="extruder" value="3"'),
+            "the unpainted facet follows its own colour to the new slot");
+});
+
+await ok("the material type travels with its colour, not with the slot number", () => {
+  const parsed = project.readProject(source(USER));
+  const built = project.convertProject(parsed, 1, null, {
+    target: "snapmaker", assignmentMode: "slots", mapping: MOVE_GREEN_TO_3,
+  });
+  assert.deepEqual(slotTypesOf(built.entries, "snapmaker"),
+                   ["ABS", "PETG", "PLA", "TPU"]);
+});
+
+await ok("arranging slots writes the same arrangement to every target", () => {
+  const parsed = project.readProject(source(USER));
+  const expected = ["#FFFFFF", "#000000", "#3F8E43", "#8E9089"];
+  for (const target of ["snapmaker", "bambu", "orca", "prusa"]) {
+    const built = project.convertProject(parsed, 1, null, {
+      target, assignmentMode: "slots", mapping: MOVE_GREEN_TO_3,
+    });
+    assert.deepEqual(built.problems, [], `${target}: ${built.problems.join("; ")}`);
+    assert.deepEqual(paletteOf(built.entries, target), expected, target);
+    // The printer-agnostic model writes every facet's colour, so it also carries
+    // the unpainted facet, whose own default filament moved to 3 with the green.
+    assert.deepEqual(statesFor(built.entries, target),
+                     target === "bambu" ? [3, 2, 1, 3] : [3, 2, 1], target);
+  }
+});
+
+await ok("an arranged slot export says in its metadata that it is not a repaint",
+         () => {
+  const parsed = project.readProject(source(USER));
+  const arranged = project.convertProject(parsed, 1, null, {
+    target: "snapmaker", assignmentMode: "slots", mapping: MOVE_GREEN_TO_3,
+  });
+  assert.ok(memberText(arranged.entries, project.MODEL_FILE)
+    .includes('<metadata name="Description">Filament slots rearranged: every colour '
+      + "keeps its own appearance"),
+            "the saved file says which kind of assignment wrote it");
+  // An identity arrangement, and every repaint, write the bytes they always did.
+  const identity = project.convertProject(parsed, 1, null,
+                                          { target: "snapmaker", assignmentMode: "slots" });
+  assert.equal(memberText(identity.entries, project.MODEL_FILE).includes("Description"),
+               false);
+});
+
+await ok("a chained arrangement still prints every colour its own colour", () => {
+  const parsed = project.readProject(source(USER));
+  // 1 -> 2 -> 3 -> 1 is one permutation, and every facet must come out in the
+  // colour it was painted with.
+  const built = project.convertProject(parsed, 1, null, {
+    target: "snapmaker", assignmentMode: "slots", mapping: { 1: 2, 2: 3, 3: 1, 4: 4 },
+  });
+  assert.deepEqual(paletteOf(built.entries, "snapmaker"),
+                   ["#FFFFFF", "#3F8E43", "#000000", "#8E9089"]);
+  assert.deepEqual(statesOf(built.entries), [2, 3, 1], "state n prints colour n");
+});
+
+await ok("two slots with the same hex stay two slots through a move", () => {
+  const twin = { ...USER, colours: ["#3F8E43", "#3F8E43", "#FFFFFF", "#000000"] };
+  const parsed = project.readProject(source(twin));
+  const built = project.convertProject(parsed, 1, null, {
+    target: "snapmaker", assignmentMode: "slots", mapping: { 1: 2, 2: 1, 3: 3, 4: 4 },
+  });
+  assert.equal(paletteOf(built.entries, "snapmaker").length, 4,
+               "an identical colour is still its own slot");
+  assert.deepEqual(statesOf(built.entries), [2, 1, 3],
+                   "the two identical colours swap rather than merge");
+});
+
+await ok("a larger palette arranges with every filament kept", () => {
+  const six = { ...FIVE, types: ["PLA", "PETG", "ABS", "TPU", "PA"] };
+  const parsed = project.readProject(source(six));
+  const rule = { 1: 4, 2: 1, 3: 5, 4: 2, 5: 3 };
+  const built = project.convertProject(parsed, 1, null,
+                                       { target: "bambu", assignmentMode: "slots",
+                                         mapping: rule });
+  const palette = paletteOf(built.entries, "bambu");
+  assert.equal(palette.length, 5);
+  for (let source = 1; source <= 5; source += 1) {
+    assert.equal(palette[rule[source] - 1], FIVE.colours[source - 1],
+                 `colour ${source} still prints its own colour`);
+  }
+  assert.deepEqual(statesFor(built.entries, "bambu"), [4, 2, 3, 1],
+                   "1 -> 4, 4 -> 2, 5 -> 3, 2 -> 1");
+});
+
+await ok("a split paint tree and a default part both follow the arrangement", () => {
+  const parsed = project.readProject(source({ ...USER, base: 3, codes: ["", SPLIT] }));
+  const built = project.convertProject(parsed, 1, null, {
+    target: "snapmaker", assignmentMode: "slots", mapping: MOVE_GREEN_TO_3,
+  });
+  // The split's leaves are state 3 (the white that moves to filament 1) and 0
+  // (the facet's own default, the part's filament 3, which also moves to 1).
+  assert.deepEqual(paint.walkStates(paint.decode(
+    /paint_color="([0-9A-Fa-f]+)"/.exec(allModelText(built.entries))[1])), [1, 0],
+                   "leaf 3 follows white to filament 1; leaf 0 waits for the part's default");
+  const settings = decoder.decode(built.entries.get("Metadata/model_settings.config"));
+  assert.ok(settings.includes('key="extruder" value="1"'),
+            "the part's own default filament is rewritten to the slot white moved to");
+  // The printer-agnostic Bambu model materialises the leaves as real triangles,
+  // and both of them resolve to that same white.
+  const standard = project.convertProject(parsed, 1, null, {
+    target: "bambu", assignmentMode: "slots", mapping: MOVE_GREEN_TO_3,
+  });
+  assert.deepEqual(standardStatesOf(standard.entries), [1, 1, 1],
+                   "leaf 3, the split's default leaf and the unpainted facet all "
+                   + "print the white that moved to filament 1");
+});
+
+await ok("a destination that cannot be a slot arrangement is refused", () => {
+  const parsed = project.readProject(source(USER));
+  // Explicitly confirmed by the user as a refusal: nothing may be merged here.
+  assert.throws(() => project.convertProject(parsed, 1, null, {
+    target: "snapmaker", assignmentMode: "slots", mapping: { 1: 2 },
+  }), /both ask for filament 2/, "two colours sent to one slot");
+  assert.throws(() => project.convertProject(parsed, 1, null, {
+    target: "snapmaker", assignmentMode: "slots", mapping: { 1: 9 },
+  }), /outside the 4/, "a destination the file cannot describe");
+});
+
+await ok("repainting keeps its many-to-one behaviour and its old bytes", () => {
+  const parsed = project.readProject(source(FIVE));
+  const mapping = { 4: 2, 5: 2 };
+  const unnamed = project.convertProject(parsed, 1, null, { target: "bambu", mapping });
+  const named = project.convertProject(parsed, 1, null,
+                                       { target: "bambu", mapping,
+                                         assignmentMode: "repaint" });
+  assert.deepEqual(statesFor(unnamed.entries, "bambu"), [1, 2, 2, 2],
+                   "three source colours print as two");
+  assert.deepEqual(paletteOf(named.entries, "bambu"), FIVE.colours,
+                   "a repaint writes the palette it read");
+  assert.deepEqual([...named.entries.keys()], [...unnamed.entries.keys()]);
+  // A fresh p:UUID is the one thing that differs between any two writes of the
+  // same file, so the documents are compared with those identifiers normalised.
+  const stripIds = (bytes) => decoder.decode(bytes)
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, "id");
+  for (const [name, data] of unnamed.entries) {
+    assert.equal(stripIds(named.entries.get(name)), stripIds(data),
+                 `${name} is exactly what an unset mode wrote`);
+  }
+  // The same map under "slots" is a different file, because it is a refusal.
+  assert.throws(() => project.convertProject(parsed, 1, null, {
+    target: "bambu", mapping, assignmentMode: "slots",
+  }), /both ask for filament 2/);
+});
+
 await ok("a part whose default extruder is outside the palette is refused", () => {
   const parsed = project.readProject(source({ colours: ["#FFFFFF", "#000000"],
                                               types: ["PLA", "PLA"], codes: ["4"],

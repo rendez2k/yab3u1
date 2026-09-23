@@ -1,4 +1,15 @@
-# yab3u1 — Yet Another Bloody 3MF → U1 converter
+# YAB3D — Yet Another Bloody 3D Tool
+
+Convert, recolour and arrange. YAB3D is a browser-based 3MF tool: it
+moves a painted project between Snapmaker Orca, Bambu Studio, OrcaSlicer and
+PrusaSlicer without losing a colour, recolours onto your own reels with predicted
+blends, and arranges the filament slots so the printer matches the model.
+
+Formerly yab3u1 — Yet Another Bloody 3MF-to-U1 converter. The name on the page
+changed; the repository, <https://yab3u1.netlify.app> and the module and storage
+identifiers did not.
+
+Open **[yab3d.uk](https://yab3d.uk)**. The original Netlify address remains available.
 
 Three ways to use the project, with different workflows:
 
@@ -6,7 +17,7 @@ Three ways to use the project, with different workflows:
 | --- | --- | --- |
 | **`U1 Converter` shortcut** | this machine | local web UI (`u1ui.py` + `u1ui.html`), reads your installed Orca profiles and can verify a plate by slicing |
 | **`u1convert.py`** | any machine with Python | the command line tool; `--fill-bed`, `--verify`, `--supports`, `--colors` |
-| **`web/`** | any static host — live at <https://yab3u1.netlify.app> | [browser version](#the-browser-version-web) — v2.3.2, the whole conversion in the page, nothing uploaded |
+| **`web/`** | any static host — live at <https://yab3u1.netlify.app> | [browser version](#the-browser-version-web) — v2.4.0, the whole conversion in the page, nothing uploaded |
 
 A local replacement for [bl2u1.nbn.cat](https://bl2u1.nbn.cat) /
 [josuanbn/bl2u1](https://github.com/josuanbn/bl2u1) that actually works on
@@ -37,12 +48,22 @@ There are two routes, both static:
 
 * **`index.html` — convert.** A painted 3MF moves between Snapmaker Orca, Bambu
   Studio, OrcaSlicer and PrusaSlicer in any direction, keeping every source
-  filament definition, the paint and the geometry. An optional filament
-  assignment table repaints colours or exchanges two filaments at once. Projects
-  carrying native Full Spectrum blends are refused rather than flattened.
+  filament definition, the paint and the geometry. The filament assignment table
+  has two modes: **Arrange slots** (the default) keeps every colour and moves it
+  to the filament you pick — the colour already in that slot takes the vacated
+  one, so nothing is merged and the model looks exactly as it did — and
+  **Repaint colours** prints a source colour in another filament's colour, where
+  two colours sent to one filament merge. The exchange control swaps two
+  colours' filaments in one step in either mode, every row and option names its
+  colour in plain words beside the hex, and a rearranged file says so in its own
+  metadata. Projects carrying native Full Spectrum blends are refused rather
+  than flattened.
   An optional **Show preview** draws Original and Output views of the model
   (prepared only when you ask), and every download carries a thumbnail rendered
   from the output colours, so Explorer and the slicers show what you saved.
+  Slot numbers are the file's own filament list: Bambu Studio's import dialog
+  reads that list and may rebind it to your AMS, so the file cannot promise a
+  particular physical slot.
 * **`recolour.html` — Full Spectrum recolouring.** Recolour onto four reels of
   your own, with predicted blends, review and a native export — which also saves
   a regenerated output thumbnail.
@@ -58,6 +79,7 @@ web/
   recolour.js               its page logic
   converter.js              the earlier single-object U1 conversion, kept for selftest.html
   shared/project.js         read, assess and rewrite a 3MF
+  shared/assignment.js      slot arrangement / repaint, and the offline colour names
   shared/convertSession.js  epoch-guarded load/assignment/export state
   shared/raster.js          software rasteriser for the saved thumbnail (no WebGL)
   shared/png.js             canvas-free PNG encoder/reader
@@ -75,7 +97,7 @@ web/
 ```
 
 The pages report their own version (`VERSION` in `web/convert-page.js` and
-`web/recolour.js`); the live deployment is **v2.3.2**.
+`web/recolour.js`); the live deployment is **v2.4.0**.
 
 **Deploying.** The Python UI cannot go on a static host — it needs your Orca
 install and the slicer — but the browser converter can, and that is what

@@ -99,6 +99,7 @@ export class RecolourWorker {
                                        options.preserveSourceSettings === true,
                                      carrySettings: options.carrySettings !== false,
                                      supportMode: options.supportMode || "auto",
+                                     assignmentMode: options.assignmentMode || null,
                                      thumbnails: options.thumbnails || null })
       .then((reply) => ({ bytes: reply.bytes, ms: reply.ms,
                           thumbnails: reply.thumbnails || null,

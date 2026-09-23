@@ -6,18 +6,23 @@
 // the user has replaced, the source→destination assignment and the one download
 // it is willing to hand over.
 //
+// The assignment has two modes, each with its own map so that switching back and
+// forth never loses the other one:
+//
+//   slots    "arrange slots": the map is a bijection, a destination that is
+//            already taken displaces its colour back to the vacated slot, and
+//            the export rearranges the palette so the model keeps its look.
+//   repaint  "repaint colours": the map may send several sources to one
+//            filament and the printed colours change.
+//
 // The worker factory and the object-URL helpers are injected so a test can drive
 // the races with a deliberately slow fake worker, without a browser.
 
 import { planLayout } from "./layout.js";
+import { REPAINT, SLOTS, identityRule, normaliseMode } from "./assignment.js";
 export const TYPED_3MF = "application/vnd.ms-package.3dmanufacturing-3dmodel+xml";
 
-/** Identity: source colour *n* becomes destination filament *n*. */
-export function identityRule(count) {
-  const rule = {};
-  for (let index = 1; index <= count; index += 1) rule[index] = index;
-  return rule;
-}
+export { identityRule };
 
 export function safeName(title) {
   return String(title || "model").replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "")
@@ -44,7 +49,11 @@ export class ConvertSession {
     this.revision = 0;
     this.target = "snapmaker";
     this.state = null;      // {title, colours, types, plates, plateId, summary}
-    this.rule = {};         // source index (1-based) -> destination filament
+    // One map per mode, so switching modes keeps both.  The page reads the
+    // active one through the `rule` getter.
+    // Each map is source index (1-based) -> destination filament.
+    this.rules = { [SLOTS]: {}, [REPAINT]: {} };
+    this.assignmentMode = SLOTS;
     // The plate layout: user-chosen dimensions, not a printer bed.  The size is
     // measured from the file the moment it loads; the user's own values win from
     // then on, and survive the next file.
@@ -64,6 +73,29 @@ export class ConvertSession {
     this.renderThumbnail = null;   // set by the page: never save without one
     this.convertSeq = 0;    // so an obsolete export cannot clear a newer one's lock
     this.closed = false;
+  }
+
+  /** The source→destination map of the mode that is in force now. */
+  get rule() {
+    return this.rules[this.assignmentMode] || {};
+  }
+
+  /**
+   * Choose how the assignment is read: `slots` keeps every colour and moves it to
+   * another filament, `repaint` prints a colour in another filament's colour.
+   *
+   * The two keep their own maps, so a user can look at the other mode and come
+   * back.  The open download belongs to the old mode, so it is dropped with the
+   * revision bump -- an export still writing is discarded when it answers.
+   */
+  setAssignmentMode(mode) {
+    const next = normaliseMode(mode);
+    if (next === this.assignmentMode) return false;
+    this.assignmentMode = next;
+    this.invalidate();
+    if (this.hooks.mode) this.hooks.mode(this.assignmentMode);
+    if (this.hooks.rule) this.hooks.rule(this.rule);
+    return true;
   }
 
   setStatus(text) {
@@ -268,7 +300,10 @@ export class ConvertSession {
     this.state = null;
     this.boundsPending = false;
     this.boundsSeq = (this.boundsSeq || 0) + 1;
-    this.rule = {};
+    // A new file starts in the homepage's own mode, with both maps cleared: an
+    // assignment made for the file that was just replaced means nothing here.
+    this.assignmentMode = SLOTS;
+    this.rules = { [SLOTS]: {}, [REPAINT]: {} };
     this.setStatus(`Reading ${file.name}…`);
     if (this.hooks.cleared) this.hooks.cleared();
     let bytes;
@@ -315,7 +350,8 @@ export class ConvertSession {
         objectSettings: reply.meta.objectSettings || [],
         summary: reply.summary || null,
       };
-      this.rule = identityRule(this.state.colours.length);
+      const count = this.state.colours.length;
+      this.rules = { [SLOTS]: identityRule(count), [REPAINT]: identityRule(count) };
       // A fresh file starts from a single copy.  The box keeps whatever the user
       // set (or the neutral planning area); the model's own bounds only feed the
       // fit feedback and the capacity, never a printer claim.
@@ -361,16 +397,30 @@ export class ConvertSession {
     return true;
   }
 
-  /** Assign one source colour to a destination filament. */
+  /**
+   * Send one source colour to a destination filament.
+   *
+   * In slots mode the map stays a bijection: if that filament is already taken,
+   * the colour sitting in it moves back to the slot this source is leaving, so
+   * every colour is still written exactly once and none is lost.  In repaint mode
+   * the destination is simply taken, and the colour already there is overwritten
+   * (two sources may share one filament).
+   */
   setSource(source, destination) {
     const from = Number(source);
     const to = Number(destination);
-    if (!this.state || !(from in this.rule)) return false;
+    const rule = this.rule;
+    if (!this.state || !(from in rule)) return false;
     if (!Number.isInteger(to) || to < 1 || to > this.state.colours.length) return false;
-    if (this.rule[from] === to) return false;
-    this.rule[from] = to;
+    if (rule[from] === to) return false;
+    if (this.assignmentMode === SLOTS) {
+      const displaced = Object.keys(rule).map(Number)
+        .find((other) => other !== from && rule[other] === to);
+      if (displaced !== undefined) rule[displaced] = rule[from];
+    }
+    rule[from] = to;
     this.invalidate();
-    if (this.hooks.rule) this.hooks.rule(this.rule);
+    if (this.hooks.rule) this.hooks.rule(rule);
     return true;
   }
 
@@ -379,19 +429,22 @@ export class ConvertSession {
     const a = Number(left);
     const b = Number(right);
     if (!this.state || a === b) return false;
-    if (!(a in this.rule) || !(b in this.rule)) return false;
-    const first = this.rule[a];
-    const second = this.rule[b];
-    this.rule[a] = second;
-    this.rule[b] = first;
+    const rule = this.rule;
+    if (!(a in rule) || !(b in rule)) return false;
+    const first = rule[a];
+    const second = rule[b];
+    rule[a] = second;
+    rule[b] = first;
     this.invalidate();
-    if (this.hooks.rule) this.hooks.rule(this.rule);
+    if (this.hooks.rule) this.hooks.rule(rule);
     return true;
   }
 
+  /** Put the *active* mode's assignment back to identity; the other mode's map
+   *  is left alone, because it belongs to a mode the user is not looking at. */
   reset() {
     if (!this.state) return false;
-    this.rule = identityRule(this.state.colours.length);
+    this.rules[this.assignmentMode] = identityRule(this.state.colours.length);
     this.invalidate();
     if (this.hooks.rule) this.hooks.rule(this.rule);
     return true;
@@ -417,6 +470,10 @@ export class ConvertSession {
       plateId: plateId === undefined || plateId === null
         ? this.state.plateId : plateId,
       mapping: { ...this.rule },
+      // The mode is part of the snapshot: a mode switch while this export is
+      // writing must not let it publish, and the page's thumbnail has to be
+      // drawn with the palette *this* mode writes.
+      assignmentMode: this.assignmentMode,
       layout: { ...this.layout, centre: target === "bambu" ? [0, 0]
         : [this.layout.width / 2, this.layout.depth / 2] },
       preserveSourceSettings: this.preserveSourceSettings,
@@ -438,6 +495,7 @@ export class ConvertSession {
         thumbnails = await this.renderThumbnail({
           worker: snapshot.worker, plateId: snapshot.plateId,
           target: snapshot.target, mapping: snapshot.mapping,
+          assignmentMode: snapshot.assignmentMode,
           colours: snapshot.colours, layout: snapshot.layout,
         });
         if (snapshot.token !== this.epoch || snapshot.revision !== this.revision
@@ -457,7 +515,9 @@ export class ConvertSession {
                                                     carrySettings:
                                                       snapshot.carrySettings,
                                                     supportMode:
-                                                      snapshot.supportMode });
+                                                      snapshot.supportMode,
+                                                    assignmentMode:
+                                                      snapshot.assignmentMode });
       if (snapshot.token !== this.epoch || snapshot.revision !== this.revision) return null;
       const bytes = built.bytes instanceof Uint8Array ? built.bytes
         : new Uint8Array(built.bytes);
@@ -468,6 +528,7 @@ export class ConvertSession {
         target: snapshot.target,
         plateId: snapshot.plateId,
         mapping: snapshot.mapping,
+        assignmentMode: snapshot.assignmentMode,
         colours: snapshot.colours,
         bytes: bytes.length,
         ms: built.ms || 0,

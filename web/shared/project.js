@@ -13,6 +13,8 @@
 
 import { norm } from "./colour.js";
 import * as paint from "./paint.js";
+import { SLOTS, arrange, bijectionProblem, completeRule, isIdentity }
+  from "./assignment.js";
 import { COLOUR_NS, colourOf, colourGroupXml, leafTriangles, parseColourGroups } from "./standard.js";
 import { relationshipXml, thumbnailPlan } from "./thumbnail.js";
 import { SOURCE_KEYS, applySupport, carryPrintSettings, normaliseSupportMode, supportOf }
@@ -1862,6 +1864,21 @@ function copyMemberObjects(project, member, keep, mapping, target, rename, highe
  * source colours for the simple repaint (which is applied in one pass, so a swap
  * of 1 and 3 really swaps them rather than collapsing both onto one).  No
  * mixture is created and no colour is substituted unless the caller asks.
+ *
+ * `options.assignmentMode` says how that map is meant:
+ *
+ *   undefined / "repaint"  today's behaviour, unchanged.  The palette is written
+ *                          as it was read and each painted facet names the
+ *                          destination filament, so the facet is *printed in that
+ *                          filament's colour*; several sources may share one and
+ *                          their colours merge.
+ *   "slots"                "arrange slots": every colour keeps its appearance and
+ *                          travels to the filament it was sent to.  The map must
+ *                          therefore be a complete bijection over the palette --
+ *                          a non-bijective one is refused rather than written --
+ *                          and the physical palette and its material types are
+ *                          permuted to match, with the paint and the default
+ *                          extruders rewritten to the same slots.
  */
 export function convertProject(project, plateId, objectIds, options = {}) {
   // A virtual blend is not one more solid reel: refuse before anything is built.
@@ -1877,12 +1894,26 @@ export function convertProject(project, plateId, objectIds, options = {}) {
   for (const [source, id] of Object.entries(options.mapping || {})) {
     mapping[Number(source)] = Number(id);
   }
+  // Arranging slots writes the colours in the order they were sent to.  The
+  // refusal comes *before* anything is built, so a collision or an out-of-range
+  // destination is a sentence rather than a file that has quietly lost a colour.
+  const slots = options.assignmentMode === SLOTS;
+  let physical = palette;
+  if (slots) {
+    const rule = completeRule(mapping, size);
+    const problem = size ? bijectionProblem(rule, size) : null;
+    if (problem) {
+      throw new ProjectError(`this slot arrangement cannot be written: ${problem}`);
+    }
+    physical = arrange(palette, rule);
+  }
   return exportProject(project, plateId, objectIds, {
     target: options.target,
-    physical: palette,
+    physical,
     mapping,
     recipes: [],
     convert: true,
+    assignmentMode: slots ? SLOTS : (options.assignmentMode || null),
     title: options.title,
     layout: options.layout || null,
     preserveSourceSettings: options.preserveSourceSettings === true,
@@ -2238,10 +2269,21 @@ export function exportProject(project, plateId, objectIds, options) {
   const paletteRgba = table.physical
     .map((colour) => `${norm(colour) || "#FFFFFF"}FF`);
   const colourGroup = standard ? colourGroupXml(rootGroup, paletteRgba) : "";
+  // A rearranged slot list is not a repaint, and nobody can tell the two apart
+  // from the colours alone once the file is on disk: the archive says which one
+  // it is.  Repainting and the untouched identity export write no note, so their
+  // bytes stay exactly what they were.
+  const assignmentNote = options.assignmentMode === SLOTS && !isIdentity(mapping)
+    ? "Filament slots rearranged: every colour keeps its own appearance and "
+      + "prints from the filament it was moved to."
+    : "";
   let model = `${XML_HEADER}<model unit="millimeter" xml:lang="en-US" ${namespaces}>\n`
     + ` <metadata name="Application">${esc(application)}</metadata>\n`
     + ` <metadata name="Title">${esc(options.title || project.title || "U1 project")}`
-    + "</metadata>\n" + header
+    + "</metadata>\n"
+    + (assignmentNote ? ` <metadata name="Description">${esc(assignmentNote)}`
+      + "</metadata>\n" : "")
+    + header
     + ` <resources>\n${colourGroup}${resources.join("\n")}\n </resources>\n`
     + ` <build${target === "prusa" ? "" : ` p:UUID="${uuid()}"`}>\n${itemsXml}\n`
     + " </build>\n"

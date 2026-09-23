@@ -35,6 +35,9 @@ PUBLIC_FILES = (
     "index.html",
     "recolour.html",
     "recolour.js",
+    "assets/yab3d-mark-96.png",
+    "assets/yab3d-mark.png",
+    "shared/assignment.js",
     "shared/colour.js",
     "shared/convertSession.js",
     "shared/layout.js",
@@ -152,6 +155,42 @@ class SiteBuild(unittest.TestCase):
                     continue
                 self.assertTrue(os.path.isfile(os.path.join(self.out, ref)),
                                 f"{page} refers to {ref}, which the build left out")
+
+    def test_a_png_asset_ships_byte_for_byte(self):
+        # A stand-in tree, so the test never writes to the real `web/`: the mark
+        # the pages load is published exactly as it is on disk, beside the larger
+        # original root keeps there.
+        builder = load_builder()
+        web = os.path.join(self.tmp, "web")
+        os.makedirs(os.path.join(web, "assets"))
+        with open(os.path.join(web, "index.html"), "w", encoding="utf-8") as fh:
+            fh.write("<!DOCTYPE html><html></html>")
+        with open(os.path.join(web, "convert-page.js"), "w", encoding="utf-8") as fh:
+            fh.write("// the page's module\n")
+        header_mark = bytes(range(256)) * 4
+        with open(os.path.join(web, "assets", "yab3d-mark-96.png"), "wb") as fh:
+            fh.write(b"\x89PNG\r\n\x1a\n" + header_mark)
+        with open(os.path.join(web, "assets", "yab3d-mark.png"), "wb") as fh:
+            fh.write(b"\x89PNG\r\n\x1a\n" + b"master art")
+        original = builder.WEB
+        builder.WEB = pathlib.Path(web)
+        self.addCleanup(setattr, builder, "WEB", original)
+
+        chosen = {item.as_posix() for item in builder.asset_paths(pathlib.Path(web))}
+        self.assertIn("assets/yab3d-mark-96.png", chosen)
+        self.assertIn("assets/yab3d-mark.png", chosen,
+                      "every approved image under web/ is published")
+
+        out = os.path.join(self.tmp, "image-site")
+        report = builder.build(pathlib.Path(out), clean=False)
+        self.assertEqual({item["path"] for item in report["files"]} - {"LICENSE"},
+                         {"THIRD_PARTY_NOTICES.txt", "assets/yab3d-mark-96.png",
+                          "assets/yab3d-mark.png", "convert-page.js", "index.html"})
+        built = os.path.join(out, "assets", "yab3d-mark-96.png")
+        self.assertTrue(os.path.isfile(built), "the image was not published")
+        with open(built, "rb") as fh:
+            self.assertEqual(fh.read(), b"\x89PNG\r\n\x1a\n" + header_mark,
+                             "the published image is not the source byte for byte")
 
     def test_clean_removes_stale_files_from_the_output(self):
         # The guard only allows cleaning inside the repository, so point the

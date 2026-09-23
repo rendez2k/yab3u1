@@ -5,6 +5,47 @@ The version shown on the page comes from `VERSION` in `web/convert-page.js` (and
 the collapsed "What's new" block in the footer. Bump those constants and add a
 section here together.
 
+## 2.4.0 — arrange filament slots without changing a colour
+
+The assignment table could only repaint: sending green to filament 3 printed
+green *in black*, because the file kept its palette and re-pointed the paint at
+another filament. That is right when the point is to change a colour and wrong
+when the point is to match the spools in the printer, which is what most people
+open it for. The table now has two modes, and the one that keeps your colours is
+the default.
+
+- **The tool is now YAB3D — Yet Another Bloody 3D Tool.** The converter and the
+  Full Spectrum page carry that name in their headings, page titles and meta
+  tags, and the subtitle says what it does: convert, recolour, arrange. Only the
+  name changed: the repository, <https://yab3u1.netlify.app>, the module names and
+  the local-storage keys are the ones they always were, so saved themes and reel
+  setups survive, and earlier entries in this changelog keep the old name.
+- **Arrange slots (the default) keeps every colour where you can see it.** The
+  palette itself is rearranged: every colour travels to the filament it was sent
+  to and the paint follows it, so the model prints exactly the appearance it had.
+  The map is a bijection, so sending green to filament 3 gives the white that was
+  in 3 back to the slot green left — nothing is merged, nothing is lost, and a
+  destination that is already taken displaces its colour rather than colliding
+  with it. A permutation that merges two colours, or names a filament the file
+  does not have, is refused with a sentence instead of written.
+- **Repaint colours is the old behaviour, kept and named.** A source colour is
+  printed in the destination filament's colour, several colours may share one
+  filament, and the model's colours change. An engine call that names no mode
+  writes exactly the bytes it always did; the two modes keep separate maps, so
+  looking at one never destroys the other, and switching modes discards a
+  download (or an export still writing) that belongs to the old one.
+- **Every swatch now reads as words as well as hex.** Source rows, destination
+  options and both exchange controls name the colour (`Green #3F8E43`) from an
+  offline, deterministic approximation, so two similar shades can still be told
+  apart by the hex beside the name. No brand is guessed and nothing is looked up
+  over the network.
+- **The saved file says which kind of assignment wrote it**, and the Output
+  preview and the saved thumbnail are drawn from the rearranged palette the
+  archive actually carries, so what you see is what the file does. Original
+  colours still shows the file as it was read.
+- **Bambu Studio's import dialog reads the file's filament list and may rebind it
+  to your AMS.** The page says so rather than promising a physical slot.
+
 ## 2.3.2 — reserve prime-tower space by default
 
 The converter starts each newly loaded model with "Leave room for the prime

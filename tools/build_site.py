@@ -6,7 +6,8 @@
     python tools/build_site.py --out scratch --no-clean
 
 Only the browser application is a site: the two pages, the modules and worker
-they load beside them, the icon, and the two licence files.  Everything else in
+they load beside them, the icon, any image the pages reference, and the two
+licence files.  Everything else in
 the repository stays out of the output -- the Python applications under the
 root, `tests/`, `web/tests/` and its fixtures, `web/selftest.html` and the
 self-test fixtures, `make_fixtures.mjs`, the private models and the planning
@@ -33,7 +34,8 @@ DEFAULT_OUT = ROOT / "dist"
 
 # A file under `web/` is a site asset when it has one of these suffixes, or when
 # it is one of the two pages.  Nothing else in `web/` is published.
-ASSET_SUFFIXES = frozenset({".js", ".css", ".wasm", ".svg", ".ico", ".woff", ".woff2"})
+ASSET_SUFFIXES = frozenset({".js", ".css", ".wasm", ".svg", ".ico", ".woff",
+                            ".woff2", ".png"})
 PAGES = frozenset({"index.html", "recolour.html"})
 # Directories under `web/` that are development scaffolding, and file name
 # prefixes that belong only to the browser self-test.
@@ -49,8 +51,13 @@ class BuildError(Exception):
     """The build cannot be trusted to produce the published site."""
 
 
-def asset_paths(web: Path = WEB) -> list[Path]:
-    """Every file under `web` that belongs on the published site, sorted."""
+def asset_paths(web: Path | None = None) -> list[Path]:
+    """Every file under `web` that belongs on the published site, sorted.
+
+    The tree defaults to the module's own `WEB` at call time rather than at import
+    time, so a test (or a caller) can point it at another checkout.
+    """
+    web = WEB if web is None else web
     if not (web / "index.html").is_file():
         raise BuildError(f"{web / 'index.html'} is missing - is this a full checkout?")
     chosen: list[Path] = []

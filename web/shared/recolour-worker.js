@@ -399,6 +399,8 @@ self.onmessage = async (event) => {
       const built = project.convertProject(parsed, message.plateId, message.objects,
                                            { target: message.target,
                                              mapping: message.mapping || {},
+                                             assignmentMode: message.assignmentMode
+                                               || null,
                                              title: message.title,
                                              layout: message.layout || null,
                                              preserveSourceSettings:

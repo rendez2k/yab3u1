@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>yab3u1 &mdash; 3MF between Snapmaker, Bambu, Orca and Prusa</title>
-<link rel="icon" type="image/x-icon" href="icon.ico">
-<meta name="description" content="Convert 3MF projects between Snapmaker Orca, Bambu Studio, OrcaSlicer and PrusaSlicer in any direction, keeping every filament, the multi-colour painting and the geometry. Optionally reassign filaments. Runs entirely in your browser.">
+<title>YAB3D &mdash; 3MF between Snapmaker, Bambu, Orca and Prusa</title>
+<link rel="icon" type="image/png" href="assets/yab3d-mark-96.png">
+<meta name="description" content="YAB3D, the Yet Another Bloody 3D Tool: convert 3MF projects between Snapmaker Orca, Bambu Studio, OrcaSlicer and PrusaSlicer in any direction, keeping every filament, the multi-colour painting and the geometry. Convert, recolour or arrange the filament slots. Runs entirely in your browser.">
 <meta property="og:type" content="website">
-<meta property="og:title" content="yab3u1 — 3MF between Snapmaker, Bambu, Orca and Prusa">
-<meta property="og:description" content="Convert painted 3MF projects between Snapmaker Orca, Bambu Studio, OrcaSlicer and PrusaSlicer in any direction. Every colour and the geometry travel unchanged. Runs entirely in your browser — nothing is uploaded.">
-<meta name="theme-color" content="#14161a">
+<meta property="og:title" content="YAB3D — 3MF between Snapmaker, Bambu, Orca and Prusa">
+<meta property="og:description" content="YAB3D — Yet Another Bloody 3D Tool — converts painted 3MF projects between Snapmaker Orca, Bambu Studio, OrcaSlicer and PrusaSlicer in any direction. Every colour and the geometry travel unchanged. Runs entirely in your browser — nothing is uploaded.">
+<meta name="theme-color" content="#fbfcf8">
 <script>
 /* Resolve the theme before first paint, so there is no flash of the wrong one. */
 (function () {
@@ -20,60 +20,72 @@
   }
   document.documentElement.setAttribute("data-theme", t);
   var m = document.querySelector('meta[name="theme-color"]');
-  if (m) m.setAttribute("content", t === "light" ? "#f7f8fa" : "#14161a");
+  if (m) m.setAttribute("content", t === "light" ? "#fbfcf8" : "#0e141f");
 })();
 </script>
 <style>
   :root {
-    color-scheme: dark;
-    --bg: #14161a;
-    --panel: #1c1f25;
-    --panel2: #22262e;
-    --line: #2e333d;
-    --text: #e6e9ef;
-    --dim: #939aa8;
-    --accent: #f7a33c;
-    --ok: #4ec98a;
-    --bad: #ef6f6c;
-    --log-bg: #0f1114;
-    --log-fg: #b9c2d0;
-    --hover-line: #454c59;
-    --on-accent: #201703;
-  }
-  /* The theme is resolved to an explicit value before first paint, so the light
-     palette only ever needs defining once. */
-  :root[data-theme="light"] {
+    /* Lime Frost, in this app's own static CSS.  The light set is the reference
+       theme's own tokens; the dark set keeps the same hues and moves the
+       lightness, which is why these are written as OKLCH. */
     color-scheme: light;
-    --bg: #f7f8fa;
+    --bg: oklch(0.989 0.005 117.92);          /* #fbfcf8 */
     --panel: #ffffff;
-    --panel2: #eef0f4;
-    --line: #d9dde4;
-    --text: #1a1e26;
-    --dim: #5c6573;
-    --accent: #b26408;
-    --ok: #1c7f4c;
-    --bad: #b3261e;
-    --log-bg: #f1f3f7;
-    --log-fg: #39404c;
-    --hover-line: #b4bcc8;
-    --on-accent: #fff6ee;
+    --panel2: oklch(0.968 0.007 247.896);     /* #f1f5f9 */
+    --line: oklch(0.929 0.013 255.508);       /* #e2e8f0 */
+    --text: oklch(0.208 0.04 265.755);        /* #0f172a */
+    --dim: oklch(0.372 0.039 257.287);        /* #334155 */
+    --accent: oklch(0.887 0.212 128.504);     /* #aff33e */
+    --mint: oklch(0.982 0.018 155.826);       /* #f0fdf4 */
+    --on-accent: #000000;
+    --focus: oklch(0.55 0.16 128.5);
+    --hover-line: oklch(0.86 0.02 255.5);
+    --ok: oklch(0.6 0.14 155);
+    --bad: oklch(0.56 0.19 25);
+    --log-bg: oklch(0.968 0.007 247.896);
+    --log-fg: oklch(0.372 0.039 257.287);
+    /* One soft elevation, declared once and used by the panels that float. */
+    --shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 10px 24px -18px rgba(15, 23, 42, .22);
+  }
+  /* The theme is resolved to an explicit value before first paint. */
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: oklch(0.19 0.025 265);
+    --panel: oklch(0.235 0.025 265);
+    --panel2: oklch(0.29 0.025 265);
+    --line: oklch(0.35 0.025 265);
+    --text: oklch(0.97 0.01 118);
+    --dim: oklch(0.78 0.02 252);
+    --accent: oklch(0.887 0.212 128.504);
+    --mint: oklch(0.33 0.05 155);
+    --on-accent: #000000;
+    --focus: oklch(0.887 0.212 128.504);
+    --hover-line: oklch(0.46 0.03 265);
+    --ok: oklch(0.78 0.15 155);
+    --bad: oklch(0.72 0.16 25);
+    --log-bg: oklch(0.165 0.025 265);
+    --log-fg: oklch(0.86 0.02 252);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 12px 26px -18px rgba(0, 0, 0, .8);
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; padding: 32px 20px 28px;
     background: var(--bg); color: var(--text);
-    font: 15px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif;
+    /* Inter where the machine has it, the platform UI face otherwise: one font
+       family, no download and no layout shift. */
+    font: 15px/1.5 Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
     display: flex; flex-direction: column; min-height: 100vh;
   }
   .wrap { max-width: 860px; margin: 0 auto; width: 100%; flex: 1 0 auto; }
-  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: .01em; }
-  h1 span { color: var(--accent); }
-  h1 span.ver {
+  h1 { font-size: 24px; margin: 0 0 5px; letter-spacing: .01em; color: var(--text); }
+  /* The page names the tool, then says what it does in the quieter tone. */
+  h1 .what { color: var(--dim); font-weight: 500; }
+  h1 .ver {
     font-size: 11px; font-weight: 600; color: var(--dim);
     border: 1px solid var(--line); border-radius: 999px;
-    padding: 2px 9px; vertical-align: 3px; margin-left: 6px;
+    background: var(--mint); padding: 2px 9px; vertical-align: 3px; margin-left: 6px;
   }
-  .sub { color: var(--dim); margin: 0 0 26px; font-size: 14px; }
+  .sub { color: var(--dim); margin: 0; font-size: 14px; max-width: 62ch; }
   .sub .name {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-weight: 600; color: var(--text);
@@ -81,13 +93,13 @@
   .sub .acro { font-weight: 700; color: var(--text); }
 
   #convertdrop {
-    border: 2px dashed var(--line); border-radius: 14px;
-    padding: 44px 20px; text-align: center; cursor: pointer;
+    border: 2px dashed var(--line); border-radius: 20px;
+    padding: 30px 22px; text-align: left; cursor: pointer;
     background: var(--panel); transition: border-color .15s, background .15s;
   }
   #convertdrop:hover, #convertdrop.over { border-color: var(--accent); background: var(--panel2); }
-  #convertdrop strong { display: block; font-size: 17px; margin-bottom: 6px; }
-  #convertdrop span { color: var(--dim); font-size: 13px; }
+  #convertdrop strong { display: block; font-size: 17px; margin-bottom: 5px; }
+  #convertdrop span { color: var(--dim); font-size: 13px; max-width: 56ch; display: block; }
   /* Hidden from view but still focusable, so the file picker can be opened from
      the keyboard (Tab to it, then Enter). display:none would remove it entirely. */
   #convertdrop input {
@@ -98,11 +110,17 @@
 
   .card {
     background: var(--panel); border: 1px solid var(--line);
-    border-radius: 14px; padding: 20px; margin-top: 20px;
+    border-radius: 20px; padding: 20px; margin-top: 18px;
+    box-shadow: var(--shadow);
   }
   .card h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .07em;
              color: var(--dim); margin: 0 0 14px; font-weight: 600; }
   .hidden { display: none !important; }
+  /* The one distinct panel: the other page, offered as the next step.  It is
+     told apart by its surface and its accent action, not by another border. */
+  .card.promo { background: var(--mint); }
+  .card.promo h2 { color: var(--text); }
+  .card.promo a.save { margin-top: 12px; }
 
   .facts { display: flex; flex-wrap: wrap; gap: 10px 28px; margin-bottom: 4px; }
   .fact b { display: block; font-size: 13px; color: var(--dim); font-weight: 500; }
@@ -125,7 +143,7 @@
   }
   select, input[type=number] {
     background: var(--panel2); color: var(--text); border: 1px solid var(--line);
-    border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 14px;
+    border-radius: 12px; padding: 6px 10px; font: inherit; font-size: 14px;
   }
   select { max-width: 100%; }
   input[type=number] { width: 80px; }
@@ -140,7 +158,7 @@
   .check input { width: 16px; height: 16px; accent-color: var(--accent); }
 
   button {
-    font: inherit; font-weight: 600; border-radius: 8px; cursor: pointer;
+    font: inherit; font-weight: 600; border-radius: 14px; cursor: pointer;
     border: 1px solid var(--line); background: var(--panel2); color: var(--text);
     padding: 9px 16px;
   }
@@ -203,7 +221,7 @@
   }
   a.save {
     display: inline-flex; align-items: center; gap: 9px; margin-top: 14px;
-    padding: 13px 22px; border-radius: 10px; font-size: 15px; font-weight: 600;
+    padding: 13px 22px; border-radius: 14px; font-size: 15px; font-weight: 600;
     background: var(--accent); color: var(--on-accent);
     text-decoration: none; border: 1px solid var(--accent);
   }
@@ -212,9 +230,9 @@
 
   footer {
     max-width: 860px; margin: 40px auto 0; width: 100%;
-    border-top: 1px solid var(--line); padding-top: 16px;
-    color: var(--dim); font-size: 13px; text-align: center;
-    display: flex; flex-direction: column; gap: 6px; align-items: center;
+    border-top: 1px solid var(--line); padding-top: 18px;
+    color: var(--dim); font-size: 12.5px; text-align: left;
+    display: flex; flex-direction: column; gap: 7px; align-items: flex-start;
   }
   footer a.repo {
     color: var(--text); text-decoration: none; font-weight: 600;
@@ -228,11 +246,35 @@
   details.whatsnew { font-size: 12px; opacity: .85; max-width: 46em; }
   details.whatsnew summary { cursor: pointer; color: var(--dim); }
   details.whatsnew summary:hover { color: var(--accent); }
-  details.whatsnew ul { margin: 8px 0 0; padding-left: 18px; text-align: left; }
+  details.whatsnew ul { margin: 8px 0 0; padding-left: 18px; }
   details.whatsnew li { margin: 3px 0; }
 
-  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  /* One header, left aligned, on both pages: the mark, the name and what the
+     page does, with the way to the other page and the theme beside them.  It is
+     the one faintly translucent surface -- a hint of glass, no blur, nothing
+     that covers the controls below it. */
+  .head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap;
+    padding: 12px 0 14px; margin-bottom: 18px;
+    border-bottom: 1px solid var(--line);
+    background: color-mix(in oklab, var(--panel) 55%, transparent);
+  }
+  .headline { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+  .headline > div { min-width: 0; }
+  /* The logo lands here: a fixed slot so the header does not move when it
+     arrives, and nothing competing drawn in its place.  The mark carries its
+     own rounded tile, so it is sized and nothing else is added around it. */
+  .brandmark {
+    flex: 0 0 auto; display: block; width: 44px; height: 44px; margin-top: 3px;
+  }
+  .headtools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .navlink {
+    font-size: 12.5px; font-weight: 600; color: var(--dim); text-decoration: none;
+    border-bottom: 1px solid transparent; padding-bottom: 1px;
+  }
+  .navlink:hover { color: var(--text); border-bottom-color: var(--line); }
   .theme {
     flex: 0 0 auto; font-size: 12px; font-weight: 600; padding: 5px 11px;
     border-radius: 999px; background: none; color: var(--dim);
@@ -248,7 +290,7 @@
      be written as.  Two swatches per row make the before/after visible without
      reading the numbers. */
   fieldset.repaint {
-    border: 1px solid var(--line); border-radius: 12px;
+    border: 1px solid var(--line); border-radius: 20px;
     padding: 14px 16px 16px; margin: 18px 0 0;
   }
   fieldset.repaint legend {
@@ -260,8 +302,30 @@
     padding: 5px 0; border-bottom: 1px solid var(--line);
   }
   .maprow:last-child { border-bottom: none; }
-  .maprow select { min-width: 170px; }
-  .mapid { font-variant-numeric: tabular-nums; font-size: 13.5px; min-width: 118px; }
+  .maprow select { min-width: 210px; }
+  .mapid { font-variant-numeric: tabular-nums; font-size: 13.5px; min-width: 176px; }
+  /* The two ways to read the table below it.  Native radios, so keyboard and
+     screen readers get the real control; the box around them is the label. */
+  .modes { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 12px; }
+  .mode { position: relative; display: block; }
+  .mode input {
+    position: absolute; width: 1px; height: 1px; margin: 0; padding: 0;
+    opacity: 0; pointer-events: none;
+  }
+  .modebox {
+    display: flex; flex-direction: column; gap: 1px; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 9px; padding: 7px 12px;
+    transition: border-color .15s, background .15s;
+  }
+  .modebox b { font-size: 13.5px; font-weight: 600; }
+  .modebox .role { font-size: 12px; color: var(--dim); }
+  .modebox:hover { border-color: var(--hover-line); }
+  .mode input:checked + .modebox {
+    border-color: var(--accent); background: var(--mint);
+  }
+  .mode input:focus-visible + .modebox {
+    outline: 2px solid var(--focus); outline-offset: 2px;
+  }
   .swatch {
     width: 20px; height: 20px; border-radius: 5px;
     border: 1px solid var(--line); flex: 0 0 auto;
@@ -273,11 +337,11 @@
   }
 
   fieldset.preview {
-    border: 1px solid var(--line); border-radius: 12px;
+    border: 1px solid var(--line); border-radius: 20px;
     padding: 14px 16px 16px; margin: 18px 0 0;
   }
   fieldset.layout, fieldset.settings {
-    border: 1px solid var(--line); border-radius: 12px;
+    border: 1px solid var(--line); border-radius: 20px;
     padding: 14px 16px 16px; margin: 18px 0 0;
   }
   fieldset.layout legend, fieldset.settings legend, fieldset.preview legend {
@@ -299,7 +363,7 @@
   #convertpreview {
     display: block; width: 100%; height: 360px; margin-top: 6px;
     background: var(--log-bg); border: 1px solid var(--line);
-    border-radius: 10px; touch-action: none;
+    border-radius: 16px; touch-action: none;
   }
   footer .made, footer .more { font-size: 12px; }
   footer .made a, footer .more a {
@@ -311,11 +375,13 @@
 
   @media (max-width: 620px) {
     body { padding: 22px 14px; }
-    h1 { font-size: 19px; }
+    h1 { font-size: 21px; }
+    .brandmark { width: 38px; height: 38px; }
+    .sub { font-size: 13.5px; }
     table { font-size: 13px; }
     th, td { padding: 7px 6px; }
-    #convertdrop { padding: 32px 14px; }
-    .mapid { min-width: 96px; }
+    #convertdrop { padding: 24px 16px; }
+    .mapid { min-width: 132px; }
     .maprow select { min-width: 0; flex: 1 1 132px; }
     #convertpreview { height: 260px; }
   }
@@ -326,19 +392,27 @@
   enabled. Nothing is sent anywhere either way.</div></noscript>
 <div class="wrap">
 
-  <div class="head">
-    <div>
-      <h1>3MF <span>converter</span> <span class="ver" id="ver"></span></h1>
-      <p class="sub"><span class="name">yab3u1</span> &mdash; Yet Another Bloody
-         3MF-to-U1 converter. Now moving painted 3MFs between
-         <b>Snapmaker Orca</b>, <b>Bambu Studio</b>, <b>OrcaSlicer</b> and
+  <header class="head">
+    <div class="headline">
+      <img class="brandmark" src="assets/yab3d-mark-96.png" alt="" width="44"
+           height="44">
+      <div>
+        <h1><span>YAB3D</span> <span class="what">3MF converter</span>
+          <span class="ver" id="ver"></span></h1>
+      <p class="sub"><span class="name">YAB3D</span> &mdash; Yet Another Bloody 3D
+         Tool. Convert &middot; recolour &middot; arrange. Now moving painted 3MFs
+         between <b>Snapmaker Orca</b>, <b>Bambu Studio</b>, <b>OrcaSlicer</b> and
          <b>PrusaSlicer</b> &mdash; in any direction. Every filament definition, the
          paint and the geometry travel unchanged: no substitutions, no blends, no
          four-slot limit. Runs entirely in your browser &mdash; your model is never
          uploaded.</p>
+      </div>
     </div>
-    <button id="theme" class="theme" type="button" aria-label="Switch theme">Light</button>
-  </div>
+    <div class="headtools">
+      <a class="navlink" href="recolour.html">Full Spectrum recolour</a>
+      <button id="theme" class="theme" type="button" aria-label="Switch theme">Light</button>
+    </div>
+  </header>
 
   <div id="convertdrop" role="button" tabindex="0"
        aria-label="Choose a 3MF file to convert">
@@ -368,9 +442,23 @@
 
     <fieldset class="repaint">
       <legend>Filament assignment</legend>
-      <p class="hint" id="convertmaphint">Every colour keeps its own filament.
-        Change a row to send that colour to another filament, or exchange two of
-        them at once. This assignment is the only thing that changes a colour.</p>
+      <div class="modes" role="radiogroup" aria-labelledby="modeslabel">
+        <span class="sr-only" id="modeslabel">How the assignment is read</span>
+        <label class="mode">
+          <input type="radio" name="assignmentmode" value="slots" checked>
+          <span class="modebox"><b>Arrange slots</b>
+            <span class="role">keep every colour</span></span>
+        </label>
+        <label class="mode">
+          <input type="radio" name="assignmentmode" value="repaint">
+          <span class="modebox"><b>Repaint colours</b>
+            <span class="role">print in another filament's colour</span></span>
+        </label>
+      </div>
+      <p class="hint" id="convertmaphint">Every colour keeps its own appearance.
+        Send a colour to another filament and the colour already in that slot
+        moves back to the one this colour leaves, so nothing is merged and nothing
+        is lost. Exchange swaps two colours' filaments in one step.</p>
       <div id="convertmap"></div>
       <div class="row" style="margin-top:12px">
         <div class="field">
@@ -477,6 +565,9 @@
           <button type="button" id="previewreset">Reset view</button>
         </div>
       </div>
+      <p class="hint" id="previewmodehint">Output colours: the same appearance,
+        printed from the filaments you chose. Original colours: the file as it was
+        read.</p>
       <p class="hint" id="previewnote" role="status" aria-live="polite"></p>
     </fieldset>
 
@@ -487,13 +578,13 @@
     <div id="convertout" style="margin-top:12px"></div>
   </div>
 
-  <div class="card">
+  <div class="card promo">
     <h2>Full Spectrum recolouring <span class="ver">separate step</span></h2>
     <p class="hint">Recolour a painted model onto your own four reels, compare
       predicted filament blends and write a Snapmaker Orca, Bambu Studio or
       PrusaSlicer project. Optional &mdash; the converter above works on its own.</p>
-    <p><a class="save" id="torecolour" href="recolour.html">Open Full Spectrum
-      recolouring</a></p>
+    <a class="save" id="torecolour" href="recolour.html">Open Full Spectrum
+      recolouring</a>
   </div>
 
 </div>

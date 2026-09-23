@@ -58,8 +58,8 @@ class FakeWorker {
     return { meta: this.project.meta, summary: this.project.summary };
   }
 
-  async convert(plateId, objects, target, mapping) {
-    this.calls.push({ type: "convert", plateId, target, mapping });
+  async convert(plateId, objects, target, mapping, title, options) {
+    this.calls.push({ type: "convert", plateId, target, mapping, title, options });
     await this.park();
     if (this.closed) throw new Error("the worker was disposed");
     return { bytes: new Uint8Array([1, 2, 3, 4]), ms: 1 };
@@ -251,7 +251,135 @@ await ok("the title is captured before the export awaits", async () => {
   worker.releaseAll();
   const entry = await exporting;
   assert.equal(entry.name, "captured-prusa.3mf",
-               "the name comes from the snapshot, not the live state");
+              "the name comes from the snapshot, not the live state");
+});
+
+/* ---------- the two assignment modes ---------- */
+
+await ok("a slot move displaces the colour that was there, and never merges", async () => {
+  const worker = new FakeWorker(project("slots"));
+  const session = new ConvertSession(() => worker, recorder().hooks, urls);
+  await load(session, worker, "slots.3mf");
+  assert.equal(session.assignmentMode, "slots", "the homepage opens arranging slots");
+  session.setSource(1, 3);
+  assert.deepEqual(session.rule, { 1: 3, 2: 2, 3: 1 },
+                   "the colour in filament 3 swapped back to the one colour 1 left");
+  // A destination that is free does not displace anything.
+  session.setSource(2, 2);
+  assert.deepEqual(session.rule, { 1: 3, 2: 2, 3: 1 }, "no-op stays a no-op");
+});
+
+await ok("the two modes keep their own assignment across a switch", async () => {
+  const worker = new FakeWorker(project("both"));
+  const session = new ConvertSession(() => worker, recorder().hooks, urls);
+  await load(session, worker, "both.3mf");
+  session.setSource(1, 3);                       // arrange a slot
+  session.setAssignmentMode("repaint");
+  assert.deepEqual(session.rule, identityRule(3),
+                   "repaint starts from its own, own untouched map");
+  session.setSource(1, 3);
+  session.setSource(2, 3);
+  assert.deepEqual(session.rule, { 1: 3, 2: 3, 3: 3 },
+                   "repainting may merge two colours onto one filament");
+  session.setAssignmentMode("slots");
+  assert.deepEqual(session.rule, { 1: 3, 2: 2, 3: 1 },
+                   "the slot arrangement is exactly as it was left");
+  assert.equal(session.setAssignmentMode("slots"), false, "already there");
+  assert.equal(session.setAssignmentMode("nonsense"), false,
+               "an unknown mode does not switch away from slots");
+});
+
+await ok("a mode switch discards an export that is still writing", async () => {
+  const worker = new FakeWorker(project("switch"));
+  const hooks = recorder();
+  const session = new ConvertSession(() => worker, hooks.hooks, urls);
+  await load(session, worker, "switch.3mf");
+  const exporting = session.convert("bambu");
+  await tick();
+  assert.equal(worker.calls.filter((call) => call.type === "convert").length, 1);
+  const before = session.revision;
+  session.setAssignmentMode("repaint");
+  assert.ok(session.revision > before, "the mode change bumps the revision");
+  worker.releaseAll();
+  assert.equal(await exporting, null, "the bytes of the old mode are dropped");
+  assert.equal(session.output, null);
+  assert.deepEqual(hooks.seen.output, [], "the page never saw a download");
+  assert.equal(session.busy, false, "and the export lock is released");
+});
+
+await ok("a slot change discards an export that is still writing", async () => {
+  const worker = new FakeWorker(project("later"));
+  const hooks = recorder();
+  const session = new ConvertSession(() => worker, hooks.hooks, urls);
+  await load(session, worker, "later.3mf");
+  const exporting = session.convert("bambu");
+  await tick();
+  session.setSource(1, 3);
+  worker.releaseAll();
+  assert.equal(await exporting, null);
+  assert.deepEqual(hooks.seen.output, []);
+});
+
+await ok("reset clears only the mode in force", async () => {
+  const worker = new FakeWorker(project("resetmode"));
+  const session = new ConvertSession(() => worker, recorder().hooks, urls);
+  await load(session, worker, "resetmode.3mf");
+  session.setSource(1, 3);
+  session.setAssignmentMode("repaint");
+  session.setSource(2, 3);
+  session.reset();
+  assert.deepEqual(session.rule, identityRule(3), "the repaint is cleared");
+  session.setAssignmentMode("slots");
+  assert.deepEqual(session.rule, { 1: 3, 2: 2, 3: 1 },
+                   "the other mode kept its arrangement");
+});
+
+await ok("a new file starts arranging slots with both maps at identity", async () => {
+  const made = [];
+  const session = new ConvertSession(() => {
+    const worker = new FakeWorker(project("next"));
+    made.push(worker);
+    return worker;
+  }, recorder().hooks, urls);
+  const first = session.load(file("arranged.3mf"));
+  await tick();
+  made[0].releaseAll();
+  await first;
+  session.setSource(1, 3);
+  session.setAssignmentMode("repaint");
+  session.setSource(2, 3);
+  const replacement = session.load(file("replacement.3mf"));
+  await tick();
+  assert.equal(made.length, 2, "the new file has its own worker");
+  made[1].releaseAll();
+  await replacement;
+  assert.equal(session.assignmentMode, "slots", "a new file opens in slots mode");
+  assert.deepEqual(session.rule, identityRule(3));
+  session.setAssignmentMode("repaint");
+  assert.deepEqual(session.rule, identityRule(3),
+                   "the replaced file's repaint is not carried over either");
+});
+
+await ok("the mode reaches the worker with the export it belongs to", async () => {
+  const worker = new FakeWorker(project("mode"));
+  const session = new ConvertSession(() => worker, recorder().hooks, urls);
+  await load(session, worker, "mode.3mf");
+  session.setSource(1, 3);
+  let exporting = session.convert("bambu");
+  await tick();
+  worker.releaseAll();
+  await exporting;
+  let call = worker.calls.filter((entry) => entry.type === "convert").pop();
+  assert.equal(call.options.assignmentMode, "slots");
+  session.setAssignmentMode("repaint");
+  exporting = session.convert("bambu");
+  await tick();
+  worker.releaseAll();
+  await exporting;
+  call = worker.calls.filter((entry) => entry.type === "convert").pop();
+  assert.equal(call.options.assignmentMode, "repaint");
+  assert.deepEqual(call.mapping, identityRule(3),
+                   "and the repaint's own map, not the slot arrangement");
 });
 
 if (failures.length) {

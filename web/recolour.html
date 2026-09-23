@@ -3,31 +3,91 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>3MF recolour, preview and reel-change plan</title>
+<link rel="icon" type="image/png" href="assets/yab3d-mark-96.png">
+<title>YAB3D &mdash; Full Spectrum 3MF recolour, preview and reel-change plan</title>
+<meta name="description" content="YAB3D&rsquo;s Full Spectrum page: recolour a painted 3MF onto your own four reels, preview the predicted blends and write a Snapmaker Orca, Bambu Studio or PrusaSlicer project. Runs entirely in your browser.">
+<meta name="theme-color" content="#fbfcf8">
+<script>
+/* Resolve the theme before first paint, exactly as the converter does, so this
+   page never flashes the other one and the two share one stored choice. */
+(function () {
+  var t = null;
+  try { t = localStorage.getItem("yab3u1-theme"); } catch (e) {}
+  if (t !== "light" && t !== "dark") {
+    t = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  }
+  document.documentElement.setAttribute("data-theme", t);
+  var m = document.querySelector('meta[name="theme-color"]');
+  if (m) m.setAttribute("content", t === "light" ? "#fbfcf8" : "#0e141f");
+})();
+</script>
 <style>
   :root {
-    --bg: #14161a; --panel: #1b1e24; --panel2: #22262e; --fg: #e8eaee;
-    --dim: #9aa2ae; --line: #2e333c; --accent: #4c8dff; --on-accent: #08101f;
-    --good: #58c07a; --bad: #ff6b6b;
+    /* The same Lime Frost tokens as the converter, so the two pages read as one
+       tool: light is the reference set, dark keeps the hues and moves lightness. */
+    color-scheme: light;
+    --bg: oklch(0.989 0.005 117.92); --panel: #ffffff;
+    --panel2: oklch(0.968 0.007 247.896); --fg: oklch(0.208 0.04 265.755);
+    --dim: oklch(0.372 0.039 257.287); --line: oklch(0.929 0.013 255.508);
+    --accent: oklch(0.887 0.212 128.504); --on-accent: #000000;
+    --mint: oklch(0.982 0.018 155.826); --focus: oklch(0.55 0.16 128.5);
+    --good: oklch(0.6 0.14 155); --bad: oklch(0.56 0.19 25);
   }
-  html[data-theme="light"] {
-    --bg: #f5f6f8; --panel: #ffffff; --panel2: #eef1f5; --fg: #1a1d22;
-    --dim: #5b6270; --line: #d8dce4; --accent: #2f6fe4; --on-accent: #ffffff;
+  html[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: oklch(0.19 0.025 265); --panel: oklch(0.235 0.025 265);
+    --panel2: oklch(0.29 0.025 265); --fg: oklch(0.97 0.01 118);
+    --dim: oklch(0.78 0.02 252); --line: oklch(0.35 0.025 265);
+    --accent: oklch(0.887 0.212 128.504); --on-accent: #000000;
+    --mint: oklch(0.33 0.05 155); --focus: oklch(0.887 0.212 128.504);
+    --good: oklch(0.78 0.15 155); --bad: oklch(0.72 0.16 25);
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--fg);
-         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  header { display: flex; align-items: center; gap: 12px; padding: 18px 22px; }
-  h1 { font-size: 19px; margin: 0; }
+         font: 15px/1.5 Inter, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  /* The same header surface as the converter's: faintly translucent, no blur
+     and nothing that floats over the controls below it. */
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 12px 22px;
+    border-bottom: 1px solid var(--line);
+    background: color-mix(in oklab, var(--panel) 55%, transparent);
+  }
+  h1 { font-size: 19px; margin: 0; color: var(--dim); }
+  h1 .brand { color: var(--fg); }
+  /* The same header the converter has: the reserved logo slot, the name, what
+     the page does, then the way to the other page and the theme. */
+  .brandmark {
+    flex: 0 0 auto; display: block; width: 38px; height: 38px;
+  }
+  .title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .title .role { color: var(--dim); font-size: 12.5px; }
+  header .spacer { margin-left: auto; }
+  .navlink {
+    font-size: 12.5px; font-weight: 600; color: var(--dim); text-decoration: none;
+    border-bottom: 1px solid transparent; padding-bottom: 1px;
+  }
+  .navlink:hover { color: var(--fg); border-bottom-color: var(--line); }
+  #version {
+    font-size: 11px; font-weight: 600; color: var(--dim);
+    border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px;
+  }
+  #theme {
+    border-radius: 999px; background: none; color: var(--dim);
+    font-size: 12px; font-weight: 600; padding: 5px 11px;
+  }
+  #theme:hover:not(:disabled) { color: var(--fg); }
   h2 { font-size: 15px; margin: 0 0 12px; letter-spacing: .01em; }
   main { max-width: 1080px; margin: 0 auto; padding: 0 22px 60px; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-          padding: 16px 18px; margin-bottom: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 20px;
+          padding: 16px 18px; margin-bottom: 16px;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, .05),
+                      0 10px 24px -18px rgba(15, 23, 42, .22); }
   .card.hidden, .hidden { display: none; }
   .hint { color: var(--dim); font-size: 13px; }
   button, select, input[type=file] {
     font: inherit; color: var(--fg); background: var(--panel2);
-    border: 1px solid var(--line); border-radius: 8px; padding: 7px 11px; }
+    border: 1px solid var(--line); border-radius: 12px; padding: 7px 11px; }
+  button { border-radius: 14px; }
   button.primary { background: var(--accent); color: var(--on-accent); border-color: transparent;
                    font-weight: 600; }
   button:disabled { opacity: .5; }
@@ -43,11 +103,11 @@
   .reciperows { list-style: none; margin: 10px 0 0; padding: 0; }
   .reciperows li { display: flex; align-items: center; gap: 6px; margin: 4px 0;
                    font-size: 13px; color: var(--dim); }
-  #drop { border: 2px dashed var(--line); border-radius: 12px; padding: 26px;
-          text-align: center; color: var(--dim); cursor: pointer; }
+  #drop { border: 2px dashed var(--line); border-radius: 20px; padding: 24px 22px;
+          text-align: left; color: var(--dim); cursor: pointer; }
   #drop:focus-visible, button:focus-visible, select:focus-visible,
   input:focus-visible, a:focus-visible {
-    outline: 3px solid var(--accent); outline-offset: 2px; }
+    outline: 3px solid var(--focus); outline-offset: 2px; }
   /* The mapping table is the one wide element: let it scroll on a phone rather
      than pushing the whole page sideways. */
   #maptable { overflow-x: auto; }
@@ -63,7 +123,7 @@
     #preview { height: 260px; }
     button, select, input[type=file] { padding: 9px 10px; }
   }
-  .segs { display: inline-flex; border: 1px solid var(--line); border-radius: 8px;
+  .segs { display: inline-flex; border: 1px solid var(--line); border-radius: 14px;
           overflow: hidden; }
   .segs button { border: 0; border-radius: 0; }
   .segs button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
@@ -73,18 +133,23 @@
   pre { white-space: pre-wrap; font-size: 12.5px; line-height: 1.45; max-height: 340px;
         overflow: auto; margin: 0; }
   a.save { display: inline-block; text-decoration: none; color: var(--on-accent);
-           background: var(--accent); border-radius: 8px; padding: 7px 11px;
+           background: var(--accent); border-radius: 14px; padding: 7px 11px;
            font-weight: 600; margin-right: 8px; }
   footer { color: var(--dim); font-size: 12.5px; text-align: center; padding: 24px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>3MF recolour <span class="hint" style="font-size:13px">(this page) &middot;
-    convert &middot; plan reel changes</span></h1>
-  <span class="hint" id="version"></span>
-  <a href="index.html" style="margin-left:auto;margin-right:10px">Back to converter</a>
-  <button id="theme" type="button" style="margin-left:auto">Theme</button>
+  <img class="brandmark" src="assets/yab3d-mark-96.png" alt="" width="38"
+       height="38">
+  <div class="title">
+    <h1><span class="brand">YAB3D</span> Full Spectrum recolour</h1>
+    <span class="role">Recolour onto your own reels &middot; plan the reel
+      changes</span>
+  </div>
+  <span id="version"></span>
+  <a class="navlink spacer" href="index.html">3MF converter</a>
+  <button id="theme" type="button">Theme</button>
 </header>
 <main>
   <div id="drop" role="button" tabindex="0" aria-label="Choose a 3MF file to open">

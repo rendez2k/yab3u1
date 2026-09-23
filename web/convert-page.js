@@ -8,17 +8,20 @@
 import { RecolourWorker } from "./shared/workerClient.js";
 import { TARGETS } from "./shared/targets.js";
 import { ConvertSession } from "./shared/convertSession.js";
+import { REPAINT, SLOTS, assignmentPlan, colourName } from "./shared/assignment.js";
 import { Preview } from "./shared/preview.js";
 import { thumbnailSizes } from "./shared/thumbnail.js";
 import { planLayout } from "./shared/layout.js";
 import { appliedSettings, supportOf } from "./shared/printSettings.js";
 
-const VERSION = "2.3.2";
+const VERSION = "2.4.0";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const hex = (value) => String(value || "#FFFFFF").toUpperCase();
+/** "Green (#3F8E43)": the name is an offline approximation, the hex is the fact. */
+const swatchLabel = (value) => `${colourName(value)} (${hex(value)})`;
 const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase());
 
 /* ---------- version and what's new ---------- */
@@ -26,7 +29,8 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 const CHANGES = [
   "The homepage converts a painted 3MF between Snapmaker Orca, Bambu Studio, OrcaSlicer and PrusaSlicer, in any direction.",
   "Every source filament definition, the paint and the geometry travel unchanged; there is no four-slot limit and no colour substitution.",
-  "An optional filament assignment table lets you send a source colour to another filament, or exchange two at once, before downloading.",
+  "Filament assignment has two modes. Arrange slots (the default) keeps every colour and moves it to the filament you pick, displacing the colour that was there; Repaint colours prints a source colour in another filament's colour.",
+  "Every row, option and exchange control names its colour in plain words beside the hex, and the file says which kind of assignment wrote it.",
   "A project carrying native Full Spectrum blends is refused with a sentence rather than quietly written as a solid colour.",
   "Optional Show preview with Original/Output views, drawn only when you ask for it.",
   "Every download carries a thumbnail rendered from the output colours, so Windows Explorer and the slicers show the model you actually saved.",
@@ -64,7 +68,7 @@ function setTheme(theme, remember) {
   themeBtn.setAttribute("aria-label",
                         toLight ? "Switch to light theme" : "Switch to dark theme");
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", toLight ? "#14161a" : "#f7f8fa");
+  if (meta) meta.setAttribute("content", toLight ? "#0e141f" : "#fbfcf8");
 }
 
 setTheme(document.documentElement.getAttribute("data-theme") || "dark", false);
@@ -124,6 +128,7 @@ function renderOutput(entry) {
   const changed = Object.keys(entry.mapping)
     .map(Number).sort((a, b) => a - b)
     .filter((source) => entry.mapping[source] !== source);
+  const rearranged = entry.assignmentMode === SLOTS;
   // What the export really did with the source's print intent, from the converter
   // itself rather than from what the page hoped: a U1 project carries compatible
   // print settings and a support decision, and the sentence names them.
@@ -135,7 +140,12 @@ function renderOutput(entry) {
       + ` ${cap(entry.settings.support)}.`
     : "";
   setStatus(`Wrote ${entry.name} with ${entry.colours.length} filament(s)`
-    + (changed.length ? ` and ${changed.length} reassigned` : " and no reassignment")
+    + (changed.length
+      ? (rearranged
+        ? `, with ${changed.length} colour(s) printed from another filament and `
+          + "their appearance unchanged"
+        : ` and ${changed.length} reassigned, which changes those colours`)
+      : " and no colour change")
     + (entry.target === "snapmaker"
       ? ". The project carries the U1 printer profile and its own speeds, "
         + "temperatures and machine g-code."
@@ -144,7 +154,9 @@ function renderOutput(entry) {
     + applied
     + (entry.target === "bambu"
       ? " Bambu Studio may ask you to map the file's colours to your own "
-        + "filaments; the file itself carries no printer or process preset."
+        + "filaments: its colour dialog reads the file's filament list and may "
+        + "rebind it to your AMS, and the file itself carries no printer or "
+        + "process preset."
       : "")
     + " Where a painted facet was split, the export writes its exact leaf "
     + "triangles, so the mesh may hold more triangles than the source.");
@@ -162,6 +174,7 @@ const session = new ConvertSession(() => new RecolourWorker(), {
     resetPreview();
   },
   loaded: (state) => renderChoices(state),
+  mode: () => syncMode(),
   rule: () => {
     syncRule();
     // A new assignment changes the Output view only; the geometry is reused.
@@ -197,9 +210,14 @@ const session = new ConvertSession(() => new RecolourWorker(), {
 session.setThumbnailer(async (snapshot) => {
   const sizes = thumbnailSizes(snapshot.target);
   const started = Date.now();
+  // The saved picture is the *output* view, so it is drawn from the very palette
+  // and map the archive is written with -- a slot arrangement has a rearranged
+  // palette, and painting it with the source's would show a different file.
+  const plan = assignmentPlan(snapshot.assignmentMode, snapshot.colours,
+                              snapshot.mapping);
   const rendered = await snapshot.worker.thumbnail(snapshot.plateId, null,
-                                                   paletteTable(snapshot.colours),
-                                                   snapshot.mapping,
+                                                   paletteTable(plan.palette),
+                                                   plan.mapping,
                                                    { size: sizes.main,
                                                      small: sizes.small,
                                                      layout: snapshot.layout });
@@ -217,6 +235,36 @@ function paletteTable(colours) {
   return table;
 }
 
+/** One label shape everywhere a filament is chosen: the slot number, the plain
+ *  name, then the hex that tells two similar shades apart. */
+function optionsFor(palette) {
+  return palette.map((colour, index) =>
+    `<option value="${index + 1}">${index + 1} · ${esc(colourName(colour))} · `
+    + `${esc(hex(colour))}</option>`).join("");
+}
+
+const paletteSignature = (palette) => palette.map((colour) => hex(colour)).join(",");
+
+/** Point a select at one palette, keeping the choice that is already made.
+ *
+ * An arranged slot moves the colours, so a slot's own name and hex change with
+ * them: the labels have to be rebuilt from the palette this export writes, not
+ * from the one the file was read with, or the selected option would contradict
+ * the swatch beside it.  The user's choice is preserved across the rewrite.
+ */
+function syncOptions(select, palette, signature, value) {
+  if (!select) return;
+  if (select.dataset.palette !== signature) {
+    const keep = select.value;
+    select.innerHTML = optionsFor(palette);
+    select.dataset.palette = signature;
+    if (keep !== "") select.value = keep;
+  }
+  if (value !== undefined && select.value !== String(value)) {
+    select.value = String(value);
+  }
+}
+
 function renderChoices(state) {
   clearError();
   const plate = $("convertplate");
@@ -230,10 +278,14 @@ function renderChoices(state) {
     `<option value="${esc(id)}">${esc(LABELS[id])}</option>`).join("");
   target.value = session.target;
 
-  const options = state.colours.map((colour, index) =>
-    `<option value="${index + 1}">${index + 1} · ${esc(hex(colour))}</option>`).join("");
+  // One label shape everywhere a filament is chosen or shown: the slot number,
+  // the plain name, then the hex that tells two similar shades apart.
+  const options = optionsFor(state.colours);
+  const signature = paletteSignature(state.colours);
   $("convertswapa").innerHTML = options;
   $("convertswapb").innerHTML = options;
+  $("convertswapa").dataset.palette = signature;
+  $("convertswapb").dataset.palette = signature;
   $("convertswapa").value = "1";
   $("convertswapb").value = String(Math.min(3, state.colours.length));
 
@@ -241,19 +293,19 @@ function renderChoices(state) {
     const source = index + 1;
     return `<div class="maprow" data-source="${source}">`
       + `<span class="swatch" style="background:${esc(hex(colour))}" aria-hidden="true"></span>`
-      + `<span class="mapid">${source} · ${esc(hex(colour))}</span>`
+      + `<span class="mapid">${source} · ${esc(colourName(colour))} · `
+      + `${esc(hex(colour))}</span>`
       + `<span class="arrow" aria-hidden="true">&rarr;</span>`
       + `<span class="swatch" id="mapswatch-${source}" aria-hidden="true"></span>`
       + `<label class="sr-only" for="mapdest-${source}">Destination filament for `
         + `source colour ${source}</label>`
-      + `<select id="mapdest-${source}" data-source="${source}">`
-      + state.colours.map((entry, at) =>
-        `<option value="${at + 1}">${at + 1} · ${esc(hex(entry))}</option>`).join("")
-      + "</select></div>";
+      + `<select id="mapdest-${source}" data-source="${source}" `
+      + `data-palette="${esc(signature)}">${options}</select></div>`;
   }).join("");
   $("convertmap").innerHTML = rows;
 
   $("convertpick").classList.remove("hidden");
+  syncMode();
   syncRule();
   syncLayout();
   syncSettings();
@@ -470,25 +522,89 @@ function syncLayout() {
   if ($("layoutfill")) $("layoutfill").disabled = Boolean(problem) || !session.state;
 }
 
-/** Update the destination swatches, selects and the plan line from the rule. */
+/* ---------- the two assignment modes ----------
+ *
+ * The same table drives both, so switching the mode keeps the rows, the selects
+ * and the exchange control where they are and only changes what they mean.  Each
+ * mode owns its own map in the session, so a look at one never loses the other.
+ */
+
+const MODE_HINT = {
+  slots: "Every colour keeps its own appearance. Send a colour to another "
+    + "filament and the colour already in that slot moves back to the one this "
+    + "colour leaves, so nothing is merged and nothing is lost. Exchange swaps "
+    + "two colours' filaments in one step.",
+  repaint: "The source colour is printed in the colour of the filament you send "
+    + "it to, so the model's colours change: two colours sent to one filament are "
+    + "merged into it. Exchange swaps two of them in one step.",
+};
+
+/** The mode radios, the hint under them and the "what it means" line above the
+ *  preview follow the session; the rows themselves are re-synced by syncRule. */
+function syncMode() {
+  const mode = session.assignmentMode === REPAINT ? REPAINT : SLOTS;
+  document.querySelectorAll('input[name="assignmentmode"]').forEach((node) => {
+    node.checked = node.value === mode;
+  });
+  const hint = $("convertmaphint");
+  if (hint) hint.textContent = MODE_HINT[mode];
+  const note = $("previewmodehint");
+  if (note) {
+    note.textContent = mode === SLOTS
+      ? "Output colours: the same appearance, printed from the filaments you "
+        + "chose. Original colours: the file as it was read."
+      : "Output colours: what the file will look like after the repaint. "
+        + "Original colours: the file as it was read.";
+  }
+}
+
+/** Update the mode radios, the destination swatches, the selects and the plan
+ *  line from the session. */
 function syncRule() {
   if (!session.state) return;
   const { colours } = session.state;
+  // What this mode really writes: an arranged slot has a rearranged palette, so
+  // the swatch shows the colour that will be in that slot, not the one that was
+  // there when the file was read.
+  const plan = assignmentPlan(session.assignmentMode, colours, session.rule);
+  // ...and the options have to say the same thing the swatch does.  A repaint
+  // writes the palette it read, so its labels stay on the original colours.
+  const labels = plan.mode === SLOTS ? plan.palette : colours;
+  const signature = paletteSignature(labels);
   for (let source = 1; source <= colours.length; source += 1) {
     const destination = session.rule[source] ?? source;
-    const select = $(`mapdest-${source}`);
-    if (select && select.value !== String(destination)) select.value = String(destination);
+    syncOptions($(`mapdest-${source}`), labels, signature, destination);
     const swatch = $(`mapswatch-${source}`);
-    if (swatch) swatch.style.background = hex(colours[destination - 1]);
+    if (swatch) {
+      swatch.style.background = hex(plan.palette[destination - 1]
+        || colours[destination - 1]);
+    }
   }
+  // The exchange pickers name filaments too, so they follow the same palette.
+  syncOptions($("convertswapa"), labels, signature);
+  syncOptions($("convertswapb"), labels, signature);
   const changes = session.changes();
+  const slots = plan.mode === SLOTS;
   $("convertplan").innerHTML = changes.length
-    ? "Chosen for export: " + changes.map(({ source, destination }) =>
-      `<b>${source}</b> (${esc(hex(colours[source - 1]))}) `
-      + `&rarr; <b>${destination}</b> (${esc(hex(colours[destination - 1]))})`).join(", ")
-      + `; ${colours.length - changes.length} other filament(s) keep their own colour.`
-    : "Chosen for export: every colour keeps its own filament, so the "
-      + "file is converted without changing any colour.";
+    ? "Chosen for export: " + changes.slice(0, 6).map(({ source, destination }) =>
+      slots
+        ? `<b>${esc(colourName(colours[source - 1]))}</b> `
+          + `(${esc(hex(colours[source - 1]))}) prints from filament `
+          + `<b>${destination}</b>`
+        : `<b>${source}</b> ${esc(swatchLabel(colours[source - 1]))} &rarr; `
+          + `<b>${destination}</b> ${esc(swatchLabel(colours[destination - 1]))}`
+    ).join(", ")
+      + (changes.length > 6 ? `, and ${changes.length - 6} more` : "")
+      + (slots
+        ? `; ${colours.length - changes.length} other filament(s) keep their own `
+          + "colour, and every colour keeps its appearance."
+        : `; ${colours.length - changes.length} other filament(s) keep their own `
+          + "colour.")
+    : (slots
+      ? "Chosen for export: every colour keeps its own filament and its own "
+        + "appearance, so the file is converted without changing any colour."
+      : "Chosen for export: no colour is repainted, so the file is converted "
+        + "without changing any colour.");
 }
 
 /* ---------- controls ---------- */
@@ -535,12 +651,17 @@ async function refreshPreview() {
   if (!preview.ok) {
     note(preview.error);
     window.__convertPreview = { mode: previewMode, triangles: 0,
-                                error: preview.error };
+                                render: token, error: preview.error };
     return;
   }
   const state = session.state;
-  const colours = paletteTable(state.colours);
-  const mapping = previewMode === "result" ? session.rule : null;
+  // The Output view is drawn from the palette and map this export writes, which
+  // for an arranged slot list is the rearranged palette; the Original view is the
+  // file as it was read, by its own palette and with no map at all.
+  const plan = assignmentPlan(session.assignmentMode, state.colours, session.rule);
+  const colours = paletteTable(previewMode === "result" ? plan.palette
+                                                        : state.colours);
+  const mapping = previewMode === "result" ? plan.mapping : null;
   let soup;
   try {
     soup = await session.worker.preview(state.plateId, null, previewMode, colours,
@@ -553,7 +674,7 @@ async function refreshPreview() {
     preview.setSoup(new Float32Array(0), new Float32Array(0));
     note(`the preview could not be drawn: ${error.message}`);
     window.__convertPreview = { mode: previewMode, triangles: 0,
-                                error: error.message };
+                                render: token, error: error.message };
     return;
   }
   if (token !== previewToken) return;              // a newer request wins
@@ -581,7 +702,10 @@ async function refreshPreview() {
   window.__convertPreview = { mode: previewMode, triangles: soup.triangles,
                               floats: positions.length, reused: soup.reused,
                               colours: hashColours(soup.colors),
-                              total: soup.total, simplified: soup.simplified };
+                              total: soup.total, simplified: soup.simplified,
+                              // The render this reply belongs to, so a check can
+                              // wait for the picture to catch up with an edit.
+                              render: token };
 }
 
 function resetPreview() {
@@ -641,7 +765,19 @@ $("convertmap").addEventListener("change", (event) => {
 });
 $("convertswap").addEventListener("click", () => {
   if (!session.state) return;
-  session.swap($("convertswapa").value, $("convertswapb").value);
+  // These pickers show the current slot occupants. Resolve their source rows
+  // before exchanging; after an earlier move, source IDs and slot IDs differ.
+  const sourceAt = (slot) => session.assignmentMode === SLOTS
+    ? Object.keys(session.rule).find((source) => session.rule[source] === Number(slot))
+    : slot;
+  session.swap(sourceAt($("convertswapa").value), sourceAt($("convertswapb").value));
+});
+// The two mode radios are native inputs in one group: arrow keys move between
+// them, and the label is the whole target.
+document.querySelectorAll('input[name="assignmentmode"]').forEach((node) => {
+  node.addEventListener("change", () => {
+    if (node.checked) session.setAssignmentMode(node.value);
+  });
 });
 $("convertreset").addEventListener("click", () => {
   if (session.state) session.reset();

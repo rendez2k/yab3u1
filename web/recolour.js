@@ -15,7 +15,7 @@ import { RecolourWorker } from "./shared/workerClient.js";
 import { readZip } from "./zip.js";
 
 const REEL_KEY = "yab3u1-web-reels";
-const VERSION = "2.1.0";
+const VERSION = "2.4.0";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -910,11 +910,17 @@ function linkFor(blob, filename, label) {
 // ------------------------------------------------------------------ theme -----
 
 const THEME_KEY = "yab3u1-theme";
+const themeButton = $("theme");
 function setTheme(theme, remember) {
   document.documentElement.setAttribute("data-theme", theme);
   if (remember) {
     try { localStorage.setItem(THEME_KEY, theme); } catch (error) { /* fine */ }
   }
+  // The same label the converter's header uses, so the two pages read alike.
+  const toLight = theme === "dark";
+  themeButton.textContent = toLight ? "Light" : "Dark";
+  themeButton.setAttribute("aria-label",
+                           toLight ? "Switch to light theme" : "Switch to dark theme");
 }
 setTheme(localStorage.getItem(THEME_KEY)
   || (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"),
