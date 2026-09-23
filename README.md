@@ -340,12 +340,14 @@ provides an explanation instead. The
 installed Snapmaker CLI crashes during plate initialisation. Validate a short
 print with at least two pauses before using the exporter for a long job.
 
-Under **Loaded reels → Use my Spool Studio filaments**, open Spool Studio and use
-**Download saved data (JSON)**. Import that file here, choose a filament for each
-slot, then **Apply to loaded reels**. This imports available single-colour stock
-with supported materials; it does not connect accounts, reserve stock or import
-slicer temperature profiles. Only chosen colour/material values are saved with
-the loaded reels. The imported library stays in tab memory and can be cleared.
+Under **Loaded reels → Use my Spool Studio filaments**, choose **Connect to Spool
+Studio**. In the new tab, sign in if needed and **Share available colours with
+YAB3D**. Back in YAB3D, choose a filament for each slot, then **Apply to loaded
+reels**. Sharing is a one-time approved snapshot, using the same protocol as
+Strata; it does not grant ongoing account access, reserve stock or import slicer
+temperature profiles. Only chosen colour/material values are saved with the
+loaded reels. The library snapshot stays in tab memory and can be cleared.
+**Import a saved file instead** retains the local JSON route as a fallback.
 
 ## Why the online tool failed
 

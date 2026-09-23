@@ -209,12 +209,10 @@
     <p class="hint" id="reelnote" style="margin-top:12px"></p>
     <details id="spoolimport">
       <summary>Use my Spool Studio filaments</summary>
-      <p class="hint"><a href="https://spool-studio.uk/" target="_blank" rel="noopener noreferrer">Open Spool Studio</a>,
-        choose <strong>Download saved data (JSON)</strong>, then import that file here.
-        It is read in this browser only. Choose which reel is loaded in each slot; importing does not change your model.</p>
-      <label class="field">Spool Studio data file
-        <input type="file" accept=".json,application/json" data-stock-file>
-      </label>
+      <p class="hint">Bring in the filaments you own, then choose which reel is in each slot.
+        Spool Studio opens in a new tab and asks you to share your available colours.</p>
+      <div class="row"><button type="button" data-stock-connect>Connect to Spool Studio</button>
+        <button type="button" data-stock-cancel hidden>Cancel connection</button></div>
       <p class="hint" role="status" aria-live="polite" data-stock-status></p>
       <div data-stock-picker hidden>
         <label class="field">Find a filament <input type="search" data-stock-search placeholder="Brand, colour or material"></label>
@@ -224,6 +222,11 @@
         <p class="hint">Only colour and material are applied. The library stays in this tab; chosen slot colours are saved as usual.
           This does not check how much filament remains or calibrate blend predictions.</p>
       </div>
+      <details><summary>Import a saved file instead</summary>
+        <p class="hint">In <a href="https://spool-studio.uk/" target="_blank" rel="noopener noreferrer">Spool Studio</a>,
+          choose <strong>Download saved data (JSON)</strong>. The file is read only in this browser.</p>
+        <label class="field">Spool Studio data file <input type="file" accept=".json,application/json" data-stock-file></label>
+      </details>
     </details>
   </div>
 

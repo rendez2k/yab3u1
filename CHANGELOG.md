@@ -7,10 +7,12 @@ section here together.
 
 ## Unreleased — experimental U1 reel-change export
 
-Added an optional Spool Studio link and local saved-data JSON import under Loaded
-reels. Choose stocked filaments per slot and explicitly apply their colour and
-material; account and purchase fields are ignored, and no inventory is uploaded.
-This is file import, not a live account connection.
+Added direct Spool Studio stock sharing under Loaded reels, using Strata's
+one-time consent flow. Connect, approve sharing in Spool Studio, then choose
+filaments per slot and apply their colour/material. Exact origin, popup, nonce
+and payload checks protect the transfer. Cancellation, timeout and popup closure
+remove listeners; imported stock stays in tab memory. Saved-data JSON import
+remains as a fallback. Neither route imports account credentials or print profiles.
 
 Corrected Organic support-style translation: Snapmaker/Orca serialize `organic`,
 Bambu serializes `tree_organic`. Covered project and object settings in every
