@@ -17,7 +17,7 @@ Three ways to use the project, with different workflows:
 | --- | --- | --- |
 | **`U1 Converter` shortcut** | this machine | local web UI (`u1ui.py` + `u1ui.html`), reads your installed Orca profiles and can verify a plate by slicing |
 | **`u1convert.py`** | any machine with Python | the command line tool; `--fill-bed`, `--verify`, `--supports`, `--colors` |
-| **`web/`** | any static host — live at <https://yab3u1.netlify.app> | [browser version](#the-browser-version-web) — v2.4.2, the whole conversion in the page, nothing uploaded |
+| **`web/`** | any static host — live at <https://yab3u1.netlify.app> | [browser version](#the-browser-version-web) — v2.4.3, the whole conversion in the page, nothing uploaded |
 
 A local replacement for [bl2u1.nbn.cat](https://bl2u1.nbn.cat) /
 [josuanbn/bl2u1](https://github.com/josuanbn/bl2u1) that actually works on
@@ -96,7 +96,7 @@ web/
 ```
 
 The pages report their own version (`VERSION` in `web/convert-page.js` and
-`web/recolour.js`); the live deployment is **v2.4.2**.
+`web/recolour.js`); the live deployment is **v2.4.3**.
 
 **Deploying.** The Python UI cannot go on a static host — it needs your Orca
 install and the slicer — but the browser converter can, and that is what
@@ -593,8 +593,21 @@ Based on [bl2u1](https://github.com/josuanbn/bl2u1) by josuanbn.
 Exactly one file here comes from that project: `u1_base_project_settings.json` is
 extracted from its `u1_template.3mf` — the Snapmaker U1 machine, process and
 filament baseline — and `web/base_settings.js` is generated from that. Everything
-else (the converter, the paint handling, the layout, both UIs) was written for
-this project.
+else is not derived from bl2u1. Additional sources used by later features are:
+
+* [FilamentMixer](https://github.com/justinh-rahb/filament-mixer) by Justin Hayes:
+  the MIT-licensed polynomial coefficients used for predicted blend colours,
+  brought across through Strata's JavaScript port. The original notice is in
+  [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).
+* [PaintPort](https://github.com/perspektive3D/paintport): format documentation
+  consulted for interoperability; its implementation was not copied.
+* [OrcaSlicer FullSpectrum](https://github.com/ratdoux/OrcaSlicer-FullSpectrum)
+  and [Snapmaker Orca](https://github.com/Snapmaker/OrcaSlicer): reference for
+  native mixed-filament settings and identifiers.
+* [Bambu Studio](https://github.com/bambulab/BambuStudio) and
+  [OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer): importer behaviour and
+  the `TriangleSelector::perform_split` algorithm used to implement exact
+  subdivision of painted faces for standard-colour 3MF export.
 
 bl2u1 ships the **GNU GPL v3**: its README says MIT, but the `LICENSE` file in the
 repository is the full GPL-3.0 text, so that is the licence that actually applies.

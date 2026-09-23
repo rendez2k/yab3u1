@@ -1,8 +1,14 @@
 Third-party notices
 
+bl2u1 by josuanbn — Snapmaker U1 settings baseline
+https://github.com/josuanbn/bl2u1
+u1_base_project_settings.json was extracted from its u1_template.3mf;
+web/base_settings.js is generated from that baseline. See LICENSE (GPL v3).
+
 FilamentMixer polynomial coefficients
 Copyright (c) 2026 Justin Hayes
 MIT License
+https://github.com/justinh-rahb/filament-mixer
 
 The coefficients in shared/mix_model.js originate from FilamentMixer,
 via the Strata JavaScript port. The model's original copyright and
@@ -29,3 +35,17 @@ SOFTWARE.
 The application is distributed under the GNU General Public License v3;
 see LICENSE. PaintPort's format documentation was consulted for
 interoperability; its implementation was not copied into this application.
+https://github.com/perspektive3D/paintport
+
+Additional format and algorithm references
+
+OrcaSlicer FullSpectrum and Snapmaker Orca: native mixed-filament settings
+and identifiers, consulted to write compatible project files.
+https://github.com/ratdoux/OrcaSlicer-FullSpectrum
+https://github.com/Snapmaker/OrcaSlicer
+
+Bambu Studio and OrcaSlicer: importer behaviour and the
+TriangleSelector::perform_split algorithm used to implement exact subdivision
+of painted faces in web/shared/standard.js for standard-colour 3MF export.
+https://github.com/bambulab/BambuStudio
+https://github.com/OrcaSlicer/OrcaSlicer

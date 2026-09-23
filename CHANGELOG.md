@@ -5,6 +5,17 @@ The version shown on the page comes from `VERSION` in `web/convert-page.js` (and
 the collapsed "What's new" block in the footer. Bump those constants and add a
 section here together.
 
+## 2.4.3 — compact preview, website address and source credits
+
+Added a visible yab3d.uk link above the title on both pages, including when
+visiting through the original Netlify address. Expanded the credits to identify
+FilamentMixer's blend coefficients and the format/algorithm references used by
+later features. Both pages now link to the third-party notices.
+
+The converter's 3D viewer starts collapsed behind a Show 3D preview button,
+with no empty canvas or inactive view controls taking up space. It can be
+hidden again, and rendering remains on demand for large models.
+
 ## 2.4.2 — U1 fill-plate placement and copy colours
 
 Fixed Fill plate using the source printer's bed dimensions for a Snapmaker U1

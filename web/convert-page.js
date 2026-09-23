@@ -14,7 +14,7 @@ import { thumbnailSizes } from "./shared/thumbnail.js";
 import { planLayout, targetLayout } from "./shared/layout.js";
 import { appliedSettings, supportOf } from "./shared/printSettings.js";
 
-const VERSION = "2.4.2";
+const VERSION = "2.4.3";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -27,6 +27,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "The 3D preview opens only when requested and can be hidden again, without an empty viewer taking up space.",
   "Fill plate now uses the U1's destination bed and keeps the assigned colours on every copy.",
   "The homepage converts a painted 3MF between Snapmaker Orca, Bambu Studio, OrcaSlicer and PrusaSlicer, in any direction.",
   "Every source filament definition, the paint and the geometry travel unchanged; there is no four-slot limit and no colour substitution.",
@@ -641,6 +642,7 @@ function note(text) {
 async function refreshPreview() {
   if (!previewShown || !session.state) return;
   const token = (previewToken += 1);
+  note("Preparing 3D preview…");
   if (!preview) {
     preview = new Preview($("convertpreview"));
     $("previewreset").addEventListener("click", () => preview.reset());
@@ -713,7 +715,7 @@ function resetPreview() {
   previewPositions = null;
   previewMode = "result";
   if ($("previewmode")) $("previewmode").value = "result";
-  if ($("previewshow")) $("previewshow").textContent = "Show preview";
+  syncPreviewVisibility();
   if (preview && preview.ok) preview.setSoup(new Float32Array(0), new Float32Array(0));
   note("");
   window.__convertPreview = null;
@@ -835,10 +837,17 @@ $("convertagain").addEventListener("click", () => {
   input.click();
 });
 
+function syncPreviewVisibility() {
+  $("previewpanel").classList.toggle("hidden", !previewShown);
+  $("previewshow").textContent = previewShown ? "Hide preview" : "Show 3D preview";
+  $("previewshow").setAttribute("aria-expanded", String(previewShown));
+}
+
 $("previewshow").addEventListener("click", () => {
-  previewShown = true;
-  $("previewshow").textContent = "Refresh preview";
-  refreshPreview();
+  previewShown = !previewShown;
+  syncPreviewVisibility();
+  if (previewShown) refreshPreview();
+  else previewToken += 1; // A pending reply cannot update the collapsed viewer.
 });
 $("previewmode").addEventListener("change", () => {
   previewMode = $("previewmode").value;

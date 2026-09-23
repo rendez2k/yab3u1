@@ -275,6 +275,10 @@
     border-bottom: 1px solid transparent; padding-bottom: 1px;
   }
   .navlink:hover { color: var(--text); border-bottom-color: var(--line); }
+  .site-address {
+    display: inline-block; margin-bottom: 5px; color: var(--text);
+    font-size: 13px; font-weight: 650; text-underline-offset: 3px;
+  }
   .theme {
     flex: 0 0 auto; font-size: 12px; font-weight: 600; padding: 5px 11px;
     border-radius: 999px; background: none; color: var(--dim);
@@ -397,6 +401,7 @@
       <img class="brandmark" src="assets/yab3d-mark-96.png" alt="" width="44"
            height="44">
       <div>
+        <a class="site-address" href="https://yab3d.uk/">yab3d.uk</a>
         <h1><span>YAB3D</span> <span class="what">3MF converter</span>
           <span class="ver" id="ver"></span></h1>
       <p class="sub"><span class="name">YAB3D</span> &mdash; Yet Another Bloody 3D
@@ -522,11 +527,12 @@
     <p class="hint" id="convertplan" role="status" aria-live="polite"></p>
 
     <fieldset class="preview">
-      <legend>Preview <span class="hint">optional</span></legend>
-      <p class="hint">An approximate look at the output, drawn from the simplified
-        surface in the colours this export would write, with sub-divided facets shown
-        in their dominant colour. It is a model preview, not sliced toolpaths, and it
-        never leaves your machine.</p>
+      <legend>3D preview</legend>
+      <button type="button" id="previewshow" aria-expanded="false"
+              aria-controls="previewpanel">Show 3D preview</button>
+      <div id="previewpanel" class="hidden">
+      <p class="hint">Compare the original and output colours. This is a simplified
+        model preview; the exported model keeps its full detail.</p>
       <canvas id="convertpreview" width="760" height="420"
               aria-label="Preview of the model to convert"></canvas>
       <div class="row" style="margin-top:10px">
@@ -539,10 +545,6 @@
         </div>
         <div class="field">
           <label>&nbsp;</label>
-          <button type="button" id="previewshow">Show preview</button>
-        </div>
-        <div class="field">
-          <label>&nbsp;</label>
           <button type="button" id="previewreset">Reset view</button>
         </div>
       </div>
@@ -550,6 +552,7 @@
         printed from the filaments you chose. Original colours: the file as it was
         read.</p>
       <p class="hint" id="previewnote" role="status" aria-live="polite"></p>
+      </div>
     </fieldset>
 
     <div class="actions">
@@ -586,7 +589,10 @@
   <span class="based">Based on
     <a href="https://github.com/josuanbn/bl2u1" target="_blank" rel="noopener noreferrer">bl2u1</a>
     by josuanbn &mdash; the Snapmaker U1 settings baseline comes from that project,
-    which is GPL-3.0 licensed.</span>
+    which is GPL-3.0 licensed. Blend predictions use
+    <a href="https://github.com/justinh-rahb/filament-mixer" target="_blank" rel="noopener noreferrer">FilamentMixer</a>
+    by Justin Hayes, via Strata.
+    <a href="THIRD_PARTY_NOTICES.txt">Credits and third-party notices</a>.</span>
   <span class="note">The conversion runs entirely in your browser &mdash; your model is
     never uploaded anywhere.</span>
   <details class="whatsnew" id="whatsnew"></details>

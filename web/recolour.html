@@ -67,6 +67,10 @@
     border-bottom: 1px solid transparent; padding-bottom: 1px;
   }
   .navlink:hover { color: var(--fg); border-bottom-color: var(--line); }
+  .site-address {
+    align-self: flex-start; margin-bottom: 3px; color: var(--fg);
+    font-size: 13px; font-weight: 650; text-underline-offset: 3px;
+  }
   #version {
     font-size: 11px; font-weight: 600; color: var(--dim);
     border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px;
@@ -143,6 +147,7 @@
   <img class="brandmark" src="assets/yab3d-mark-96.png" alt="" width="38"
        height="38">
   <div class="title">
+    <a class="site-address" href="https://yab3d.uk/">yab3d.uk</a>
     <h1><span class="brand">YAB3D</span> Full Spectrum recolour</h1>
     <span class="role">Recolour onto your own reels &middot; plan the reel
       changes</span>
@@ -249,7 +254,11 @@
   </div>
 </main>
 <footer>Colour prediction is an uncalibrated estimate from swatch values. The swap plan
-  needs a real slice; nothing here slices for you or touches your printer.</footer>
+  needs a real slice; nothing here slices for you or touches your printer.
+  <p>Blend predictions use
+    <a href="https://github.com/justinh-rahb/filament-mixer">FilamentMixer</a>
+    by Justin Hayes, via Strata.
+    <a href="THIRD_PARTY_NOTICES.txt">Credits and third-party notices</a>.</p></footer>
 <script type="module" src="./recolour.js"></script>
 </body>
 </html>
