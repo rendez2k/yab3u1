@@ -5,6 +5,27 @@ The version shown on the page comes from `VERSION` in `web/convert-page.js` (and
 the collapsed "What's new" block in the footer. Bump those constants and add a
 section here together.
 
+## Unreleased — experimental U1 reel-change export
+
+Added a separate slice-only project export and U1 G-code postprocessor. It remaps
+logical tools, heaters, tool fans and pre-extrusion indices to four physical heads,
+inserts layer-boundary M600 pauses and downloads a companion change sheet. An
+independent replay checks every source command, physical tool index and pause
+location before a file is offered. Unused slice palette entries are reported and
+excluded from the reel load. Work runs in a cancellable worker with stale results
+and download URLs discarded. Existing pauses and unsupported commands are refused.
+
+The Full Spectrum destination selector is now first, explaining U1's four slots
+and distinguishing other slicer formats from a particular printer. The U1 swap
+controls are shown only for that destination. Slice-only projects keep the original
+palette and designer settings, regardless of recolouring choices, with thumbnails.
+
+Validated automated two-pause cases, failed/tampered inputs, cancellation,
+desktop/mobile layouts, and real alien project preparation. The installed
+Snapmaker CLI still crashes during plate initialisation; native GUI slicing and
+physical printer validation are outstanding. This feature remains on a review
+build and is not part of the stable v2.5.1 release.
+
 ## 2.5.1 — retain custom settings when Snapmaker loads its preset
 
 Restored the process override metadata required by Snapmaker Orca's preset

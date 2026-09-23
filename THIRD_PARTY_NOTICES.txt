@@ -49,3 +49,32 @@ TriangleSelector::perform_split algorithm used to implement exact subdivision
 of painted faces in web/shared/standard.js for standard-colour 3MF export.
 https://github.com/bambulab/BambuStudio
 https://github.com/OrcaSlicer/OrcaSlicer
+
+
+Slots U1 — pause placement and U1 G-code conventions
+https://github.com/jalbornozv/slots-u1
+The separate YAB3D browser postprocessor was informed by its documented pause
+anchor, tool/header remapping and output verification. The scheduler and motion
+scanner remain YAB3D implementations.
+
+MIT License
+
+Copyright (c) 2026 Javier Albornoz
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

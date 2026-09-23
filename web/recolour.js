@@ -8,14 +8,13 @@
 import { comparison, norm, suggestMapping } from "./shared/colour.js";
 import { mappingFromPlan, mixHex, planMixtures } from "./shared/mix.js";
 import { Preview } from "./shared/preview.js";
-import { analyse as analyseGcode, decode as decodeGcode, planText } from "./shared/planner.js";
 import { LABELS, RECOLOUR_TARGETS } from "./shared/targets.js";
 import { thumbnailSizes } from "./shared/thumbnail.js";
 import { RecolourWorker } from "./shared/workerClient.js";
 import { readZip } from "./zip.js";
 
 const REEL_KEY = "yab3u1-web-reels";
-const VERSION = "2.5.1";
+const VERSION = "2.6.0-preview";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -185,13 +184,16 @@ function setLoading(active) {
 }
 
 function resetForUpload() {
+  $("prepareswaps").disabled = true;
+  $("preparestatus").textContent = "";
+  cancelPlan();
   // Bumped here too: this runs before any of the early returns below, so an
   // in-flight assessment or preview from the previous file can never apply.
   assessToken += 1;
   previewToken += 1;
   state.project = null;
   $("loaderror").textContent = "";
-  ["project", "reelscard", "mixcard", "previewcard", "exportcard", "plannercard"]
+  ["project", "reelscard", "mixcard", "previewcard", "exportcard"]
     .forEach((id) => $(id).classList.add("hidden"));
   state.assessed = null;
   state.mix = null;
@@ -223,7 +225,8 @@ function resetForUpload() {
 }
 
 function show() {
-  ["project", "reelscard", "mixcard", "previewcard", "exportcard", "plannercard"]
+  $("prepareswaps").disabled = state.target !== "snapmaker";
+  ["project", "reelscard", "mixcard", "previewcard", "exportcard"]
     .forEach((id) => $(id).classList.remove("hidden"));
   $("version").textContent = "v" + VERSION;
   $("pfacts").textContent = `${state.project.kind} project · `
@@ -375,6 +378,11 @@ async function refresh() {
 /** Everything that follows an assessment, with the assessment already in hand. */
 function useAssessed(assessed) {
   state.assessed = assessed;
+  const surfaceColours = new Set(assessed.used || []).size;
+  const extraColours = Math.max(0, state.project.paletteCount - surfaceColours);
+  $("palettenote").textContent = extraColours
+    ? `${surfaceColours} colours found on the selected model; ${extraColours} other palette entries are not used on its surface. The sliced-file check can confirm which can be left out of the reel load, including support and purge use.`
+    : "";
   state.mix = planMixtures(assessed.sourceColors, state.reels);
   state.recipes = state.mix.recipes;
   /* Ticking belongs to one recipe set. A new set starts fully ticked; an empty set
@@ -542,6 +550,8 @@ $("review").addEventListener("change", () => {
 });
 $("target").addEventListener("change", () => {
   state.target = $("target").value;
+  cancelPlan();
+  syncDestination();
   clearReview();
 });
 
@@ -798,104 +808,111 @@ function download(blob, filename, host) {
 
 // ----------------------------------------------------------------- planner ----
 
-let planEpoch = 0;
-
-async function planChanges() {
-  const epoch = (planEpoch += 1);
-  const file = $("gcodefile").files[0];
-  if (!file) {
-    $("gcodemember").innerHTML = '<span class="bad">Choose the sliced file first.</span>';
-    return;
-  }
-  const chosen = $("gcodememberlist").value || "";
-  $("gcodemember").textContent = `reading ${file.name}\u2026`;
+let planEpoch = 0, planWorker = null, planAction = "export";
+const planUrls = [];
+function clearPlan() {
+  for (const url of planUrls.splice(0)) URL.revokeObjectURL(url);
   $("planout").classList.add("hidden");
-  $("plandownloads").innerHTML = "";
-  try {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    let text;
-    if (bytes[0] === 0x50 && bytes[1] === 0x4b) {
-      const entries = await readZip(bytes);
-      if (epoch !== planEpoch) return;
-      const members = [...entries.keys()].filter((name) => name.toLowerCase()
-        .endsWith(".gcode"));
-      if (!members.length) {
-        throw new Error("that sliced 3MF has no .gcode member in it");
-      }
-      if (!chosen || !members.includes(chosen)) {
-        // More than one toolpath can live in a sliced 3MF, and guessing which one
-        // the user meant is how the wrong plan gets shown.  Ask instead.
-        showMembers(members);
-        return;
-      }
-      $("gcodemember").textContent = `using ${chosen} from the 3MF`;
-      text = decodeGcode(entries.get(chosen));
-    } else {
-      $("gcodepick").classList.add("hidden");
-      $("gcodememberlist").innerHTML = "";
-      text = decodeGcode(bytes);
+  $("plandownloads").replaceChildren();
+}
+function cancelPlan() {
+  planEpoch++;
+  if (planWorker) planWorker.terminate();
+  planWorker = null;
+  $("planbutton").disabled = false;
+  $("swapexport").disabled = false;
+  $("plancancel").classList.add("hidden");
+  clearPlan();
+}
+function planLink(text, filename, label, mime = "text/plain") {
+  const a = linkFor(new Blob([text], {type:mime}), filename, label);
+  if (!filename.endsWith(".gcode")) a.classList.add("secondary");
+  planUrls.push(a.href);
+  return a;
+}
+async function planChanges(action = planAction) {
+  cancelPlan();
+  planAction = action;
+  const epoch = planEpoch;
+  const file = $("gcodefile").files[0];
+  if (!file) { $("gcodemember").textContent = "Choose a sliced file first."; return; }
+  const member = $("gcodememberlist").value || "";
+  $("gcodemember").textContent = action === "export" ? "Checking the U1 slice, remapping tools and verifying pauses…" : "Reading the sliced toolpaths…";
+  $("planbutton").disabled = $("swapexport").disabled = true;
+  $("plancancel").classList.remove("hidden");
+  const worker = planWorker = new Worker(new URL("./shared/swapWorker.js", import.meta.url), {type:"module"});
+  const finish = () => {
+    worker.terminate();
+    if (epoch !== planEpoch) return false;
+    planWorker = null;
+    $("planbutton").disabled = $("swapexport").disabled = false;
+    $("plancancel").classList.add("hidden");
+    return true;
+  };
+  worker.onerror = () => {
+    if (finish()) $("gcodemember").textContent = "The background process stopped. Try a smaller sliced file.";
+  };
+  worker.onmessage = ({data}) => {
+    if (!finish()) return;
+    if (data.error) { $("gcodemember").textContent = data.error; return; }
+    if (data.members) {
+      $("gcodememberlist").replaceChildren(...data.members.map((name)=>new Option(name,name)));
+      $("gcodepick").classList.remove("hidden");
+      $("gcodemember").textContent = "Choose the plate's G-code member, then prepare the file.";
+      return;
     }
-    if (epoch !== planEpoch) return;
-    const evidence = analyseGcode(text, { physical: 4 });
-    evidence.plan_text = planText(evidence, file.name);
-    if (epoch !== planEpoch) return;
-    showPlan(evidence, file.name, chosen);
-  } catch (error) {
-    if (epoch !== planEpoch) return;
-    $("planout").classList.add("hidden");
-    $("plandownloads").innerHTML = "";
-    $("gcodemember").innerHTML = `<span class="bad">${esc(error.message)}</span>`;
-  }
+    const base = file.name.replace(/\.[^.]+$/, "");
+    const box = $("planout");
+    box.classList.remove("hidden");
+    const pre = document.createElement("pre");
+    pre.textContent = data.sheet;
+    box.replaceChildren(pre);
+    $("gcodemember").textContent = data.gcode
+      ? `Export checks passed: ${data.evidence.pause_count} pauses and ${data.evidence.reel_changes} reel changes. Download both files below.`
+      : data.evidence.summary;
+    if (data.evidence.unused_colours?.length) $("gcodemember").textContent +=
+      ` ${data.evidence.unused_colours.length} unused palette colours excluded from the reel plan.`;
+    const downloads = $("plandownloads");
+    if (data.gcode) downloads.appendChild(planLink(data.gcode, `${base}-u1-swaps.gcode`, "Download U1 G-code with pauses"));
+    downloads.appendChild(planLink(data.sheet, `${base}-reel-changes.txt`, data.gcode ? "Download reel-change sheet" : "Download planning report"));
+    downloads.appendChild(planLink(JSON.stringify(data.evidence,null,2), `${base}-plan-evidence.json`, "Download analysis (.json)", "application/json"));
+    window.__plan = {feasible:data.evidence.feasible, pause_count:data.evidence.pause_count,
+      reel_changes:data.evidence.reel_changes, exported:Boolean(data.gcode)};
+  };
+  worker.postMessage({file,member,action});
 }
-
-function showMembers(members) {
-  const list = $("gcodememberlist");
-  list.innerHTML = "";
-  members.forEach((name) => {
-    const option = document.createElement("option");
-    option.value = name;
-    option.textContent = name;
-    list.appendChild(option);
-  });
-  $("gcodepick").classList.remove("hidden");
-  $("gcodemember").innerHTML = "That sliced 3MF holds more than one G-code "
-    + "member; choose the one to read, then press <b>Plan reel changes</b>.";
-}
-
-function showPlan(evidence, name, member = "") {
-  $("gcodemember").textContent = member
-    ? `${member}: ${evidence.summary}` : evidence.summary;
-  const box = $("planout");
-  box.classList.remove("hidden");
-  box.innerHTML = `<pre>${esc(evidence.plan_text)}</pre>`;
-  const downloads = $("plandownloads");
-  downloads.innerHTML = "";
-  const base = String(name).replace(/\.[^.]+$/, "");
-  downloads.appendChild(linkFor(new Blob([evidence.plan_text], { type: "text/plain" }),
-                                `${base}-reel-changes.txt`, "Download the plan (.txt)"));
-  downloads.appendChild(linkFor(new Blob([JSON.stringify(evidence, null, 2)],
-                                         { type: "application/json" }),
-                                `${base}-plan-evidence.json`,
-                                "Download the evidence (.json)"));
-  window.__plan = { feasible: evidence.feasible, pause_count: evidence.pause_count,
-                    reel_changes: evidence.reel_changes, layers: evidence.layers,
-                    tools: evidence.tools, member };
-}
-
 $("gcodefile").addEventListener("change", () => {
-  planEpoch += 1;                    // any plan in flight is for the old file
-  // A new file invalidates any member choice made against the previous one, and
-  // the old plan must not stay on screen next to it.
+  cancelPlan();
   $("gcodepick").classList.add("hidden");
-  $("gcodememberlist").innerHTML = "";
-  $("planout").classList.add("hidden");
-  $("plandownloads").innerHTML = "";
-  const file = $("gcodefile").files[0];
-  $("gcodemember").textContent = file ? `selected ${file.name}` : "";
+  $("gcodememberlist").replaceChildren();
+  $("gcodemember").textContent = $("gcodefile").files[0]?.name || "";
 });
-
-$("planbutton").addEventListener("click", () => planChanges());
-$("gcodememberlist").addEventListener("change", () => planChanges());
+$("planbutton").addEventListener("click", () => planChanges("plan"));
+$("swapexport").addEventListener("click", () => planChanges("export"));
+$("plancancel").addEventListener("click", () => {
+  cancelPlan(); $("gcodemember").textContent = "Cancelled. No file was changed.";
+});
+$("gcodememberlist").addEventListener("change", () => { cancelPlan(); $("gcodemember").textContent = "Plate selected. Prepare the file to continue."; });
+$("prepareswaps").addEventListener("click", async () => {
+  if (!state.project || !state.objects.length || state.target !== "snapmaker") return;
+  const epoch = state.epoch, plate = state.plateId, objects = JSON.stringify(state.objects);
+  const button = $("prepareswaps"), status = $("preparestatus");
+  button.disabled = true;
+  status.textContent = "Preparing the original colours for slicing…";
+  try {
+    const chosenObjects = state.objects.slice();
+    const rendered = await background().thumbnail(plate, chosenObjects, paletteOf(null, "original"), null,
+      {size:512,small:128,estimate:state.assessed?.counts?.triangles || 0});
+    if (epoch !== state.epoch || plate !== state.plateId || objects !== JSON.stringify(state.objects) || state.target !== "snapmaker") return;
+    const built = await background().request("prepare-swaps", {plateId:plate,objects:chosenObjects,
+      thumbnails:{main:rendered.main,small:rendered.small}});
+    if (epoch !== state.epoch || plate !== state.plateId || objects !== JSON.stringify(state.objects) || state.target !== "snapmaker") return;
+    status.textContent = "Open this as a project, then slice and export G-code. Do not print the virtual-tool slice directly.";
+    download(new Blob([built.bytes], {type:"application/octet-stream"}),
+      (state.project.title || "model").replace(/[^\w.-]+/g,"-") + "-U1-SLICE-ONLY.3mf", status);
+  } catch (error) { if (epoch === state.epoch) status.textContent = error.message; }
+  finally { if (epoch === state.epoch) button.disabled = state.target !== "snapmaker"; }
+});
 
 function linkFor(blob, filename, label) {
   const url = URL.createObjectURL(blob);
@@ -929,3 +946,16 @@ $("theme").addEventListener("click", () => setTheme(
   document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light",
   true));
 $("version").textContent = "v" + VERSION;
+
+function syncDestination() {
+  const u1 = state.target === "snapmaker";
+  $("destinationnote").textContent = u1
+    ? "Snapmaker U1 has four physical filament slots. Extra source colours need recolouring, supported blends or manual reel changes."
+    : "Choose your printer in the destination slicer. This recolouring page currently compares four loaded reels; that is not a limit on your printer. Use the 3MF converter to keep any number of source colours.";
+  $("plannercard").classList.toggle("hidden", !u1);
+  $("prepareswaps").disabled = !u1 || !state.project;
+}
+$("target").innerHTML = RECOLOUR_TARGETS.map((id) =>
+  `<option value="${id}">${esc(LABELS[id])}</option>`).join("");
+$("target").value = state.target;
+syncDestination();

@@ -303,20 +303,40 @@ than reopened as white defaults, and a PrusaSlicer object built from several
 volumes (triangle ranges, including negative volumes) is refused instead of
 flattened into one filament.
 
-**Planning from a real slice.** Everything the assessment says about colour is a
-surface estimate until the file is sliced. Drop the sliced `.gcode` (or a sliced
-3MF, in which case the page asks **which** G-code member inside it to read rather
-than guessing) and the plan is read from the slicer's own toolpath:
+**Planning from a real slice.** The planning report reads supported sliced
+G-code (or a selected G-code member inside a sliced 3MF), including extrusion
+for supports, infill and purging. It reports initial reels and changes between
+layers. A report alone does not modify the slice or insert pauses.
 
-```bash
-python u1gcode.py  # not a CLI: import u1gcode; u1gcode.analyse(text)
-```
+**Preview branch: U1 reel-change export.** The experimental browser workflow adds
+an actual postprocessor, separate from normal 3MF conversion. Choose Snapmaker U1
+at the top of the Full Spectrum page, load the original model and download its
+slice-only project. It has logical extruders for the original palette, reviewed
+print-setting overrides and a generated thumbnail. Open as a project in a slicer
+with U1 profiles, review settings, slice, and export G-code. **Do not print the
+virtual-tool slice directly.** Return the slice to YAB3D and choose **Prepare U1
+file with pauses**. Download the remapped G-code and its reel-change sheet.
 
-It reports which filaments really extrude in each layer, refuses a file whose
-layers need more than four colours (those layers cannot be separated by changing
-reels between layers), and otherwise prints the initial load and every boundary
-change, as a text plan plus a JSON record of the evidence. Your G-code is never
-modified or rewritten, and no pause is ever inserted into it.
+The first implementation accepts declared Klipper U1 slices with all-PLA
+filaments, 0.4 mm nozzles, relative extrusion and matching layer counters. It
+remaps tool selections, explicit tool temperatures/fans and U1 pre-extrusion
+indices, inserts Orca-style `M600` pauses after layer housekeeping, and replays the
+output against the source commands and schedule before offering a download.
+Unknown macros, existing pauses, mixed-filament inputs, ambiguous commands and
+layers addressing over four colours are refused. It reports unused palette
+entries from the sliced commands and excludes them from the initial reel load.
+
+All work runs in a cancellable browser worker. No printer communication or slicing
+is performed by the website. At each pause the operator must load/purge the reels
+listed on the sheet before resuming. Logical-colour consumption columns are kept
+as labelled source statistics rather than misrepresented as per-head consumption.
+The viewer's slot colours cannot represent all colours loaded at different times.
+
+This is **not yet validated on a physical printer**. Automated two-pause fixtures,
+command-tampering checks and browser downloads pass; the real alien model's
+slice-only archive has been checked, but native GUI slicing is outstanding. The
+installed Snapmaker CLI crashes during plate initialisation. Validate a short
+print with at least two pauses before using the exporter for a long job.
 
 ## Why the online tool failed
 
@@ -680,10 +700,9 @@ a four-slot limit; its target-specific settings are described above.
   project reopens identically in the installed slicer has **not** been verified
   here: the earlier Orca command-line crash means the slicer is not launched by
   this tool, and confirming it is a manual step.
-* Mid-print reel changes are planned from a **sliced** file, never from the mesh:
-  the page reads the real toolpath (infill and supports included) and reports the
-  changes, but it does not modify the G-code or insert pauses into it. The plan is
-  a separate document you act on.
+* Mid-print reel changes are derived from a **sliced** file. The planning report
+  does not modify it. The separate experimental U1 exporter described above
+  remaps supported slices and inserts pauses; physical validation is outstanding.
 * Foreign-target projects are **colour projects**. They carry geometry, parts, the
   palette and the recipes; they do not carry the U1's printer, process or G-code,
   and the local portable exporters preserve the source arrangement. The browser

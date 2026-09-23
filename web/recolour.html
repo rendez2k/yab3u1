@@ -97,6 +97,8 @@
   button:disabled { opacity: .5; }
   .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
   .field { display: flex; flex-direction: column; gap: 6px; }
+  .field.hidden, .row.hidden { display: none; }
+  #plandownloads .save.secondary { background: var(--panel2); color: var(--fg); border-color: var(--line); }
   .field.grow { flex: 1 1 240px; }
   label.check { display: flex; align-items: center; gap: 8px; font-size: 14px; }
   table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
@@ -157,6 +159,13 @@
   <button id="theme" type="button">Theme</button>
 </header>
 <main>
+  <div class="card" id="destinationcard" style="margin-top:16px">
+    <div class="field">
+      <label for="target">Printer / output format</label>
+      <select id="target"></select>
+    </div>
+    <p class="hint" id="destinationnote" role="status"></p>
+  </div>
   <div id="drop" role="button" tabindex="0" aria-label="Choose a 3MF file to open">
     <strong>Drop a .3mf here</strong>
     <div class="hint" style="margin-top:6px">Everything runs in this page: nothing is
@@ -173,6 +182,7 @@
   <div class="card hidden" id="project">
     <h2>Plate &amp; objects</h2>
     <div class="facts hint" id="pfacts"></div>
+    <p class="hint" id="palettenote"></p>
     <div class="row" style="margin-top:12px">
       <div class="field grow">
         <label for="plate">Plate to export</label>
@@ -225,36 +235,46 @@
   <div class="card hidden" id="exportcard">
     <h2>Export</h2>
     <div class="row">
-      <div class="field grow">
-        <label for="target">Project to write</label>
-        <select id="target"></select>
-      </div>
       <button type="button" class="primary" id="export">Download the project</button>
     </div>
     <p class="hint" id="exportnote"></p>
     <div id="exportlog" class="hint"></div>
   </div>
 
-  <div class="card hidden" id="plannercard">
-    <h2>Reel changes from a real slice</h2>
-    <p class="hint">Drop the <em>sliced</em> G-code (or a sliced 3MF that carries one)
-      and the plan is read from the slicer's own toolpath — infill, supports and the
-      wipe tower included. The file is never modified and no G-code is written back.</p>
-    <div class="row">
+  <div class="card" id="plannercard">
+    <h2>Print with manual reel changes <span class="hint">· U1 experimental</span></h2>
+    <p class="hint">Keep more than four original colours by changing reels between layers.
+      Start with an all-PLA model and a U1 with 0.4 mm nozzles. The slice must fit four colours per layer.</p>
+    <ol class="hint">
+      <li>Load your original 3MF above and download a slice-only project. This keeps its original colours, regardless of recolouring choices above.</li>
+      <li>Open it as a project in OrcaSlicer with U1 profiles, check its settings, slice and export G-code. <strong>Do not print that virtual-tool slice.</strong></li>
+      <li>Choose the sliced file below. Prepare a U1 file with pauses and download its reel-change sheet.</li>
+    </ol>
+    <button type="button" id="prepareswaps" disabled>Download slice-only project</button>
+    <p class="hint" id="preparestatus" role="status"></p>
+    <div class="field">
+      <label for="gcodefile">Sliced G-code or sliced 3MF</label>
       <input type="file" id="gcodefile" accept=".gcode,.gco,.g,.3mf">
-      <button type="button" id="planbutton">Plan reel changes</button>
     </div>
+    <div class="row" style="margin-top:12px">
+      <button type="button" class="primary" id="swapexport">Prepare U1 file with pauses</button>
+      <button type="button" id="planbutton">Planning report only</button>
+      <button type="button" id="plancancel" class="hidden">Cancel</button>
+    </div>
+    <p class="hint">The export remaps tools, temperatures and purge commands to four heads and inserts M600 pauses.
+      At each pause, load and purge the listed reels using the printer controls before resuming.
+      Test a short print with at least two pauses first; this YAB3D exporter has not yet been verified on a physical printer.</p>
     <div class="field hidden" id="gcodepick" style="margin-top:10px">
       <label for="gcodememberlist">Which G-code is inside that sliced 3MF?</label>
       <select id="gcodememberlist"></select>
     </div>
-    <p class="hint" id="gcodemember"></p>
+    <p class="hint" id="gcodemember" role="status" aria-live="polite"></p>
     <div id="planout" class="hidden" style="margin-top:12px"></div>
     <div class="row" id="plandownloads" style="margin-top:10px"></div>
   </div>
 </main>
-<footer>Colour prediction is an uncalibrated estimate from swatch values. The swap plan
-  needs a real slice; nothing here slices for you or touches your printer.
+<footer>Colour prediction is an uncalibrated estimate from swatch values. Reel-change exports
+  need a real U1 slice. Nothing here slices for you or sends files to your printer.
   <p>Blend predictions use
     <a href="https://github.com/justinh-rahb/filament-mixer">FilamentMixer</a>
     by Justin Hayes, via Strata.

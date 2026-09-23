@@ -325,6 +325,14 @@ self.onmessage = async (event) => {
     }
     if (!loaded) throw new Error("no project is loaded yet");
     const { project: parsed } = loaded;
+    if (type === "prepare-swaps") {
+      const { prepareSwapProject } = await import("./swapProject.js");
+      const built = prepareSwapProject(parsed, message.plateId, message.objects,
+                                       message.thumbnails || null);
+      const bytes = await writeZip([...built.entries].map(([name, data]) => ({ name, data })));
+      post({ type: "prepared-swaps", id, bytes }, [bytes.buffer]);
+      return;
+    }
     if (type === "bounds") {
       // The selection's own bounds, for the layout box: measured on the plate the
       // user picked, never a printer bed.  The reply carries the selection's
