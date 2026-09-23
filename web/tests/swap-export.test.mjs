@@ -27,6 +27,17 @@ assert.match(built.sheet, /slot 4, remove colour 4.*load colour 5/i);
 assert.match(built.sheet, /slot 4, remove colour 5.*load colour 4/i);
 assert.equal(built.gcode.match(/^; filament_colour = (.*)$/m)[1].split(';').length,4);
 const source = inspectU1(src);
+const preamble = 'EXCLUDE_OBJECT_DEFINE NAME=alien CENTER=0,0 POLYGON=[[0,0],[1,0],[0,1]]\nM73 P0 R1\nM106 S0\nM106 P2 S0\n';
+const realDialect = preamble + src.replace('M83', 'M83\nG17');
+const realBuilt = buildSwapExport(realDialect);
+assert.ok(realBuilt.gcode.includes(preamble));
+assert.ok(realBuilt.gcode.includes('\nG17\n'));
+assert.throws(() => buildSwapExport('M106 S255\n' + src), /before PRINT_START/);
+assert.throws(() => buildSwapExport(src.replace('M83', 'M83\nG18')), /does not model/);
+const impossible = inspectU1(fixture([[0,1,2,3,4]]));
+assert.equal(impossible.evidence.feasible, false);
+assert.match(impossible.evidence.summary, /actually deposit/);
+assert.equal(impossible.evidence.incompatible_count, 1);
 assert.equal(verifySwapExport(source,built.gcode),true);
 for (const corrupted of [built.gcode.replace('G1 X10 Y2 E1','G1 X10 Y2 E9'),
   built.gcode.replace(/^M600$/m,'M0'), built.gcode.replace('M109 S210 T3','M109 S210 T2'),

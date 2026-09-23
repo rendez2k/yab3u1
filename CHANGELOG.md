@@ -7,6 +7,20 @@ section here together.
 
 ## Unreleased — experimental U1 reel-change export
 
+Added an optional Spool Studio link and local saved-data JSON import under Loaded
+reels. Choose stocked filaments per slot and explicitly apply their colour and
+material; account and purchase fields are ignored, and no inventory is uploaded.
+This is file import, not a live account connection.
+
+Corrected Organic support-style translation: Snapmaker/Orca serialize `organic`,
+Bambu serializes `tree_organic`. Covered project and object settings in every
+destination. Also guarded export rendering while colour analysis is pending.
+
+The real alien slice now parses Orca's object-definition/fan-off preamble and XY
+arc-plane commands. It correctly refuses printable export: 59 layers deposit
+five colours, first at layer 406 (81.20 mm); three palette entries are unused.
+Infeasible jobs now retain a downloadable explanation and analysis.
+
 Added a separate slice-only project export and U1 G-code postprocessor. It remaps
 logical tools, heaters, tool fans and pre-extrusion indices to four physical heads,
 inserts layer-boundary M600 pauses and downloads a companion change sheet. An
@@ -22,8 +36,8 @@ palette and designer settings, regardless of recolouring choices, with thumbnail
 
 Validated automated two-pause cases, failed/tampered inputs, cancellation,
 desktop/mobile layouts, and real alien project preparation. The installed
-Snapmaker CLI still crashes during plate initialisation; native GUI slicing and
-physical printer validation are outstanding. This feature remains on a review
+Snapmaker CLI still crashes during plate initialisation. The user confirmed native
+GUI slicing and supplied its G-code; physical printer validation is outstanding. This feature remains on a review
 build and is not part of the stable v2.5.1 release.
 
 ## 2.5.1 — retain custom settings when Snapmaker loads its preset

@@ -341,8 +341,8 @@ await ok("supports follow the source: Prusa's organic tree, manual, at 40 degree
   assert.equal(cfg.enable_support, "1", "supports are enabled");
   assert.equal(cfg.support_type, "tree(manual)", "the source's type is written");
   assert.equal(cfg.support_threshold_angle, "40", "the source's angle is written");
-  assert.equal(cfg.support_style, "tree_organic",
-               "Prusa organic style is translated to Orca tree_organic");
+  assert.equal(cfg.support_style, "organic",
+               "Prusa organic style uses Snapmaker's serialized organic enum");
   assert.match(built.settings.support, /tree\(manual\) at 40 degrees/,
                "the export says what it wrote");
 });
@@ -709,6 +709,20 @@ await ok("painted supports remain enabled on each cloned U1 object", () => {
   const objects = [...project.readProject(built.entries).meta.values()].filter(o => o.settings);
   assert.equal(objects.length, 3);
   for (const object of objects) assert.equal(object.settings.enable_support, "1");
+});
+
+await ok("organic support style uses each slicer's serialized enum at object and project scope", () => {
+  for (const source of [{ support_style: "tree_organic", enable_support: "1", support_type: "tree(auto)" },
+    { support_style: "organic", enable_support: "1", support_type: "tree(auto)" },
+    { support_material_style: "organic", support_material: "1" }]) {
+    for (const object of [false, true]) {
+      for (const target of ["snapmaker", "orca", "bambu", "prusa"]) {
+        const values = transferSettings(source, target, { object }).values;
+        assert.equal(values[target === "prusa" ? "support_material_style" : "support_style"], target === "bambu" ? "tree_organic" : "organic");
+      }
+    }
+    assert.equal(u1ConfigOf(bambuSource({ settings: source })).cfg.support_style, "organic");
+  }
 });
 
 if (failures.length) {

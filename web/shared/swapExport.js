@@ -61,6 +61,9 @@ export function inspectU1(text) {
     if (/^(?:M0|M1|M600|PAUSE|RESUME)(?:\s|$)/.test(code))
       fail(`Line ${i + 1}: the slice already contains a pause or filament change. Remove it in the slicer and export again.`);
     if (code === "M83") relativeE = true;
+    // The scanner already models arcs in XY. Orca explicitly reasserts this
+    // plane; other planes remain unsupported. Preserve G17 in the written file.
+    if (code === "G17") { clean.push(""); continue; }
     if (code === "M82") fail("Absolute extrusion is not supported by the U1 reel-change exporter. Slice with relative E distances.");
     if (/^G[0-3]\b.*\bE/.test(code) && !relativeE) fail(`Line ${i + 1}: extrusion occurs before M83.`);
     const bare = /^T(\d+)$/.exec(code);
@@ -113,7 +116,11 @@ export function inspectU1(text) {
         fail(`Line ${i + 1}: layer markers and the U1 layer counter disagree.`);
       anchors[layer] = i;
     }
-    if (code && !started && !/^M(?:73|201|203|204|205)\b/.test(code))
+    // Orca emits object-cancellation geometry and fan-off commands before its
+    // machine start block. They do not activate or extrude a logical colour.
+    const preamble = /^EXCLUDE_OBJECT_DEFINE NAME=[\w.-]+ CENTER=[-\d.,]+ POLYGON=\[[-\d.,\[\]]+\]$/.test(code)
+      || /^M106(?: P[02])? S0$/.test(code);
+    if (code && !started && !preamble && !/^M(?:73|201|203|204|205)\b/.test(code))
       fail(`Line ${i + 1}: unexpected command before PRINT_START.`);
     clean.push(line);
   }
@@ -133,12 +140,19 @@ export function inspectU1(text) {
     (t.layer < 0 ? startup : perLayer[t.layer].tools).add(t.tool);
   }
   const usage = perLayer.map((l) => ({ ...l, tools: [...l.tools].sort((a,b) => a-b) }));
-  const over = usage.find((l) => l.tools.length > 4);
-  if (over) fail(`Layer ${over.index + 1} addresses ${over.tools.length} colours. This exporter can only change reels between layers using four heads.`);
-  const plan = schedule(usage, [...startup], 4);
+  const incompatible = usage.filter((l) => l.tools.length > 4), over = incompatible[0];
+  const deposited = evidence.per_layer.filter((l) => l.tools.length > 4);
+  const firstDeposit = deposited[0];
+  const summary = over ? `Layer ${over.index + 1} addresses ${over.tools.length} colours. `
+    + (firstDeposit ? `${deposited.length} layers actually deposit more than four colours, starting at layer ${firstDeposit.index + 1} (Z ${firstDeposit.z?.toFixed(2)} mm). ` : 'Advance heating, purge or tool selection also counts as using a colour. ')
+    + 'This exporter can only change reels between layers using four heads. Recolour one source colour onto a loaded reel, or change the model/slice; no printable swap file has been generated.' : null;
+  const plan = over ? { schedule: [], initial: {}, pause_count: null, reel_changes: null, summary,
+    diagnosis: 'too-many-colours-per-layer' } : schedule(usage, [...startup], 4);
   const used = new Set([...startup, ...usage.flatMap((l) => l.tools)]);
   return { lines, cfg, colours, anchors, touches, evidence: {
-    ...evidence, ...plan, feasible: true, per_layer: usage,
+    ...evidence, ...plan, feasible: !over, per_layer: usage,
+    incompatible_count: incompatible.length, incompatible_layers: incompatible.slice(0,20),
+    max_tools_per_layer: Math.max(...usage.map(l => l.tools.length)),
     startup_tools: [...startup], physical: 4,
     source_palette_count: colours.length,
     unused_colours: colours.map((_, i) => i).filter((i) => !used.has(i)),
@@ -212,6 +226,9 @@ export function operatorSheet(evidence, colours, name = "model") {
 
 export function buildSwapExport(text, name = "model") {
   const source = inspectU1(text), { evidence, lines, anchors } = source;
+  if (!evidence.feasible) {
+    const error = new GcodeError(evidence.summary); error.evidence = evidence; throw error;
+  }
   let map = new Map(Object.entries(evidence.initial).map(([raw, slot]) => [Number(raw), slot - 1]));
   const at = new Map();
   for (const c of evidence.schedule) {

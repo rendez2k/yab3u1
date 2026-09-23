@@ -189,6 +189,7 @@ function carriedValue(sourceSettings, key) {
   if (value === null || value === undefined || value === "") return undefined;
   value = String(value);
   if (key === "seam_position" && value === "rear") value = "back";
+  // Bambu's serialized enum is tree_organic; Orca/Snapmaker use organic.
   if (key === "support_style" && value === "organic") value = "tree_organic";
   return acceptable(key, value) ? value : undefined;
 }
@@ -236,6 +237,7 @@ export function transferSettings(source, target, { object = false } = {}) {
         && !["rectilinear", "alignedrectilinear", "grid", "triangles", "stars", "cubic", "line",
              "concentric", "honeycomb", "3dhoneycomb", "gyroid", "supportcubic", "lightning"].includes(value)) name = null;
     if (value === undefined || !name) { skipped.push(key); continue; }
+    if (key === "support_style" && value === "tree_organic" && ["snapmaker", "orca"].includes(target)) value = "organic";
     values[name] = value;
   }
   const support = supportOf(source);
@@ -253,7 +255,7 @@ export function transferSettings(source, target, { object = false } = {}) {
       values.enable_support = support.enabled ? "1" : "0";
       if (support.type) values.support_type = support.type;
       if (support.angle) values.support_threshold_angle = String(support.angle);
-      if (source?.support_material_style === "organic") values.support_style = "tree_organic";
+      if (source?.support_material_style === "organic") values.support_style = target === "bambu" ? "tree_organic" : "organic";
     }
   }
   return { values, skipped };
@@ -312,7 +314,7 @@ export function appliedSettings(sourceSettings, enabled = true) {
   const out = [];
   for (const key of CARRY_KEYS) {
     const value = carriedValue(sourceSettings, key);
-    if (value !== undefined) out.push({ key, value });
+    if (value !== undefined) out.push({ key, value: key === "support_style" && value === "tree_organic" ? "organic" : value });
   }
   return out;
 }
@@ -322,8 +324,9 @@ export function carryPrintSettings(cfg, sourceSettings, enabled = true) {
   if (!sourceSettings || !enabled) return [];
   const carried = [];
   for (const key of CARRY_KEYS) {
-    const value = carriedValue(sourceSettings, key);
+    let value = carriedValue(sourceSettings, key);
     if (value === undefined) continue;
+    if (key === "support_style" && value === "tree_organic") value = "organic";
     cfg[key] = Array.isArray(cfg[key])
       ? new Array(cfg[key].length || 1).fill(value)
       : value;

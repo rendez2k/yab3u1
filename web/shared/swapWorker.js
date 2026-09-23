@@ -24,5 +24,8 @@ self.onmessage = async ({data}) => {
         ? inspectU1(text).evidence : analyse(text, {physical:4});
       self.postMessage({evidence, sheet:planText(evidence,file.name,member)});
     }
-  } catch (error) { self.postMessage({error:error.message}); }
+  } catch (error) {
+    if (error.evidence) self.postMessage({evidence: error.evidence, sheet: planText(error.evidence, data.file.name, data.member)});
+    else self.postMessage({error:error.message});
+  }
 };

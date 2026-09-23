@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import { parseSpoolStock } from '../shared/spoolImport.js';
+const item = {brand:'Maker', product:'Basic', colour:'Green', material:'PLA', hex:'#3f8e43', spools:1, used:false};
+const pack = items => JSON.stringify({format:'spool-studio-account-export-v1', accountKey:'private-account', library:{items}, phoneBatch:{private:'ignored'}});
+const parsed = parseSpoolStock(pack([item, {...item}, {...item, used:true}, {...item, spools:0}, {...item, hex:'invalid'}, {...item, material:'PLA-CF'}, {...item, colour:'Rainbow'}]));
+assert.equal(parsed.rows.length,1);
+assert.equal(parsed.omitted,5);
+assert.deepEqual(parsed.rows[0], {color:'#3F8E43',type:'PLA',name:'Maker · Basic · Green · PLA'});
+assert.ok(!JSON.stringify(parsed).includes('private'));
+assert.throws(()=>parseSpoolStock('{}'),/Spool Studio/);
+assert.throws(()=>parseSpoolStock('not json'),/valid JSON/);
+assert.equal(parseSpoolStock(pack([])).rows.length,0);
+assert.equal(parseSpoolStock(pack([{...item,hex:'#ffffffFF'}])).rows[0].color,'#FFFFFF');
+console.log('Spool Studio import: supported export, availability, colour/material filters and private-field isolation passed');

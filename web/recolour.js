@@ -12,6 +12,7 @@ import { LABELS, RECOLOUR_TARGETS } from "./shared/targets.js";
 import { thumbnailSizes } from "./shared/thumbnail.js";
 import { RecolourWorker } from "./shared/workerClient.js";
 import { readZip } from "./zip.js";
+import { mountSpoolImport } from "./shared/spoolImport.js";
 
 const REEL_KEY = "yab3u1-web-reels";
 const VERSION = "2.6.0-preview";
@@ -49,6 +50,11 @@ state.reels = defaultReels();
 function saveReels() {
   try { localStorage.setItem(REEL_KEY, JSON.stringify(state.reels)); } catch (e) { /* fine */ }
 }
+
+mountSpoolImport({ host: $("spoolimport"), getReels: () => state.reels, apply: (reels) => {
+  state.reels = reels;
+  saveReels(); clearReview(); renderReels(); refresh();
+} });
 
 // ------------------------------------------------------------------ loading ---
 
@@ -412,9 +418,9 @@ function clearReview() {
 function resultPlan() {
   const assessed = state.assessed;
   const slots = state.reels.map((reel) => norm(reel.color));
-  if (!assessed) {
+  if (!assessed || !state.mix) {
     return { mapping: {}, recipes: [], kept: [], physical: state.reels,
-             blocked: "tick at least one object" };
+             blocked: assessed ? "Analysing the selected colours…" : "tick at least one object" };
   }
   if (state.strategy === "source") {
     const used = assessed.used;

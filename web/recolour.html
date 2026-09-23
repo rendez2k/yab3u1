@@ -98,6 +98,13 @@
   .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
   .field { display: flex; flex-direction: column; gap: 6px; }
   .field.hidden, .row.hidden { display: none; }
+  #spoolimport { margin-top: 16px; }
+  #spoolimport summary { cursor: pointer; padding: 8px 0; }
+  #spoolimport a { color: var(--fg); text-underline-offset: 3px; }
+  #spoolimport input { max-width: 100%; min-width: 0; }
+  #spoolimport input[type=search] { font: inherit; padding: 9px 11px; color: var(--fg); background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; }
+  [data-stock-slots] { display: grid; gap: 12px; margin: 14px 0; }
+  [data-stock-slots] select { min-width: 0; width: 100%; }
   #plandownloads .save.secondary { background: var(--panel2); color: var(--fg); border-color: var(--line); }
   .field.grow { flex: 1 1 240px; }
   label.check { display: flex; align-items: center; gap: 8px; font-size: 14px; }
@@ -200,6 +207,24 @@
     <h2>Loaded reels</h2>
     <div class="row" id="reels"></div>
     <p class="hint" id="reelnote" style="margin-top:12px"></p>
+    <details id="spoolimport">
+      <summary>Use my Spool Studio filaments</summary>
+      <p class="hint"><a href="https://spool-studio.uk/" target="_blank" rel="noopener noreferrer">Open Spool Studio</a>,
+        choose <strong>Download saved data (JSON)</strong>, then import that file here.
+        It is read in this browser only. Choose which reel is loaded in each slot; importing does not change your model.</p>
+      <label class="field">Spool Studio data file
+        <input type="file" accept=".json,application/json" data-stock-file>
+      </label>
+      <p class="hint" role="status" aria-live="polite" data-stock-status></p>
+      <div data-stock-picker hidden>
+        <label class="field">Find a filament <input type="search" data-stock-search placeholder="Brand, colour or material"></label>
+        <div data-stock-slots></div>
+        <div class="row"><button type="button" data-stock-apply disabled>Apply to loaded reels</button>
+          <button type="button" data-stock-clear>Clear imported library</button></div>
+        <p class="hint">Only colour and material are applied. The library stays in this tab; chosen slot colours are saved as usual.
+          This does not check how much filament remains or calibrate blend predictions.</p>
+      </div>
+    </details>
   </div>
 
   <div class="card hidden" id="mixcard">

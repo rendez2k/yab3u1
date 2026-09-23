@@ -52,6 +52,7 @@ PUBLIC_FILES = (
     "shared/swapExport.js",
     "shared/swapProject.js",
     "shared/swapWorker.js",
+    "shared/spoolImport.js",
     "shared/png.js",
     "shared/preview.js",
     "shared/printSettings.js",

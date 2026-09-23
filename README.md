@@ -334,9 +334,18 @@ The viewer's slot colours cannot represent all colours loaded at different times
 
 This is **not yet validated on a physical printer**. Automated two-pause fixtures,
 command-tampering checks and browser downloads pass; the real alien model's
-slice-only archive has been checked, but native GUI slicing is outstanding. The
+slice-only archive has been checked, and the user has sliced it in native Orca.
+Its real G-code needs five colours on 59 layers, so the exporter refuses it and
+provides an explanation instead. The
 installed Snapmaker CLI crashes during plate initialisation. Validate a short
 print with at least two pauses before using the exporter for a long job.
+
+Under **Loaded reels → Use my Spool Studio filaments**, open Spool Studio and use
+**Download saved data (JSON)**. Import that file here, choose a filament for each
+slot, then **Apply to loaded reels**. This imports available single-colour stock
+with supported materials; it does not connect accounts, reserve stock or import
+slicer temperature profiles. Only chosen colour/material values are saved with
+the loaded reels. The imported library stays in tab memory and can be cleared.
 
 ## Why the online tool failed
 
