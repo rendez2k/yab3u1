@@ -1,0 +1,6 @@
+# Netlify builds the static browser converter with the same script a local
+# build uses (tools/build_site.py), and publishes only its output.
+
+[build]
+  command = "python3 tools/build_site.py"
+  publish = "dist"

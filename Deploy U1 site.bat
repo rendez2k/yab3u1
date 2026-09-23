@@ -9,21 +9,31 @@ if not exist "web\index.html" (
 )
 
 echo.
-echo Deploying web\ to Netlify.
-echo The first run asks you to log in and pick the yab3u1 site; after that it
-echo just deploys.
-echo.
-
-call npx --yes netlify deploy --prod --dir web
+echo Building the publishable site into dist\ ...
+python tools\build_site.py
 if errorlevel 1 (
   echo.
-  echo Deploy failed - see the message above.
-  echo If it says it is not linked, run:  npx netlify link
+  echo Build failed - see the message above. Nothing was deployed.
   pause
   exit /b 1
 )
 
 echo.
-echo Done. Open the site and check the badge next to the title reads v1.1.0.
-echo If it still reads an older version, hard refresh with Ctrl+Shift+R.
+echo Deploying dist\ to the yab3u1 site on Netlify.
+echo The first run asks you to log in; after that it just deploys.
+echo.
+
+call npx --yes netlify deploy --prod --no-build --dir dist --site 9a37f1d8-ee76-4b19-ab7d-382277fb7850
+if errorlevel 1 (
+  echo.
+  echo Deploy failed - see the message above.
+  echo If it says it is not linked, run:
+  echo   npx netlify link --id 9a37f1d8-ee76-4b19-ab7d-382277fb7850
+  pause
+  exit /b 1
+)
+
+echo.
+echo Done. https://yab3u1.netlify.app should now serve the new build.
+echo If the browser still shows the old page, hard refresh with Ctrl+Shift+R.
 pause
