@@ -209,6 +209,43 @@
     th, td { padding: 7px 6px; }
     #drop { padding: 32px 14px; }
   }
+
+  /* project mode: plates, objects, assessment, mapping */
+  .opt { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+         margin-bottom: 10px; background: var(--panel2); }
+  .opt h3 { margin: 0; font-size: 14px; display: flex; gap: 8px; align-items: center;
+            flex-wrap: wrap; }
+  .opt p { margin: 7px 0 0; color: var(--dim); font-size: 13px; }
+  .opt .optgo { margin-top: 10px; }
+  .opt.unavailable h3 { color: var(--dim); }
+  .objlist { max-height: 280px; overflow: auto; border: 1px solid var(--line);
+             border-radius: 8px; padding: 6px 10px; }
+  .objlist label { display: flex; gap: 9px; align-items: baseline; padding: 4px 0;
+                   font-size: 13px; border-bottom: 1px solid var(--line); }
+  .objlist label:last-child { border-bottom: none; }
+  .objlist input { width: 15px; height: 15px; accent-color: var(--accent); flex: 0 0 auto; }
+  .objlist .meta { color: var(--dim); font-size: 12px; margin-left: auto;
+                   text-align: right; white-space: nowrap; }
+.swatch { display: inline-block; width: 16px; height: 16px; border-radius: 4px;
+            border: 1px solid var(--line); vertical-align: -3px; margin-right: 7px; }
+  .segs { display: inline-flex; border: 1px solid var(--line); border-radius: 8px;
+          overflow: hidden; }
+  .segs button { border: 0; border-radius: 0; padding: 7px 13px; background: var(--panel2); }
+  .segs button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+  .reel { display: flex; flex-direction: column; gap: 6px; }
+  .reel label { font-size: 12px; color: var(--dim); text-transform: uppercase;
+                letter-spacing: .06em; }
+  .reel .rowline { display: flex; gap: 8px; align-items: center; }
+  .reel select { flex: 1 1 auto; }
+  table.map td { vertical-align: middle; }
+  table.map select { min-width: 130px; }
+  small.dim { color: var(--dim); }
+  .warn { color: var(--bad); font-size: 13px; margin: 8px 0 0; }
+  .warnlist { margin: 10px 0 0; padding-left: 18px; color: var(--dim); font-size: 13px; }
+  .reciperows { list-style: none; margin: 10px 0 0; padding: 0; }
+  .reciperows li { display: flex; align-items: center; gap: 2px; margin: 4px 0;
+                   font-size: 13px; color: var(--dim); }
+  .opt .reciperows .check { color: var(--fg); }
 </style>
 </head>
 <body>
@@ -238,6 +275,75 @@
     <div id="slotarea"></div>
   </div>
 
+  <div class="card hidden" id="project">
+    <h2>Plate &amp; objects</h2>
+    <div class="facts" id="pfacts"></div>
+    <div class="row" style="margin-top:18px">
+      <div class="field grow">
+        <label for="plate">Plate to export</label>
+        <select id="plate"></select>
+      </div>
+    </div>
+    <div style="margin-top:16px">
+      <label class="hint" style="display:block;margin-bottom:6px">Objects on this plate</label>
+      <div class="objlist" id="objects"></div>
+    </div>
+    <p class="hint" id="selhint" style="margin:12px 0 0"></p>
+  </div>
+
+  <div class="card hidden" id="assessment">
+    <h2>Colour assessment</h2>
+    <div id="projoptions"></div>
+    <div id="assesswarn"></div>
+  </div>
+
+  <div class="card hidden" id="previewcard">
+    <h2>Preview &mdash; original and result</h2>
+    <div class="segs" id="previewmode" role="group" aria-label="Preview mode">
+      <button type="button" data-preview="original" aria-pressed="false">Original colours</button>
+      <button type="button" data-preview="result" aria-pressed="true">Result</button>
+    </div>
+    <canvas id="preview" width="640" height="420" style="width:100%;height:360px;margin-top:12px;border:1px solid var(--line);border-radius:10px;touch-action:none"></canvas>
+    <div class="actions" style="margin-top:10px">
+      <button type="button" id="previewreset">Reset view</button>
+      <span class="hint" id="previewnote"></span>
+    </div>
+  </div>
+
+  <div class="card hidden" id="mappingcard">
+    <h2>Loaded filaments &amp; mapping</h2>
+    <div class="row" id="reels"></div>
+    <p class="hint" id="reelnote" style="margin:14px 0 0"></p>
+    <div id="maptable"></div>
+    <div class="field" style="margin-top:14px">
+      <label for="target">Project to write</label>
+      <select id="target"></select>
+    </div>
+    <p class="hint" id="targetnote" style="margin:8px 0 0"></p>
+    <div class="actions" id="projectactions"></div>
+    <div id="plog" class="hidden"></div>
+    <a id="psave" class="save hidden" download></a>
+  </div>
+
+  <div class="card hidden" id="plannercard">
+    <h2>Reel changes from a real slice</h2>
+    <p class="hint" style="margin:0 0 10px">Everything above is a surface estimate.
+      Drop the <em>sliced</em> file here and the plan is read from the slicer's own
+      toolpath — infill, supports and the wipe tower included. Nothing is uploaded
+      anywhere, no file is modified, and no G-code is written back.</p>
+    <div class="row">
+      <input type="file" id="gcodefile" accept=".gcode,.gco,.g,.3mf">
+      <button type="button" id="planbutton">Plan reel changes</button>
+    </div>
+    <div class="field hidden" id="gcodepick" style="margin-top:10px">
+      <label for="gcodememberlist">Which G-code is inside that sliced 3MF?</label>
+      <select id="gcodememberlist"></select>
+    </div>
+    <p class="hint" id="gcodemember" style="margin:10px 0 0"></p>
+    <div id="planout" class="hidden" style="margin-top:12px"></div>
+    <div class="actions" id="plandownloads"></div>
+  </div>
+
   <div class="card hidden" id="options">
     <h2>Plate &amp; profiles</h2>
     <div class="row">
@@ -251,14 +357,14 @@
       </div>
     </div>
     <div class="row" style="margin-top:18px">
-      <div class="field">
+      <div class="field" id="f-copies">
         <label for="copies">Copies</label>
         <div style="display:flex;gap:8px;align-items:center">
           <input type="number" id="copies" min="1" value="1">
           <button id="fill">Fill bed</button>
         </div>
       </div>
-      <div class="field">
+      <div class="field" id="f-gap">
         <label for="gap">Spacing (mm)</label>
         <input type="number" id="gap" min="0" step="0.5" value="5">
       </div>
@@ -270,18 +376,22 @@
           <option value="off">Off</option>
         </select>
       </div>
-      <div class="field">
+      <div class="field" id="f-tower">
         <label>&nbsp;</label>
         <label class="check"><input type="checkbox" id="tower" checked> Leave room for the prime tower</label>
-        <label class="check"><input type="checkbox" id="carry" checked> Keep the source's print settings where they're safe</label>
       </div>
       <div class="field">
+        <label>&nbsp;</label>
+        <label class="check"><input type="checkbox" id="carry" checked> Keep the source's print settings where they're safe</label>
+      </div>
+      <div class="field" id="f-repos">
         <label>&nbsp;</label>
         <label class="check"><input type="checkbox" id="repos" checked> Centre if off the plate</label>
       </div>
       <div class="field">
         <label>&nbsp;</label>
         <label class="check"><input type="checkbox" id="verify" checked> Check it slices (slower)</label>
+        <span class="hint" id="verifyhint"></span>
       </div>
     </div>
     <p class="hint" id="supporthint" style="margin:16px 0 0"></p>
@@ -291,15 +401,25 @@
       <button class="primary" id="go">Convert and download</button>
       <button id="again">Choose another file</button>
     </div>
+  </div>
+
+  <div class="card hidden" id="logcard">
+    <h2>Log</h2>
     <div id="log" class="hidden"></div>
     <a id="save" class="save hidden" download></a>
   </div>
 
 </div>
 
-<script>
+<script type="module">
+import { Preview, soupFromBase64 } from "./web/shared/preview.js";
+import { LABELS as TARGET_LABELS } from "./web/shared/targets.js";
+
 const $ = id => document.getElementById(id);
-let state = { id: null, data: null, timer: null };
+let state = { id: null, data: null, timer: null, fileToken: 0, renderedToken: -1 };
+/* The page is an ES module so it can import the shared browser modules, which
+   would otherwise hide this from the console and the QA harness. */
+window.state = state;
 
 function show(id) { $(id).classList.remove('hidden'); }
 function hide(id) { $(id).classList.add('hidden'); }
@@ -335,6 +455,7 @@ async function upload(file) {
     if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
     state.id = data.id;
     state.data = data;
+    state.fileToken += 1;          // a new file: the log and the last send start over
     render(data, file.size);
   } catch (err) {
     fail(err.message);
@@ -345,7 +466,7 @@ async function upload(file) {
 }
 
 function fail(msg) {
-  show('log');
+  show('logcard'); show('log');
   $('log').innerHTML = '<span class="err">' + esc(msg) + '</span>';
 }
 
@@ -358,7 +479,11 @@ const KINDS = {
 const TYPES = ['PLA','PETG','ABS','ASA','PLA-CF','PETG-CF','PC','PA','PA-CF','TPU','PVA','Support For PLA'];
 
 function render(d, size) {
+  if (d.multipart) return renderProject(d, size);
   show('source'); show('options');
+  show('go');
+  hide('project'); hide('assessment'); hide('mappingcard');
+  ['f-copies', 'f-gap', 'f-tower', 'f-repos'].forEach(id => show(id));
   $('log').classList.add('hidden');
 
   const f = d.footprint;
@@ -414,6 +539,16 @@ function render(d, size) {
 
 function fact(label, value) {
   return '<div class="fact"><b>' + label + '</b><span>' + value + '</span></div>';
+}
+
+function plural(count, word) {
+  return count + ' ' + word + (count === 1 ? '' : 's');
+}
+
+function plateLabel(plate) {
+  /* Files that never named a plate fall back to "Plate 1"; do not say it twice. */
+  var named = /^plate\s/i.test(plate.name || '') ? plate.name : 'Plate ' + plate.id + ' \u00b7 ' + plate.name;
+  return named + ' (' + plate.instances + ')';
 }
 
 const LABELS = { auto: "Match the source\u2019s layer height" };
@@ -494,7 +629,7 @@ $('go').addEventListener('click', async () => {
   const colors = [...document.querySelectorAll('input[type=color]')].map(i => i.value.toUpperCase());
   const types = [...document.querySelectorAll('select[data-type]')].map(s => s.value);
   $('go').disabled = true;
-  show('log');
+  show('logcard'); show('log');
   $('log').innerHTML = '<span class="spinner"></span>starting\u2026';
 
   const body = {
@@ -554,12 +689,684 @@ function renderLog(lines) {
   $('log').scrollTop = $('log').scrollHeight;
 }
 
+/* ---------- project mode: plates, objects, assessment, mapping ----------
+   Used when the file is not the single-object shape the converter grew up on:
+   several plates, several objects, parts built from shared mesh files, paint
+   stored inline, or more colours than the U1 has slots.  The page never picks
+   the colours for you: it shows what the file uses, what the printer has loaded,
+   and what each export would actually do. */
+
+const REEL_TYPES = TYPES;
+const PROJECT_STATE_KEY = "yab3u1-reels";
+
+function defaultReels() {
+  var saved = null;
+  try { saved = JSON.parse(localStorage.getItem(PROJECT_STATE_KEY) || "null"); } catch (e) {}
+  if (saved && saved.length === 4) return saved;
+  // The reels loaded in the machine when this feature was written.  The hues are
+  // a screenshot approximation, not a calibration, and every one is editable.
+  return [{ color: "#FFFFFF", type: "PLA" }, { color: "#000000", type: "PLA" },
+          { color: "#3D9140", type: "PLA" }, { color: "#FF9500", type: "PLA" }];
+}
+let reels = defaultReels();
+let projMode = "source";        // "source" = keep the file's colours, "loaded" = map onto reels
+let projReviewed = false;       // the substitution tick: cleared by any change
+let spectrumReviewed = false;   // the recipe tick: cleared by any change
+let spectrumTicked = {};        // recipe id -> included in the export
+let projTimer = null;
+let planEpoch = 0;              // bumped whenever the selection or the reels change
+
+function newEpoch() {
+  planEpoch += 1;
+  /* Any change to the file, the selection, the reels or the mapping invalidates the
+     approval the user gave for the previous mapping. */
+  projReviewed = false;
+  spectrumReviewed = false;
+  return planEpoch;
+}
+
+function reelsKey(list) {
+  return (list || []).map(r => ((r.color || '') + '/' + (r.type || '')).toUpperCase())
+    .join(',');
+}
+
+function currentReels() {
+  return reels.map((r, i) => ({ color: (r.color || '#FFFFFF').toUpperCase(),
+                                type: (r.type || 'PLA') }));
+}
+
+function renderProject(d, size) {
+  show('project'); show('assessment'); show('mappingcard'); show('options');
+  show('previewcard'); show('plannercard');
+  const targetSelect = $('target');
+  const keepTarget = targetSelect.value;
+  const targets = d.targets || [{ id: 'snapmaker', label: 'Snapmaker Orca' }];
+  targetSelect.innerHTML = targets.map(t =>
+    '<option value="' + esc(t.id) + '">' + esc(t.label) + '</option>').join('');
+  targetSelect.value = targets.some(t => t.id === keepTarget) ? keepTarget : targets[0].id;
+  $('targetnote').textContent = 'Snapmaker Orca is the appliance\'s own project. Bambu '
+    + 'and PrusaSlicer get a portable colour project: geometry, parts, the four reels '
+    + 'and the reviewed blends, with no U1 printer or G-code copied in. Open them with '
+    + 'your own profile — for PrusaSlicer, open the file as a project with a '
+    + 'four-extruder profile: the palette lives in the Full Spectrum description and '
+    + 'no print config is written that would override your preset.';
+  hide('source');
+  ['f-copies', 'f-gap', 'f-tower', 'f-repos'].forEach(id => hide(id));
+  hide('log'); hide('logcard');
+  hide('go');
+  /* A new file starts a fresh log; a re-plan of the same file must not wipe the
+     log of an export that is still running. */
+  if (state.renderedToken !== state.fileToken) {
+    state.renderedToken = state.fileToken;
+    $('psave').classList.add('hidden');
+    $('plog').innerHTML = '';
+    $('plog').classList.add('hidden');
+    window.__lastExport = null;
+  }
+  /* Slice checks spawn Snapmaker Orca, and its command line has been seen to
+     crash (access violation) on some large multi-object exports.  For the
+     project flow the check is therefore opt-in, off by default. */
+  $('verify').checked = false;
+  $('verifyhint').textContent = 'off by default for multi-object plates: the check ' +
+    'starts Snapmaker Orca, which has crashed its own command line on large exports';
+  state.data = d;
+  fillSelect('filament', d.profiles ? d.profiles.filament : null, d.defaults ? d.defaults.filament : null);
+  fillSelect('process', d.profiles ? d.profiles.process : null, d.defaults ? d.defaults.process : null);
+
+  var counts = d.counts || {};
+  $('pfacts').innerHTML = [
+    fact('file', esc(d.filename) + (size ? ' <span class="pill">' + (size / 1048576).toFixed(1) + ' MB</span>' : '')),
+    fact('format', KINDS[d.kind] || d.kind),
+    fact('colours used', '<b>' + d.mapping.used.length + '</b> of ' + d.source.palette_size +
+         ' source slots <span class="pill">' + esc(d.source.palette_source || '') + '</span>'),
+    fact('geometry', plural(counts.parts, 'part') + ' \u00b7 ' +
+         counts.triangles.toLocaleString() + ' triangles'),
+    fact('paint', (counts.painted_triangles || 0).toLocaleString() + ' painted' +
+         (counts.subdivided_triangles ? ' \u00b7 ' + counts.subdivided_triangles + ' sub-divided' : '')),
+    fact('size', d.fit.size ? d.fit.size.x.toFixed(1) + ' \u00d7 ' + d.fit.size.y.toFixed(1) +
+         ' \u00d7 ' + d.fit.size.z.toFixed(1) + ' mm' : 'not measured'),
+    fact('plate', d.fit.bed.x.toFixed(0) + ' \u00d7 ' + d.fit.bed.y.toFixed(0) + ' mm' +
+         (d.fit.fits ? '' : ' <span class="err">selection is larger</span>')),
+  ].join('');
+
+  var labels = d.plates.map(plateLabel);
+  var selected = d.plates.findIndex(p => p.id === d.plate.id);
+  fillSelect('plate', labels, selected >= 0 ? labels[selected] : labels[0]);
+  $('plate').disabled = d.plates.length < 2;
+
+  $('objects').innerHTML = d.objects.map(o =>
+    '<label><input type="checkbox" data-object="' + esc(o.id) + '"' +
+    (o.selected || d.selection.objects.indexOf(o.id) >= 0 ? ' checked' : '') + '>' +
+    '<span>' + esc(o.name) + ' <small class="dim">[' + esc(o.id) + ']</small></span>' +
+    '<span class="meta">' + plural(o.parts, 'part') + ' \u00b7 ' +
+    o.triangles.toLocaleString() + ' tris \u00b7 ' +
+    o.colours.map(c => '<span class="swatch" style="background:' + esc(c.color) + '"></span>').join('') +
+    '</span></label>').join('');
+  $('objects').querySelectorAll('input[data-object]').forEach(box => {
+    box.addEventListener('change', () => { newEpoch(); scheduleProjectPlan(); });
+  });
+  $('selhint').textContent = d.selection.objects.length + ' of ' + d.objects.length +
+    ' objects selected. Selection, mapping and export all follow these boxes.';
+
+  renderAssessment(d);
+  renderMapping(d);
+  refreshPreview();
+  /* An upload is analysed with the server's defaults, so if the response used
+     different reels than the page is showing, re-plan with the page's own before
+     anything is offered as exportable.  A plan response echoes the reels it was
+     given, and that echo becomes the displayed truth. */
+  var wantKey = reelsKey(currentReels());
+  var haveKey = reelsKey(d.loaded || []);
+  if (haveKey && haveKey !== wantKey) {
+    scheduleProjectPlan();
+  } else if (haveKey) {
+    reels = (d.loaded || []).map(r => ({ color: (r.color || '').toUpperCase(),
+                                        type: r.type || 'PLA' }));
+    try { localStorage.setItem(PROJECT_STATE_KEY, JSON.stringify(reels)); } catch (e) {}
+  }
+}
+
+function optionButton(opt, label, handler, primary, action) {
+  var b = document.createElement('button');
+  b.textContent = label;
+  if (primary) b.className = 'primary';
+  if (action) b.setAttribute('data-action', action);
+  b.addEventListener('click', handler);
+  return b;
+}
+
+/* Every button that belongs to the project flow (the "choose another file"
+   button is shared with the single-object flow and must stay usable). */
+function projectButtons() {
+  return [...document.querySelectorAll('#projectactions button, #assessment button')];
+}
+
+function renderAssessment(d) {
+  var box = $('projoptions');
+  box.innerHTML = '';
+  d.options.forEach(opt => {
+    var card = document.createElement('div');
+    card.className = 'opt' + (opt.feasible ? '' : ' unavailable');
+    var h = document.createElement('h3');
+    h.innerHTML = esc(opt.title) + (opt.feasible
+      ? ' <span class="pill on">available</span>' : ' <span class="pill">not offered</span>');
+    card.appendChild(h);
+    var p = document.createElement('p');
+    p.textContent = opt.detail;
+    card.appendChild(p);
+    var actions = document.createElement('div');
+    actions.className = 'optgo';
+    if (opt.id === 'direct' && opt.feasible) {
+      actions.appendChild(optionButton(opt, 'Export with the source colours',
+        () => { projMode = 'source'; startProjectConvert('direct'); },
+        true, 'export-direct'));
+    }
+    if (opt.id === 'separate' && opt.feasible) {
+      (opt.groups || []).forEach((group, i) => {
+        actions.appendChild(optionButton(opt, 'Export print ' + (i + 1) +
+          ' \u00b7 ' + group.names.join(' + '),
+          () => selectObjects(group.ids, true), false, 'export-group'));
+      });
+      if (d.separate.prints > 1) {
+        actions.appendChild(optionButton(opt, 'Select every group in turn',
+          () => selectObjects(d.objects.map(o => o.id), false), false, 'select-all'));
+      }
+    }
+    if (opt.id === 'simplify' && opt.feasible) {
+      var label = document.createElement('label');
+      label.className = 'check';
+      var tick = document.createElement('input');
+      tick.type = 'checkbox';
+      tick.checked = projReviewed;
+      tick.addEventListener('change', () => {
+        projReviewed = tick.checked;
+        projMode = 'loaded';
+        renderMapping(state.data);
+      });
+      label.appendChild(tick);
+      label.appendChild(document.createTextNode(
+        'I have looked at the mapping below and accept the substitutions'));
+      actions.appendChild(label);
+      actions.appendChild(optionButton(opt, 'Export the approximation',
+        () => { projMode = 'loaded'; startProjectConvert('approximate'); }, false,
+        'export-approximate'));
+    }
+    if (opt.id === 'full-spectrum' && opt.feasible) {
+      var sp = d.spectrum || {};
+      var refreshSpectrum = null;
+      if (!Object.keys(spectrumTicked).length) {
+        (sp.recipes || []).forEach(r => { spectrumTicked[r.id] = true; });
+      }
+      var byRow = {};
+      (sp.rows || []).forEach(r => { byRow[r.source] = r; });
+      /* What is on screen is what will be sent. Unticking a recipe renumbers the
+         ones that remain, and a colour whose blend is gone falls back to the reel
+         it already matched: the ids in the export always describe the list above. */
+      function spectrumPayload() {
+        var ids = {};
+        var kept = (sp.recipes || []).filter(r => spectrumTicked[r.id] !== false);
+        kept.forEach((r, i) => { ids[r.id] = 5 + i; });
+        var mapping = {};
+        Object.keys(sp.suggested_mapping || {}).forEach(src => {
+          var want = sp.suggested_mapping[src];
+          if (want <= 4) { mapping[src] = want; return; }
+          if (ids[want] !== undefined) { mapping[src] = ids[want]; return; }
+          var row = byRow[src];
+          mapping[src] = (row && row.solid && row.solid.slot) ? row.solid.slot : 1;
+        });
+        return { recipes: kept.map(r => ({ a: r.a, b: r.b, percent: r.percent })),
+                 mapping: mapping, kept: kept };
+      }
+      function chosenText(src) {
+        var row = byRow[src];
+        var plan = spectrumPayload();
+        var target = plan.mapping[src];
+        if (target <= 4) {
+          return 'reel ' + target + ' \u00b7 ' + (row ? esc(row.solid.color || '') : '') +
+            (row && row.solid.error !== null ? ' (' + row.solid.error + ')' : '');
+        }
+        var recipe = plan.kept[target - 5];
+        if (!recipe) return 'reel ' + (row && row.solid.slot ? row.solid.slot : 1);
+        return 'blend ' + esc(recipe.color) + ' (' + recipe.a + ' + ' +
+          recipe.percent + '% of reel ' + recipe.b + ')';
+      }
+      var table = document.createElement('table');
+      table.className = 'map';
+      table.innerHTML = '<thead><tr><th>Source</th><th>In the file</th>' +
+        '<th>Nearest reel</th><th>Chosen for the export</th></tr></thead>';
+      var body = document.createElement('tbody');
+      (sp.rows || []).forEach(row => {
+        body.innerHTML += '<tr>' +
+          '<td class="num">colour ' + row.source + '</td>' +
+          '<td><span class="swatch" style="background:' + esc(row.original) + '"></span>' +
+            esc(row.original) + '</td>' +
+          '<td><span class="swatch" style="background:' +
+            esc(row.solid.color || '#000') + '"></span>' +
+            esc(row.solid.color || '\u2014') + '</td>' +
+          '<td class="use" data-source="' + esc(row.source) + '"></td></tr>';
+      });
+      table.appendChild(body);
+      card.appendChild(table);
+
+      var list = document.createElement('ul');
+      list.className = 'reciperows';
+      (sp.recipes || []).forEach(recipe => {
+        var item = document.createElement('li');
+        var label = document.createElement('label');
+        label.className = 'check';
+        var tick = document.createElement('input');
+        tick.type = 'checkbox';
+        tick.checked = spectrumTicked[recipe.id] !== false;
+        tick.setAttribute('data-recipe', recipe.id);
+        tick.addEventListener('change', () => {
+          spectrumTicked[recipe.id] = tick.checked;
+          spectrumReviewed = false;
+          refreshSpectrum();
+        });
+        label.appendChild(tick);
+        label.appendChild(document.createTextNode(
+          ' reel ' + recipe.a + ' + ' + recipe.percent + '% of reel ' + recipe.b +
+          ' \u00b7 predicted ' + recipe.color));
+        var chip = document.createElement('span');
+        chip.className = 'swatch';
+        chip.style.background = recipe.color;
+        item.appendChild(chip);
+        item.appendChild(label);
+        list.appendChild(item);
+      });
+      card.appendChild(list);
+
+      var note = document.createElement('p');
+      note.className = 'hint';
+      card.appendChild(note);
+
+      var review = document.createElement('label');
+      review.className = 'check';
+      var rtick = document.createElement('input');
+      rtick.type = 'checkbox';
+      rtick.checked = spectrumReviewed;
+      rtick.setAttribute('data-action', 'review-spectrum');
+      rtick.addEventListener('change', () => {
+        spectrumReviewed = rtick.checked;
+        refreshSpectrum();
+      });
+      review.appendChild(rtick);
+      review.appendChild(document.createTextNode(
+        ' I have reviewed the recipes and predicted shades above'));
+      actions.appendChild(review);
+      var spectrumBtn = optionButton(opt, 'Export the Full Spectrum project',
+        () => { projMode = 'loaded'; startProjectConvert('spectrum'); }, false,
+        'export-spectrum');
+      actions.appendChild(spectrumBtn);
+
+      /* One place decides what is on screen and what would be sent, so the two
+         can never disagree -- including after a recipe is unticked. */
+      refreshSpectrum = function () {
+        var plan = spectrumPayload();
+        card.querySelectorAll('td[data-source]').forEach(td => {
+          td.textContent = chosenText(td.getAttribute('data-source'));
+        });
+        var kept = plan.kept.length;
+        note.textContent = !kept
+          ? 'No recipes are ticked, so the export would be an ordinary substitution ' +
+            'onto the four reels.'
+          : (kept + ' predicted blend' + (kept === 1 ? '' : 's') +
+             ' would be written after your four reels: the slicer alternates the two ' +
+             'reels named for each one. Nothing is mixed for a colour that already ' +
+             'matches a reel, and the shades are uncalibrated estimates from the ' +
+             'swatch values. Written for Snapmaker Orca with Full Spectrum support ' +
+             '(2.4.0 is the installed target; reopening it here is not verified).');
+        rtick.checked = spectrumReviewed;
+        spectrumBtn.disabled = !spectrumReviewed || !kept;
+        spectrumBtn.classList.toggle('primary', spectrumReviewed && !!kept);
+        state.spectrumPlan = plan;
+        refreshPreview();
+      };
+      refreshSpectrum();
+    }
+    if (actions.children.length) card.appendChild(actions);
+    box.appendChild(card);
+  });
+
+  var warn = $('assesswarn');
+  warn.innerHTML = '';
+  var notes = (d.warnings || []).slice();
+  if (d.mapping.used.length > 4) {
+    notes.unshift('This selection needs ' + d.mapping.used.length +
+      ' colours and the plate holds four. Nothing is changed unless you tick the box above.');
+  }
+  if (notes.length) {
+    var ul = document.createElement('ul');
+    ul.className = 'warnlist';
+    ul.innerHTML = notes.map(n => '<li>' + esc(n) + '</li>').join('');
+    warn.appendChild(ul);
+  }
+}
+
+function renderMapping(d) {
+  var rows = $('reels');
+  rows.innerHTML = '';
+  reels.forEach((reel, i) => {
+    var wrap = document.createElement('div');
+    wrap.className = 'field reel';
+    var label = document.createElement('label');
+    label.textContent = 'Slot ' + (i + 1);
+    var line = document.createElement('div');
+    line.className = 'rowline';
+    var colour = document.createElement('input');
+    colour.type = 'color';
+    colour.value = (reel.color || '#FFFFFF').toLowerCase();
+    colour.setAttribute('aria-label', 'Slot ' + (i + 1) + ' colour');
+    colour.addEventListener('input', () => {
+      reels[i].color = colour.value.toUpperCase();
+      try { localStorage.setItem(PROJECT_STATE_KEY, JSON.stringify(reels)); } catch (e) {}
+      newEpoch();
+      scheduleProjectPlan();
+    });
+    var type = document.createElement('select');
+    type.setAttribute('aria-label', 'Slot ' + (i + 1) + ' material');
+    type.innerHTML = REEL_TYPES.map(t =>
+      '<option' + (t === reel.type ? ' selected' : '') + '>' + t + '</option>').join('');
+    type.addEventListener('change', () => {
+      reels[i].type = type.value;
+      try { localStorage.setItem(PROJECT_STATE_KEY, JSON.stringify(reels)); } catch (e) {}
+      newEpoch();
+      scheduleProjectPlan();
+    });
+    line.appendChild(colour);
+    line.appendChild(type);
+    wrap.appendChild(label);
+    wrap.appendChild(line);
+    rows.appendChild(wrap);
+  });
+
+  var direct = d.mapping.direct_possible;
+  $('reelnote').innerHTML =
+    'These four are the reels you have loaded \u2014 edit them and they are remembered. ' +
+    'They are compared with the file\u2019s colours in CIELAB; the match is an estimate from ' +
+    'the swatch values, not a calibration, and it never changes a file by itself. ' +
+    (direct ? 'This selection already fits four slots, so it can be exported with the ' +
+              'source colours exactly as they are.'
+            : 'This selection needs ' + d.mapping.used.length +
+              ' colours, so exporting it onto these four is a substitution.');
+
+  var html = '<table class="map"><thead><tr><th>Source</th><th>In the file</th>' +
+    '<th>Suggested</th><th>Exported as</th><th>Difference</th></tr></thead><tbody>';
+  d.mapping.comparison.forEach((row, i) => {
+    html += '<tr>' +
+      '<td class="num">colour ' + row.source + '</td>' +
+      '<td><span class="swatch" style="background:' + esc(row.original || '#000') + '"></span>' +
+        esc(row.original || '?') + '</td>' +
+      '<td><select data-source="' + row.source + '">' +
+        [1, 2, 3, 4].map(slot => '<option value="' + slot + '"' +
+          (slot === row.slot ? ' selected' : '') + '>slot ' + slot + ' \u00b7 ' +
+          esc((reels[slot - 1] || {}).color || '') + '</option>').join('') +
+      '</select></td>' +
+      '<td><span class="swatch" style="background:' + esc(row.result || '#000') + '"></span>' +
+        esc(row.result || '\u2014') + '</td>' +
+      '<td class="use">' + esc(row.verdict) +
+        (row.distance === null ? '' : ' (' + row.distance + ')') + '</td>' +
+    '</tr>';
+  });
+  html += '</tbody></table>';
+  $('maptable').innerHTML = html;
+  $('maptable').querySelectorAll('select[data-source]').forEach(sel => {
+    sel.addEventListener('change', () => {
+      if (!state.data.mapping.override) state.data.mapping.override = {};
+      state.data.mapping.override[sel.getAttribute('data-source')] = parseInt(sel.value, 10);
+      newEpoch();
+      scheduleProjectPlan();
+    });
+  });
+
+  var actions = $('projectactions');
+  actions.innerHTML = '';
+  actions.appendChild(optionButton({}, 'Use the suggestions', () => {
+    if (state.data.mapping) delete state.data.mapping.override;
+    spectrumTicked = {};
+    newEpoch();
+    scheduleProjectPlan();
+  }, false));
+  actions.appendChild(optionButton({}, 'Re-check this selection', () => projectPlan(), false));
+}
+
+function selectObjects(ids, go) {
+  state.data.selection = { plate: state.data.selection.plate, objects: ids.slice() };
+  newEpoch();
+  $('objects').querySelectorAll('input[data-object]').forEach(box => {
+    box.checked = ids.indexOf(box.getAttribute('data-object')) >= 0;
+  });
+  projectPlan().then(() => { if (go) startProjectConvert('direct'); });
+}
+
+function scheduleProjectPlan() {
+  clearTimeout(projTimer);
+  projTimer = setTimeout(projectPlan, 260);
+}
+
+async function projectPlan() {
+  if (!state.id || !state.data || !state.data.multipart) return;
+  var epoch = newEpoch();
+  var objects = [...document.querySelectorAll('input[data-object]')]
+    .filter(b => b.checked).map(b => b.getAttribute('data-object'));
+  var plateId = state.data.plate.id;
+  var body = {
+    id: state.id,
+    plate: plateId,
+    objects: objects,
+    filaments: reels,
+    mapping: state.data.mapping && state.data.mapping.override ? state.data.mapping.override : null,
+    approximate: projMode === 'loaded',
+    supports: $('supports').value,
+    carry: $('carry').checked,
+    filament: $('filament').value,
+    process: $('process').value
+  };
+  window.__lastPlan = { filaments: body.filaments, plate: body.plate,
+                        objects: body.objects, epoch: epoch };
+  try {
+    const r = await fetch('/api/plan', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await r.json();
+    if (epoch !== planEpoch) return;          // a newer selection has taken over
+    if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+    data.filename = state.data.filename;
+    /* A different recipe set is a different review: re-tick from scratch so the
+       page never exports a mixture the user has not seen. */
+    var key = JSON.stringify(((data.spectrum || {}).recipes || [])
+      .map(r => [r.id, r.a, r.b, r.percent, r.color]));
+    if (key !== state.spectrumKey) {
+      state.spectrumKey = key;
+      spectrumTicked = {};
+      spectrumReviewed = false;
+    }
+    window.__lastPlan.spectrum = ((data.spectrum || {}).recipes || [])
+      .map(r => ({ id: r.id, a: r.a, b: r.b, percent: r.percent, color: r.color }));
+    renderProject(data, null);
+  } catch (err) {
+    if (epoch !== planEpoch) return;
+    $('assesswarn').innerHTML = '<p class="warn">' + esc(err.message) + '</p>';
+  }
+}
+
+$('plate').addEventListener('change', () => {
+  if (!state.data || !state.data.multipart) return;
+  var chosen = state.data.plates[$('plate').selectedIndex];
+  if (!chosen) return;
+  var epoch = newEpoch();
+  state.data.selection = { plate: chosen.id, objects: [] };
+  fetch('/api/plan', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      /* null (not []) asks for the plate's default selection: every object it can
+         export.  An empty list would mean "none", which is an error. */
+      id: state.id, plate: chosen.id, objects: null,
+      filaments: reels, approximate: projMode === 'loaded',
+      supports: $('supports').value, carry: $('carry').checked,
+      filament: $('filament').value, process: $('process').value
+    })
+  }).then(r => r.json()).then(data => {
+    if (epoch !== planEpoch) return;
+    if (data.error) throw new Error(data.error);
+    data.filename = state.data.filename;
+    renderProject(data, null);
+  }).catch(err => {
+    if (epoch !== planEpoch) return;
+    $('assesswarn').innerHTML = '<p class="warn">' + esc(err.message) + '</p>';
+  });
+});
+
+async function startProjectConvert(mode) {
+  if (!state.id || !state.data) return;
+  if (mode === 'approximate' && !projReviewed) {
+    $('assesswarn').innerHTML = '<p class="warn">Look at the mapping, then tick the ' +
+      'substitution box before exporting an approximation.</p>';
+    return;
+  }
+  if (mode === 'spectrum' && !spectrumReviewed) {
+    $('assesswarn').innerHTML = '<p class="warn">Review the recipes and their ' +
+      'predicted shades, then tick the box before exporting a Full Spectrum project.' +
+      '</p>';
+    return;
+  }
+  var epoch = planEpoch;
+  var objects = [...document.querySelectorAll('input[data-object]')]
+    .filter(b => b.checked).map(b => b.getAttribute('data-object'));
+  if (!objects.length) {
+    $('assesswarn').innerHTML = '<p class="warn">Choose at least one object.</p>';
+    return;
+  }
+  show('plog');
+  $('plog').innerHTML = '<span class="spinner"></span>starting\u2026';
+  projectButtons().forEach(b => b.disabled = true);
+
+  var mapping = null;
+  if (mode === 'approximate') {
+    /* Send the mapping that was on screen: the suggestions the page showed, with
+       any per-colour overrides applied.  The server refuses an approximation
+       without one, so nothing is substituted unseen. */
+    mapping = Object.assign({}, state.data.mapping.suggested || {},
+                            state.data.mapping.override || {});
+  }
+  var recipes = null;
+  if (mode === 'spectrum') {
+    /* Exactly what the card showed: the kept recipes plus the mapping rebuilt for
+       them, so a colour whose blend was unticked falls back to its own reel. */
+    var plan = state.spectrumPlan;
+    recipes = plan ? plan.recipes : [];
+    mapping = plan ? Object.assign({}, plan.mapping) : null;
+    if (!recipes.length || !mapping) {
+      $('assesswarn').innerHTML = '<p class="warn">Tick at least one recipe before ' +
+        'exporting a Full Spectrum project.</p>';
+      return;
+    }
+  }
+  var sent = { filaments: currentReels(), mapping: mapping, recipes: recipes };
+  /* Recorded before the request goes out, so what was sent can be checked even if
+     the export is still running (or fails). */
+  window.__lastExport = { epoch: epoch, mode: mode, objects: objects,
+                          filaments: sent.filaments, mapping: sent.mapping,
+                          recipes: sent.recipes };
+  try {
+    const r = await fetch('/api/convert', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: state.id,
+        plate: state.data.plate.id,
+        objects: objects,
+        mode: mode,
+        filaments: sent.filaments,
+        mapping: mapping,
+        recipes: recipes,
+        filament: $('filament').value,
+        process: $('process').value,
+        supports: $('supports').value,
+        carry: $('carry').checked,
+        verify: $('verify').checked,
+        target: $('target').value || 'snapmaker'
+      })
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+    projectPoll();
+  } catch (err) {
+    $('plog').innerHTML = '<span class="err">' + esc(err.message) + '</span>';
+    projectButtons().forEach(b => b.disabled = false);
+  }
+}
+
+function projectPoll() {
+  setTimeout(async () => {
+    try {
+      const r = await fetch('/api/progress/' + state.id);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'lost the session');
+      var done = d.logs.some(l => l.startsWith('output'));
+      $('plog').innerHTML = (done ? '' : '<span class="spinner"></span>') +
+        d.logs.map(l => esc(l)).join('\n');
+      $('plog').scrollTop = $('plog').scrollHeight;
+      if (d.state === 'done') {
+        if (d.unverified) {
+          $('plog').innerHTML += '\n<span class="err">UNVERIFIED \u2014 the archive was ' +
+            'checked against its source, but the requested slice check did not pass. ' +
+            'Open it in the slicer before printing.</span>';
+        }
+        return projectDownload(d);
+      }
+      if (d.state === 'error') {
+        $('plog').innerHTML += '\n<span class="err">' + esc(d.error) + '</span>';
+        projectButtons().forEach(b => b.disabled = false);
+        return;
+      }
+      projectPoll();
+    } catch (err) {
+      $('plog').innerHTML += '\n<span class="err">' + esc(err.message) + '</span>';
+      projectButtons().forEach(b => b.disabled = false);
+    }
+  }, 500);
+}
+
+async function projectDownload(d) {
+  const r = await fetch('/api/result/' + state.id);
+  const blob = await r.blob();
+  const name = decodeURIComponent(r.headers.get('X-Suggested-Filename') || 'model-U1.3mf');
+  const url = URL.createObjectURL(blob);
+  $('plog').innerHTML = d.logs.map(l => esc(l)).join('\n') +
+    '\n\nready \u2014 ' + esc(name) + ' (' + (blob.size / 1048576).toFixed(1) + ' MB)';
+  const save = $('psave');
+  save.href = url;
+  save.download = name;
+  save.innerHTML = '\u2b07 Save ' + esc(name) + ' <span class="size">' +
+    (blob.size / 1048576).toFixed(1) + ' MB</span>';
+  save.classList.remove('hidden');
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  projectButtons().forEach(b => b.disabled = false);
+}
+
 /* ---------- version ----------
    Kept in step with web/index.html's APP_VERSION and CHANGELOG.md. */
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "2.0.3";
 const CHANGES = [
+  "Multi-object and multi-plate files open: choose a plate, tick the objects, and the " +
+  "assessment follows the selection.",
+  "The page says what each print would really do \u2014 a direct four-slot print, separate " +
+  "prints per object group, or an explicit substitution onto the filaments you have loaded.",
+  "The four loaded reels are editable and remembered; matching is an uncalibrated CIELAB " +
+  "estimate with the original and the result shown side by side.",
+  "Full Spectrum mixing: the page predicts every useful two-reel blend of your four " +
+  "loaded filaments, shows each source colour next to the reel and the blend that come " +
+  "closest, and exports the recipes you tick as a native Full Spectrum project " +
+  "(virtual filaments 5 onward, opened by Snapmaker Orca with Full Spectrum support). " +
+  "Predicted shades are uncalibrated and every blend is yours to accept or drop.",
+  "Reel changes between layers are planned in the slicer from its own toolpath; this " +
+  "page does not guess pause counts from a model's height.",
   "Light and dark themes, following your system setting until you pick one.",
-  "Plates holding several copies of one model now convert.",
+  "Plates holding several copies of one model still convert.",
   "The output carries the source's preview image, so the file shows a thumbnail.",
   "A full-size Save button; the file is still downloaded automatically as well.",
 ];
@@ -628,11 +1435,258 @@ function renderLogLines(lines) { return lines.map(l => esc(l)).join('\n'); }
 
 $('again').addEventListener('click', () => {
   hide('source'); hide('options');
+  hide('project'); hide('assessment'); hide('mappingcard');
+  hide('logcard'); hide('plog');
   $('log').classList.add('hidden');
+  $('psave').classList.add('hidden');
   state.id = null; state.data = null;
   picker.click();
 });
-function clearLog() { $('log').classList.add('hidden'); $('log').innerHTML = ''; }
+function clearLog() {
+  hide('logcard');
+  $('log').classList.add('hidden');
+  $('log').innerHTML = '';
+}
+
+/* ---------- preview, targets and the sliced-G-code plan ----------
+   The three pieces below are the ones the online page shares: the same
+   web/shared/*.js modules drive both, so the picture, the palette and the plan
+   cannot disagree between the local and the static application. */
+
+let preview = null;
+let previewMode = 'result';
+let previewEpoch = 0;
+let previewGeometry = '';
+
+function ensurePreview() {
+  if (preview) return preview;
+  const canvas = $('preview');
+  if (!canvas) return null;
+  preview = new Preview(canvas);
+  if (!preview.ok) { $('previewnote').textContent = preview.error; return preview; }
+  window.addEventListener('resize', () => preview.resize());
+  $('previewreset').addEventListener('click', () => preview.reset());
+  document.querySelectorAll('#previewmode button').forEach(button => {
+    button.addEventListener('click', () => {
+      previewMode = button.getAttribute('data-preview');
+      document.querySelectorAll('#previewmode button').forEach(other =>
+        other.setAttribute('aria-pressed', String(other === button)));
+      refreshPreview();
+    });
+  });
+  return preview;
+}
+
+/* The mapping the page would export, plus the recipes that are ticked: the preview
+   must show the same thing the export writes, including a recipe that was removed. */
+function previewPayload() {
+  const spectrumPlan = state.spectrumPlan;
+  const recipes = (spectrumPlan && state.data.multipart) ? spectrumPlan.recipes : [];
+  let mapping = spectrumPlan ? spectrumPlan.mapping : null;
+  if (!mapping) {
+    mapping = Object.assign({}, state.data.mapping.suggested || {},
+                            state.data.mapping.override || {});
+  }
+  return { recipes, mapping };
+}
+
+async function refreshPreview() {
+  if (!state.data || !state.data.multipart) return;
+  const view = ensurePreview();
+  if (!view || !view.ok) return;
+  /* A preview refresh is a redraw, not a change: it must not clear the review
+     approvals the export depends on.  It only guards against its own stale replies. */
+  previewEpoch += 1;
+  const epoch = previewEpoch;
+  const payload = previewPayload();
+  const objects = [...document.querySelectorAll('input[data-object]')]
+    .filter(box => box.checked).map(box => box.getAttribute('data-object'));
+  if (!objects.length) {
+    view.setSoup(new Float32Array(0), new Float32Array(0));
+    $('previewnote').textContent = ' nothing is ticked, so there is nothing to show';
+    window.__preview = { epoch: epoch, mode: previewMode, triangles: 0 };
+    return;
+  }
+  /* A different selection is a new thing to look at; re-colouring the same
+     geometry keeps the camera where the user put it. */
+  const geometry = `${state.data.plate.id}|${objects.join(',')}`;
+  const fit = geometry !== previewGeometry;
+  try {
+    const response = await fetch('/api/mesh', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: state.id,
+        plate: state.data.plate.id,
+        objects: objects,
+        filaments: currentReels(),
+        mode: previewMode,
+        mapping: previewMode === 'result' ? payload.mapping : null,
+        recipes: previewMode === 'result' ? payload.recipes : [],
+        epoch: epoch
+      })
+    });
+    const data = await response.json();
+    if (epoch !== previewEpoch) return;
+    if (!response.ok) {
+      $('previewnote').innerHTML = ' the preview could not be drawn: '
+        + esc(data.error || ('HTTP ' + response.status));
+      window.__preview = { epoch: epoch, mode: previewMode, triangles: 0,
+                           error: data.error || 'failed' };
+      return;
+    }
+    const soup = soupFromBase64(data);
+    view.setSoup(soup.positions, soup.colors, { fit: fit });
+    previewGeometry = geometry;
+    window.__preview = { epoch: epoch, mode: previewMode, triangles: data.triangles,
+                         mapping: data.mapping, palette: data.palette,
+                         floats: soup.positions.length,
+                         colors: soup.colors.length,
+                         truncated: data.truncated,
+                         stride: data.stride, total: data.total };
+    $('previewnote').textContent = data.triangles
+      ? ` ${data.triangles.toLocaleString()} triangles drawn`
+        + (data.subdivided ? `, ${data.subdivided.toLocaleString()} sub-divided facets `
+           + 'shown in their dominant colour' : '')
+        + (data.unknown_paint ? `, ${data.unknown_paint} facets with paint this tool `
+           + 'will not rewrite (pink)' : '')
+        + (data.truncated
+           ? ` — sampled preview: every ${data.stride}th of `
+             + `${(data.total || 0).toLocaleString()} triangles, drawn across the whole `
+             + 'model; the export is complete'
+           : '')
+        + ' · drag to orbit, shift-drag to pan, wheel to zoom'
+        + (previewMode === 'original' ? ' · original colours'
+           : ' · colours this export would write')
+      : ' nothing selected';
+  } catch (error) {
+    $('previewnote').textContent = ' the preview could not be drawn: ' + error.message;
+  }
+}
+
+/* ---------- the plan from a real slice ---------- */
+
+let planEpochToken = null;
+let planRequest = 0;
+
+async function requestPlan() {
+  // A second click, or a new file, must not let the first answer overwrite it.
+  const token = (planRequest += 1);
+  const picker = $('gcodefile');
+  const file = picker.files && picker.files[0];
+  if (!file) {
+    $('gcodemember').innerHTML = '<span class="err">Choose the sliced file first.</span>';
+    return;
+  }
+  const member = picker.getAttribute('data-member') || '';
+  $('gcodemember').textContent = 'reading ' + file.name + '\u2026';
+  $('planout').classList.add('hidden');
+  $('plandownloads').innerHTML = '';
+  try {
+    const buffer = await file.arrayBuffer();
+    if (token !== planRequest) return;
+    const response = await fetch('/api/gcode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream', 'X-Filename': file.name,
+                 ...(member ? { 'X-Member': member } : {}) },
+      body: buffer
+    });
+    const data = await response.json();
+    if (token !== planRequest) return;
+    if (!response.ok) {
+      // A sliced 3MF holds more than one G-code member.  The server asks which
+      // one instead of picking for the user, so offer them here and plan the
+      // member they choose.
+      if (Array.isArray(data.candidates) && data.candidates.length) {
+        showMembers(picker, data.candidates, data.error);
+        return;
+      }
+      $('gcodemember').innerHTML = '<span class="err">' + esc(data.error) + '</span>';
+      return;
+    }
+    $('gcodepick').classList.add('hidden');
+    showPlan(data, file.name);
+  } catch (error) {
+    if (token !== planRequest) return;
+    $('planout').classList.add('hidden');
+    $('plandownloads').innerHTML = '';
+    $('gcodemember').innerHTML = '<span class="err">' + esc(error.message) + '</span>';
+  }
+}
+
+function showMembers(picker, candidates, message) {
+  const list = $('gcodememberlist');
+  list.innerHTML = '';
+  candidates.forEach((name) => {
+    const option = document.createElement('option');
+    option.value = name;
+    option.textContent = name;
+    list.appendChild(option);
+  });
+  // Nothing is planned until the user confirms the member: guessing is what put
+  // the wrong toolpath in the plan before.
+  picker.removeAttribute('data-member');
+  $('gcodepick').classList.remove('hidden');
+  $('gcodemember').innerHTML = '<span class="err">' + esc(message)
+    + '</span> then press <b>Plan reel changes</b> again.';
+}
+
+function showPlan(evidence, name) {
+  planEpochToken = evidence.fingerprint;
+  window.__plan = { feasible: evidence.feasible, pause_count: evidence.pause_count,
+                    reel_changes: evidence.reel_changes, tools: evidence.tools,
+                    layers: evidence.layers, fingerprint: evidence.fingerprint,
+                    name: name };
+  $('gcodemember').textContent = evidence.feasible
+    ? ` ${name}: ${evidence.summary}`
+    : ` ${name}: ${evidence.summary}`;
+  const box = $('planout');
+  box.classList.remove('hidden');
+  box.innerHTML = '<pre style="white-space:pre-wrap;font-size:12.5px;line-height:1.45;'
+    + 'max-height:340px;overflow:auto;margin:0">' + esc(evidence.plan_text) + '</pre>';
+  const downloads = $('plandownloads');
+  downloads.innerHTML = '';
+  const textBlob = new Blob([evidence.plan_text], { type: 'text/plain' });
+  const jsonBlob = new Blob([JSON.stringify(evidence, null, 2)],
+                            { type: 'application/json' });
+  downloads.appendChild(downloadButton('Download the plan (.txt)', textBlob,
+                                       baseName(name) + '-reel-changes.txt'));
+  downloads.appendChild(downloadButton('Download the evidence (.json)', jsonBlob,
+                                       baseName(name) + '-plan-evidence.json'));
+}
+
+function downloadButton(label, blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.textContent = label;
+  link.className = 'save';
+  setTimeout(() => URL.revokeObjectURL(url), 120000);
+  return link;
+}
+
+function baseName(name) {
+  return String(name || 'slice').replace(/\.[^.]+$/, '');
+}
+
+$('gcodefile').addEventListener('change', () => {
+  const picker = $('gcodefile');
+  planRequest += 1;                 // any plan in flight is for the previous file
+  picker.removeAttribute('data-member');
+  $('gcodepick').classList.add('hidden');
+  $('gcodememberlist').innerHTML = '';
+  $('planout').classList.add('hidden');
+  $('plandownloads').innerHTML = '';
+  const file = picker.files && picker.files[0];
+  $('gcodemember').textContent = file ? ' selected ' + file.name : '';
+});
+$('gcodememberlist').addEventListener('change', (event) => {
+  // Remember the choice, then plan it straight away so the page cannot show one
+  // member's plan while another is selected.
+  $('gcodefile').setAttribute('data-member', event.target.value);
+  requestPlan();
+});
+$('planbutton').addEventListener('click', () => requestPlan());
 </script>
 <footer>
   <a class="repo" href="https://github.com/rendez2k/yab3u1"

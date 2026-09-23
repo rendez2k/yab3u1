@@ -8,6 +8,15 @@ const SIG_LOCAL = 0x04034b50;
 const SIG_CENTRAL = 0x02014b50;
 const SIG_EOCD = 0x06054b50;
 
+// A decompression bomb is cheap to write and expensive to read, so every limit
+// is checked before and after inflating: the size in the header is a claim, not
+// a fact.  These are what a real sliced 3MF needs (the alien model is 18 MB
+// compressed and ~150 MB expanded) with headroom to spare.
+export const MAX_ARCHIVE_BYTES = 96 * 1024 * 1024;
+export const MAX_MEMBER_BYTES = 256 * 1024 * 1024;
+export const MAX_TOTAL_BYTES = 512 * 1024 * 1024;
+export const MAX_MEMBERS = 5000;
+
 let CRC_TABLE = null;
 
 function crcTable() {
@@ -43,6 +52,32 @@ export async function inflateRaw(bytes) {
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
+/** Inflate, refusing to buffer past `limit` however small the input claims to be. */
+export async function inflateRawBounded(bytes, limit = MAX_MEMBER_BYTES) {
+  const stream = chunkStream(bytes).pipeThrough(new DecompressionStream("deflate-raw"));
+  const reader = stream.getReader();
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > limit) {
+      await reader.cancel();
+      throw new Error(`a member expands to more than ${Math.round(limit / 1048576)} MB; `
+        + "this reader stops there");
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, at);
+    at += chunk.length;
+  }
+  return out;
+}
+
 export async function deflateRaw(bytes) {
   const stream = chunkStream(bytes).pipeThrough(new CompressionStream("deflate-raw"));
   return new Uint8Array(await new Response(stream).arrayBuffer());
@@ -63,6 +98,10 @@ export async function readZip(u8) {
   if (u8.length < 22 || u8[0] !== 0x50 || u8[1] !== 0x4b) {
     throw new Error("not a ZIP/3MF archive");
   }
+  if (u8.length > MAX_ARCHIVE_BYTES) {
+    throw new Error(`this archive is ${(u8.length / 1048576).toFixed(0)} MB; this `
+      + `reader stops at ${MAX_ARCHIVE_BYTES / 1048576} MB`);
+  }
   const eocd = findEOCD(u8);
   if (eocd < 0) throw new Error("no ZIP end-of-central-directory record found");
   const dv = new DataView(u8.buffer, u8.byteOffset, u8.length);
@@ -71,9 +110,14 @@ export async function readZip(u8) {
   if (cdOffset === 0xffffffff || count === 0xffff) {
     throw new Error("ZIP64 archives are not supported");
   }
+  if (count > MAX_MEMBERS) {
+    throw new Error(`this archive lists ${count} members; this reader stops at `
+      + MAX_MEMBERS);
+  }
 
   const decoder = new TextDecoder("utf-8");
   const out = new Map();
+  let expanded = 0;
   let p = cdOffset;
   for (let i = 0; i < count; i++) {
     if (dv.getUint32(p, true) !== SIG_CENTRAL) break;
@@ -86,9 +130,25 @@ export async function readZip(u8) {
     const localAt = dv.getUint32(p + 42, true);
     const name = decoder.decode(u8.subarray(p + 46, p + 46 + nameLen));
 
+    if (out.has(name)) {
+      // Two members with one name would let the second silently replace the
+      // first, which is how a "harmless" zip hides different geometry.
+      throw new Error(`damaged archive: ${name} is stored more than once`);
+    }
     // the local header carries its own name/extra lengths, and they can differ
     if (dv.getUint32(localAt, true) !== SIG_LOCAL) {
       throw new Error(`damaged archive: bad local header for ${name}`);
+    }
+    // Checked before inflating: rawSize is the archive's own claim, so it also
+    // has to be re-checked afterwards.
+    if (rawSize > MAX_MEMBER_BYTES) {
+      throw new Error(`${name} claims to expand to `
+        + `${(rawSize / 1048576).toFixed(0)} MB; this reader stops at `
+        + `${MAX_MEMBER_BYTES / 1048576} MB`);
+    }
+    if (expanded + rawSize > MAX_TOTAL_BYTES) {
+      throw new Error(`this archive expands to more than `
+        + `${MAX_TOTAL_BYTES / 1048576} MB; this reader stops there`);
     }
     const lNameLen = dv.getUint16(localAt + 26, true);
     const lExtraLen = dv.getUint16(localAt + 28, true);
@@ -97,14 +157,26 @@ export async function readZip(u8) {
 
     let data;
     if (method === 0) {
+      if (body.length > MAX_MEMBER_BYTES) {
+        throw new Error(`${name} is larger than this reader will hold`);
+      }
       data = body.slice();
     } else if (method === 8) {
-      data = await inflateRaw(body);
+      data = await inflateRawBounded(body, MAX_MEMBER_BYTES);
     } else {
       throw new Error(`unsupported compression method ${method} for ${name}`);
     }
     if (rawSize && data.length !== rawSize) {
       throw new Error(`size mismatch reading ${name}`);
+    }
+    expanded += data.length;
+    if (expanded > MAX_TOTAL_BYTES) {
+      throw new Error(`this archive expands to more than `
+        + `${MAX_TOTAL_BYTES / 1048576} MB; this reader stops there`);
+    }
+    const expected = dv.getUint32(p + 16, true);
+    if (crc32(data) !== expected) {
+      throw new Error(`${name} is damaged (its checksum does not match)`);
     }
     out.set(name, data);
     p += 46 + nameLen + extraLen + commentLen;

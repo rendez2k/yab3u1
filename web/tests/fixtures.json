@@ -1,0 +1,895 @@
+{
+ "colour": {
+  "nearest": [
+   {
+    "index": 0,
+    "palette": [
+     "#FFFFFF",
+     "#000000",
+     "#FF9500",
+     "#FF0080"
+    ],
+    "target": "#C8D8C0"
+   }
+  ],
+  "pairs": [
+   {
+    "a": "#FF0000",
+    "b": "#000000",
+    "distance": 56.306811
+   },
+   {
+    "a": "#C8D8C0",
+    "b": "#3D9140",
+    "distance": 40.091451
+   },
+   {
+    "a": "#0080C0",
+    "b": "#637E9F",
+    "distance": 7.525631
+   },
+   {
+    "a": "#FFFFFF",
+    "b": "#FF9500",
+    "distance": 87.954706
+   },
+   {
+    "a": "#17BECF",
+    "b": "#8C564B",
+    "distance": 49.308663
+   }
+  ]
+ },
+ "mix": {
+  "cases": [
+   {
+    "expected": {
+     "advice": "1 of 1 colours would be closer as a predicted mixture; the rest stay on the reel they already match. The palette itself is a long way from these reels (worst match 23.7), so loading closer filament is worth doing where you can",
+     "recipes": [
+      {
+       "a": 3,
+       "b": 4,
+       "color": "#FF4631",
+       "id": 5,
+       "percent": 50
+      }
+     ],
+     "rows": [
+      {
+       "choice": "mixture",
+       "recipe_id": 5,
+       "solid_error": 23.7,
+       "solid_slot": 4,
+       "source": 1
+      }
+     ]
+    },
+    "sources": {
+     "1": "#FF0000"
+    }
+   },
+   {
+    "expected": {
+     "advice": "no blend comes closer than the nearest reel, and the reels do not cover these colours; load closer filament rather than mixing",
+     "recipes": [],
+     "rows": [
+      {
+       "choice": "solid",
+       "recipe_id": null,
+       "solid_error": 17.6,
+       "solid_slot": 1,
+       "source": 1
+      }
+     ]
+    },
+    "sources": {
+     "1": "#C8D8C0"
+    }
+   },
+   {
+    "expected": {
+     "advice": "1 of 2 colours would be closer as a predicted mixture; the rest stay on the reel they already match. The palette itself is a long way from these reels (worst match 15.9), so loading closer filament is worth doing where you can",
+     "recipes": [
+      {
+       "a": 2,
+       "b": 4,
+       "color": "#B1005F",
+       "id": 5,
+       "percent": 75
+      }
+     ],
+     "rows": [
+      {
+       "choice": "mixture",
+       "recipe_id": 5,
+       "solid_error": 15.9,
+       "solid_slot": 4,
+       "source": 1
+      },
+      {
+       "choice": "solid",
+       "recipe_id": null,
+       "solid_error": 0.0,
+       "solid_slot": 1,
+       "source": 2
+      }
+     ]
+    },
+    "sources": {
+     "1": "#B03060",
+     "2": "#FFFFFF"
+    }
+   }
+  ],
+  "hexes": [
+   {
+    "a": "#FFFFFF",
+    "b": "#000000",
+    "color": "#A3BCD3",
+    "percent": 25
+   },
+   {
+    "a": "#FFFFFF",
+    "b": "#000000",
+    "color": "#637E9F",
+    "percent": 50
+   },
+   {
+    "a": "#FFFFFF",
+    "b": "#000000",
+    "color": "#27425E",
+    "percent": 75
+   }
+  ],
+  "reels": [
+   {
+    "color": "#FFFFFF",
+    "slot": 1,
+    "type": "PLA"
+   },
+   {
+    "color": "#000000",
+    "slot": 2,
+    "type": "PLA"
+   },
+   {
+    "color": "#FF9500",
+    "slot": 3,
+    "type": "PLA"
+   },
+   {
+    "color": "#FF0080",
+    "slot": 4,
+    "type": "PLA"
+   }
+  ]
+ },
+ "paint": {
+  "decoded": [
+   {
+    "tree": null,
+    "value": ""
+   },
+   {
+    "tree": {
+     "kind": "leaf",
+     "state": 0
+    },
+    "value": "0"
+   },
+   {
+    "tree": {
+     "kind": "leaf",
+     "state": 1
+    },
+    "value": "4"
+   },
+   {
+    "tree": {
+     "kind": "leaf",
+     "state": 2
+    },
+    "value": "8"
+   },
+   {
+    "tree": "error",
+    "value": "C"
+   },
+   {
+    "tree": {
+     "kind": "leaf",
+     "state": 5
+    },
+    "value": "2C"
+   },
+   {
+    "tree": {
+     "children": [
+      {
+       "children": [
+        {
+         "kind": "leaf",
+         "state": 1
+        },
+        {
+         "kind": "leaf",
+         "state": 1
+        },
+        {
+         "kind": "leaf",
+         "state": 5
+        }
+       ],
+       "kind": "split",
+       "sides": 2,
+       "specialSide": 0
+      },
+      {
+       "kind": "leaf",
+       "state": 1
+      },
+      {
+       "kind": "leaf",
+       "state": 1
+      },
+      {
+       "children": [
+        {
+         "kind": "leaf",
+         "state": 5
+        },
+        {
+         "kind": "leaf",
+         "state": 5
+        },
+        {
+         "kind": "leaf",
+         "state": 1
+        }
+       ],
+       "kind": "split",
+       "sides": 2,
+       "specialSide": 2
+      }
+     ],
+     "kind": "split",
+     "sides": 3,
+     "specialSide": 0
+    },
+    "value": "42C2CA442C4423"
+   },
+   {
+    "tree": {
+     "kind": "leaf",
+     "state": 4
+    },
+    "value": "1C"
+   },
+   {
+    "tree": "error",
+    "value": "4444444444444444444444444444444444"
+   }
+  ],
+  "excessive": [
+   {
+    "states": [],
+    "value": "0"
+   },
+   {
+    "states": [],
+    "value": "4"
+   },
+   {
+    "states": [],
+    "value": "8"
+   },
+   {
+    "states": [],
+    "value": "C"
+   },
+   {
+    "states": [],
+    "value": "2C"
+   },
+   {
+    "states": [],
+    "value": "42C2CA442C4423"
+   },
+   {
+    "states": [],
+    "value": "1C"
+   },
+   {
+    "states": [],
+    "value": "4444444444444444444444444444444444"
+   }
+  ],
+  "remapped": [
+   {
+    "mapping": {
+     "1": 2,
+     "3": 4,
+     "4": 5
+    },
+    "result": "",
+    "value": ""
+   },
+   {
+    "mapping": {
+     "1": 2,
+     "3": 4,
+     "4": 5
+    },
+    "result": "0",
+    "value": "0"
+   },
+   {
+    "mapping": {
+     "1": 2,
+     "3": 4,
+     "4": 5
+    },
+    "result": "8",
+    "value": "4"
+   },
+   {
+    "mapping": {
+     "1": 2,
+     "3": 4,
+     "4": 5
+    },
+    "result": "8",
+    "value": "8"
+   },
+   {
+    "mapping": {
+     "1": 2,
+     "3": 4,
+     "4": 5
+    },
+    "result": "error",
+    "value": "C"
+   },
+   {
+    "mapping": {
+     "1": 2,
+     "3": 4,
+     "4": 5
+    },
+    "result": "2C",
+    "value": "2C"
+   },
+   {
+    "mapping": {
+     "1": 2,
+     "3": 4,
+     "4": 5
+    },
+    "result": "82C2CA882C8823",
+    "value": "42C2CA442C4423"
+   },
+   {
+    "mapping": {
+     "1": 2,
+     "3": 4,
+     "4": 5
+    },
+    "result": "2C",
+    "value": "1C"
+   },
+   {
+    "mapping": {
+     "1": 2,
+     "3": 4,
+     "4": 5
+    },
+    "result": "error",
+    "value": "4444444444444444444444444444444444"
+   }
+  ],
+  "supported_max": 16
+ },
+ "planner": [
+  {
+   "expected": {
+    "anomalies": 0,
+    "diagnosis": "ok",
+    "feasible": true,
+    "flavour": "orca",
+    "incompatible_count": 0,
+    "initial": {
+     "0": 1,
+     "1": 2
+    },
+    "layers": 2,
+    "legend": [],
+    "max_tools_per_layer": 2,
+    "pause_count": 0,
+    "per_layer": [
+     {
+      "height": 0.2,
+      "index": 0,
+      "line": 3,
+      "tools": [
+       0,
+       1
+      ],
+      "z": 0.2
+     },
+     {
+      "height": 0.2,
+      "index": 1,
+      "line": 20,
+      "tools": [
+       0,
+       1
+      ],
+      "z": 0.4
+     }
+    ],
+    "primes": 0,
+    "reel_changes": 0,
+    "retractions": 4,
+    "schedule": [],
+    "sentinels": [],
+    "startup_tools": [],
+    "stats_layer_markers": 2,
+    "summary": "2 layers, never more than 2 colours in one layer; 0 reel changes at 0 pauses \u2014 the four loaded reels cover every layer. The pause positions come from the slicer's own layer markers; the sequence is deterministic, not proven minimal.",
+    "tools": [
+     0,
+     1
+    ],
+    "total_layers": null
+   },
+   "gcode": "; generated by OrcaSlicer 2.4.0\n; estimated printing time = 12m\n;LAYER_CHANGE\n;Z:0.2\n;HEIGHT:0.2\n;SET_PRINT_STATS_INFO CURRENT_LAYER:0\n;BEFORE_LAYER_CHANGE\nM83\nT0\nG1 X10 Y10 F9000\nG1 X20 Y10 E1.000\nG1 E-0.5 F2100\nG1 E0.5 F2100\nT1\nG1 X10 Y10 F9000\nG1 X20 Y10 E1.000\nG1 E-0.5 F2100\nG1 E0.5 F2100\n;AFTER_LAYER_CHANGE\n;LAYER_CHANGE\n;Z:0.4\n;HEIGHT:0.2\n;SET_PRINT_STATS_INFO CURRENT_LAYER:1\n;BEFORE_LAYER_CHANGE\nM83\nT0\nG1 X10 Y10 F9000\nG1 X20 Y10 E1.000\nG1 E-0.5 F2100\nG1 E0.5 F2100\nT1\nG1 X10 Y10 F9000\nG1 X20 Y10 E1.000\nG1 E-0.5 F2100\nG1 E0.5 F2100\n;AFTER_LAYER_CHANGE\n",
+   "name": "two tools, no changes",
+   "physical": 4
+  },
+  {
+   "expected": {
+    "anomalies": 0,
+    "diagnosis": "ok",
+    "feasible": true,
+    "flavour": "prusa",
+    "incompatible_count": 0,
+    "initial": {
+     "0": 1,
+     "1": 2,
+     "2": 3,
+     "3": 4
+    },
+    "layers": 5,
+    "legend": [],
+    "max_tools_per_layer": 1,
+    "pause_count": 1,
+    "per_layer": [
+     {
+      "height": 0.2,
+      "index": 0,
+      "line": 2,
+      "tools": [
+       0
+      ],
+      "z": 0.2
+     },
+     {
+      "height": 0.2,
+      "index": 1,
+      "line": 14,
+      "tools": [
+       1
+      ],
+      "z": 0.4
+     },
+     {
+      "height": 0.2,
+      "index": 2,
+      "line": 26,
+      "tools": [
+       2
+      ],
+      "z": 0.6000000000000001
+     },
+     {
+      "height": 0.2,
+      "index": 3,
+      "line": 38,
+      "tools": [
+       3
+      ],
+      "z": 0.8
+     },
+     {
+      "height": 0.2,
+      "index": 4,
+      "line": 50,
+      "tools": [
+       4
+      ],
+      "z": 1.0
+     }
+    ],
+    "primes": 0,
+    "reel_changes": 1,
+    "retractions": 5,
+    "schedule": [
+     {
+      "in": 4,
+      "layer": 4,
+      "line": 50,
+      "out": 0,
+      "slot": 1,
+      "z": 1.0
+     }
+    ],
+    "sentinels": [],
+    "startup_tools": [],
+    "stats_layer_markers": 5,
+    "summary": "5 layers, never more than 1 colours in one layer; 1 reel change at 1 pause. The pause positions come from the slicer's own layer markers; the sequence is deterministic, not proven minimal.",
+    "tools": [
+     0,
+     1,
+     2,
+     3,
+     4
+    ],
+    "total_layers": null
+   },
+   "gcode": "; PrusaSlicer 2.9.6\n;LAYER_CHANGE\n;Z:0.2\n;HEIGHT:0.2\n;SET_PRINT_STATS_INFO CURRENT_LAYER:0\n;BEFORE_LAYER_CHANGE\nM83\nT0\nG1 X10 Y10 F9000\nG1 X20 Y10 E1.000\nG1 E-0.5 F2100\nG1 E0.5 F2100\n;AFTER_LAYER_CHANGE\n;LAYER_CHANGE\n;Z:0.4\n;HEIGHT:0.2\n;SET_PRINT_STATS_INFO CURRENT_LAYER:1\n;BEFORE_LAYER_CHANGE\nM83\nT1\nG1 X10 Y10 F9000\nG1 X20 Y10 E1.000\nG1 E-0.5 F2100\nG1 E0.5 F2100\n;AFTER_LAYER_CHANGE\n;LAYER_CHANGE\n;Z:0.6000000000000001\n;HEIGHT:0.2\n;SET_PRINT_STATS_INFO CURRENT_LAYER:2\n;BEFORE_LAYER_CHANGE\nM83\nT2\nG1 X10 Y10 F9000\nG1 X20 Y10 E1.000\nG1 E-0.5 F2100\nG1 E0.5 F2100\n;AFTER_LAYER_CHANGE\n;LAYER_CHANGE\n;Z:0.8\n;HEIGHT:0.2\n;SET_PRINT_STATS_INFO CURRENT_LAYER:3\n;BEFORE_LAYER_CHANGE\nM83\nT3\nG1 X10 Y10 F9000\nG1 X20 Y10 E1.000\nG1 E-0.5 F2100\nG1 E0.5 F2100\n;AFTER_LAYER_CHANGE\n;LAYER_CHANGE\n;Z:1.0\n;HEIGHT:0.2\n;SET_PRINT_STATS_INFO CURRENT_LAYER:4\n;BEFORE_LAYER_CHANGE\nM83\nT4\nG1 X10 Y10 F9000\nG1 X20 Y10 E1.000\nG1 E-0.5 F2100\nG1 E0.5 F2100\n;AFTER_LAYER_CHANGE\n",
+   "name": "five tools across layers",
+   "physical": 4
+  },
+  {
+   "expected": {
+    "anomalies": 0,
+    "diagnosis": "too-many-colours-per-layer",
+    "feasible": false,
+    "flavour": "unknown",
+    "incompatible_count": 1,
+    "initial": {},
+    "layers": 1,
+    "legend": [],
+    "max_tools_per_layer": 5,
+    "pause_count": null,
+    "per_layer": [
+     {
+      "height": 0.2,
+      "index": 0,
+      "line": 1,
+      "tools": [
+       0,
+       1,
+       2,
+       3,
+       4
+      ],
+      "z": 0.2
+     }
+    ],
+    "primes": 0,
+    "reel_changes": null,
+    "retractions": 5,
+    "schedule": [],
+    "sentinels": [],
+    "startup_tools": [],
+    "stats_layer_markers": 1,
+    "summary": "1 of 1 layers deposit more than 4 colours (worst 5, first at layer 0, line 1, Z 0.20 mm). Colours inside one layer cannot be separated by changing reels between layers, so there is no layer-boundary plan for this file. Recolour the model or slice it differently.",
+    "tools": [
+     0,
+     1,
+     2,
+     3,
+     4
+    ],
+    "total_layers": null
+   },
+   "gcode": ";LAYER_CHANGE\n;Z:0.2\n;HEIGHT:0.2\n;SET_PRINT_STATS_INFO CURRENT_LAYER:0\n;BEFORE_LAYER_CHANGE\nM83\nT0\nG1 X10 Y10 F9000\nG1 X20 Y10 E1.000\nG1 E-0.5 F2100\nG1 E0.5 F2100\nT1\nG1 X10 Y10 F9000\nG1 X20 Y10 E1.000\nG1 E-0.5 F2100\nG1 E0.5 F2100\nT2\nG1 X10 Y10 F9000\nG1 X20 Y10 E1.000\nG1 E-0.5 F2100\nG1 E0.5 F2100\nT3\nG1 X10 Y10 F9000\nG1 X20 Y10 E1.000\nG1 E-0.5 F2100\nG1 E0.5 F2100\nT4\nG1 X10 Y10 F9000\nG1 X20 Y10 E1.000\nG1 E-0.5 F2100\nG1 E0.5 F2100\n;AFTER_LAYER_CHANGE\n",
+   "name": "five colours in one layer",
+   "physical": 4
+  },
+  {
+   "expected": {
+    "error": "line 13: this G-code changes filament itself (M600) and then prints again, so which reel is in the head is unknown; this planner will not give a confident schedule for it"
+   },
+   "gcode": "T1\nG1 X1 Y1 F9000\nG1 X5 Y1 E0.4 F1200\nM600\n;LAYER_CHANGE\n;Z:0.2\n;HEIGHT:0.2\n;SET_PRINT_STATS_INFO CURRENT_LAYER:0\n;BEFORE_LAYER_CHANGE\nM83\nT0\nG1 X10 Y10 F9000\nG1 X20 Y10 E1.000\nG1 E-0.5 F2100\nG1 E0.5 F2100\n;AFTER_LAYER_CHANGE\n;LAYER_CHANGE\n;Z:0.4\n;HEIGHT:0.2\n;SET_PRINT_STATS_INFO CURRENT_LAYER:1\n;BEFORE_LAYER_CHANGE\nM83\nT1\nG1 X10 Y10 F9000\nG1 X20 Y10 E1.000\nG1 E-0.5 F2100\nG1 E0.5 F2100\nT2\nG1 X10 Y10 F9000\nG1 X20 Y10 E1.000\nG1 E-0.5 F2100\nG1 E0.5 F2100\nT3\nG1 X10 Y10 F9000\nG1 X20 Y10 E1.000\nG1 E-0.5 F2100\nG1 E0.5 F2100\n;AFTER_LAYER_CHANGE\n",
+   "name": "startup and a sentinel",
+   "physical": 4
+  },
+  {
+   "expected": {
+    "anomalies": 0,
+    "diagnosis": "ok",
+    "feasible": true,
+    "flavour": "unknown",
+    "incompatible_count": 0,
+    "initial": {
+     "0": 1,
+     "2": 2,
+     "3": 3
+    },
+    "layers": 1,
+    "legend": [],
+    "max_tools_per_layer": 3,
+    "pause_count": 0,
+    "per_layer": [
+     {
+      "height": 0.2,
+      "index": 0,
+      "line": 1,
+      "tools": [
+       0,
+       2,
+       3
+      ],
+      "z": 0.2
+     }
+    ],
+    "primes": 0,
+    "reel_changes": 0,
+    "retractions": 2,
+    "schedule": [],
+    "sentinels": [],
+    "startup_tools": [],
+    "stats_layer_markers": 1,
+    "summary": "1 layers, never more than 3 colours in one layer; 0 reel changes at 0 pauses \u2014 the four loaded reels cover every layer. The pause positions come from the slicer's own layer markers; the sequence is deterministic, not proven minimal.",
+    "tools": [
+     0,
+     2,
+     3
+    ],
+    "total_layers": null
+   },
+   "gcode": ";LAYER_CHANGE\n;Z:0.2\n;HEIGHT:0.2\n;SET_PRINT_STATS_INFO CURRENT_LAYER:0\n;BEFORE_LAYER_CHANGE\nM83\nT0\nG1 X10 Y10 F9000\nG1 X20 Y10 E1.000\nG1 E-0.5 F2100\nG1 E0.5 F2100\nT2\nG1 X10 Y10 F9000\nG1 X20 Y10 E1.000\nG1 E-0.5 F2100\nG1 E0.5 F2100\n;AFTER_LAYER_CHANGE\n;TYPE:SUPPORT\nT3\nG1 X30 Y10 E1.2 F1800\n",
+   "name": "supports add a colour",
+   "physical": 4
+  },
+  {
+   "expected": {
+    "anomalies": 0,
+    "diagnosis": "ok",
+    "feasible": true,
+    "flavour": "unknown",
+    "incompatible_count": 0,
+    "initial": {
+     "0": 1,
+     "1": 2
+    },
+    "layers": 2,
+    "legend": [],
+    "max_tools_per_layer": 1,
+    "pause_count": 0,
+    "per_layer": [
+     {
+      "height": 0.2,
+      "index": 0,
+      "line": 7,
+      "tools": [
+       1
+      ],
+      "z": 0.2
+     },
+     {
+      "height": 0.2,
+      "index": 1,
+      "line": 13,
+      "tools": [],
+      "z": 0.4
+     }
+    ],
+    "primes": 0,
+    "reel_changes": 0,
+    "retractions": 0,
+    "schedule": [],
+    "sentinels": [],
+    "startup_tools": [
+     0
+    ],
+    "stats_layer_markers": 0,
+    "summary": "2 layers, never more than 1 colours in one layer; 0 reel changes at 0 pauses \u2014 the four loaded reels cover every layer. The pause positions come from the slicer's own layer markers; the sequence is deterministic, not proven minimal.",
+    "tools": [
+     0,
+     1
+    ],
+    "total_layers": null
+   },
+   "gcode": ";BEFORE_LAYER_CHANGE\n;Z:0.2\n;HEIGHT:0.2\nM83\nT0\nG1 X5 Y5 E1.0\n;AFTER_LAYER_CHANGE\n;BEFORE_LAYER_CHANGE\n;Z:0.4\n;HEIGHT:0.2\nT1\nG1 X6 Y5 E1.0\n;AFTER_LAYER_CHANGE\n",
+   "name": "hook-only dialect",
+   "physical": 4
+  },
+  {
+   "expected": {
+    "anomalies": 0,
+    "diagnosis": "ok",
+    "feasible": true,
+    "flavour": "unknown",
+    "incompatible_count": 0,
+    "initial": {
+     "0": 1,
+     "1": 2
+    },
+    "layers": 2,
+    "legend": [],
+    "max_tools_per_layer": 1,
+    "pause_count": 0,
+    "per_layer": [
+     {
+      "height": 0.16,
+      "index": 0,
+      "line": 2,
+      "tools": [
+       0
+      ],
+      "z": 0.2
+     },
+     {
+      "height": 0.16,
+      "index": 1,
+      "line": 9,
+      "tools": [
+       1
+      ],
+      "z": 0.36
+     }
+    ],
+    "primes": 0,
+    "reel_changes": 0,
+    "retractions": 0,
+    "schedule": [],
+    "sentinels": [],
+    "startup_tools": [],
+    "stats_layer_markers": 1,
+    "summary": "2 layers, never more than 1 colours in one layer; 0 reel changes at 0 pauses \u2014 the four loaded reels cover every layer. The pause positions come from the slicer's own layer markers; the sequence is deterministic, not proven minimal.",
+    "tools": [
+     0,
+     1
+    ],
+    "total_layers": 2
+   },
+   "gcode": "SET_PRINT_STATS_INFO TOTAL_LAYER=2\n;LAYER_CHANGE\n;Z:0.2\n;HEIGHT:0.16\nSET_PRINT_STATS_INFO CURRENT_LAYER=0\nM83\nT0\nG1 X5 Y5 E1.0\n;LAYER_CHANGE\n;Z:0.36\n;HEIGHT:0.16\nT1\nG1 X6 Y5 E1.0\n",
+   "name": "uncommented stats and height",
+   "physical": 4
+  },
+  {
+   "expected": {
+    "anomalies": 0,
+    "diagnosis": "ok",
+    "feasible": true,
+    "flavour": "unknown",
+    "incompatible_count": 0,
+    "initial": {
+     "0": 1
+    },
+    "layers": 1,
+    "legend": [],
+    "max_tools_per_layer": 1,
+    "pause_count": 0,
+    "per_layer": [
+     {
+      "height": null,
+      "index": 0,
+      "line": 1,
+      "tools": [
+       0
+      ],
+      "z": 0.2
+     }
+    ],
+    "primes": 1,
+    "reel_changes": 0,
+    "retractions": 1,
+    "schedule": [],
+    "sentinels": [],
+    "startup_tools": [],
+    "stats_layer_markers": 0,
+    "summary": "1 layers, never more than 1 colours in one layer; 0 reel changes at 0 pauses \u2014 the four loaded reels cover every layer. The pause positions come from the slicer's own layer markers; the sequence is deterministic, not proven minimal.",
+    "tools": [
+     0
+    ],
+    "total_layers": null
+   },
+   "gcode": ";LAYER_CHANGE\n;Z:0.2\nM83\nT0\nG1 X5 Y5 E1.0\nG1 E-1.0\nG1 E1.0\nG1 E0.4\nG2 I1 J0 E0.8\n",
+   "name": "retract debt and a full circle",
+   "physical": 4
+  },
+  {
+   "expected": {
+    "anomalies": 0,
+    "diagnosis": "ok",
+    "feasible": true,
+    "flavour": "unknown",
+    "incompatible_count": 0,
+    "initial": {
+     "2": 1
+    },
+    "layers": 1,
+    "legend": [],
+    "max_tools_per_layer": 1,
+    "pause_count": 0,
+    "per_layer": [
+     {
+      "height": null,
+      "index": 0,
+      "line": 1,
+      "tools": [
+       2
+      ],
+      "z": 0.2
+     }
+    ],
+    "primes": 1,
+    "reel_changes": 0,
+    "retractions": 1,
+    "schedule": [],
+    "sentinels": [],
+    "startup_tools": [],
+    "stats_layer_markers": 0,
+    "summary": "1 layers, never more than 1 colours in one layer; 0 reel changes at 0 pauses \u2014 the four loaded reels cover every layer. The pause positions come from the slicer's own layer markers; the sequence is deterministic, not proven minimal.",
+    "tools": [
+     2
+    ],
+    "total_layers": null
+   },
+   "gcode": ";LAYER_CHANGE\n;Z:0.2\nT2\nG1 X1 Y1 F9000\nG1 E5.0\nT0\nG1 X5 Y5 E1.0\n",
+   "name": "startup purge",
+   "physical": 4
+  },
+  {
+   "expected": {
+    "error": "line 18: this G-code changes filament itself (M600) and then prints again, so which reel is in the head is unknown; this planner will not give a confident schedule for it"
+   },
+   "gcode": ";LAYER_CHANGE\n;Z:0.2\n;HEIGHT:0.2\n;SET_PRINT_STATS_INFO CURRENT_LAYER:0\n;BEFORE_LAYER_CHANGE\nM83\nT0\nG1 X10 Y10 F9000\nG1 X20 Y10 E1.000\nG1 E-0.5 F2100\nG1 E0.5 F2100\n;AFTER_LAYER_CHANGE\nM600\n;LAYER_CHANGE\n;Z:0.4\nM0\nT0\nG1 X5 Y5 E1.0\n",
+   "name": "m600 and a pause",
+   "physical": 4
+  },
+  {
+   "expected": {
+    "error": "this file switches to G90.1 extrusion, whose semantics this planner does not model"
+   },
+   "gcode": ";LAYER_CHANGE\nG90.1\nG1 X5 Y5 E1.0\n",
+   "name": "refuses G90.1",
+   "physical": 4
+  },
+  {
+   "expected": {
+    "error": "line 2: T255 looks like a slicer sentinel rather than a tool; this planner will not guess which reel it means"
+   },
+   "gcode": ";LAYER_CHANGE\nT255\nG1 X5 Y5 E1.0\n",
+   "name": "refuses a sentinel tool",
+   "physical": 4
+  },
+  {
+   "expected": {
+    "error": "line 2: X has no number in \"X Y5 E1.0\""
+   },
+   "gcode": ";LAYER_CHANGE\nG1 X Y5 E1.0\n",
+   "name": "refuses a malformed move",
+   "physical": 4
+  }
+ ],
+ "spectrum": {
+  "max_recipes": 12,
+  "max_visible": 16,
+  "virtual_id": [
+   {
+    "id": 5,
+    "index": 0,
+    "physical": 4
+   },
+   {
+    "id": 6,
+    "index": 1,
+    "physical": 4
+   },
+   {
+    "id": 7,
+    "index": 2,
+    "physical": 4
+   },
+   {
+    "id": 8,
+    "index": 3,
+    "physical": 4
+   }
+  ]
+ }
+}

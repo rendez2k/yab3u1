@@ -49,6 +49,9 @@ import tempfile
 import uuid
 import zipfile
 
+import u1colour
+import u1paint
+
 # --------------------------------------------------------------------------------------
 # constants
 # --------------------------------------------------------------------------------------
@@ -59,6 +62,7 @@ OBJECTS_DIR = "3D/Objects/"
 
 SRC_PRUSA_MODEL = "Metadata/Slic3r_PE_model.config"
 SRC_PRUSA_PRINT = "Metadata/Slic3r_PE.config"
+SRC_PRUSA_SPECTRUM = "Metadata/Prusa_Slicer_full_spectrum.json"
 SRC_BBL_PROJECT = "Metadata/project_settings.config"
 SRC_BBL_MODEL = "Metadata/model_settings.config"
 
@@ -123,41 +127,20 @@ def log(msg: str) -> None:
 def hex_to_bits(text: str) -> list[int]:
     if not text or not re.fullmatch(r"[0-9A-Fa-f]+", text):
         return []
-    value = int(text, 16)
-    return [(value >> i) & 1 for i in range(4 * len(text))]
+    return u1paint.hex_to_bits(text)
 
 
 def bits_to_hex(bits: list[int]) -> str:
-    value = sum(b << i for i, b in enumerate(bits))
-    digits = max(1, len(bits) // 4)
-    return "%0*X" % (digits, value)
+    return u1paint.bits_to_hex(bits)
 
 
 def decode_leaf_state(text: str) -> int:
     """Extruder index for a whole-triangle paint, or 0 when not a simple leaf."""
-    bits = hex_to_bits(text)
-    if len(bits) < 4:
-        return 0
-    code = bits[0] | (bits[1] << 1) | (bits[2] << 2) | (bits[3] << 3)
-    if code & 0b11:
-        return 0
-    if (code & 0b1100) != 0b1100:
-        return code >> 2
-    if len(bits) < 8:
-        return 0
-    nib = bits[4] | (bits[5] << 1) | (bits[6] << 2) | (bits[7] << 3)
-    if nib == 0b1111:
-        return 0                      # state >= 18, two-nibble form
-    return 3 + nib
+    return u1paint.decode_leaf_state(text)
 
 
 def encode_leaf_state(state: int) -> str:
-    bits = [0, 0]
-    if state < 3:
-        bits += [state & 1, (state >> 1) & 1]
-    else:
-        bits += [1, 1] + [((state - 3) >> i) & 1 for i in range(4)]
-    return bits_to_hex(bits)
+    return u1paint.encode_leaf_state(state)
 
 
 # --------------------------------------------------------------------------------------
@@ -614,12 +597,23 @@ def _source_placement(zf: zipfile.ZipFile, src: Source):
     return out
 
 
-def _read_prusa(zf: zipfile.ZipFile) -> Source:
+def read_prusa_palette(zf: zipfile.ZipFile) -> Source:
+    """Where a PrusaSlicer project keeps its colours, and what they are.
+
+    A project saved by PrusaSlicer itself carries ``Metadata/Slic3r_PE.config``
+    with the tool and filament palettes.  A *portable colour project* -- what this
+    tool writes, and what PaintPort's format notes describe -- deliberately leaves
+    that file out so it cannot override the user's print preset, and the palette
+    lives in ``Metadata/Prusa_Slicer_full_spectrum.json`` instead.  Reading only
+    the first source would silently reopen such a project as white defaults, so
+    both are read here and a project with neither is refused rather than guessed.
+    """
     src = Source()
     src.kind = "prusa"
+    if SRC_PRUSA_PRINT not in zf.namelist():
+        return _prusa_spectrum_palette(zf, src)
     cfg = parse_prusa_ini(zf.read(SRC_PRUSA_PRINT).decode("utf-8", "replace"))
     src.source_settings = cfg
-
     tool_colors = [norm_color(c) for c in split_list(cfg.get("extruder_colour", ""))]
     fil_colors = [norm_color(c) for c in split_list(cfg.get("filament_colour", ""))]
     types = [t.strip().upper() for t in split_list(cfg.get("filament_type", ""))]
@@ -645,6 +639,81 @@ def _read_prusa(zf: zipfile.ZipFile) -> Source:
     src.palette_count = max(len(src.colors), len(src.types))
     src.support = prusa_support(cfg)
     src.layer_height = _as_float(cfg.get("layer_height"))
+    return src
+
+
+def _prusa_spectrum_palette(zf: zipfile.ZipFile, src: Source) -> Source:
+    """The Full Spectrum description *is* the palette of a portable project.
+
+    Physical extruders come first, then the virtual recipes, all in extruder-id
+    order, so paint state *n* maps to entry *n*.  Ids that are not ``1..N`` cannot
+    be mapped onto a colour index at all; rather than white-filling the gaps the
+    project is refused, because a wrong colour is worse than a clear stop.
+    """
+    if SRC_PRUSA_SPECTRUM not in zf.namelist():
+        raise ConvertError(
+            "this PrusaSlicer project has neither Metadata/Slic3r_PE.config nor "
+            f"{SRC_PRUSA_SPECTRUM}, so there is no palette to read its colours from")
+    try:
+        data = json.loads(zf.read(SRC_PRUSA_SPECTRUM).decode("utf-8", "replace"))
+    except ValueError as exc:
+        raise ConvertError(f"{SRC_PRUSA_SPECTRUM} is not JSON ({exc})") from exc
+    if not isinstance(data, dict):
+        raise ConvertError(f"{SRC_PRUSA_SPECTRUM} does not describe any extruders")
+    entries = list(data.get("physical_extruders") or []) + \
+        list(data.get("virtual_extruders") or [])
+    by_id: dict = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise ConvertError(f"{SRC_PRUSA_SPECTRUM} lists an extruder that is not "
+                               "an object")
+        try:
+            index = int(entry.get("id"))
+        except (TypeError, ValueError):
+            raise ConvertError(f"{SRC_PRUSA_SPECTRUM} lists an extruder with no "
+                               "numeric id") from None
+        by_id[index] = entry
+    if not by_id:
+        raise ConvertError(f"{SRC_PRUSA_SPECTRUM} lists no extruders")
+    if sorted(by_id) != list(range(1, len(by_id) + 1)):
+        raise ConvertError(
+            f"{SRC_PRUSA_SPECTRUM} extruder ids are {sorted(by_id)}; they must be "
+            "1..N for paint states to be mapped onto colours")
+
+    physical = {int(e["id"]) for e in (data.get("physical_extruders") or [])
+                if isinstance(e, dict) and str(e.get("id", "")).isdigit()}
+    if not physical:
+        raise ConvertError(f"{SRC_PRUSA_SPECTRUM} lists no physical extruders")
+
+    def type_of(index: int) -> str:
+        entry = by_id[index]
+        own = entry.get("type")
+        if own:
+            return str(own).upper()
+        # A recipe carries no type of its own; it is made of physical filaments.
+        for component in entry.get("components") or []:
+            if not isinstance(component, dict):
+                continue
+            try:
+                source = int(component.get("extruder"))
+            except (TypeError, ValueError):
+                continue
+            if source in by_id and by_id[source].get("type"):
+                return str(by_id[source]["type"]).upper()
+        return "PLA"
+
+    src.colors = [norm_color(by_id[i].get("color")) for i in range(1, len(by_id) + 1)]
+    src.types = [type_of(i) for i in range(1, len(by_id) + 1)]
+    if not any(src.colors):
+        raise ConvertError(f"{SRC_PRUSA_SPECTRUM} carries no readable colours")
+    src.palette_source = "Prusa_Slicer_full_spectrum.json"
+    src.palette_count = len(src.colors)
+    log(f"palette      : {len(src.colors)} slots from {src.palette_source}")
+    return src
+
+
+def _read_prusa(zf: zipfile.ZipFile) -> Source:
+    src = read_prusa_palette(zf)
 
     blob = zf.read(SRC_PRUSA_MODEL).decode("utf-8", "replace")
     objects = re.findall(r"<object\b[^>]*>(.*?)</object>", blob, re.S)
@@ -674,8 +743,12 @@ def _read_prusa(zf: zipfile.ZipFile) -> Source:
         if mat_m:
             try:
                 src.volume_matrix = matrix_from_text(mat_m.group(1))
-            except ConvertError:
-                src.volume_matrix = [row[:] for row in IDENTITY]
+            except ConvertError as exc:
+                # A matrix this tool cannot read is not the identity: guessing one
+                # would move the part somewhere the file never asked for.
+                raise ConvertError(
+                    f"the volume's matrix could not be read ({mat_m.group(1)!r}): "
+                    f"{exc}") from exc
     return src
 
 
@@ -850,7 +923,10 @@ def object_file_close() -> str:
 VERTEX_RE = re.compile(r'<vertex x="([-0-9.eE+]+)" y="([-0-9.eE+]+)" z="([-0-9.eE+]+)"')
 # The namespace prefix has to be part of the match, otherwise the rename would leave
 # it behind and produce "slic3rpe:paint_color", which the reader does not recognise.
-PAINT_RE = re.compile(r'(?:slic3rpe:)?mmu_segmentation="([0-9A-Fa-f]*)"')
+# Both spellings are matched: a Bambu source already says paint_color, and a state
+# that has to be renumbered must be rewritten there too -- renaming alone would
+# leave the triangle pointing at the wrong filament.
+PAINT_RE = re.compile(r'(?:slic3rpe:)?(?:mmu_segmentation|paint_color)="([0-9A-Fa-f]*)"')
 
 
 def copy_mesh(zf: zipfile.ZipFile, src_name: str, out, mapping: dict[int, int], stats: dict):
@@ -863,10 +939,34 @@ def copy_mesh(zf: zipfile.ZipFile, src_name: str, out, mapping: dict[int, int], 
 
     def rename_paint(m):
         text = m.group(1)
-        if repaint:
-            state = decode_leaf_state(text)
-            if state in repaint:
-                return 'paint_color="%s"' % encode_leaf_state(repaint[state])
+        if repaint and text:
+            # u1paint rewrites whole and sub-divided paint.  A value that does not
+            # mention a renumbered material is copied through untouched; one that
+            # cannot be read at all stops the conversion rather than being written
+            # back as something else.
+            try:
+                states = u1paint.walk_states(u1paint.decode(text))
+            except u1paint.PaintError as exc:
+                raise ConvertError(
+                    f"a painted triangle uses a value this tool cannot read ({exc}), and "
+                    "this conversion renumbers colours; it stopped rather than writing a "
+                    "colour that would be wrong") from exc
+            high = sorted({s for s in states if s > u1paint.SUPPORTED_STATE_MAX})
+            if high:
+                raise ConvertError(
+                    f"a painted triangle uses filament id(s) "
+                    f"{', '.join(str(s) for s in high)}, above the "
+                    f"{u1paint.SUPPORTED_STATE_MAX} this tool writes; newer files encode "
+                    "ids that high differently, so the conversion stopped rather than "
+                    "rewriting them")
+            if any(state and state in repaint for state in states):
+                try:
+                    text = u1paint.remap_text(text, repaint)
+                except u1paint.PaintError as exc:
+                    raise ConvertError(
+                        f"a painted triangle uses a value this tool cannot rewrite "
+                        f"completely ({exc}); the conversion stopped rather than writing "
+                        "a colour that would be wrong") from exc
         return 'paint_color="%s"' % text
 
     with zf.open(src_name) as raw:
@@ -888,7 +988,7 @@ def copy_mesh(zf: zipfile.ZipFile, src_name: str, out, mapping: dict[int, int], 
             elif stripped.startswith("<triangle ") or stripped.startswith("<triangle>"):
                 # note the space/close: "<triangles>" is the container, not a facet
                 triangles += 1
-                if "mmu_segmentation" in line:
+                if "mmu_segmentation" in line or ("paint_color" in line and repaint):
                     line = PAINT_RE.sub(rename_paint, line)
                 for old, new in PAINT_ATTRS[1:]:
                     if old in line:
@@ -1308,10 +1408,20 @@ def find_orca() -> str | None:
     return None
 
 
+CRASH_CODES = {
+    -1073741819: "0xC0000005 access violation",
+    -1073741676: "0xC0000094 integer divide by zero",
+    -1073741571: "0xC00000FD stack overflow",
+    3221225477: "0xC0000005 access violation",
+}
+
+
 def slices_cleanly(orca: str, path: str, timeout: int = 2400):
     """Ask the slicer about a plate. Returns (verdict, reason).
 
-    verdict is "ok", "conflict" or "error".
+    verdict is "ok", "conflict", "error" or "crashed".  The reason always names
+    what the slicer did, including its exit code: a slicer that dies (an access
+    violation, say) must never look like a plate that simply would not slice.
 
     "conflict" is deliberately NOT treated as a failure. The CLI command line runs
     a stricter check than the GUI -- its own message says so:
@@ -1333,24 +1443,31 @@ def slices_cleanly(orca: str, path: str, timeout: int = 2400):
         text = (proc.stdout or "") + "\n" + (proc.stderr or "")
         if any(f.endswith(".gcode") for f in os.listdir(outdir)):
             return "ok", ""
+        code = proc.returncode
+        crash = CRASH_CODES.get(code) or CRASH_CODES.get(code & 0xFFFFFFFF)
+        if crash or "could not be read" in text or "access violation" in text.lower():
+            detail = crash or "the slicer reported a memory read failure"
+            return "crashed", (f"{os.path.basename(orca)} died with {detail} "
+                               f"(exit {code}) while loading this file")
         for line in text.splitlines():
             if "conflicts found between" in line:
-                return "conflict", line.split("]")[-1].strip()
+                return "conflict", (line.split("]")[-1].strip()
+                                    + f" (exit {code})")
         # Report what actually went wrong, not the wrapper. The top-level handler
         # prints "Slic3r::CLI::run found error, exit" for any failure -- a crash, a
         # bad_alloc from a plate that is too big for the machine's memory -- so
         # prefer the last meaningful line and skip the logging noise.
         if "Param values in 3mf/config error" in text:
             return "error", ("the slicer could not read its own configuration -- that "
-                             "usually means Orca is open and holding it; close Orca and "
-                             "try again")
+                             f"usually means Orca is open and holding it; close Orca and "
+                             f"try again (exit {code})")
         noise = ("found error, exit", "calc_exclude", "Initializing StaticPrintConfigs",
                  "sentry_init", "Starting Sentry")
         causes = [ln.split("]")[-1].strip() for ln in text.splitlines()
                   if ln.strip() and not any(n in ln for n in noise)]
         if causes:
-            return "error", " / ".join(causes[-2:])
-        return "error", "the slicer produced no G-code"
+            return "error", " / ".join(causes[-2:]) + f" (exit {code})"
+        return "error", f"the slicer produced no G-code (exit {code})"
     except subprocess.TimeoutExpired:
         return "error", "the slicer timed out"
     except OSError as exc:
@@ -1637,12 +1754,202 @@ def analyze(src_path: str, profile_root: str | None = None,
     return describe(src, profile_root, machine, process, filament_profile, gap)
 
 
+def convert_project(src_path: str, out_path: str, *,
+                    plate: int | None = None, objects: list | None = None,
+                    slots: list | None = None, slot_types: list | None = None,
+                    mapping: dict | None = None, approximate: bool = False,
+                    mode: str | None = None,
+                    spectrum: dict | None = None,
+                    target: str = "snapmaker",
+                    profile_root: str | None = None,
+                    machine: str = DEFAULT_MACHINE, process: str = DEFAULT_PROCESS,
+                    filament_profile: str | None = None, supports: str = "auto",
+                    carry: bool = True, copies: int = 1, verify: bool = False) -> dict:
+    """Export one plate/object selection of a multi-object project.
+
+    Everything structural lives in :mod:`u1project`; this wrapper is the shared
+    entry point for the CLI and the local UI, and it logs the same way the
+    single-object path does.
+    """
+    import u1project
+
+    with zipfile.ZipFile(src_path) as zf:
+        project = u1project.read_project(zf)
+        selection = u1project.select(project, plate, objects)
+        plan = u1project.plan_for(zf, project, selection, slots, slot_types, mapping,
+                                  approximate, intent=mode)
+        recipes = list((spectrum or {}).get("recipes") or [])
+        if spectrum and not recipes:
+            # --spectrum on its own means "work out the recipes from the model and
+            # the reels you named": the same comparison the page shows.
+            import u1mix
+            used_now = sorted({e for oid in selection.as_ids()
+                               for e in u1project.object_used_extruders(zf, project, oid)})
+            plan_mix = u1mix.plan_mixtures(
+                {e: project.color_for(e) for e in used_now}, plan.filaments)
+            recipes = plan_mix["recipes"]
+            if not recipes:
+                raise ConvertError(
+                    "no mixture of these reels comes closer to any source colour than "
+                    "the nearest reel already does, so there is nothing to write: "
+                    + plan_mix["advice"])
+            plan.mapping = {int(k): int(v)
+                            for k, v in u1mix.mapping_from_plan(plan_mix).items()}
+            spectrum = {"recipes": recipes}
+            log(f"recipes      : {plan_mix['advice']}")
+        if recipes:
+            if not plan.mapping:
+                raise ConvertError(
+                    "a Full Spectrum export needs the reviewed mapping that says which "
+                    "source colour goes to which reel or recipe; the page sends it and "
+                    "the command line takes it with --map")
+            if plan.mode != "approximate":
+                # A spectrum export substitutes and redistributes colours by design.
+                plan.mode = "approximate"
+        errors = u1project.validate_plan(zf, project, selection, plan, copies=copies,
+                                         max_slot=u1project.MAX_SLOTS + len(recipes))
+        if errors:
+            raise ConvertError("; ".join(errors))
+
+        log(f"input        : {os.path.basename(src_path)}  [{project.kind} project]")
+        plate_obj = project.plate(selection.plate_id)
+        log(f"plate        : {plate_obj.id} {plate_obj.name!r} "
+            f"({len(project.plates)} in the file; only this one is exported)")
+        log(f"objects      : " + ", ".join(
+            f"{project.object_name_for(o)} [{o}]" for o in selection.as_ids()))
+        used = sorted({e for o in selection.as_ids()
+                       for e in u1project.object_used_extruders(zf, project, o)})
+        log(f"colours      : {len(used)} used of {project.palette_count} source slots "
+            f"({project.palette_source or 'settings'})")
+        for extruder in used:
+            slot = plan.mapping.get(extruder)
+            log(f"  filament {slot} <- source colour {extruder} "
+                f"{project.color_for(extruder)} ({project.type_for(extruder)})")
+        log(f"mode         : {plan.mode}"
+            + ("  (colours are substituted onto the loaded filaments)"
+               if plan.mode == "approximate" else "  (source colours kept)"))
+        recipes = list((spectrum or {}).get("recipes") or [])
+        if recipes:
+            log(f"spectrum     : {len(recipes)} recipe"
+                f"{'' if len(recipes) == 1 else 's'} written as virtual filaments "
+                f"5-{4 + len(recipes)}")
+            for index, recipe in enumerate(recipes):
+                log(f"  F{5 + index} <- reel {recipe['a']} "
+                    f"+ {recipe['percent']}% reel {recipe['b']}")
+        log("slots        : " + ", ".join(
+            f"{i + 1}:{c}" for i, c in enumerate(plan.colors())))
+        log(f"printer      : {machine}")
+        log(f"process      : {process}")
+        log(f"filament     : {filament_profile or DEFAULT_FILAMENT}")
+
+        result = u1project.export(
+            zf, project, selection, plan, out_path, profile_root=profile_root,
+            machine=machine, process=process, filament_profile=filament_profile,
+            supports=supports, carry=carry, copies=copies, spectrum=spectrum,
+            target=target)
+        log(f"target       : {target}"
+            + ("" if target == "snapmaker" else
+               "  (portable project: no U1 printer, process or G-code)"))
+        log(f"settings     : carried {len(result['carried'])} print setting"
+            f"{'' if len(result['carried']) == 1 else 's'} from the source "
+            f"({result['overrides']} project overrides flagged)")
+        log(f"supports     : {result['support_note']}")
+        log(f"placement    : plate centred on the U1 bed, offset "
+            f"({result['offset'][0]:.2f}, {result['offset'][1]:.2f}, "
+            f"{result['offset'][2]:.2f}) mm")
+        report = u1project.verify_export(out_path, zf, project, selection, plan,
+                                         max_state=u1project.MAX_SLOTS + len(recipes),
+                                         target=target)
+        if report["problems"]:
+            for problem in report["problems"]:
+                log(f"warning      : {problem}")
+        else:
+            log(f"checks       : {report['triangles']:,} triangles and the remapped paint "
+                f"verified against the source")
+        result["verify"] = report
+        result["sliced"] = None
+        result["verify_failed"] = False
+        if verify:
+            orca = find_orca()
+            if not orca:
+                log("verify       : skipped, no slicer found to check with")
+                result["verify_failed"] = True
+                log("verify       : UNVERIFIED -- no slicer was available, so nothing "
+                    "checked that this plate slices")
+            else:
+                verdict, reason = slices_cleanly(orca, out_path)
+                result["sliced"] = verdict
+                if verdict == "ok":
+                    log(f"verify       : {os.path.basename(orca)} sliced this plate")
+                else:
+                    result["verify_failed"] = True
+                    log(f"verify       : FAILED -- {os.path.basename(orca)} said "
+                        f"{verdict}" + (f": {reason}" if reason else ""))
+                    log("verify       : this export is UNVERIFIED. The file above is the "
+                        "checked archive (its geometry and paint were compared with the "
+                        "source), but no slice of it was produced.")
+                    if verdict == "crashed":
+                        log("verify       : the slicer crashed rather than refusing; do "
+                            "not loop this check automatically.")
+    log(f"output       : {out_path}  ({os.path.getsize(out_path):,} bytes)")
+    if result.get("verify_failed"):
+        log(f"status       : UNVERIFIED ({out_path})")
+    return result
+
+
 def convert(src_path: str, out_path: str, profile_root: str | None,
             filament_profile: str | None, machine: str, process: str,
             colors_override: list[str], types_override: list[str],
             reposition: bool, copies: int = 1, gap: float = 5.0,
             avoid_tower: bool = True, supports: str = "auto",
-            verify: bool = False, carry: bool = True) -> dict:
+            verify: bool = False, carry: bool = True,
+            plate=None, object_ids=None, slots=None, slot_types=None,
+            mapping=None, approximate: bool = False,
+            spectrum: dict | None = None, target: str = "snapmaker") -> dict:
+    """Convert one source file, choosing the path its structure needs.
+
+    Sources shaped like the single-object files this tool grew up on go through
+    the original pipeline, byte for byte.  Anything else -- several plates,
+    several objects, parts built from shared mesh files, paint stored inline, or
+    more colours than the U1 has slots -- is exported by :mod:`u1project`, which
+    needs to know *which* plate and objects are wanted.
+    """
+    problem = None
+    explicit = bool(plate or object_ids or slots or slot_types or mapping or approximate
+                    or spectrum or target != "snapmaker")
+    try:
+        import u1project
+        with zipfile.ZipFile(src_path) as probe:
+            project = u1project.read_project(probe)
+            problem = u1project.legacy_path_problem(probe, project)
+            if problem is None and explicit:
+                # the user asked for a plate, a subset, or named reels: those only
+                # exist on the selection-aware path
+                problem = "the export was asked for a specific plate, object set or set " \
+                          "of loaded filaments"
+    except ConvertError as exc:
+        log(f"note         : the multi-object reader passed on this file ({exc})")
+        problem = None
+    except (zipfile.BadZipFile, OSError):
+        raise
+    except Exception as exc:                    # pragma: no cover - defensive
+        log(f"note         : multi-object inspection failed ({exc}); "
+            "falling back to the single-object path")
+        problem = None
+
+    if problem:
+        log(f"structure    : {problem}; exporting the selection")
+        return convert_project(
+            src_path, out_path, plate=plate, objects=object_ids,
+            slots=slots if slots else colors_override,
+            slot_types=slot_types if slot_types else types_override,
+            mapping=mapping, approximate=approximate,
+            mode="spectrum" if spectrum else None,
+            spectrum=spectrum,
+            target=target,
+            profile_root=profile_root, machine=machine, process=process,
+            filament_profile=filament_profile, supports=supports,
+            carry=carry, copies=copies, verify=verify)
 
     with zipfile.ZipFile(src_path) as zf:
         src = read_source(zf)
@@ -1863,6 +2170,93 @@ def convert(src_path: str, out_path: str, profile_root: str | None,
 # cli
 # --------------------------------------------------------------------------------------
 
+def parse_mapping(text: str | None) -> dict:
+    """``"1:1,5:3"`` -> {1: 1, 5: 3}, with a readable error for anything else."""
+    mapping: dict[int, int] = {}
+    for chunk in (text or "").split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        if ":" not in chunk:
+            raise ConvertError(f"--map expects 'source:slot' pairs, got {chunk!r}")
+        source, _, slot = chunk.partition(":")
+        try:
+            mapping[int(source.strip())] = int(slot.strip())
+        except ValueError:
+            raise ConvertError(f"--map expects whole numbers, got {chunk!r}") from None
+    return mapping
+
+
+def list_plates(args) -> int:
+    """Describe a project's plates, objects and colours, and stop."""
+    import u1project
+
+    try:
+        with zipfile.ZipFile(args.input) as zf:
+            project = u1project.read_project(zf)
+            print(f"{os.path.basename(args.input)}  [{project.kind} project]"
+                  + (f"  title={project.title!r}" if project.title else ""))
+            print(f"source palette : {project.palette_count} slots from "
+                  f"{project.palette_source or 'the bundled defaults'}")
+            for plate in project.plates:
+                known = [o for o in dict.fromkeys(plate.object_ids) if o in project.objects]
+                used = sorted({e for oid in known
+                               for e in u1project.object_used_extruders(zf, project, oid)})
+                print(f"  plate {plate.id:>2}  {plate.name[:36]:<36} "
+                      f"{len(plate.object_ids):>3} objects  {len(used)} colours  {used}")
+
+            selection = u1project.select(
+                project, args.plate,
+                [o for o in (args.objects or "").split(",") if o.strip()] or None)
+            plan = u1project.plan_for(
+                zf, project, selection,
+                [c for c in (args.slots or "").split(",") if c.strip()],
+                [t for t in (args.slot_types or "").split(",") if t.strip()],
+                parse_mapping(args.map), args.approximate, require_explicit=False)
+            info = u1project.analyse(zf, project, selection, plan)
+
+            print()
+            print(f"plate {sh(selection.plate_id)} selected: {len(selection.as_ids())} objects, "
+                  f"{info['counts']['parts']} parts, "
+                  f"{info['counts']['triangles']:,} triangles")
+            for entry in info["objects"]:
+                colours = ", ".join(f"{c['extruder']}:{c['color']}" for c in entry["colours"])
+                print(f"  [{entry['id']:>4}] {entry['name'][:34]:<34} "
+                      f"{entry['triangles']:>9,} tris  {colours}")
+            print()
+            print("source colours in use :")
+            for row in info["mapping"]["comparison"]:
+                print(f"  {row['source']:>3} {row['original']:<9} -> slot "
+                      f"{row['slot']} {row['result']:<9} {row['verdict']}")
+            print()
+            for option in info["options"]:
+                mark = "yes" if option["feasible"] else "no "
+                print(f"  [{mark}] {option['title']}")
+                print(f"        {option['detail']}")
+            if info["separate"]["prints"] > 1:
+                print("  separate prints:")
+                for i, group in enumerate(info["separate"]["groups"], 1):
+                    print(f"    {i}. {' + '.join(group['names'])}  "
+                          f"({', '.join(str(e) for e in group['extruders'])})")
+            for warning in info["warnings"]:
+                print(f"  warning: {warning}")
+            print()
+            print("export this selection with:")
+            print(f"  python u1convert.py {sh(args.input)} -o out.3mf"
+                  + (f" --plate {selection.plate_id}" if selection.plate_id else "")
+                  + (f" --objects {','.join(selection.as_ids())}"
+                     if args.objects else "")
+                  + (" --slots ..." if plan.mode == "approximate" else ""))
+    except ConvertError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def sh(text: str) -> str:
+    return f'"{text}"' if " " in str(text) else str(text)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="u1convert.py",
@@ -1891,6 +2285,32 @@ def main(argv=None) -> int:
                          "the slicer accepts (slower, but the result is guaranteed)")
     ap.add_argument("--list-filaments", action="store_true",
                     help="list the U1 filament profiles Orca knows about")
+    ap.add_argument("--plate", type=int,
+                    help="plate to export from a multi-plate project (default: the first)")
+    ap.add_argument("--objects",
+                    help="comma separated object ids on that plate (default: all of them)")
+    ap.add_argument("--slots",
+                    help="the four loaded filament colours as #RRGGBB,#RRGGBB,... -- an "
+                         "approximation export maps the source colours onto these")
+    ap.add_argument("--slot-types",
+                    help="comma separated filament types for --slots (default PLA)")
+    ap.add_argument("--map",
+                    help="explicit source colour to slot mapping, e.g. 1:1,5:3")
+    ap.add_argument("--approximate", action="store_true",
+                    help="allow source colours to be substituted onto the loaded filaments")
+    ap.add_argument("--spectrum", action="store_true",
+                    help="write a native Full Spectrum project: the four loaded reels "
+                         "plus the --recipes as virtual filaments, with the --map "
+                         "pointing painted triangles at them")
+    ap.add_argument("--recipes",
+                    help="Full Spectrum recipes as first,second,percent triples "
+                         "separated by ';', e.g. \"1,3,50;2,4,25\"")
+    ap.add_argument("--target", default="snapmaker",
+                    choices=("snapmaker", "bambu", "prusa"),
+                    help="project to write: the U1 (default), or a portable project "
+                         "for Bambu Studio / PrusaSlicer")
+    ap.add_argument("--list-plates", action="store_true",
+                    help="describe the plates, objects and colours of a project and stop")
     args = ap.parse_args(argv)
 
     try:
@@ -1913,9 +2333,20 @@ def main(argv=None) -> int:
         print(f"error: {args.input} not found", file=sys.stderr)
         return 1
 
+    if args.list_plates:
+        return list_plates(args)
+
     output = args.output or os.path.splitext(args.input)[0] + "-U1.3mf"
+    spectrum = None
+    if args.spectrum or args.recipes:
+        try:
+            import u1spectrum
+            spectrum = {"recipes": u1spectrum.parse_recipes(args.recipes or "")}
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
     try:
-        convert(
+        result = convert(
             args.input, output, root, args.filament, args.machine, args.process,
             [c for c in (args.colors or "").split(",") if c.strip()],
             [t for t in (args.types or "").split(",") if t.strip()],
@@ -1924,6 +2355,14 @@ def main(argv=None) -> int:
             gap=args.gap,
             supports=args.supports,
             verify=args.verify,
+            plate=args.plate,
+            object_ids=[o for o in (args.objects or "").split(",") if o.strip()] or None,
+            slots=[c for c in (args.slots or "").split(",") if c.strip()],
+            slot_types=[t for t in (args.slot_types or "").split(",") if t.strip()],
+            mapping=parse_mapping(args.map),
+            approximate=args.approximate,
+            spectrum=spectrum,
+            target=args.target,
         )
     except ConvertError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -1931,8 +2370,18 @@ def main(argv=None) -> int:
     except zipfile.BadZipFile:
         print("error: the input is not a valid 3MF (zip) archive", file=sys.stderr)
         return 1
+    if isinstance(result, dict) and result.get("verify_failed"):
+        print("status: UNVERIFIED -- the archive was checked against its source, but the "
+              "requested slice check did not pass; see 'verify : FAILED' above.",
+              file=sys.stderr)
+        return 3
     return 0
 
 
 if __name__ == "__main__":
+    # Running this file as a script imports it as "__main__"; u1project imports
+    # it again as "u1convert", which would give ConvertError two identities and
+    # defeat the handler below.  Publishing the running module under its real
+    # name keeps one class for everything in the process.
+    sys.modules.setdefault("u1convert", sys.modules["__main__"])
     sys.exit(main())

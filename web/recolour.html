@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3MF recolour, preview and reel-change plan</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1b1e24; --panel2: #22262e; --fg: #e8eaee;
+    --dim: #9aa2ae; --line: #2e333c; --accent: #4c8dff; --on-accent: #08101f;
+    --good: #58c07a; --bad: #ff6b6b;
+  }
+  html[data-theme="light"] {
+    --bg: #f5f6f8; --panel: #ffffff; --panel2: #eef1f5; --fg: #1a1d22;
+    --dim: #5b6270; --line: #d8dce4; --accent: #2f6fe4; --on-accent: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 18px 22px; }
+  h1 { font-size: 19px; margin: 0; }
+  h2 { font-size: 15px; margin: 0 0 12px; letter-spacing: .01em; }
+  main { max-width: 1080px; margin: 0 auto; padding: 0 22px 60px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+          padding: 16px 18px; margin-bottom: 16px; }
+  .card.hidden, .hidden { display: none; }
+  .hint { color: var(--dim); font-size: 13px; }
+  button, select, input[type=file] {
+    font: inherit; color: var(--fg); background: var(--panel2);
+    border: 1px solid var(--line); border-radius: 8px; padding: 7px 11px; }
+  button.primary { background: var(--accent); color: var(--on-accent); border-color: transparent;
+                   font-weight: 600; }
+  button:disabled { opacity: .5; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field.grow { flex: 1 1 240px; }
+  label.check { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--dim); font-weight: 500; }
+  .swatch { display: inline-block; width: 15px; height: 15px; border-radius: 4px;
+            border: 1px solid var(--line); vertical-align: -3px; margin-right: 7px; }
+  .reciperows { list-style: none; margin: 10px 0 0; padding: 0; }
+  .reciperows li { display: flex; align-items: center; gap: 6px; margin: 4px 0;
+                   font-size: 13px; color: var(--dim); }
+  #drop { border: 2px dashed var(--line); border-radius: 12px; padding: 26px;
+          text-align: center; color: var(--dim); cursor: pointer; }
+  #drop:focus-visible, button:focus-visible, select:focus-visible,
+  input:focus-visible, a:focus-visible {
+    outline: 3px solid var(--accent); outline-offset: 2px; }
+  /* The mapping table is the one wide element: let it scroll on a phone rather
+     than pushing the whole page sideways. */
+  #maptable { overflow-x: auto; }
+  header { flex-wrap: wrap; }
+  .row > *, .field, select, input[type=file] { min-width: 0; max-width: 100%; }
+  button, a.save, select { min-height: 44px; }
+  .segs { flex-wrap: wrap; max-width: 100%; }
+  .reciperows li, .hint, .facts { overflow-wrap: anywhere; }
+  #maptable table { min-width: 520px; }
+  @media (max-width: 430px) {
+    main { padding: 0 12px 40px; }
+    .card { padding: 12px; }
+    #preview { height: 260px; }
+    button, select, input[type=file] { padding: 9px 10px; }
+  }
+  .segs { display: inline-flex; border: 1px solid var(--line); border-radius: 8px;
+          overflow: hidden; }
+  .segs button { border: 0; border-radius: 0; }
+  .segs button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+  canvas { width: 100%; height: 380px; border: 1px solid var(--line);
+           border-radius: 10px; touch-action: none; display: block; }
+  .ok { color: var(--good); } .bad { color: var(--bad); }
+  pre { white-space: pre-wrap; font-size: 12.5px; line-height: 1.45; max-height: 340px;
+        overflow: auto; margin: 0; }
+  a.save { display: inline-block; text-decoration: none; color: var(--on-accent);
+           background: var(--accent); border-radius: 8px; padding: 7px 11px;
+           font-weight: 600; margin-right: 8px; }
+  footer { color: var(--dim); font-size: 12.5px; text-align: center; padding: 24px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>3MF recolour <span class="hint" style="font-size:13px">(this page) &middot;
+    convert &middot; plan reel changes</span></h1>
+  <span class="hint" id="version"></span>
+  <a href="index.html" style="margin-left:auto;margin-right:10px">Back to converter</a>
+  <button id="theme" type="button" style="margin-left:auto">Theme</button>
+</header>
+<main>
+  <div id="drop" role="button" tabindex="0" aria-label="Choose a 3MF file to open">
+    <strong>Drop a .3mf here</strong>
+    <div class="hint" style="margin-top:6px">Everything runs in this page: nothing is
+      uploaded, and no model leaves your machine.</div>
+    <div class="hint" id="loadstatus" role="status" aria-live="polite"
+         style="margin-top:6px"></div>
+    <button type="button" id="loadcancel" class="hidden"
+            style="margin-top:8px">Choose another file</button>
+    <input type="file" id="file" accept=".3mf" style="display:none"
+           aria-label="3MF file to recolour">
+  </div>
+  <p id="loaderror" class="bad" role="alert"></p>
+
+  <div class="card hidden" id="project">
+    <h2>Plate &amp; objects</h2>
+    <div class="facts hint" id="pfacts"></div>
+    <div class="row" style="margin-top:12px">
+      <div class="field grow">
+        <label for="plate">Plate to export</label>
+        <select id="plate"></select>
+      </div>
+    </div>
+    <div style="margin-top:14px">
+      <label class="hint" for="objects">Objects on this plate</label>
+      <div id="objects" style="margin-top:6px"></div>
+    </div>
+    <p class="hint" id="selhint"></p>
+  </div>
+
+  <div class="card hidden" id="reelscard">
+    <h2>Loaded reels</h2>
+    <div class="row" id="reels"></div>
+    <p class="hint" id="reelnote" style="margin-top:12px"></p>
+  </div>
+
+  <div class="card hidden" id="mixcard">
+    <h2>Recolouring: the closest reel, or a predicted blend</h2>
+    <div class="segs" id="strategy" role="group" aria-label="What the export does">
+      <button type="button" data-strategy="source" aria-pressed="false">
+        Keep the file's colours</button>
+      <button type="button" data-strategy="solid" aria-pressed="false">
+        Substitute onto the reels</button>
+      <button type="button" data-strategy="blend" aria-pressed="true">
+        Use the blends</button>
+    </div>
+    <div id="maptable"></div>
+    <div id="mixlist"></div>
+    <p class="hint" id="mixnote"></p>
+    <div class="row" style="margin-top:12px">
+      <label class="check"><input type="checkbox" id="review">
+        I have reviewed the mapping, recipes and predicted shades above</label>
+    </div>
+  </div>
+
+  <div class="card hidden" id="previewcard">
+    <h2>Preview &mdash; original and result</h2>
+    <div class="segs">
+      <button type="button" data-preview="original" aria-pressed="false">Original</button>
+      <button type="button" data-preview="result" aria-pressed="true">Result</button>
+    </div>
+    <button type="button" id="previewreset" style="margin-left:8px">Reset view</button>
+    <canvas id="preview" width="800" height="420"></canvas>
+    <p class="hint" id="previewnote"></p>
+  </div>
+
+  <div class="card hidden" id="exportcard">
+    <h2>Export</h2>
+    <div class="row">
+      <div class="field grow">
+        <label for="target">Project to write</label>
+        <select id="target"></select>
+      </div>
+      <button type="button" class="primary" id="export">Download the project</button>
+    </div>
+    <p class="hint" id="exportnote"></p>
+    <div id="exportlog" class="hint"></div>
+  </div>
+
+  <div class="card hidden" id="plannercard">
+    <h2>Reel changes from a real slice</h2>
+    <p class="hint">Drop the <em>sliced</em> G-code (or a sliced 3MF that carries one)
+      and the plan is read from the slicer's own toolpath — infill, supports and the
+      wipe tower included. The file is never modified and no G-code is written back.</p>
+    <div class="row">
+      <input type="file" id="gcodefile" accept=".gcode,.gco,.g,.3mf">
+      <button type="button" id="planbutton">Plan reel changes</button>
+    </div>
+    <div class="field hidden" id="gcodepick" style="margin-top:10px">
+      <label for="gcodememberlist">Which G-code is inside that sliced 3MF?</label>
+      <select id="gcodememberlist"></select>
+    </div>
+    <p class="hint" id="gcodemember"></p>
+    <div id="planout" class="hidden" style="margin-top:12px"></div>
+    <div class="row" id="plandownloads" style="margin-top:10px"></div>
+  </div>
+</main>
+<footer>Colour prediction is an uncalibrated estimate from swatch values. The swap plan
+  needs a real slice; nothing here slices for you or touches your printer.</footer>
+<script type="module" src="./recolour.js"></script>
+</body>
+</html>

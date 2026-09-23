@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>yab3u1 &mdash; 3MF to Snapmaker U1</title>
+<title>yab3u1 &mdash; 3MF between Snapmaker, Bambu, Orca and Prusa</title>
 <link rel="icon" type="image/x-icon" href="icon.ico">
-<meta name="description" content="Convert Bambu Studio, OrcaSlicer or PrusaSlicer 3MF projects into Snapmaker U1 projects, keeping the multi-colour painting. Runs entirely in your browser.">
+<meta name="description" content="Convert 3MF projects between Snapmaker Orca, Bambu Studio, OrcaSlicer and PrusaSlicer in any direction, keeping every filament, the multi-colour painting and the geometry. Optionally reassign filaments. Runs entirely in your browser.">
 <meta property="og:type" content="website">
-<meta property="og:title" content="yab3u1 — 3MF to Snapmaker U1">
-<meta property="og:description" content="Convert Bambu Studio, OrcaSlicer or PrusaSlicer 3MF projects into Snapmaker U1 projects, keeping the multi-colour painting. Runs entirely in your browser — nothing is uploaded.">
+<meta property="og:title" content="yab3u1 — 3MF between Snapmaker, Bambu, Orca and Prusa">
+<meta property="og:description" content="Convert painted 3MF projects between Snapmaker Orca, Bambu Studio, OrcaSlicer and PrusaSlicer in any direction. Every colour and the geometry travel unchanged. Runs entirely in your browser — nothing is uploaded.">
 <meta name="theme-color" content="#14161a">
 <script>
 /* Resolve the theme before first paint, so there is no flash of the wrong one. */
@@ -80,21 +80,21 @@
   }
   .sub .acro { font-weight: 700; color: var(--text); }
 
-  #drop {
+  #convertdrop {
     border: 2px dashed var(--line); border-radius: 14px;
     padding: 44px 20px; text-align: center; cursor: pointer;
     background: var(--panel); transition: border-color .15s, background .15s;
   }
-  #drop:hover, #drop.over { border-color: var(--accent); background: var(--panel2); }
-  #drop strong { display: block; font-size: 17px; margin-bottom: 6px; }
-  #drop span { color: var(--dim); font-size: 13px; }
+  #convertdrop:hover, #convertdrop.over { border-color: var(--accent); background: var(--panel2); }
+  #convertdrop strong { display: block; font-size: 17px; margin-bottom: 6px; }
+  #convertdrop span { color: var(--dim); font-size: 13px; }
   /* Hidden from view but still focusable, so the file picker can be opened from
      the keyboard (Tab to it, then Enter). display:none would remove it entirely. */
-  #drop input {
+  #convertdrop input {
     position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
     overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
   }
-  #drop:focus-within { border-color: var(--accent); }
+  #convertdrop:focus-within { border-color: var(--accent); }
 
   .card {
     background: var(--panel); border: 1px solid var(--line);
@@ -243,6 +243,64 @@
     border: 1px solid var(--bad); border-radius: 10px;
     background: var(--panel); color: var(--text);
   }
+
+  /* The repaint table: one row per source colour, with the destination it would
+     be written as.  Two swatches per row make the before/after visible without
+     reading the numbers. */
+  fieldset.repaint {
+    border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px 16px; margin: 18px 0 0;
+  }
+  fieldset.repaint legend {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--dim); padding: 0 6px;
+  }
+  .maprow {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    padding: 5px 0; border-bottom: 1px solid var(--line);
+  }
+  .maprow:last-child { border-bottom: none; }
+  .maprow select { min-width: 170px; }
+  .mapid { font-variant-numeric: tabular-nums; font-size: 13.5px; min-width: 118px; }
+  .swatch {
+    width: 20px; height: 20px; border-radius: 5px;
+    border: 1px solid var(--line); flex: 0 0 auto;
+  }
+  .arrow { color: var(--dim); }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+  }
+
+  fieldset.preview {
+    border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px 16px; margin: 18px 0 0;
+  }
+  fieldset.layout, fieldset.settings {
+    border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px 16px; margin: 18px 0 0;
+  }
+  fieldset.layout legend, fieldset.settings legend, fieldset.preview legend {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--dim); padding: 0 6px;
+  }
+  .layout .check, .settings .check { font-size: 14px; }
+  /* The support control's own words are long enough to need the room; the field
+     still shrinks on a phone because the row wraps. */
+  .settings .field { flex: 0 1 260px; }
+  .layout input[type=number] { width: 96px; }
+  fieldset.preview legend {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--dim); padding: 0 6px;
+  }
+  fieldset.preview legend .hint { text-transform: none; letter-spacing: 0; }
+  /* The 3D view is a fixed-height window: the canvas itself is pointer-driven,
+     so a touch drag must orbit rather than scroll the page. */
+  #convertpreview {
+    display: block; width: 100%; height: 360px; margin-top: 6px;
+    background: var(--log-bg); border: 1px solid var(--line);
+    border-radius: 10px; touch-action: none;
+  }
   footer .made, footer .more { font-size: 12px; }
   footer .made a, footer .more a {
     color: var(--dim); text-decoration: none; border-bottom: 1px solid var(--line);
@@ -256,7 +314,10 @@
     h1 { font-size: 19px; }
     table { font-size: 13px; }
     th, td { padding: 7px 6px; }
-    #drop { padding: 32px 14px; }
+    #convertdrop { padding: 32px 14px; }
+    .mapid { min-width: 96px; }
+    .maprow select { min-width: 0; flex: 1 1 132px; }
+    #convertpreview { height: 260px; }
   }
 </style>
 </head>
@@ -267,101 +328,179 @@
 
   <div class="head">
     <div>
-      <h1>3MF &rarr; <span>Snapmaker U1</span> <span class="ver" id="ver"></span></h1>
-      <p class="sub"><span class="name">yab3u1</span> &mdash; <span class="acro">Y</span>et
-         <span class="acro">A</span>nother <span class="acro">B</span>loody
-         <span class="acro">3</span>MF-to-<span class="acro">U1</span> converter. Keeps
-         multi-colour painting intact and rebuilds the U1 profile. Tested with
-         <b>Snapmaker Orca</b>. Runs entirely in your browser &mdash; your model is never
+      <h1>3MF <span>converter</span> <span class="ver" id="ver"></span></h1>
+      <p class="sub"><span class="name">yab3u1</span> &mdash; Yet Another Bloody
+         3MF-to-U1 converter. Now moving painted 3MFs between
+         <b>Snapmaker Orca</b>, <b>Bambu Studio</b>, <b>OrcaSlicer</b> and
+         <b>PrusaSlicer</b> &mdash; in any direction. Every filament definition, the
+         paint and the geometry travel unchanged: no substitutions, no blends, no
+         four-slot limit. Runs entirely in your browser &mdash; your model is never
          uploaded.</p>
     </div>
     <button id="theme" class="theme" type="button" aria-label="Switch theme">Light</button>
   </div>
 
-  <div id="drop">
+  <div id="convertdrop" role="button" tabindex="0"
+       aria-label="Choose a 3MF file to convert">
     <strong>Drop a .3mf here</strong>
-    <span>or click to choose a file &mdash; Bambu Studio, OrcaSlicer or PrusaSlicer projects</span>
-    <input type="file" id="file" accept=".3mf">
+    <span>or click to choose a file &mdash; PrusaSlicer, Bambu Studio, OrcaSlicer or
+      Snapmaker Orca projects</span>
+    <input type="file" id="convertfile" accept=".3mf" aria-label="3MF file to convert">
   </div>
 
-  <div class="card hidden" id="source">
-    <h2>Source</h2>
-    <div class="facts" id="facts"></div>
-    <div id="slotarea"></div>
-  </div>
+  <div id="loaderror" class="card hidden" role="alert" aria-live="polite"></div>
 
-  <div class="card hidden" id="options">
-    <h2>Plate &amp; profiles</h2>
+  <p class="hint" id="convertstatus" role="status" aria-live="polite"
+     style="margin-top:12px"></p>
+
+  <div class="card hidden" id="convertpick">
+    <h2>Write a project</h2>
     <div class="row">
       <div class="field grow">
-        <label for="filament">Filament profile</label>
-        <select id="filament"></select>
+        <label for="convertplate">Plate</label>
+        <select id="convertplate"></select>
       </div>
       <div class="field grow">
-        <label for="process">Process profile</label>
-        <select id="process"></select>
+        <label for="converttarget">Format</label>
+        <select id="converttarget"></select>
       </div>
     </div>
-    <div class="row" style="margin-top:18px">
-      <div class="field">
-        <label for="copies">Copies</label>
-        <div style="display:flex;gap:8px;align-items:center">
-          <input type="number" id="copies" min="1" value="1">
-          <button id="fill">Fill bed</button>
+
+    <fieldset class="repaint">
+      <legend>Filament assignment</legend>
+      <p class="hint" id="convertmaphint">Every colour keeps its own filament.
+        Change a row to send that colour to another filament, or exchange two of
+        them at once. This assignment is the only thing that changes a colour.</p>
+      <div id="convertmap"></div>
+      <div class="row" style="margin-top:12px">
+        <div class="field">
+          <label for="convertswapa">Exchange</label>
+          <select id="convertswapa" aria-label="First filament to exchange"></select>
+        </div>
+        <div class="field">
+          <label for="convertswapb">&nbsp;</label>
+          <select id="convertswapb" aria-label="Second filament to exchange"></select>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button type="button" id="convertswap">Exchange these two</button>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button type="button" id="convertreset">Reset assignments</button>
         </div>
       </div>
-      <div class="field">
-        <label for="gap">Spacing (mm)</label>
-        <input type="number" id="gap" min="0" step="0.5" value="5">
+    </fieldset>
+
+    <fieldset class="layout">
+      <legend>Plate layout</legend>
+      <p class="hint">How many copies to write and the box they are arranged in.
+        These are layout dimensions for this file &mdash; not a printer bed; pick
+        your printer in the slicer after importing.</p>
+      <div class="row" style="margin-top:10px">
+        <div class="field">
+          <label for="layoutcopies">Copies</label>
+          <input type="number" id="layoutcopies" min="1" step="1" value="1">
+        </div>
+        <div class="field">
+          <label for="layoutspacing">Spacing (mm)</label>
+          <input type="number" id="layoutspacing" min="0" step="0.5" value="5">
+        </div>
+        <div class="field">
+          <label for="layoutwidth">Layout width (mm)</label>
+          <input type="number" id="layoutwidth" min="1" step="1" value="270">
+        </div>
+        <div class="field">
+          <label for="layoutdepth">Layout depth (mm)</label>
+          <input type="number" id="layoutdepth" min="1" step="1" value="270">
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button type="button" id="layoutfill">Fill plate</button>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <label class="check"><input type="checkbox" id="layouttower" checked>
+            Leave room for the prime tower</label>
+        </div>
       </div>
-      <div class="field">
-        <label for="supports">Supports</label>
-        <select id="supports">
-          <option value="auto" selected>From the source file</option>
-          <option value="on">On</option>
-          <option value="off">Off</option>
-        </select>
+      <p class="hint" id="layoutnote" role="status" aria-live="polite"></p>
+    </fieldset>
+
+    <fieldset class="settings" id="settingsbox">
+      <legend>Print settings</legend>
+      <div id="u1settings">
+        <label class="check">
+          <input type="checkbox" id="carrysettings" checked>
+          Carry the source's own compatible print settings</label>
+        <div class="row" style="margin-top:12px">
+          <div class="field">
+            <label for="supportmode">Supports</label>
+            <select id="supportmode">
+              <option value="auto" selected>From source</option>
+              <option value="on">On, U1 profile defaults</option>
+              <option value="off">Off</option>
+            </select>
+          </div>
+        </div>
       </div>
-      <div class="field">
-        <label>&nbsp;</label>
-        <label class="check"><input type="checkbox" id="tower" checked> Leave room for the prime tower</label>
-        <label class="check"><input type="checkbox" id="carry" checked> Keep the source's print settings where they're safe</label>
+      <label class="check" id="bambukeep">
+        <input type="checkbox" id="preservesettings">
+        Keep the source model's own layer height and support intent</label>
+      <p class="hint" id="sourcesettings" role="status" aria-live="polite"></p>
+    </fieldset>
+
+    <p class="hint" id="convertplan" role="status" aria-live="polite"></p>
+
+    <fieldset class="preview">
+      <legend>Preview <span class="hint">optional</span></legend>
+      <p class="hint">An approximate look at the output, drawn from the simplified
+        surface in the colours this export would write, with sub-divided facets shown
+        in their dominant colour. It is a model preview, not sliced toolpaths, and it
+        never leaves your machine.</p>
+      <canvas id="convertpreview" width="760" height="420"
+              aria-label="Preview of the model to convert"></canvas>
+      <div class="row" style="margin-top:10px">
+        <div class="field">
+          <label for="previewmode">View</label>
+          <select id="previewmode">
+            <option value="result" selected>Output colours</option>
+            <option value="original">Original colours</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button type="button" id="previewshow">Show preview</button>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button type="button" id="previewreset">Reset view</button>
+        </div>
       </div>
-      <div class="field">
-        <label>&nbsp;</label>
-        <label class="check"><input type="checkbox" id="repos" checked> Centre if off the plate</label>
-      </div>
-    </div>
-    <p class="hint" id="supporthint" style="margin:16px 0 0"></p>
-    <p class="hint" id="fithint" style="margin:8px 0 0"></p>
+      <p class="hint" id="previewnote" role="status" aria-live="polite"></p>
+    </fieldset>
 
     <div class="actions">
-      <button class="primary" id="go">Convert and download</button>
-      <button id="again">Choose another file</button>
+      <button type="button" class="primary" id="convertgo">Convert and download</button>
+      <button type="button" id="convertagain">Choose another file</button>
     </div>
-    <div id="log" class="hidden"></div>
-    <div id="busy" class="busy hidden">
-      <div class="ripple-loader">
-        <div class="cell d-0"></div>
-        <div class="cell d-1"></div>
-        <div class="cell d-2"></div>
-        <div class="cell d-1"></div>
-        <div class="cell d-2"></div>
-        <div class="cell d-2"></div>
-        <div class="cell d-3"></div>
-        <div class="cell d-3"></div>
-        <div class="cell d-4"></div>
-      </div>
-      <span class="hint" id="busytext">working&hellip;</span>
-    </div>
-    <a id="save" class="save hidden" download></a>
+    <div id="convertout" style="margin-top:12px"></div>
+  </div>
+
+  <div class="card">
+    <h2>Full Spectrum recolouring <span class="ver">separate step</span></h2>
+    <p class="hint">Recolour a painted model onto your own four reels, compare
+      predicted filament blends and write a Snapmaker Orca, Bambu Studio or
+      PrusaSlicer project. Optional &mdash; the converter above works on its own.</p>
+    <p><a class="save" id="torecolour" href="recolour.html">Open Full Spectrum
+      recolouring</a></p>
   </div>
 
 </div>
 
 <footer>
   <script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script>
-  <script type='text/javascript'>kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'X8X8JM9AA');kofiwidget2.draw();</script>
+  <script type='text/javascript'>if (window.kofiwidget2) { kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'X8X8JM9AA'); kofiwidget2.draw(); }</script>
   <a class="repo" href="https://github.com/rendez2k/yab3u1"
      target="_blank" rel="noopener noreferrer">Want to run it locally? Get the tool on GitHub</a>
   <span class="made">Made by
@@ -381,296 +520,6 @@
   <details class="whatsnew" id="whatsnew"></details>
 </footer>
 
-<script type="module">
-import { readZip, writeZip } from "./zip.js";
-import { readSource, describe, convert, plateCapacity,
-         FILAMENT_PRESETS, PROCESS_PRESETS, MATERIALS,
-         DEFAULT_FILAMENT, DEFAULT_PROCESS } from "./converter.js";
-
-const $ = (id) => document.getElementById(id);
-const state = { name: null, entries: null, src: null, info: null };
-
-/* ---------- version ----------
-   Bump APP_VERSION here and add an entry to CHANGELOG.md. The badges below
-   read from this constant so there is one place to change. */
-const APP_VERSION = "1.2.0";
-const CHANGES = [
-  "The source's support setting comes across, and so do painted support enforcers \u2014 the output no longer quietly prints without the supports the file asked for.",
-  "The project-override list is written, so Orca's panel shows which settings this project changes instead of everything looking like an untouched preset.",
-  "A part matrix with the translation in the last column is read correctly, which previously could scale a model to metres.",
-  "The plate thumbnail is drawn from the layout actually being written when it can be, falling back to the source's image \u2014 which showed one model for a twelve-up plate.",
-  "Light and dark themes, following your system setting until you pick one.",
-  "Plates holding several copies of one model now convert \u2014 MakerWorld downloads included, not just single-object files.",
-  "The output carries the source's preview image, so the file shows a thumbnail instead of a generic icon.",
-  "A proper Save button, rather than a small link buried in the log.",
-  "Keyboard accessible throughout, with visible focus rings and a reachable file picker.",
-  "Footer links to Product Kit, the GitHub repo, and two more 3D tools.",
-];
-
-$("ver").textContent = "v" + APP_VERSION;
-$("whatsnew").innerHTML = "<summary>What's new in " + APP_VERSION + "</summary><ul>"
-  + CHANGES.map((c) => "<li>" + c + "</li>").join("") + "</ul>";
-
-/* ---------- theme ----------
-   The pre-paint script in <head> has already resolved the theme to an explicit
-   value, so here we only need to label the button and handle switching. */
-const THEME_KEY = "yab3u1-theme";
-const themeBtn = $("theme");
-const sysLight = window.matchMedia("(prefers-color-scheme: light)");
-
-function setTheme(t, remember) {
-  document.documentElement.setAttribute("data-theme", t);
-  if (remember) { try { localStorage.setItem(THEME_KEY, t); } catch (e) {} }
-  const toLight = t === "dark";
-  themeBtn.textContent = toLight ? "Light" : "Dark";
-  themeBtn.setAttribute("aria-label", toLight ? "Switch to light theme" : "Switch to dark theme");
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", toLight ? "#14161a" : "#f7f8fa");
-}
-
-setTheme(document.documentElement.getAttribute("data-theme") || "dark", false);
-themeBtn.addEventListener("click", () => {
-  setTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark", true);
-});
-/* Follow the system only while the user has not made an explicit choice. */
-sysLight.addEventListener("change", (e) => {
-  let saved = null; try { saved = localStorage.getItem(THEME_KEY); } catch (err) {}
-  if (!saved) setTheme(e.matches ? "light" : "dark", false);
-});
-
-const show = (id) => $(id).classList.remove("hidden");
-const hide = (id) => $(id).classList.add("hidden");
-const esc = (s) => String(s).replace(/[&<>"]/g,
-  (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-
-/* ---------- drop zone ---------- */
-const drop = $("drop"), picker = $("file");
-drop.addEventListener("click", () => picker.click());
-picker.addEventListener("change", () => { if (picker.files[0]) load(picker.files[0]); });
-["dragenter", "dragover"].forEach((e) => drop.addEventListener(e, (ev) => {
-  ev.preventDefault(); drop.classList.add("over");
-}));
-["dragleave", "drop"].forEach((e) => drop.addEventListener(e, (ev) => {
-  ev.preventDefault(); drop.classList.remove("over");
-}));
-drop.addEventListener("drop", (ev) => {
-  const f = ev.dataTransfer.files[0];
-  if (f) load(f);
-});
-
-async function load(file) {
-  if (!/\.3mf$/i.test(file.name)) return fail("that is not a .3mf file");
-  clearLog();
-  const restore = "Drop a .3mf here";
-  drop.querySelector("strong").textContent = "Reading " + file.name + "\u2026";
-  try {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const entries = await readZip(bytes);
-    const src = readSource(entries);
-    const info = describe(src);
-    state.name = file.name;
-    state.entries = entries;
-    state.src = src;
-    /* Painted support enforcers with support switched off is a contradiction Orca
-       refuses to let pass, so flag it on the option rather than only in the log. */
-    const offOpt = $("supports").querySelector('option[value="off"]');
-    offOpt.textContent = src.hasSupports
-      ? "Off (model has painted support enforcers \u2014 Orca will warn)"
-      : "Off";
-    state.info = info;
-    render(info, file.size);
-  } catch (err) {
-    console.error(err);
-    fail(err.message || String(err));
-  } finally {
-    drop.querySelector("strong").textContent = restore;
-    picker.value = "";
-  }
-}
-
-function fail(msg) {
-  show("log");
-  $("log").innerHTML = '<span class="err">' + esc(msg) + "</span>";
-}
-
-/* ---------- render ---------- */
-const KIND = {
-  prusa: "PrusaSlicer / Orca project",
-  bambu: "Bambu Studio / Orca project",
-  plain: "plain 3MF (no project settings)",
-};
-
-function render(d, size) {
-  show("source"); show("options"); hide("log");
-
-  $("facts").innerHTML = [
-    fact("file", esc(d.filename || state.name)),
-    fact("format", KIND[d.kind] || d.kind),
-    fact("object", esc(d.object || "?")),
-    fact("painted", d.paintedTriangles
-      ? d.paintedTriangles.toLocaleString() + " triangles"
-      : '<span class="err">none found</span>'),
-    fact("size", `${d.footprint.x.toFixed(1)} &times; ${d.footprint.y.toFixed(1)} ` +
-                 `&times; ${d.footprint.z.toFixed(1)} mm`),
-    fact("plate", `${d.bed.x.toFixed(0)} &times; ${d.bed.y.toFixed(0)} mm`),
-  ].join("");
-
-  let html = "<table><thead><tr><th>Slot</th><th>Colour</th><th>Material</th>" +
-             "<th>From</th><th>Painted</th></tr></thead><tbody>";
-  d.slots.forEach((s, i) => {
-    html += "<tr>" +
-      `<td class="num">${s.slot}</td>` +
-      `<td><input type="color" data-slot="${i}" value="${(s.color || "#ffffff").toLowerCase()}"></td>` +
-      `<td><select data-type="${i}">` +
-        MATERIALS.map((t) => `<option${t === s.type ? " selected" : ""}>${t}</option>`).join("") +
-      "</select></td>" +
-      `<td class="use">extruder ${s.sourceExtruder}` +
-        (s.isBase ? ' <span class="pill">base</span>' : "") + "</td>" +
-      `<td class="use">${s.paintedTriangles
-          ? s.paintedTriangles.toLocaleString() + " tris" : "&mdash;"}</td>` +
-    "</tr>";
-  });
-  $("slotarea").innerHTML = html + "</tbody></table>";
-
-  const sup = d.support;
-  if (sup) {
-    let s = "source file: supports <b>" + (sup.enabled ? "on" : "off") + "</b>";
-    if (sup.enabled && sup.type) {
-      s += " &mdash; " + esc(sup.type) + (sup.angle ? " at " + sup.angle + "&deg;" : "");
-    }
-    if (d.supportsPainted) s += " &middot; support painting present";
-    $("supporthint").innerHTML = s;
-  } else {
-    $("supporthint").innerHTML = "the source file carries no support setting; the " +
-      "profile default is used";
-  }
-
-  fillSelect("filament", FILAMENT_PRESETS, DEFAULT_FILAMENT);
-  fillSelect("process", PROCESS_PRESETS, DEFAULT_PROCESS);
-  $("copies").value = 1;
-  updateFit();
-}
-
-const fact = (label, value) =>
-  `<div class="fact"><b>${label}</b><span>${value}</span></div>`;
-
-function fillSelect(id, options, selected) {
-  $(id).innerHTML = options.map((o) =>
-    `<option${o === selected ? " selected" : ""}>${esc(o)}</option>`).join("");
-}
-
-/* ---------- plate fitting (instant: it is all local) ---------- */
-function updateFit() {
-  const d = state.info;
-  if (!d || !state.src) return;
-  const gap = parseFloat($("gap").value) || 0;
-  const capacity = plateCapacity(state.src, gap, $("tower").checked, {
-    filament: $("filament").value,
-    process: $("process").value,
-  });
-  d.capacity = capacity;
-
-  const copies = Math.max(1, parseInt($("copies").value) || 1);
-  let msg = `${d.footprint.x.toFixed(1)} \u00d7 ${d.footprint.y.toFixed(1)} mm object on a ` +
-            `${d.bed.x.toFixed(0)} \u00d7 ${d.bed.y.toFixed(0)} mm plate`;
-  if (capacity > 1) {
-    msg += ` \u2014 with ${gap} mm spacing the plate holds <b>${capacity}</b>` +
-           ($("tower").checked ? " (prime tower kept clear)" : " (tower reservation off)");
-  } else {
-    msg += " \u2014 only one fits";
-  }
-  if (copies > capacity) {
-    msg += ` <span class="err">\u2014 you asked for ${copies}, it will be capped</span>`;
-  }
-  $("fithint").innerHTML = msg;
-  $("fill").disabled = capacity <= 1;
-}
-["copies", "gap"].forEach((id) => $(id).addEventListener("input", updateFit));
-$("tower").addEventListener("change", updateFit);
-$("supports").addEventListener("change", () => {
-  const sup = state.info && state.info.support;
-  if (!sup) return;
-  const note = $("supports").value === "off" && state.info.supportsPainted
-    ? "supports will be off, but the model has painted enforcers that Orca will warn about"
-    : "";
-  $("supporthint").dataset.note = note;
-});
-$("fill").addEventListener("click", () => {
-  $("copies").value = state.info ? state.info.capacity : 1;
-  updateFit();
-});
-
-/* ---------- convert ---------- */
-$("go").addEventListener("click", async () => {
-  if (!state.entries) return;
-  $("go").disabled = true;
-  show("log");
-  $("busy").classList.remove("hidden");
-  $("log").innerHTML = "working\u2026";
-
-  const lines = [];
-  const onLog = (line) => {
-    lines.push(line);
-    $("log").innerHTML = lines.map(esc).join("\n");
-    $("log").scrollTop = $("log").scrollHeight;
-  };
-
-  try {
-    const options = {
-      copies: Math.max(1, parseInt($("copies").value) || 1),
-      gap: parseFloat($("gap").value) || 0,
-      supports: $("supports").value,
-      carry: $("carry").checked,
-      avoidTower: $("tower").checked,
-      reposition: $("repos").checked,
-      filament: $("filament").value,
-      process: $("process").value,
-      colors: [...document.querySelectorAll("input[type=color]")].map((i) => i.value.toUpperCase()),
-      types: [...document.querySelectorAll("select[data-type]")].map((s) => s.value),
-      log: onLog,
-    };
-    $("save").classList.add("hidden");
-    const res = await convert(state.entries, options);
-    onLog("packing      : building the archive\u2026");
-    const bytes = await writeZip(res.items);
-
-    const base = state.name.replace(/\.3mf$/i, "");
-    const blob = new Blob([bytes], { type: "application/octet-stream" });
-    const url = URL.createObjectURL(blob);
-    const name = base + "-U1.3mf";
-    const mb = (bytes.length / 1048576).toFixed(1);
-    const save = $("save");
-    save.href = url;
-    save.download = name;
-    save.innerHTML = "\u2b07 Save " + esc(name) + ' <span class="size">' + mb + " MB</span>";
-    save.classList.remove("hidden");
-    $("busy").classList.add("hidden");
-    $("log").innerHTML = lines.map(esc).join("\n") +
-      "\n\nready \u2014 " + esc(name) + " (" + mb + " MB)";
-  } catch (err) {
-    console.error(err);
-    $("busy").classList.add("hidden");
-    $("log").innerHTML = lines.map(esc).join("\n") +
-      '<span class="err">\n' + esc(err.message || String(err)) + "</span>";
-  } finally {
-    $("go").disabled = false;
-  }
-});
-
-$("again").addEventListener("click", () => {
-  hide("source"); hide("options"); hide("log");
-  state.entries = null; state.src = null; state.info = null;
-  picker.click();
-});
-function clearLog() { hide("log"); $("log").innerHTML = ""; }
-
-/* drag a file anywhere on the page */
-window.addEventListener("dragover", (e) => e.preventDefault());
-window.addEventListener("drop", (e) => {
-  e.preventDefault();
-  const f = e.dataTransfer && e.dataTransfer.files[0];
-  if (f) load(f);
-});
-</script>
+<script type="module" src="convert-page.js"></script>
 </body>
 </html>
