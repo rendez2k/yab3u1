@@ -390,6 +390,7 @@
     #convertpreview { height: 260px; }
   }
 </style>
+<link rel="stylesheet" href="batch.css">
 </head>
 <body>
 <noscript><div class="noscript">This converter runs entirely in your browser, so it needs JavaScript
@@ -419,12 +420,18 @@
     </div>
   </header>
 
+  <div class="conversion-modes" role="group" aria-label="Conversion mode">
+    <button id="mode-single" type="button" aria-pressed="true" aria-controls="singlepanel">Single file</button>
+    <button id="mode-bulk" type="button" aria-pressed="false" aria-controls="batchpanel">Bulk conversion</button>
+  </div>
+
+  <div id="singlepanel">
   <div id="convertdrop" role="button" tabindex="0"
        aria-label="Choose a 3MF file to convert">
     <strong>Drop a .3mf here</strong>
     <span>or click to choose a file &mdash; PrusaSlicer, Bambu Studio, OrcaSlicer or
       Snapmaker Orca projects</span>
-    <input type="file" id="convertfile" accept=".3mf" aria-label="3MF file to convert">
+    <input type="file" id="convertfile" accept=".3mf" multiple aria-label="3MF files to convert">
   </div>
 
   <div id="loaderror" class="card hidden" role="alert" aria-live="polite"></div>
@@ -563,6 +570,50 @@
     </div>
     <div id="convertout" style="margin-top:12px"></div>
   </div>
+
+  </div>
+
+  <section id="batchpanel" class="card hidden" aria-labelledby="batchtitle">
+    <h2 id="batchtitle">Convert a batch</h2>
+    <p class="hint">Add Prusa, Bambu, Orca or Snapmaker projects and choose one output format.
+      Every plate gets its own 3MF, with colours, existing objects and copies kept together.</p>
+    <div id="batchdrop" role="button" tabindex="0" aria-label="Add 3MF files to the batch">
+      <strong>Drop your .3mf files here</strong>
+      <span>or click to add files · up to 50 files, 96 MB each</span>
+      <input id="batchfile" type="file" accept=".3mf" multiple class="hidden" aria-label="Add 3MF files">
+    </div>
+    <div class="row batchoptions">
+      <div class="field grow">
+        <label for="batchtarget">Convert all to</label>
+        <select id="batchtarget">
+          <option value="snapmaker">Snapmaker Orca (U1)</option>
+          <option value="bambu">Bambu Studio</option>
+          <option value="orca">OrcaSlicer</option>
+          <option value="prusa">PrusaSlicer</option>
+        </select>
+      </div>
+      <label class="check"><input id="batchsettings" type="checkbox" checked> Carry compatible print settings</label>
+    </div>
+    <p class="hint">Plates are centred as a group, without resizing or adding clones. Use Single file for slot changes or Fill plate.
+      Automatic supports and adhesion still need checking after slicing.</p>
+    <div class="batchheading"><strong id="batchcount">No files added yet</strong>
+      <button id="batchclear" type="button" class="hidden">Clear files</button></div>
+    <ol id="batchqueue" aria-label="Conversion queue"></ol>
+    <div class="actions">
+      <button id="batchgo" type="button" class="primary" disabled>Convert files</button>
+      <button id="batchcancel" type="button" class="hidden">Stop and keep completed</button>
+    </div>
+    <progress id="batchprogress" class="hidden" value="0" max="1" aria-label="Files processed"></progress>
+    <p id="batchstatus" class="hint" role="status" aria-live="polite">Add files to start a batch. Everything stays in your browser.</p>
+    <div id="batchout"></div>
+    <details class="batchlimits"><summary>Batch details and limits</summary>
+      <p class="hint">Files run one at a time. Failed files or plates are listed in the report; successful ones still download.
+        Completed outputs are limited to 256 MB per ZIP. Larger jobs can be split into smaller batches.</p>
+      <p class="hint">Thumbnails are included. Native filament blends require individual review.
+        U1 plates must fit its bed with planning clearance; for other formats, choose your printer and check bed fit in the slicer.
+        Stopping keeps completed outputs and lists everything left unprocessed.</p>
+    </details>
+  </section>
 
   <div class="card promo">
     <h2>Full Spectrum recolouring <span class="ver">separate step</span></h2>

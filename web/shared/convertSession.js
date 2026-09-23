@@ -387,8 +387,7 @@ export class ConvertSession {
                              depth: Math.max(1, Math.ceil(plate[1])) };
       }
       this.layout = targetLayout(this.target, { ...this.layout, ...this.genericArea });
-      // A new file starts with the preservation control off: it is the user's
-      // choice per file, never remembered silently.
+      // A new file starts with compatible designer settings selected.
       this.preserveSourceSettings = true;
       // The U1 controls start at the converter's own defaults for the same reason:
       // a new file is converted the way the tool does it out of the box, and the

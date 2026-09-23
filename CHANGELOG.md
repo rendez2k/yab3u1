@@ -5,6 +5,26 @@ The version shown on the page comes from `VERSION` in `web/convert-page.js` (and
 the collapsed "What's new" block in the footer. Bump those constants and add a
 section here together.
 
+## 2.5.0 — bulk conversion
+
+Added Bulk conversion alongside Single file on the existing homepage. Add files
+in any supported source format, select one destination and download a ZIP. Each
+plate is exported separately with its existing objects/copies, filament order,
+compatible settings and rendered thumbnails. Multiple files selected through the
+normal picker or drop zone now open the batch instead of using only the first.
+
+Files run sequentially in fresh workers; ZIP assembly also stays off the main
+thread. Failed files or plates are reported while successful ones still export.
+Stopping keeps completed outputs. Readable and JSON reports identify outputs,
+failures, skipped/unprocessed plates, transferred values and recognised settings
+omissions. Duplicate filenames cannot overwrite one another. Limits are 50
+sources, 96 MB per input and 256 MB of completed outputs per ZIP.
+
+Validated real browser exports to all four destinations, mixed-source input,
+multiple plates, duplicate filenames, corrupt input, cancellation and a real
+Frankenstein export with its designer settings. Checked desktop/mobile layouts,
+light/dark themes and return to the original single-file converter.
+
 ## 2.4.4 — designer settings and print-aware clone spacing
 
 Expanded browser settings transfer for quality, strength and supports across all

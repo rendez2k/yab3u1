@@ -17,7 +17,7 @@ Three ways to use the project, with different workflows:
 | --- | --- | --- |
 | **`U1 Converter` shortcut** | this machine | local web UI (`u1ui.py` + `u1ui.html`), reads your installed Orca profiles and can verify a plate by slicing |
 | **`u1convert.py`** | any machine with Python | the command line tool; `--fill-bed`, `--verify`, `--supports`, `--colors` |
-| **`web/`** | any static host — live at <https://yab3u1.netlify.app> | [browser version](#the-browser-version-web) — v2.4.4, the whole conversion in the page, nothing uploaded |
+| **`web/`** | any static host — live at <https://yab3u1.netlify.app> | [browser version](#the-browser-version-web) — v2.5.0, the whole conversion in the page, nothing uploaded |
 
 A local replacement for [bl2u1.nbn.cat](https://bl2u1.nbn.cat) /
 [josuanbn/bl2u1](https://github.com/josuanbn/bl2u1) that actually works on
@@ -96,7 +96,7 @@ web/
 ```
 
 The pages report their own version (`VERSION` in `web/convert-page.js` and
-`web/recolour.js`); the live deployment is **v2.4.4**.
+`web/recolour.js`); the live deployment is **v2.5.0**.
 
 **Deploying.** The Python UI cannot go on a static host — it needs your Orca
 install and the slicer — but the browser converter can, and that is what
@@ -157,8 +157,33 @@ reach your machine:
   settings instead. **Settings transfer details** names recognised omissions.
   This does not preserve every slicer-specific feature or part/modifier override.
 
-Bulk conversion is not implemented yet; the browser currently opens one source
-file at a time.
+### Bulk conversion
+
+Choose **Bulk conversion** beside **Single file**, add your `.3mf` files, choose
+one output format and press **Convert files**. Selecting or dropping several
+files into the normal converter also opens the batch. You can mix source formats.
+
+Each source plate becomes a separate 3MF in the downloaded ZIP. Objects and
+existing copies on that plate remain together and are centred as a group, with
+their geometry, colours and filament order preserved. Bulk conversion does not
+resize models, add clones or rearrange individual objects. Use Single file for
+slot changes and Fill plate. Compatible print settings are selected by default.
+Each output includes a rendered thumbnail.
+
+Files run sequentially in background workers, entirely in the browser. A failed
+file or plate does not stop the rest. **Stop and keep completed** stops the current
+conversion and packages completed outputs; the rest are marked in the report.
+The ZIP includes `conversion-report.txt` for a readable summary and
+`conversion-report.json` with transferred settings and recognised omissions.
+Duplicate source names get unique numbered output names.
+
+Limits: 50 source files per batch, 96 MB per source archive and 256 MB of completed
+3MFs per ZIP. Split larger jobs into smaller batches. Existing converter limits
+still apply, including unsupported volume structures and native filament blends;
+those are reported rather than silently simplified. U1 groups must fit its bed
+with planning clearance. For portable formats, choose the printer and check bed
+fit in the destination slicer. Every output still needs slicing, including checks
+for automatically generated supports, brims, rafts and tower size.
 
 ## Multi-object files: one plate, some objects, honest options
 
