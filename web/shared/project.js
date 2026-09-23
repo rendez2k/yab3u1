@@ -20,7 +20,7 @@ import { relationshipXml, thumbnailPlan } from "./thumbnail.js";
 import { SOURCE_KEYS, applySupport, carryPrintSettings, normaliseSupportMode, supportOf }
   from "./printSettings.js";
 import { addBox, addPoint, boxSize, boxValid, emptyBox, layoutOffsets, planLayout,
-         transformBox }
+         transformBox, targetLayout }
   from "./layout.js";
 import {
   APPLICATION, BAMBU_ONLY_KEYS, MACHINE_KEYS, PAINT_ATTR, PRUSA_MODEL_CONFIG,
@@ -2002,9 +2002,10 @@ export function exportProject(project, plateId, objectIds, options) {
   // Bambu model is centred on its own origin (the importer centres it again on the
   // user's bed), while the native project dialects keep the box's real centre.
   const layoutOptions = options.layout
-    ? { ...options.layout,
-        centre: target === "bambu" && standard ? [0, 0]
-          : [Number(options.layout.width) / 2, Number(options.layout.depth) / 2] }
+    ? (target === "bambu" && !standard
+      ? { ...options.layout, centre: [Number(options.layout.width) / 2,
+                                     Number(options.layout.depth) / 2] }
+      : targetLayout(target, options.layout))
     : null;
   const placed = layoutInstances(project, plateId, objectIds, layoutOptions);
   const instances = placed.instances;
@@ -2100,12 +2101,17 @@ export function exportProject(project, plateId, objectIds, options) {
     }
   }
   const rootObjects = [];
-  // One root object per selected object, positioned by its build items: copies
-  // share the same meshes instead of repeating them.
+  // Native Orca imports need a configured root per copy. Sharing a root loses
+  // inherited base filaments on later copies and confuses tower collision checks.
+  // The large mesh members are still shared by all of these small wrappers.
+  const separateCopies = target === "snapmaker" || target === "orca"
+    || (target === "bambu" && !standard);
+  // Standard colour models and Prusa can share roots; native Orca copies need
+  // distinct roots. All native roots share the same mesh members.
   const uniqueInstances = [];
   const seenObjects = new Set();
   for (const [objectId, itemTransform] of instances) {
-    if (seenObjects.has(String(objectId))) continue;
+    if (!separateCopies && seenObjects.has(String(objectId))) continue;
     seenObjects.add(String(objectId));
     uniqueInstances.push([objectId, itemTransform]);
   }
@@ -2202,13 +2208,23 @@ export function exportProject(project, plateId, objectIds, options) {
   // The saved thumbnail is the *output* view: the caller renders it from the
   // same geometry and the same palette/mapping as this export (in the worker,
   // without WebGL).  An engine-only call may omit it and get no PNG members.
+  const instanceCounts = new Map();
+  let plateCopyIndex = 0;
+  const plateInstances = instances.filter(([id]) => chosen.has(String(id)))
+    .map(([id]) => {
+      const root = separateCopies ? rootObjects[plateCopyIndex++]
+        : rootObjects.find((entry) => entry.objectId === String(id));
+      const instanceId = instanceCounts.get(root.id) || 0;
+      instanceCounts.set(root.id, instanceId + 1);
+      return { objectId: root.id, instanceId };
+    });
   const plan = options.thumbnails
     ? thumbnailPlan({
         target,
         thumbnails: options.thumbnails,
         plateName: options.thumbnails.plateName
           || (plate(project, plateId) || {}).name || "Plate 1",
-        objectIds: rootObjects.map((root) => root.id),
+        instances: plateInstances,
         plateId,
       })
     : null;
@@ -2238,8 +2254,11 @@ export function exportProject(project, plateId, objectIds, options) {
   // Every copy is its own build item over the same mesh resources.  The instance
   // list already carries the layout-composed placement, so the item writes it as
   // it is -- composing again here would double the offset.
+  let copyIndex = 0;
   const itemsXml = instances.map(([objectId, itemTransform]) => {
-    const root = rootObjects.find((entry) => entry.objectId === String(objectId));
+    if (!chosen.has(String(objectId))) return "";
+    const root = separateCopies ? rootObjects[copyIndex++]
+      : rootObjects.find((entry) => entry.objectId === String(objectId));
     if (!root) return "";
     return target === "prusa"
       ? `<item objectid="${root.id}" transform="${transformText(matmul(

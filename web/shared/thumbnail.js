@@ -37,6 +37,7 @@ export function thumbnailSizes(target) {
  *
  * @param {{target: string, thumbnails: {main: Uint8Array, small?: Uint8Array|null},
  *          plateName?: string, objectIds?: Array<string|number>,
+ *          instances?: Array<{objectId: string|number, instanceId: number}>,
  *          plateId?: number|string}} request
  * @returns {{members: Array<[string, Uint8Array]>, rels: Array<{id, type, target}>,
  *            plate: string|null, main: string, small: string|null}}
@@ -79,9 +80,10 @@ export function thumbnailPlan(request) {
       + `  <metadata key="plater_id" value="${plateId}"/>\n`
       + `  <metadata key="plater_name" value="${escapeXml(plateName)}"/>\n`
       + `  <metadata key="thumbnail_file" value="${THUMBNAIL_MAIN}"/>\n`
-      + (request.objectIds || []).map((id) => "  <model_instance>\n"
-        + `   <metadata key="object_id" value="${escapeXml(id)}"/>\n`
-        + '   <metadata key="instance_id" value="0"/>\n'
+      + (request.instances || (request.objectIds || []).map((objectId) =>
+        ({ objectId, instanceId: 0 }))).map(({ objectId, instanceId }) => "  <model_instance>\n"
+        + `   <metadata key="object_id" value="${escapeXml(objectId)}"/>\n`
+        + `   <metadata key="instance_id" value="${escapeXml(instanceId)}"/>\n`
         + "  </model_instance>\n").join("")
       + " </plate>";
     return { members, rels, plate, main: THUMBNAIL_MAIN, small: THUMBNAIL_SMALL };

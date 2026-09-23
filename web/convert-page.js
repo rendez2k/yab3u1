@@ -11,10 +11,10 @@ import { ConvertSession } from "./shared/convertSession.js";
 import { REPAINT, SLOTS, assignmentPlan, colourName } from "./shared/assignment.js";
 import { Preview } from "./shared/preview.js";
 import { thumbnailSizes } from "./shared/thumbnail.js";
-import { planLayout } from "./shared/layout.js";
+import { planLayout, targetLayout } from "./shared/layout.js";
 import { appliedSettings, supportOf } from "./shared/printSettings.js";
 
-const VERSION = "2.4.1";
+const VERSION = "2.4.2";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -27,6 +27,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "Fill plate now uses the U1's destination bed and keeps the assigned colours on every copy.",
   "The homepage converts a painted 3MF between Snapmaker Orca, Bambu Studio, OrcaSlicer and PrusaSlicer, in any direction.",
   "Every source filament definition, the paint and the geometry travel unchanged; there is no four-slot limit and no colour substitution.",
   "Filament assignment has two modes. Arrange slots (the default) keeps every colour and moves it to the filament you pick, displacing the colour that was there; Repaint colours prints a source colour in another filament's colour.",
@@ -475,6 +476,9 @@ function layoutPlanNow() {
 
 function syncLayout() {
   const layout = session.layout;
+  $("layouthint").textContent = session.target === "snapmaker"
+    ? "Choose how many copies to arrange and their spacing. The area is fixed to the Snapmaker U1 bed."
+    : "Choose how many copies to arrange, their spacing and the available area. Select your printer in the slicer after importing.";
   const set = (id, value) => {
     const node = $(id);
     if (node && !session.layoutProblem && document.activeElement !== node
@@ -484,6 +488,9 @@ function syncLayout() {
   set("layoutspacing", layout.spacing);
   set("layoutwidth", layout.width);
   set("layoutdepth", layout.depth);
+  for (const id of ["layoutwidth", "layoutdepth"]) {
+    $(id).disabled = session.target === "snapmaker";
+  }
   if ($("layouttower")) $("layouttower").checked = Boolean(layout.tower);
   const bounds = session.state && session.state.bounds;
   const plan = layoutPlanNow();
@@ -504,7 +511,9 @@ function syncLayout() {
     }
     if (plan.capped) note.push(`only ${plan.capacity} fit, so that is what is written`);
   }
-  note.push("your printer and process stay yours: pick them in the slicer");
+  note.push(session.target === "snapmaker"
+    ? "Snapmaker U1: copies are fitted to its 270 × 270 mm bed"
+    : "your printer and process stay yours: pick them in the slicer");
   const problem = session.layoutProblem
     || (session.boundsPending ? "the selection's size is still being measured" : "")
     || (plan && plan.blocked ? "no copy fits this layout box" : "")
@@ -656,8 +665,7 @@ async function refreshPreview() {
     soup = await session.worker.preview(state.plateId, null, previewMode, colours,
                                         mapping, previewGeometryId,
                                         state.coloursUsed || 0,
-                                        { ...session.layout, centre: session.target === "bambu"
-                                          ? [0, 0] : [session.layout.width / 2, session.layout.depth / 2] });
+                                        targetLayout(session.target, session.layout));
   } catch (error) {
     if (token !== previewToken) return;
     preview.setSoup(new Float32Array(0), new Float32Array(0));

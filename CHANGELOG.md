@@ -5,6 +5,20 @@ The version shown on the page comes from `VERSION` in `web/convert-page.js` (and
 the collapsed "What's new" block in the footer. Bump those constants and add a
 section here together.
 
+## 2.4.2 — U1 fill-plate placement and copy colours
+
+Fixed Fill plate using the source printer's bed dimensions for a Snapmaker U1
+export. U1 layout, preview, thumbnail and export now share its 270 × 270 mm bed
+and height limit. Other targets retain their editable planning area.
+
+Native Orca exports give every copy its own object and filament metadata while
+sharing the mesh. This preserves the base colour on every copy and restores the
+original converter's copy structure. Thumbnail plate metadata now lists every
+instance, including shared instances in printer-independent Bambu models.
+
+Validated with the reported Frankenstein source: four copies at 5 mm spacing
+with tower room, each within the U1 build volume and with green in slot 3.
+
 ## 2.4.1 — simpler filament assignment
 
 Removed the separate Exchange row. Choose a slot beside each colour and the

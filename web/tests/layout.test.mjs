@@ -4,7 +4,8 @@
 
 import assert from "node:assert/strict";
 
-import { layoutCapacity, layoutOffsets, planLayout } from "../shared/layout.js";
+import { layoutCapacity, layoutOffsets, planLayout, targetLayout } from "../shared/layout.js";
+import { encodePng } from "../shared/png.js";
 import * as project from "../shared/project.js";
 
 const encoder = new TextEncoder();
@@ -191,6 +192,52 @@ function pumpkinLike(extra = {}) {
     ["Metadata/model_settings.config", encoder.encode(config)],
   ]);
 }
+
+await ok("U1 fill ignores a larger source bed and configures every copy", async () => {
+  const parsed = project.readProject(pumpkinLike());
+  const thumbnails = {
+    main: await encodePng(new Uint8Array(512 * 512 * 4), 512, 512),
+    small: await encodePng(new Uint8Array(128 * 128 * 4), 128, 128),
+  };
+  const built = project.convertProject(parsed, 1, null, {
+    target: "snapmaker", assignmentMode: "slots", mapping: { 1: 2, 2: 1 },
+    layout: { copies: 99, width: 350, depth: 320, spacing: 5, tower: true },
+    thumbnails,
+  });
+  const reread = project.readProject(built.entries);
+  const all = project.selectionInstances(reread, 1, null);
+  assert.equal(all.length, 12, "only the U1 capacity, and all copies on its plate");
+  assert.equal(new Set(all.map(([id]) => id)).size, 12, "distinct configured roots");
+  for (const [id] of all) {
+    assert.equal(Number(reread.meta.get(id).extruder), 2);
+    assert.equal(Number(reread.meta.get(id).parts[0].extruder), 2);
+    const bounds = project.selectionBounds(reread, 1, [id]);
+    assert.ok(bounds.min[0] >= 0.5 && bounds.max[0] <= 270.5);
+    assert.ok(bounds.min[1] >= 1 && bounds.max[1] <= 271);
+    assert.ok(Math.abs(bounds.min[2]) < 1e-6);
+  }
+  assert.equal([...built.entries.keys()].filter((key) => key.startsWith("3D/Objects/")).length, 1);
+  const withoutThumbnail = project.convertProject(parsed, 1, null, {
+    target: "snapmaker", layout: { copies: 4, width: 270, depth: 270, spacing: 5 },
+  });
+  assert.equal(project.selectionInstances(project.readProject(withoutThumbnail.entries), 1, null).length, 4);
+});
+
+await ok("Bambu shared copies all remain registered when a thumbnail is saved", async () => {
+  const built = project.convertProject(project.readProject(pumpkinLike()), 1, null, {
+    target: "bambu", layout: { copies: 6, width: 270, depth: 270, spacing: 5 },
+    thumbnails: {
+      main: await encodePng(new Uint8Array(512 * 512 * 4), 512, 512),
+      small: await encodePng(new Uint8Array(128 * 128 * 4), 128, 128),
+    },
+  });
+  assert.equal(project.selectionInstances(project.readProject(built.entries), 1, null).length, 6);
+});
+
+await ok("U1 rejects a model taller than its build volume", () => {
+  assert.equal(planLayout({ min: [0, 0, 0], max: [20, 20, 300] },
+    targetLayout("snapmaker", { width: 350, depth: 320 })).blocked, true);
+});
 
 if (failures.length) {
   console.error(`\n${failures.length} layout check(s) failed`);

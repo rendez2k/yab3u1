@@ -18,7 +18,7 @@
 // The worker factory and the object-URL helpers are injected so a test can drive
 // the races with a deliberately slow fake worker, without a browser.
 
-import { planLayout } from "./layout.js";
+import { planLayout, targetLayout } from "./layout.js";
 import { REPAINT, SLOTS, identityRule, normaliseMode } from "./assignment.js";
 export const TYPED_3MF = "application/vnd.ms-package.3dmanufacturing-3dmodel+xml";
 
@@ -54,10 +54,11 @@ export class ConvertSession {
     // Each map is source index (1-based) -> destination filament.
     this.rules = { [SLOTS]: {}, [REPAINT]: {} };
     this.assignmentMode = SLOTS;
-    // The plate layout: user-chosen dimensions, not a printer bed.  The size is
-    // measured from the file the moment it loads; the user's own values win from
-    // then on, and survive the next file.
-    this.layout = { copies: 1, spacing: 5, width: 270, depth: 270, tower: true };
+    // U1 projects use the destination bed. Other targets retain an editable
+    // planning area, initially measured from the source file.
+    this.layout = targetLayout(this.target,
+      { copies: 1, spacing: 5, width: 270, depth: 270, tower: true });
+    this.genericArea = { width: 270, depth: 270 };
     this.layoutEdited = false;
     // Off by default: the user chooses to carry the source's own layer height and
     // support intent; their printer and process stay theirs either way.
@@ -144,8 +145,16 @@ export class ConvertSession {
   setTarget(target) {
     if (this.target === target) return false;
     if (!["snapmaker", "bambu", "orca", "prusa"].includes(target)) return false;
+    if (this.target !== "snapmaker") {
+      this.genericArea = { width: this.layout.width, depth: this.layout.depth };
+    }
     this.target = target;
+    this.layout = targetLayout(target, { ...this.layout, ...this.genericArea });
+    if (target === "snapmaker" && /^(width|depth) /.test(this.layoutProblem || "")) {
+      this.layoutProblem = "";
+    }
     this.invalidate();
+    if (this.hooks.layout) this.hooks.layout(this.layout);
     return true;
   }
 
@@ -184,6 +193,7 @@ export class ConvertSession {
       next.spacing = spacing;
     }
     for (const key of ["width", "depth"]) {
+      if (this.target === "snapmaker") continue;
       if (patch[key] === undefined) continue;
       const value = Number(patch[key]);
       if (!Number.isFinite(value) || value <= 0 || value > 10000) {
@@ -197,10 +207,12 @@ export class ConvertSession {
     if (patch.tower !== undefined) next.tower = Boolean(patch.tower);
     this.layoutProblem = "";
     const changed = JSON.stringify(next) !== JSON.stringify(this.layout);
-    this.layout = next;
+    this.layout = targetLayout(this.target, next);
     // The user has opinions now: a later file must not overwrite the box size.
-    if (changed && ["width", "depth"].some((key) => patch[key] !== undefined)) {
+    if (this.target !== "snapmaker" && changed
+        && ["width", "depth"].some((key) => patch[key] !== undefined)) {
       this.layoutEdited = true;
+      this.genericArea = { width: this.layout.width, depth: this.layout.depth };
     }
     if (!changed) {
       // Restoring the value that is already in force is a recovery: clear the
@@ -352,18 +364,18 @@ export class ConvertSession {
       };
       const count = this.state.colours.length;
       this.rules = { [SLOTS]: identityRule(count), [REPAINT]: identityRule(count) };
-      // A fresh file starts from a single copy.  The box keeps whatever the user
-      // set (or the neutral planning area); the model's own bounds only feed the
-      // fit feedback and the capacity, never a printer claim.
+      // A fresh file starts from a single copy. Keep the user's generic planning
+      // area separately so it can never replace the U1 destination bed.
       this.layout = { ...this.layout, copies: 1, tower: true };
       // A source plate size is used only when the file really states one and the
       // user has not set their own box; otherwise the editable planning area stays.
       const plate = reply.summary && reply.summary.plateSize;
       if (plate && !this.layoutEdited
           && Number.isFinite(plate[0]) && Number.isFinite(plate[1])) {
-        this.layout.width = Math.max(1, Math.ceil(plate[0]));
-        this.layout.depth = Math.max(1, Math.ceil(plate[1]));
+        this.genericArea = { width: Math.max(1, Math.ceil(plate[0])),
+                             depth: Math.max(1, Math.ceil(plate[1])) };
       }
+      this.layout = targetLayout(this.target, { ...this.layout, ...this.genericArea });
       // A new file starts with the preservation control off: it is the user's
       // choice per file, never remembered silently.
       this.preserveSourceSettings = false;
@@ -460,8 +472,8 @@ export class ConvertSession {
   /** Write the loaded project to the chosen target, or drop the reply as stale. */
   async convert(target, plateId) {
     if (!this.state || this.busy || this.closed || this.layoutProblem || this.boundsPending) return null;
-    if (this.state.bounds && planLayout(this.state.bounds, this.layout).blocked) return null;
     this.setTarget(String(target));
+    if (this.state.bounds && planLayout(this.state.bounds, this.layout).blocked) return null;
     const snapshot = {
       revision: this.revision,
       token: this.epoch,
@@ -474,8 +486,7 @@ export class ConvertSession {
       // writing must not let it publish, and the page's thumbnail has to be
       // drawn with the palette *this* mode writes.
       assignmentMode: this.assignmentMode,
-      layout: { ...this.layout, centre: target === "bambu" ? [0, 0]
-        : [this.layout.width / 2, this.layout.depth / 2] },
+      layout: targetLayout(target, this.layout),
       preserveSourceSettings: this.preserveSourceSettings,
       carrySettings: this.carrySettings,
       supportMode: this.supportMode,

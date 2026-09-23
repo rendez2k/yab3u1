@@ -1,14 +1,23 @@
 // The plate layout: how many copies of the selected group are written, where
 // they sit, and what the preview and thumbnail must show.
 //
-// The width and depth are *layout dimensions* the user chooses, not a printer
-// bed: nothing here reads or invents a machine profile.  One plan drives the
+// Generic targets use a user-chosen planning area. The U1 target uses its actual
+// build volume, matching the machine profile written by the exporter. One plan drives the
 // archive, the preview and the saved thumbnail, so the picture cannot disagree
 // with the file.
 
 // Bambu's generic import re-centres the whole group, so an asymmetric empty strip
 // cannot survive.  The reservation is therefore symmetric: 25 mm on each X side.
 export const TOWER_RESERVE_PER_SIDE = 25;
+
+/** U1 exports include a machine profile; other targets use an editable area. */
+export function targetLayout(target, options = {}) {
+  if (target === "snapmaker") return { ...options, width: 270, depth: 270,
+    maxHeight: 270.05, centre: [135.5, 136] };
+  const { maxHeight, ...layout } = options;
+  return { ...layout, centre: target === "bambu" ? [0, 0]
+    : [Number(options.width) / 2, Number(options.depth) / 2] };
+}
 
 export function emptyBox() {
   return { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] };
@@ -89,6 +98,9 @@ export function layoutCapacity(size, options = {}) {
 export function planLayout(bounds, options = {}) {
   const size = boxSize(bounds);
   const grid = layoutCapacity(size, options);
+  if (Number.isFinite(options.maxHeight) && size[2] > options.maxHeight + 1e-6) {
+    grid.capacity = 0;
+  }
   const asked = Math.max(1, Math.floor(Number(options.copies) || 1));
   const copies = Math.min(asked, grid.capacity);
   return {

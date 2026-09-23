@@ -382,6 +382,28 @@ await ok("the mode reaches the worker with the export it belongs to", async () =
                    "and the repaint's own map, not the slot arrangement");
 });
 
+await ok("U1 uses its own bed while generic targets retain the user's area", async () => {
+  const fixture = project("large Bambu bed");
+  fixture.summary.plateSize = [350, 320];
+  const worker = new FakeWorker(fixture);
+  const session = new ConvertSession(() => worker, {}, urls);
+  await load(session, worker, "large.3mf");
+  assert.equal(session.layout.width, 270);
+  assert.equal(session.layout.depth, 270);
+  assert.deepEqual(session.layout.centre, [135.5, 136]);
+  session.setLayout({ width: 350, depth: 320 });
+  assert.equal(session.layout.width, 270, "a U1 cannot use an oversized box");
+  session.setTarget("bambu");
+  assert.equal(session.layout.width, 350);
+  assert.equal(session.layout.depth, 320);
+  assert.deepEqual(session.layout.centre, [0, 0]);
+  session.setLayout({ width: 256, depth: 256 });
+  session.setTarget("snapmaker");
+  assert.equal(session.layout.width, 270);
+  session.setTarget("bambu");
+  assert.equal(session.layout.width, 256);
+});
+
 if (failures.length) {
   console.error(`\n${failures.length} race check(s) failed`);
   process.exitCode = 1;
