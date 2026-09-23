@@ -11,10 +11,10 @@ import { ConvertSession } from "./shared/convertSession.js";
 import { REPAINT, SLOTS, assignmentPlan, colourName } from "./shared/assignment.js";
 import { Preview } from "./shared/preview.js";
 import { thumbnailSizes } from "./shared/thumbnail.js";
-import { planLayout, targetLayout } from "./shared/layout.js";
-import { appliedSettings, supportOf } from "./shared/printSettings.js";
+import { planLayout } from "./shared/layout.js";
+import { supportOf, transferSettings } from "./shared/printSettings.js";
 
-const VERSION = "2.4.3";
+const VERSION = "2.4.4";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -27,6 +27,8 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "Compatible designer quality, strength and support settings now travel to every target by default, with a transfer-details list.",
+  "U1 Fill plate reserves a tower corner instead of full side strips. Clone spacing includes explicit brims/rafts and an estimated support allowance; check automatic contours after slicing.",
   "The 3D preview opens only when requested and can be hidden again, without an empty viewer taking up space.",
   "Fill plate now uses the U1's destination bed and keeps the assigned colours on every copy.",
   "The homepage converts a painted 3MF between Snapmaker Orca, Bambu Studio, OrcaSlicer and PrusaSlicer, in any direction.",
@@ -326,7 +328,7 @@ const LENGTH_KEYS = new Set([
   "mmu_segmented_region_interlocking_depth",
 ]);
 
-const valueWithUnit = (key, value) => (LENGTH_KEYS.has(key) ? `${value} mm` : value);
+const valueWithUnit = (key, value) => (LENGTH_KEYS.has(key) && !String(value).endsWith("%") ? `${value} mm` : value);
 
 /** Short, human names for the settings a U1 export can carry.  A key with no
  *  entry is shown as it is spelled in the file, which is what a user comparing
@@ -378,91 +380,37 @@ function supportSentence(source, state) {
     + (support.angle ? ` at ${support.angle}°` : "") + ".";
 }
 
-/** The print-settings controls, which differ per target.  A U1 project *is* a
- *  printer project, so the source's compatible print intent travels there; the
- *  Bambu colour model stays printer-independent, and the portable colour projects
- *  carry no print settings at all -- each is said on the page rather than implied. */
+/** Report the destination's reviewed settings and known omissions. The U1 uses
+ *  a bundled profile; portable projects carry designer intent on each object. */
 function syncSettings() {
   const isU1 = session.target === "snapmaker";
-  const isBambu = session.target === "bambu";
   const state = session.state;
-  // The U1 exporter reads the *project's* settings and nothing else, so the U1
-  // controls describe exactly those.  Per-object settings belong to our own
-  // standard colour model, and the Bambu control keeps using them so it stays
-  // usable when such a file is reimported; they are deliberately not offered as a
-  // U1 carry, because this export would not apply them.
-  const perObject = (state && state.objectSettings) || [];
-  const objectSettings = perObject.length
-    ? { ...perObject[0].settings,
-        objectName: perObject[0].name || perObject[0].id }
-    : null;
-  const projectSettings = (state && state.sourceSettings) || null;
-  const source = projectSettings || objectSettings;
-  const applied = isU1 ? appliedSettings(projectSettings, session.carrySettings) : [];
-
-  const carryBox = $("carrysettings");
-  if (carryBox) carryBox.checked = Boolean(session.carrySettings);
-  const supportSelect = $("supportmode");
-  if (supportSelect && document.activeElement !== supportSelect) {
-    supportSelect.value = session.supportMode;
-  }
-  const bambuBox = $("preservesettings");
-  if (bambuBox) bambuBox.checked = Boolean(session.preserveSourceSettings);
-
-  const u1Block = $("u1settings");
-  if (u1Block) u1Block.classList.toggle("hidden", !isU1);
-  const bambuKeep = $("bambukeep");
-  if (bambuKeep) bambuKeep.classList.toggle("hidden", !isBambu);
-
-  const note = $("sourcesettings");
-  if (note) {
-    const list = applied.map(({ key, value }) =>
-      `${labelFor(key)} ${valueWithUnit(key, value)}`);
-    if (isU1) {
-      note.textContent = (session.carrySettings
-        ? (list.length
-          ? `Will carry ${list.length} of the source's print setting(s): `
-            + `${list.slice(0, 6).join(", ")}${list.length > 6 ? ", …" : ""}.`
-          : "The source states no setting this U1 profile can take, so nothing is carried.")
-        : "Left at the U1 profile's own values.")
-        + ` ${supportSentence(projectSettings, state)}`
-        + " Your printer, speeds and filaments stay the U1 profile's.";
-    } else if (isBambu) {
-      const bits = [];
-      if (source && source.layer_height !== undefined) {
-        bits.push(`layer height ${source.layer_height} mm`);
-      }
-      const support = supportOf(source);
-      if (support) {
-        bits.push(`supports ${support.enabled ? "on" : "off"}`
-          + (support.type ? ` (${support.type})` : "")
-          + (support.angle ? ` at ${support.angle}°` : ""));
-      }
-      const where = source && source.objectName
-        ? `object "${source.objectName}" says` : "The source says";
-      note.textContent = bits.length
-        ? `${where}: ${bits.join(", ")}. Tick to carry those values; your printer, `
-          + "process and filaments stay your own."
-        : "The source file states no layer height or support setting, so there is "
-          + "nothing to carry.";
-      if (bambuBox) {
-        bambuBox.disabled = !bits.length;
-        if (bambuBox.disabled) bambuBox.checked = false;
-      }
-    } else {
-      note.textContent = `${LABELS[session.target]} gets a portable colour project: `
-        + "the source's layer height, supports and print settings are not carried, so "
-        + "your own print preset keeps working. Convert to Snapmaker Orca (U1) to "
-        + "carry them.";
-    }
-  }
-  window.__convertSettings = {
-    target: session.target,
-    carry: session.carrySettings,
-    supportMode: session.supportMode,
-    applied: applied.map(({ key, value }) => ({ key, value })),
-    supportsPainted: Boolean(state && state.supportsPainted),
-  };
+  const ids = state?.plates.find(p => String(p.id) === String(state.plateId))?.objectIds;
+  const objects = (state?.objectSettings || []).filter(o => !ids || ids.map(String).includes(String(o.id)));
+  const source = { ...(state?.sourceSettings || {}), ...(objects[0]?.settings || {}) };
+  const enabled = isU1 ? session.carrySettings : session.preserveSourceSettings;
+  const report = transferSettings(source, session.target, { object: !isU1 });
+  const applied = enabled ? Object.entries(report.values).map(([key, value]) => ({ key, value })) : [];
+  $("carrysettings").checked = session.carrySettings;
+  $("preservesettings").checked = session.preserveSourceSettings;
+  $("preservesettings").disabled = false;
+  $("supportmode").value = session.supportMode;
+  $("u1settings").classList.toggle("hidden", !isU1);
+  $("bambukeep").classList.toggle("hidden", isU1);
+  $("sourcesettings").textContent = enabled
+    ? `Carrying ${applied.length} compatible print settings, including quality, strength and support settings.`
+      + (objects.length > 1 ? " Details below describe the first object; each object's overrides are exported separately." : "")
+      + (isU1 ? ` ${supportSentence(source, state)}` : " These are model settings; select your printer and filament profiles in the slicer.")
+    : "The destination's print settings will be used.";
+  $("settinglist").innerHTML = (applied.length ? "<ul>" + applied.map(({key,value}) =>
+    `<li>${esc(labelFor(key))}: ${esc(valueWithUnit(key,value))}</li>`).join("") + "</ul>" : "")
+    + (enabled && report.skipped.length ? `<p>Not transferred to this target: ${report.skipped.map(k => esc(labelFor(k))).join(", ")}.</p>` : "")
+    + "<p>Printer, nozzle, filament temperatures, motion limits and machine G-code use the destination profiles. Generated supports and rafts need re-slicing.</p>";
+  window.__convertSettings = { target: session.target, carry: enabled,
+    supportMode: session.supportMode, applied, skipped: report.skipped,
+    supportsPainted: Boolean(state?.supportsPainted) };
+  syncLayout();
+  refreshPreview();
 }
 
 /** The layout controls mirror the session, and the note says what will happen.
@@ -472,7 +420,7 @@ function layoutPlanNow() {
   const bounds = (session.state && session.state.bounds) || null;
   if (!bounds || !bounds.size) return null;
   const box = { min: bounds.min, max: bounds.max };
-  return planLayout(box, session.layout);
+  return planLayout(box, session.planningLayout());
 }
 
 function syncLayout() {
@@ -508,9 +456,13 @@ function syncLayout() {
     note.push(`${plan.copies} of ${plan.capacity} possible copy(ies) in a `
       + `${layout.width} × ${layout.depth} mm box at ${layout.spacing} mm spacing`);
     if (plan.tower) {
-      note.push(`prime-tower space of ${plan.reserve / 2} mm reserved on each X side`);
+      note.push(plan.towerBox
+        ? "60 × 70 mm corner reserved for the prime tower; check its final size after slicing"
+        : `prime-tower space of ${plan.reserve / 2} mm reserved on each X side`);
     }
     if (plan.capped) note.push(`only ${plan.capacity} fit, so that is what is written`);
+    if (plan.padding) note.push(`${plan.padding.toFixed(1)} mm extra clearance per side for print additions`);
+    note.push(...plan.footprintNotes);
   }
   note.push(session.target === "snapmaker"
     ? "Snapmaker U1: copies are fitted to its 270 × 270 mm bed"
@@ -667,7 +619,7 @@ async function refreshPreview() {
     soup = await session.worker.preview(state.plateId, null, previewMode, colours,
                                         mapping, previewGeometryId,
                                         state.coloursUsed || 0,
-                                        targetLayout(session.target, session.layout));
+                                        session.planningLayout());
   } catch (error) {
     if (token !== previewToken) return;
     preview.setSoup(new Float32Array(0), new Float32Array(0));

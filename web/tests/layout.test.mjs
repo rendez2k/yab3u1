@@ -239,6 +239,29 @@ await ok("U1 rejects a model taller than its build volume", () => {
     targetLayout("snapmaker", { width: 350, depth: 320 })).blocked, true);
 });
 
+await ok("Frankenstein fits six with corner tower room and no overlapping copies", () => {
+  const bounds = { min: [0, 0, 0], max: [75.6244675, 88.1106944, 70] };
+  const options = targetLayout("snapmaker", { copies: 99, spacing: 5, tower: true });
+  const plan = planLayout(bounds, options);
+  assert.equal(plan.capacity, 6);
+  const offsets = layoutOffsets(bounds, plan, options.centre);
+  const boxes = offsets.map(([x, y]) => [x, y, x + bounds.max[0], y + bounds.max[1]]);
+  for (let i = 0; i < boxes.length; i++) {
+    const [x, y, right, top] = boxes[i];
+    assert.ok(x >= .5 && right <= 270.5 && y >= 1 && top <= 271);
+    assert.ok(right <= .5 || x >= 65.5 - 1e-6 || top <= 196 + 1e-6,
+      "tower corner plus spacing stays clear");
+    for (const [a, b, c, d] of boxes.slice(i + 1)) {
+      assert.ok(right + 5 <= a + 1e-6 || c + 5 <= x + 1e-6
+        || top + 5 <= b + 1e-6 || d + 5 <= y + 1e-6);
+    }
+  }
+  const single = planLayout(bounds, { ...options, copies: 1 });
+  assert.equal(single.cells.length, 1);
+  assert.deepEqual(single.cells[0], [135, 135]);
+  assert.equal(planLayout(bounds, { ...options, tower: false }).capacity, 6);
+});
+
 if (failures.length) {
   console.error(`\n${failures.length} layout check(s) failed`);
   process.exitCode = 1;

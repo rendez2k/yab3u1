@@ -17,7 +17,7 @@ import { SLOTS, arrange, bijectionProblem, completeRule, isIdentity }
   from "./assignment.js";
 import { COLOUR_NS, colourOf, colourGroupXml, leafTriangles, parseColourGroups } from "./standard.js";
 import { relationshipXml, thumbnailPlan } from "./thumbnail.js";
-import { SOURCE_KEYS, applySupport, carryPrintSettings, normaliseSupportMode, supportOf }
+import { SOURCE_KEYS, applySupport, carryPrintSettings, normaliseSupportMode, supportOf, transferSettings, planningAllowance }
   from "./printSettings.js";
 import { addBox, addPoint, boxSize, boxValid, emptyBox, layoutOffsets, planLayout,
          transformBox, targetLayout }
@@ -594,9 +594,9 @@ function readMeta(entries, project) {
       if (id === null) continue;
       const entry = { id: String(id), name: "", extruder: null, parts: [],
                       subtype: attr(object[1], "subtype") || "normal_part" };
-      const name = /<metadata key="name" value="([^"]*)"/.exec(object[2]);
+      const name = /<metadata(?: type="[^"]*")? key="name" value="([^"]*)"/.exec(object[2]);
       if (name) entry.name = name[1];
-      const extruder = /<metadata key="extruder" value="([^"]*)"/.exec(object[2]);
+      const extruder = /<metadata(?: type="[^"]*")? key="extruder" value="([^"]*)"/.exec(object[2]);
       if (extruder) entry.extruder = Number(extruder[1]);
       // Per-object intent the optional preservation control may carry: an object
       // that says more than the file's global settings wins for that object.  Only
@@ -604,16 +604,15 @@ function readMeta(entries, project) {
       // must not be mistaken for the object's.
       const ownBody = object[2].split(/<part\b/)[0];
       entry.settings = {};
-      for (const key of ["layer_height", "enable_support", "support_type",
-                         "support_style", "support_threshold_angle"]) {
+      for (const key of SOURCE_KEYS) {
         const found = new RegExp(`<metadata key="${key}" value="([^"]*)"`).exec(ownBody);
         if (found) entry.settings[key] = found[1];
       }
       if (!Object.keys(entry.settings).length) delete entry.settings;
       for (const part of object[2].matchAll(/<part\b([^>]*)>([\s\S]*?)<\/part>/g)) {
         const partId = attr(part[1], "id");
-        const partName = /<metadata key="name" value="([^"]*)"/.exec(part[2]);
-        const partExtruder = /<metadata key="extruder" value="([^"]*)"/.exec(part[2]);
+        const partName = /<metadata(?: type="[^"]*")? key="name" value="([^"]*)"/.exec(part[2]);
+        const partExtruder = /<metadata(?: type="[^"]*")? key="extruder" value="([^"]*)"/.exec(part[2]);
         entry.parts.push({
           id: partId === null ? "" : String(partId),
           name: partName ? partName[1] : "",
@@ -649,7 +648,7 @@ function readMeta(entries, project) {
       const id = attr(object[1], "id");
       const entry = { id: String(id), name: "", extruder: null, parts: [],
                       subtype: "normal_part" };
-      const name = /<metadata key="name" value="([^"]*)"/.exec(object[2]);
+      const name = /<metadata(?: type="[^"]*")? key="name" value="([^"]*)"/.exec(object[2]);
       if (name) entry.name = name[1];
       // PrusaSlicer puts the object's own extruder on a typed metadata line; the
       // Bambu spelling above does not match it, and losing it would drop a
@@ -657,10 +656,17 @@ function readMeta(entries, project) {
       const extruder = /<metadata type="object" key="extruder" value="([^"]*)"/.exec(
         object[2]);
       if (extruder) entry.extruder = Number(extruder[1]);
+      entry.settings = {};
+      const ownBody = object[2].split(/<volume\b/)[0];
+      for (const key of SOURCE_KEYS) {
+        const found = new RegExp(`<metadata(?: type="object")? key="${key}" value="([^"]*)"`).exec(ownBody);
+        if (found) entry.settings[key] = found[1];
+      }
+      if (!Object.keys(entry.settings).length) delete entry.settings;
       for (const volume of object[2].matchAll(/<volume\b([^>]*)>([\s\S]*?)<\/volume>/g)) {
-        const volumeName = /<metadata key="name" value="([^"]*)"/.exec(volume[2]);
-        const volumeExtruder = /<metadata key="extruder" value="([^"]*)"/.exec(volume[2]);
-        const volumeType = /<metadata key="volume_type" value="([^"]*)"/.exec(volume[2]);
+        const volumeName = /<metadata(?: type="[^"]*")? key="name" value="([^"]*)"/.exec(volume[2]);
+        const volumeExtruder = /<metadata(?: type="[^"]*")? key="extruder" value="([^"]*)"/.exec(volume[2]);
+        const volumeType = /<metadata(?: type="[^"]*")? key="volume_type" value="([^"]*)"/.exec(volume[2]);
         const first = attr(volume[1], "firstid");
         const last = attr(volume[1], "lastid");
         entry.parts.push({
@@ -1743,52 +1749,20 @@ function supportSplit(attrs) {
  * silently.  The destination's first-layer height is left alone: per-object
  * first-layer support is not verified.
  */
-function sourceSettingMetadata(project, objectId) {
-  const meta = project.meta.get(objectId);
-  const global = project.sourceSettings || {};
-  const local = (meta && meta.settings) || {};
-  const value = (...names) => {
-    for (const name of names) {
-      if (local[name] !== undefined && local[name] !== "") return local[name];
-    }
-    for (const name of names) {
-      if (global[name] !== undefined && global[name] !== "") return global[name];
-    }
-    return undefined;
-  };
-  const out = [];
-  const add = (key, found) => {
-    if (found === undefined || found === "") return;
-    out.push(`<metadata key="${key}" value="${esc(found)}"/>`);
-  };
-  add("layer_height", value("layer_height"));
-  // Known native values win: a source that already speaks Bambu's object metadata
-  // vocabulary must not be re-derived into a different type.
-  const nativeType = value("support_type");
-  const nativeStyle = value("support_style");
-  const nativeThreshold = value("support_threshold_angle");
-  const enabled = value("enable_support", "support_material");
-  if (nativeType !== undefined || nativeStyle !== undefined
-      || nativeThreshold !== undefined || enabled !== undefined) {
-    const on = enabled === undefined ? true
-      : !["0", "false"].includes(String(enabled).toLowerCase());
-    add("enable_support", on ? "1" : "0");
-    if (on) {
-      const style = String(nativeStyle ?? value("support_material_style") ?? "")
-        .toLowerCase();
-      const auto = value("support_material_auto");
-      const automatic = auto === undefined ? false
-        : !["0", "false"].includes(String(auto).toLowerCase());
-      const organic = style.includes("organic");
-      add("support_type", nativeType ?? `${organic ? "tree" : "normal"}(${automatic
-        ? "auto" : "manual"})`);
-      if (nativeStyle !== undefined) add("support_style", nativeStyle);
-      else if (organic) add("support_style", "tree_organic");
-      add("support_threshold_angle", nativeThreshold
-        ?? value("support_material_threshold"));
-    }
+function sourceSettingMetadata(project, objectId, target = "bambu", options = {}, painted = false) {
+  const source = { ...(project.sourceSettings || {}),
+                   ...(project.meta.get(objectId)?.settings || {}) };
+  const report = transferSettings(source, target, { object: true });
+  if (target === "snapmaker" && painted && options.supportMode !== "off"
+      && report.values.enable_support === "0") report.values.enable_support = "1";
+  if (target === "snapmaker" && options.supportMode === "off") report.values.enable_support = "0";
+  if (target === "snapmaker" && options.supportMode === "on") {
+    report.values.enable_support = "1";
+    report.values.support_type = BASE_SETTINGS.support_type;
+    report.values.support_threshold_angle = BASE_SETTINGS.support_threshold_angle;
   }
-  return out.join("");
+  return Object.entries(report.values).map(([key, value]) =>
+    `<metadata${target === "prusa" ? ' type="object"' : ""} key="${key}" value="${esc(value)}"/>`).join("");
 }
 
 /** The object blocks one member keeps, with paint remapped and names renamed. */
@@ -2007,6 +1981,13 @@ export function exportProject(project, plateId, objectIds, options) {
                                      Number(options.layout.depth) / 2] }
       : targetLayout(target, options.layout))
     : null;
+  if (layoutOptions) {
+    const sources = (objectIds?.length ? objectIds : eligibleObjects(project, plateId))
+      .map(id => ({ ...(project.sourceSettings || {}), ...(project.meta.get(String(id))?.settings || {}) }));
+    Object.assign(layoutOptions, planningAllowance(sources, target,
+      target === "snapmaker" ? options.carrySettings !== false : options.preserveSourceSettings,
+      options.supportMode, target === "snapmaker" && supportPaintPresent(project, plateId, objectIds)));
+  }
   const placed = layoutInstances(project, plateId, objectIds, layoutOptions);
   const instances = placed.instances;
   const placement = placed.plan;
@@ -2229,6 +2210,7 @@ export function exportProject(project, plateId, objectIds, options) {
       })
     : null;
 
+  const paintedByObject = new Map();
   for (const root of rootObjects) {
     resources.push(target === "prusa"
       ? `  <object id="${root.id}" type="model">\n${root.mesh}\n  </object>`
@@ -2239,8 +2221,14 @@ export function exportProject(project, plateId, objectIds, options) {
     // from the facet's own reference.
     const extruderOf = (value) => (standard ? ""
       : `<metadata key="extruder" value="${value}"/>`);
-    const preserved = standard && options.preserveSourceSettings
-      ? sourceSettingMetadata(project, String(root.objectId)) : "";
+    const preserve = target === "snapmaker" ? options.carrySettings !== false
+      : options.preserveSourceSettings;
+    const sourceId = String(root.objectId);
+    if (preserve && target === "snapmaker" && !paintedByObject.has(sourceId)) {
+      paintedByObject.set(sourceId, supportPaintPresent(project, plateId, [sourceId]));
+    }
+    const preserved = preserve
+      ? sourceSettingMetadata(project, sourceId, target, options, paintedByObject.get(sourceId)) : "";
     settings.push(`<object id="${root.id}"><metadata key="name" value="${esc(root.name)}"`
       + `/>${extruderOf(root.parts[0] ? root.parts[0].extruder : 1)}${preserved}`
       + root.parts.map((part) => `<part id="${esc(part.id)}" `
@@ -2383,7 +2371,7 @@ export function exportProject(project, plateId, objectIds, options) {
     // documented Full Spectrum description below is what carries the palette.
     members.set(PRUSA_SPECTRUM_JSON,
                 encoder.encode(prusaSpectrumJson(table.physical, reelTypes, recipes)));
-    members.set(PRUSA_MODEL_CONFIG, encoder.encode(prusaModelConfig(rootObjects)));
+    members.set(PRUSA_MODEL_CONFIG, encoder.encode(prusaModelConfig(rootObjects, project, options)));
     spec = { cfg };
   }
 
@@ -2453,19 +2441,20 @@ export function exportProject(project, plateId, objectIds, options) {
            thumbnails: plan ? { main: plan.main, small: plan.small } : null };
 }
 
-function prusaModelConfig(roots) {
+function prusaModelConfig(roots, project, options) {
   const lines = [XML_HEADER, "<config>\n"];
   for (const root of roots) {
     lines.push(` <object id="${root.id}">\n`);
-    lines.push(`  <metadata key="name" value="${esc(root.name)}"/>\n`);
+    lines.push(`  <metadata type="object" key="name" value="${esc(root.name)}"/>\n`);
+    if (options.preserveSourceSettings) lines.push(sourceSettingMetadata(project, root.objectId, "prusa", options));
     root.parts.forEach((part, index) => {
       const triangles = Number(root.triangles || 0);
       const last = Math.max(0, triangles - 1);
       const first = index === 0 ? 0 : last + 1;
       lines.push(`  <volume firstid="${first}" lastid="${last}">\n`);
-      lines.push(`   <metadata key="name" value="${esc(part.name)}"/>\n`);
-      lines.push('   <metadata key="volume_type" value="ModelPart"/>\n');
-      lines.push(`   <metadata key="extruder" value="${part.extruder}"/>\n`);
+      lines.push(`   <metadata type="volume" key="name" value="${esc(part.name)}"/>\n`);
+      lines.push('   <metadata type="volume" key="volume_type" value="ModelPart"/>\n');
+      lines.push(`   <metadata type="volume" key="extruder" value="${part.extruder}"/>\n`);
       lines.push("  </volume>\n");
     });
     lines.push(" </object>\n");

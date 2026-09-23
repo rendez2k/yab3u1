@@ -13,8 +13,11 @@ export const TOWER_RESERVE_PER_SIDE = 25;
 /** U1 exports include a machine profile; other targets use an editable area. */
 export function targetLayout(target, options = {}) {
   if (target === "snapmaker") return { ...options, width: 270, depth: 270,
-    maxHeight: 270.05, centre: [135.5, 136] };
-  const { maxHeight, ...layout } = options;
+    maxHeight: 270.05, centre: [135.5, 136],
+    // Local bed coordinates. Allows for the U1 baseline tower at (13, 211),
+    // its brim and ribs. This is a planning allowance; slicing determines size.
+    towerBox: { min: [0, 200], max: [60, 270] } };
+  const { maxHeight, towerBox, ...layout } = options;
   return { ...layout, centre: target === "bambu" ? [0, 0]
     : [Number(options.width) / 2, Number(options.depth) / 2] };
 }
@@ -68,7 +71,8 @@ export function layoutCapacity(size, options = {}) {
   const spacing = Math.max(0, Number(options.spacing) || 0);
   const width = Math.max(1, Number(options.width) || 1);
   const depth = Math.max(1, Number(options.depth) || 1);
-  const reserve = options.tower
+  const corner = options.tower && options.towerBox;
+  const reserve = options.tower && !corner
     ? 2 * (Number(options.towerReserve) || TOWER_RESERVE_PER_SIDE) : 0;
   const usableWidth = width - reserve;
   const columns = Math.floor((usableWidth + spacing) / (size[0] + spacing));
@@ -77,15 +81,55 @@ export function layoutCapacity(size, options = {}) {
   // file.  Zero columns/rows mean exactly that.
   const safeColumns = Math.max(0, Math.min(columns, 64));
   const safeRows = Math.max(0, Math.min(rows, 64));
+  const cells = corner ? cornerCells(size, width, depth, safeColumns, safeRows,
+                                    spacing, corner) : null;
   return {
     columns: safeColumns,
     rows: safeRows,
-    capacity: safeColumns * safeRows,
+    capacity: cells ? cells.length : safeColumns * safeRows,
+    cells,
     block: [safeColumns ? safeColumns * size[0] + (safeColumns - 1) * spacing : 0,
             safeRows ? safeRows * size[1] + (safeRows - 1) * spacing : 0],
     reserve,
     usableWidth,
   };
+}
+
+/** Slide a grid to the bed or obstacle edges, keeping the most clear cells.
+ * Unlike a full-height strip, the tower only excludes its own corner. */
+function cornerCells(size, width, depth, columns, rows, spacing, box) {
+  if (!columns || !rows) return [];
+  const block = [columns * size[0] + (columns - 1) * spacing,
+                 rows * size[1] + (rows - 1) * spacing];
+  const candidates = (limit, span, axis) => [...new Set([
+    (limit - span) / 2, 0, limit - span,
+    box.min[axis] - spacing - span, box.max[axis] + spacing,
+  ].filter((v) => v >= -1e-7 && v + span <= limit + 1e-7))];
+  let best = [], bestDistance = Infinity;
+  for (const x of candidates(width, block[0], 0)) {
+    for (const y of candidates(depth, block[1], 1)) {
+      const cells = [];
+      for (let row = 0; row < rows; row += 1) {
+        for (let col = 0; col < columns; col += 1) {
+          const left = x + col * (size[0] + spacing);
+          const bottom = y + row * (size[1] + spacing);
+          if (left + size[0] > box.min[0] - spacing + 1e-7
+              && left < box.max[0] + spacing - 1e-7
+              && bottom + size[1] > box.min[1] - spacing + 1e-7
+              && bottom < box.max[1] + spacing - 1e-7) continue;
+          cells.push([left + size[0] / 2, bottom + size[1] / 2]);
+        }
+      }
+      const distance = (x + block[0] / 2 - width / 2) ** 2
+        + (y + block[1] / 2 - depth / 2) ** 2;
+      if (cells.length > best.length || (cells.length === best.length
+          && distance < bestDistance)) {
+        best = cells;
+        bestDistance = distance;
+      }
+    }
+  }
+  return best;
 }
 
 /**
@@ -96,13 +140,25 @@ export function layoutCapacity(size, options = {}) {
  * single centred copy.
  */
 export function planLayout(bounds, options = {}) {
-  const size = boxSize(bounds);
+  const modelSize = boxSize(bounds);
+  const padding = Math.max(0, Number(options.padding) || 0);
+  const size = [modelSize[0] + padding * 2, modelSize[1] + padding * 2,
+                modelSize[2] + Math.max(0, Number(options.extraHeight) || 0)];
   const grid = layoutCapacity(size, options);
   if (Number.isFinite(options.maxHeight) && size[2] > options.maxHeight + 1e-6) {
     grid.capacity = 0;
   }
   const asked = Math.max(1, Math.floor(Number(options.copies) || 1));
   const copies = Math.min(asked, grid.capacity);
+  let cells = grid.cells;
+  if (cells && copies > 0 && copies < grid.capacity) {
+    // Try a compact block for a partial plate, keeping a single copy centred.
+    const columns = Math.min(grid.columns, copies);
+    const compact = cornerCells(size, Number(options.width), Number(options.depth),
+      columns, Math.ceil(copies / columns), Math.max(0, Number(options.spacing) || 0),
+      options.towerBox);
+    if (compact.length >= copies) cells = compact;
+  }
   return {
     copies,
     asked,
@@ -113,8 +169,12 @@ export function planLayout(bounds, options = {}) {
     width: Math.max(1, Number(options.width) || 1),
     depth: Math.max(1, Number(options.depth) || 1),
     size,
+    padding,
+    footprintNotes: options.footprintNotes || [],
     block: grid.block,
-    tower: grid.reserve > 0,
+    tower: Boolean(options.tower),
+    towerBox: options.tower && options.towerBox || null,
+    cells: cells ? cells.slice(0, copies) : null,
     reserve: grid.reserve,
     usableWidth: grid.usableWidth,
     capped: asked > copies,
@@ -130,6 +190,14 @@ export function planLayout(bounds, options = {}) {
  * later uses, and Bambu's own "centre a model on my bed" import stays a no-op.
  */
 export function layoutOffsets(bounds, plan, centre = [0, 0]) {
+  if (plan.cells) {
+    const groupCentre = [(bounds.min[0] + bounds.max[0]) / 2,
+                         (bounds.min[1] + bounds.max[1]) / 2];
+    return plan.cells.map(([x, y]) => [
+      centre[0] - plan.width / 2 + x - groupCentre[0],
+      centre[1] - plan.depth / 2 + y - groupCentre[1], -bounds.min[2],
+    ]);
+  }
   const size = plan.size;
   const spacing = plan.spacing;
   const count = plan.copies;

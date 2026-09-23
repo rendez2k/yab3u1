@@ -272,7 +272,8 @@ function instanceView(plateId, objectIds, layout) {
 function layoutKey(layout) {
   if (!layout) return "single";
   return `${layout.copies}|${layout.spacing}|${layout.width}|${layout.depth}`
-    + `|${layout.tower ? 1 : 0}`;
+    + `|${layout.tower ? 1 : 0}|${JSON.stringify(layout.towerBox || null)}`
+    + `|${layout.padding || 0}|${layout.extraHeight || 0}`;
 }
 
 function floatsOf(array) {

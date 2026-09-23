@@ -13,7 +13,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { readZip } from "../zip.js";
 import { BASE_SETTINGS } from "../base_settings.js";
 import * as project from "../shared/project.js";
-import { CARRY_KEYS, appliedSettings, supportOf } from "../shared/printSettings.js";
+import { CARRY_KEYS, appliedSettings, supportOf, planningAllowance, transferSettings } from "../shared/printSettings.js";
 import { ConvertSession } from "../shared/convertSession.js";
 
 const encoder = new TextEncoder();
@@ -284,8 +284,8 @@ await ok("supports follow the source: Prusa's organic tree, manual, at 40 degree
   assert.equal(cfg.enable_support, "1", "supports are enabled");
   assert.equal(cfg.support_type, "tree(manual)", "the source's type is written");
   assert.equal(cfg.support_threshold_angle, "40", "the source's angle is written");
-  assert.equal(cfg.support_style, BASE_SETTINGS.support_style,
-               "no support style this Orca may not know is invented");
+  assert.equal(cfg.support_style, "tree_organic",
+               "Prusa organic style is translated to Orca tree_organic");
   assert.match(built.settings.support, /tree\(manual\) at 40 degrees/,
                "the export says what it wrote");
 });
@@ -580,6 +580,78 @@ await ok("the pumpkin carries exactly what the desktop converter carried", async
                "switching the carry off resets the print settings to the profile");
   assert.equal(off.cfg.support_type, "tree(manual)",
                "and leaves the support control to make its own decision");
+});
+
+await ok("support placement flags survive as explicit on and off values", () => {
+  const flags = ["support_on_build_plate_only", "support_critical_regions_only",
+                 "support_remove_small_overhang"];
+  for (const value of ["0", "1"]) {
+    const parsed = project.readProject(bambuSource({ settings: {
+      enable_support: "1", support_type: "tree(auto)", support_threshold_angle: "30",
+      ...Object.fromEntries(flags.map((key) => [key, value])),
+    } }));
+    const built = project.convertProject(parsed, 1, null, { target: "snapmaker" });
+    const cfg = JSON.parse(decoder.decode(built.entries.get("Metadata/project_settings.config")));
+    for (const key of flags) assert.equal(cfg[key], value, key);
+    assert.equal(cfg.enable_support, "1");
+    assert.equal(cfg.support_type, "tree(auto)");
+    assert.equal(cfg.support_threshold_angle, "30");
+    const off = project.convertProject(parsed, 1, null, { target: "snapmaker", carrySettings: false });
+    const base = JSON.parse(decoder.decode(off.entries.get("Metadata/project_settings.config")));
+    for (const key of flags) assert.equal(base[key], BASE_SETTINGS[key]);
+  }
+});
+
+await ok("all four formats retain designer settings through every destination", () => {
+  const original = project.readProject(bambuSource({ settings: {
+    seam_position: "back", sparse_infill_density: "7%", sparse_infill_pattern: "gyroid",
+    sparse_infill_anchor: "350%", sparse_infill_anchor_max: "17", wall_loops: "4",
+    top_shell_layers: "6", bottom_shell_layers: "4", layer_height: "0.16",
+    enable_support: "1", support_type: "tree(auto)", support_threshold_angle: "30",
+    support_on_build_plate_only: "1", support_critical_regions_only: "1",
+    support_remove_small_overhang: "0", raft_layers: "2", raft_expansion: "3",
+  } }));
+  const targets = ["snapmaker", "bambu", "orca", "prusa"];
+  for (const from of targets) {
+    const first = project.readProject(project.convertProject(original, 1, null,
+      { target: from, preserveSourceSettings: true }).entries);
+    for (const target of targets) {
+      const result = project.readProject(project.convertProject(first, 1, null,
+        { target, preserveSourceSettings: true }).entries);
+      const own = [...result.meta.values()].find(o => o.settings)?.settings || {};
+      const canonical = transferSettings({ ...(result.sourceSettings || {}), ...own }, "snapmaker").values;
+      for (const [key, value] of Object.entries({ seam_position: "back", sparse_infill_density: "7%",
+        sparse_infill_pattern: "gyroid", infill_anchor: "350%", infill_anchor_max: "17", wall_loops: "4",
+        top_shell_layers: "6", bottom_shell_layers: "4", layer_height: "0.16",
+        enable_support: "1", support_on_build_plate_only: "1", raft_layers: "2", raft_expansion: "3" })) {
+        assert.equal(canonical[key], value, `${from} → ${target}: ${key}`);
+      }
+    }
+  }
+});
+
+await ok("brims, rafts and support reach contribute to clone clearance", () => {
+  const brim = planningAllowance([{ brim_type: "outer_only", brim_width: "5", brim_object_gap: "0.1" }], "bambu", true);
+  assert.equal(brim.padding, 5.1);
+  const raft = planningAllowance([{ raft_layers: "3", raft_expansion: "4", raft_first_layer_expansion: "2", layer_height: "0.2" }], "bambu", true);
+  assert.equal(raft.padding, 6);
+  assert.ok(Math.abs(raft.extraHeight - 0.6) < 1e-6);
+  const auto = planningAllowance([{ enable_support: "1", support_type: "tree(auto)", brim_type: "auto_brim" }], "bambu", true);
+  assert.equal(auto.padding, 3);
+  assert.equal(auto.footprintNotes.length, 2);
+  assert.equal(planningAllowance([{ brim_type: "outer_only", brim_width: "10" }], "bambu", false).padding, 0);
+  assert.equal(planningAllowance([{ brim_width: "5", brim_separation: "0.1" }], "prusa", true).padding, 5.1);
+  assert.ok(planningAllowance([{ enable_support: "0" }], "snapmaker", true, "auto", true).padding >= 3);
+  assert.ok(planningAllowance([{ raft_layers: "2", raft_first_layer_expansion: "-1" }], "bambu", true)
+    .footprintNotes.some(note => note.includes("automatic raft")));
+});
+
+await ok("painted supports remain enabled on each cloned U1 object", () => {
+  const { built } = u1ConfigOf(bambuSource({ settings: { enable_support: "0" }, painted: true }),
+    { layout: { copies: 3, width: 270, depth: 270, spacing: 5 } });
+  const objects = [...project.readProject(built.entries).meta.values()].filter(o => o.settings);
+  assert.equal(objects.length, 3);
+  for (const object of objects) assert.equal(object.settings.enable_support, "1");
 });
 
 if (failures.length) {

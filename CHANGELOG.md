@@ -5,6 +5,28 @@ The version shown on the page comes from `VERSION` in `web/convert-page.js` (and
 the collapsed "What's new" block in the footer. Bump those constants and add a
 section here together.
 
+## 2.4.4 — designer settings and print-aware clone spacing
+
+Expanded browser settings transfer for quality, strength and supports across all
+four destinations. Compatible settings are selected by default. Per-object
+overrides travel with every copy, including seam placement, shell counts, infill
+and its anchors, support placement, interface distances and raft settings.
+Prusa names and supported enum values are translated explicitly. Transfer details
+show the recognised settings that cannot be carried to a destination. Hardware,
+temperatures and machine G-code continue to use the destination profiles.
+
+U1 Fill plate now reserves a 60 × 70 mm tower corner instead of full-height side
+strips. The reported Frankenstein fits six at 5 mm spacing, with a 3 mm support
+allowance. Clone spacing includes explicit outer brims, raft expansion and skirts;
+automatic support reach is an estimate and automatic brims need a final slicing
+check. Painted support enforcers remain enabled on every copied U1 object unless
+the user explicitly switches support off.
+
+Validated shared settings through all 16 format pairs, real browser export and
+native Bambu Studio/PrusaSlicer import and re-save. Snapmaker Orca CLI validation
+could not complete: the installed command-line importer crashes on both this
+candidate and the previous release. These checks do not replace slicing a plate.
+
 ## 2.4.3 — compact preview, website address and source credits
 
 Added a visible yab3d.uk link above the title on both pages, including when

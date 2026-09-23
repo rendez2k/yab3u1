@@ -20,6 +20,7 @@
 
 import { planLayout, targetLayout } from "./layout.js";
 import { REPAINT, SLOTS, identityRule, normaliseMode } from "./assignment.js";
+import { planningAllowance } from "./printSettings.js";
 export const TYPED_3MF = "application/vnd.ms-package.3dmanufacturing-3dmodel+xml";
 
 export { identityRule };
@@ -60,9 +61,9 @@ export class ConvertSession {
       { copies: 1, spacing: 5, width: 270, depth: 270, tower: true });
     this.genericArea = { width: 270, depth: 270 };
     this.layoutEdited = false;
-    // Off by default: the user chooses to carry the source's own layer height and
-    // support intent; their printer and process stay theirs either way.
-    this.preserveSourceSettings = false;
+    // Carry compatible designer settings by default; destination hardware and
+    // machine profiles remain independent of the source.
+    this.preserveSourceSettings = true;
     // The U1 target's own controls.  Unlike the Bambu colour model above, a U1
     // project *is* a printer project, so the compatible source settings travel by
     // default -- that is the behaviour the original converter had -- and the
@@ -79,6 +80,16 @@ export class ConvertSession {
   /** The source→destination map of the mode that is in force now. */
   get rule() {
     return this.rules[this.assignmentMode] || {};
+  }
+
+  planningLayout() {
+    const ids = this.state?.plates.find(p => String(p.id) === String(this.state.plateId))?.objectIds;
+    const objects = (this.state?.objectSettings || []).filter(o => !ids || ids.map(String).includes(String(o.id)));
+    const sources = (objects.length ? objects : [{}]).map(o =>
+      ({ ...(this.state?.sourceSettings || {}), ...(o.settings || {}) }));
+    return { ...targetLayout(this.target, this.layout), ...planningAllowance(sources,
+      this.target, this.target === "snapmaker" ? this.carrySettings : this.preserveSourceSettings,
+      this.supportMode, Boolean(this.state?.supportsPainted)) };
   }
 
   /**
@@ -378,7 +389,7 @@ export class ConvertSession {
       this.layout = targetLayout(this.target, { ...this.layout, ...this.genericArea });
       // A new file starts with the preservation control off: it is the user's
       // choice per file, never remembered silently.
-      this.preserveSourceSettings = false;
+      this.preserveSourceSettings = true;
       // The U1 controls start at the converter's own defaults for the same reason:
       // a new file is converted the way the tool does it out of the box, and the
       // page shows those values rather than an inherited override.
@@ -473,7 +484,7 @@ export class ConvertSession {
   async convert(target, plateId) {
     if (!this.state || this.busy || this.closed || this.layoutProblem || this.boundsPending) return null;
     this.setTarget(String(target));
-    if (this.state.bounds && planLayout(this.state.bounds, this.layout).blocked) return null;
+    if (this.state.bounds && planLayout(this.state.bounds, this.planningLayout()).blocked) return null;
     const snapshot = {
       revision: this.revision,
       token: this.epoch,
@@ -486,7 +497,7 @@ export class ConvertSession {
       // writing must not let it publish, and the page's thumbnail has to be
       // drawn with the palette *this* mode writes.
       assignmentMode: this.assignmentMode,
-      layout: targetLayout(target, this.layout),
+      layout: this.planningLayout(),
       preserveSourceSettings: this.preserveSourceSettings,
       carrySettings: this.carrySettings,
       supportMode: this.supportMode,

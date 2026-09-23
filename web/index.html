@@ -519,9 +519,11 @@
         </div>
       </div>
       <label class="check" id="bambukeep">
-        <input type="checkbox" id="preservesettings">
-        Keep the source model's own layer height and support intent</label>
+        <input type="checkbox" id="preservesettings" checked>
+        Carry the source's compatible print settings</label>
       <p class="hint" id="sourcesettings" role="status" aria-live="polite"></p>
+      <details id="settingdetails"><summary>Settings transfer details</summary>
+        <div class="hint" id="settinglist"></div></details>
     </fieldset>
 
     <p class="hint" id="convertplan" role="status" aria-live="polite"></p>

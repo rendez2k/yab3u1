@@ -17,7 +17,7 @@ Three ways to use the project, with different workflows:
 | --- | --- | --- |
 | **`U1 Converter` shortcut** | this machine | local web UI (`u1ui.py` + `u1ui.html`), reads your installed Orca profiles and can verify a plate by slicing |
 | **`u1convert.py`** | any machine with Python | the command line tool; `--fill-bed`, `--verify`, `--supports`, `--colors` |
-| **`web/`** | any static host — live at <https://yab3u1.netlify.app> | [browser version](#the-browser-version-web) — v2.4.3, the whole conversion in the page, nothing uploaded |
+| **`web/`** | any static host — live at <https://yab3u1.netlify.app> | [browser version](#the-browser-version-web) — v2.4.4, the whole conversion in the page, nothing uploaded |
 
 A local replacement for [bl2u1.nbn.cat](https://bl2u1.nbn.cat) /
 [josuanbn/bl2u1](https://github.com/josuanbn/bl2u1) that actually works on
@@ -96,7 +96,7 @@ web/
 ```
 
 The pages report their own version (`VERSION` in `web/convert-page.js` and
-`web/recolour.js`); the live deployment is **v2.4.3**.
+`web/recolour.js`); the live deployment is **v2.4.4**.
 
 **Deploying.** The Python UI cannot go on a static host — it needs your Orca
 install and the slicer — but the browser converter can, and that is what
@@ -136,20 +136,29 @@ reach your machine:
   Snapmaker export uses that baseline with the compatible source settings you
   choose to retain. Choose the appropriate printer and filament profiles in your
   slicer after importing.
-* it cannot run Orca to verify a plate slices, so `Fill plate` reports the
-  geometric capacity only.
+* it cannot run Orca to verify a plate slices. `Fill plate` includes explicit
+  brim/raft/skirt clearance and an estimated support allowance; generated support
+  branches, automatic brims and final tower size still need a slicing check.
 * `Fill plate` reserves the prime tower's space by default — **Leave room for the
-  prime tower** is ticked when a model loads, the same reservation the local
-  `Fill bed` makes — and the checkbox can be cleared for a print that does not
-  need it.
+  prime tower** is ticked when a model loads. U1 exports reserve a 60 × 70 mm
+  corner; other destinations reserve symmetric side strips because Bambu's
+  model importer recentres the group. The checkbox can be cleared when unneeded.
 * **what each target carries differs.** A Snapmaker Orca (U1) export keeps the U1
   profile and the source file's own *compatible* print settings — the support
-  decision, the shell and the infill — through the same reviewed allowlist the
-  local tool uses, while the printer, the speeds, the temperatures and the
-  filaments stay the bundled baseline's. Bambu Studio and PrusaSlicer exports are
+  decision, shells, infill, seam and adhesion — through an expanded browser
+  allowlist, while hardware, speeds and temperatures stay the bundled baseline's.
+  Compatible per-object overrides travel with each copy. Bambu Studio, OrcaSlicer
+  and PrusaSlicer exports are
   **colour projects**: geometry, parts, the palette, the paint and the recipes,
   with the U1's printer, process and start/end G-code left out, and no
   `Metadata/Slic3r_PE.config` for PrusaSlicer to override your own preset with.
+  Compatible designer settings are included as object overrides by default;
+  clear **Carry source compatible print settings** to use your destination's
+  settings instead. **Settings transfer details** names recognised omissions.
+  This does not preserve every slicer-specific feature or part/modifier override.
+
+Bulk conversion is not implemented yet; the browser currently opens one source
+file at a time.
 
 ## Multi-object files: one plate, some objects, honest options
 

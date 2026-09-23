@@ -1,8 +1,9 @@
-// The reviewed print-intent transfer for a Snapmaker U1 project.
+import { BASE_SETTINGS } from "../base_settings.js";
+
+// The reviewed print-intent transfer for supported slicer projects.
 //
-// These are the helpers the original page converter (`web/converter.js`) and the
-// desktop tool (`u1convert.py`) already applied, moved into the shared modules so
-// the homepage converter carries exactly the same things they did.  Nothing here
+// Based on the original converter's allowlist, expanded with explicit destination
+// mappings for designer settings across the browser's supported slicers. Nothing here
 // describes a *printer* or a *filament*: bed and filament temperatures, speeds,
 // accelerations, retraction, purge and prime-tower numbers, toolchange and machine
 // g-code and the bed geometry all belong to the machine that wrote the file, and
@@ -33,6 +34,18 @@ export const CARRY_KEYS = [
   "mmu_segmented_region_max_width", "mmu_segmented_region_interlocking_depth",
   // support geometry -- the on/off decision is handled by applySupport
   "support_threshold_overlap",
+  "support_on_build_plate_only", "support_critical_regions_only",
+  "support_remove_small_overhang",
+  "seam_position", "wall_generator", "detect_thin_wall", "infill_direction",
+  "infill_wall_overlap", "internal_solid_infill_pattern",
+  "support_top_z_distance", "support_bottom_z_distance", "support_object_xy_distance",
+  "support_base_pattern_spacing", "support_interface_spacing",
+  "support_bottom_interface_spacing", "support_interface_top_layers",
+  "support_interface_bottom_layers", "support_expansion", "support_style",
+  "tree_support_branch_angle", "tree_support_branch_diameter",
+  "tree_support_branch_distance", "tree_support_tip_diameter", "tree_support_brim_width",
+  "raft_layers", "raft_expansion", "raft_first_layer_expansion", "raft_contact_distance",
+  "skirt_loops", "skirt_distance", "skirt_height",
   // reviewed enums, whose spellings are stable across versions
   "sparse_infill_pattern", "top_surface_pattern", "bottom_surface_pattern",
   "ironing_type", "ironing_pattern", "brim_type",
@@ -41,6 +54,23 @@ export const CARRY_KEYS = [
 /* PrusaSlicer names for several of the same settings.  Without these a Prusa
    project carries far less than a Bambu one, because the names do not match. */
 export const PRUSA_ALIASES = {
+  support_style: ["support_material_style"],
+  brim_object_gap: ["brim_separation"],
+  infill_anchor: ["sparse_infill_anchor"],
+  infill_anchor_max: ["sparse_infill_anchor_max"],
+  detect_thin_wall: ["thin_walls"],
+  infill_direction: ["fill_angle"],
+  infill_wall_overlap: ["infill_overlap"],
+  wall_generator: ["perimeter_generator"],
+  support_top_z_distance: ["support_material_contact_distance"],
+  support_bottom_z_distance: ["support_material_bottom_contact_distance"],
+  support_object_xy_distance: ["support_material_xy_spacing"],
+  support_base_pattern_spacing: ["support_material_spacing"],
+  support_interface_spacing: ["support_material_interface_spacing"],
+  support_interface_top_layers: ["support_material_interface_layers"],
+  support_interface_bottom_layers: ["support_material_bottom_interface_layers"],
+  skirt_loops: ["skirts"],
+  support_on_build_plate_only: ["support_material_buildplate_only"],
   initial_layer_print_height: ["first_layer_height"],
   wall_loops: ["perimeters"],
   top_shell_layers: ["top_solid_layers"],
@@ -60,6 +90,10 @@ export const PRUSA_ALIASES = {
    raft_first_layer_expansion meaning "auto" -- and Orca either warns about them or
    refuses to open the file, so carrying them unchecked is worse than not carrying. */
 export const ENUM_VALUES = {
+  seam_position: ["aligned", "nearest", "random", "back"],
+  wall_generator: ["classic", "arachne"],
+  internal_solid_infill_pattern: ["rectilinear", "monotonic", "monotonicline", "concentric"],
+  support_style: ["default", "grid", "snug", "tree_slim", "tree_strong", "tree_hybrid", "tree_organic"],
   sparse_infill_pattern: [
     "grid", "line", "concentric", "honeycomb", "3dhoneycomb", "gyroid",
     "crosshatch", "cubic", "triangles", "tri-hexagon", "star", "supportcubic",
@@ -104,6 +138,8 @@ export function normaliseSupportMode(mode) {
 
 /** Would this Orca accept the value as it stands? */
 export function acceptable(key, value) {
+  if (["support_on_build_plate_only", "support_critical_regions_only",
+       "support_remove_small_overhang", "detect_thin_wall"].includes(key)) return ["0", "1"].includes(value);
   if (ENUM_VALUES[key]) return ENUM_VALUES[key].includes(value);
   // Orca writes percentages as "400%", so the suffix is part of the value
   const n = Number(String(value).replace(/%$/, ""));
@@ -126,7 +162,118 @@ function carriedValue(sourceSettings, key) {
   if (Array.isArray(value)) value = value.length ? value[0] : null;
   if (value === null || value === undefined || value === "") return undefined;
   value = String(value);
+  if (key === "seam_position" && value === "rear") value = "back";
+  if (key === "support_style" && value === "organic") value = "tree_organic";
   return acceptable(key, value) ? value : undefined;
+}
+
+// Only explicitly mapped Prusa keys are written. Unknown destination features
+// stay out rather than becoming unrecognised object options.
+const PRUSA_NAMES = {
+  layer_height: "layer_height", initial_layer_print_height: "first_layer_height",
+  wall_loops: "perimeters", top_shell_layers: "top_solid_layers",
+  bottom_shell_layers: "bottom_solid_layers", top_shell_thickness: "top_solid_min_thickness",
+  bottom_shell_thickness: "bottom_solid_min_thickness", sparse_infill_density: "fill_density",
+  sparse_infill_pattern: "fill_pattern", internal_solid_infill_pattern: "solid_infill_pattern",
+  top_surface_pattern: "top_fill_pattern", bottom_surface_pattern: "bottom_fill_pattern",
+  seam_position: "seam_position", infill_anchor: "infill_anchor", infill_anchor_max: "infill_anchor_max",
+  infill_direction: "fill_angle", infill_wall_overlap: "infill_overlap",
+  wall_generator: "perimeter_generator", detect_thin_wall: "thin_walls",
+  brim_width: "brim_width", brim_object_gap: "brim_separation",
+  raft_layers: "raft_layers", raft_expansion: "raft_expansion",
+  skirt_loops: "skirts", skirt_distance: "skirt_distance", skirt_height: "skirt_height",
+  support_on_build_plate_only: "support_material_buildplate_only",
+  support_top_z_distance: "support_material_contact_distance",
+  support_bottom_z_distance: "support_material_bottom_contact_distance",
+  support_object_xy_distance: "support_material_xy_spacing",
+  support_base_pattern_spacing: "support_material_spacing",
+  support_interface_spacing: "support_material_interface_spacing",
+  support_interface_top_layers: "support_material_interface_layers",
+  support_interface_bottom_layers: "support_material_bottom_interface_layers",
+  resolution: "resolution", elefant_foot_compensation: "elefant_foot_compensation",
+  ironing_spacing: "ironing_spacing", ironing_speed: "ironing_speed",
+};
+
+/** Compatible object-level print settings and explicit omissions, by target. */
+export function transferSettings(source, target, { object = false } = {}) {
+  const values = {}, skipped = [];
+  for (const key of CARRY_KEYS) {
+    const present = source && [key, ...(PRUSA_ALIASES[key] || [])].some((k) => k in source);
+    if (!present) continue;
+    let value = carriedValue(source, key);
+    let name = target === "prusa" ? PRUSA_NAMES[key] : key;
+    if (target === "bambu" && key.startsWith("infill_anchor")) name = key.replace("infill_", "sparse_infill_");
+    if (object && key === "initial_layer_print_height") name = null;
+    if (target === "prusa" && key === "seam_position" && value === "back") value = "rear";
+    if (target === "prusa" && key.endsWith("pattern") && value === "monotonicline") value = "monotonic";
+    if (target === "prusa" && key === "sparse_infill_pattern"
+        && !["rectilinear", "alignedrectilinear", "grid", "triangles", "stars", "cubic", "line",
+             "concentric", "honeycomb", "3dhoneycomb", "gyroid", "supportcubic", "lightning"].includes(value)) name = null;
+    if (value === undefined || !name) { skipped.push(key); continue; }
+    values[name] = value;
+  }
+  const support = supportOf(source);
+  if (support) {
+    if (target === "prusa") {
+      values.support_material = support.enabled ? "1" : "0";
+      if (support.type) {
+        values.support_material_auto = support.type.includes("manual") ? "0" : "1";
+        values.support_material_style = support.type.startsWith("tree") ? "organic"
+          : ["snug", "grid"].includes(source.support_style || source.support_material_style)
+            ? (source.support_style || source.support_material_style) : "grid";
+      }
+      if (support.angle) values.support_material_threshold = String(support.angle);
+    } else {
+      values.enable_support = support.enabled ? "1" : "0";
+      if (support.type) values.support_type = support.type;
+      if (support.angle) values.support_threshold_angle = String(support.angle);
+      if (source?.support_material_style === "organic") values.support_style = "tree_organic";
+    }
+  }
+  return { values, skipped };
+}
+
+/** Printable additions around a model. Automatic brim/support contours only
+ * exist after slicing; report them rather than claiming an exact footprint. */
+export function planningAllowance(sources, target, enabled, mode = "auto", painted = false) {
+  let padding = 0, extraHeight = 0;
+  const notes = new Set();
+  for (const source of sources.length ? sources : [{}]) {
+    const cfg = target === "snapmaker" ? { ...BASE_SETTINGS } : {};
+    if (enabled) Object.assign(cfg, transferSettings(source, "snapmaker").values);
+    if (target === "snapmaker") applySupport(cfg, supportOf(source), mode, painted);
+    const n = (key) => Math.max(0, Number(cfg[key]) || 0);
+    let reach = 0;
+    if (cfg.enable_support === "1") {
+      if (String(cfg.support_type).includes("auto")) {
+        reach = Math.max(3, n("support_object_xy_distance") + n("tree_support_branch_diameter") / 2);
+        notes.add("automatic supports: estimated 3 mm minimum allowance; verify generated branches after slicing");
+      } else {
+        reach = Math.max(3, n("support_object_xy_distance"));
+        notes.add("painted supports: estimated 3 mm minimum allowance; check generated support reach after slicing");
+      }
+    }
+    const brim = cfg.brim_type || (enabled && source.brim_width !== undefined ? "outer_only" : null);
+    if (["outer_only", "outer_and_inner"].includes(brim)) {
+      reach += n("brim_width") + n("brim_object_gap");
+    } else if (["auto_brim", "brim_ears"].includes(brim)) {
+      notes.add("automatic brims/ears are decided by the slicer and need a final clearance check");
+    }
+    if (n("raft_layers") > 0) {
+      reach = Math.max(reach, n("raft_expansion") + n("raft_first_layer_expansion"));
+      extraHeight = Math.max(extraHeight, n("raft_layers") * (n("layer_height") || 0.2));
+      if (Number(cfg.raft_first_layer_expansion) < 0
+          || (enabled && Number(source.raft_first_layer_expansion) < 0)) {
+        notes.add("automatic raft expansion needs a slicer check");
+      }
+    }
+    if (n("skirt_loops") > 0) {
+      reach = Math.max(reach, n("skirt_distance") + n("skirt_loops") * 0.5);
+      notes.add("skirt clearance includes an estimated 0.5 mm per loop");
+    }
+    padding = Math.max(padding, reach);
+  }
+  return { padding, extraHeight, footprintNotes: [...notes] };
 }
 
 /** The allowlisted keys and values this source would really contribute, in order.
