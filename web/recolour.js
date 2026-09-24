@@ -16,7 +16,7 @@ import { mountSpoolImport } from "./shared/spoolImport.js";
 import { colourName } from "./shared/assignment.js";
 
 const REEL_KEY = "yab3u1-web-reels";
-const VERSION = "2.6.0-preview.4";
+const VERSION = "2.6.0-preview.5";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -82,6 +82,8 @@ function invalidateRecommendation() {
   recommendationWorker?.terminate(); recommendationWorker=null; recommendationKey='';
   state.recommendation=null; state.recommendationOptions=[]; state.recommendationIndex=0; state.showMorePalettes=false; setReelView('loaded');
   state.recommendationSearch=null; state.modelApplied=false;
+  // Until a model palette is selected, only the actual source is a valid view.
+  if(state.workflow==='model') state.previewMode='original';
   renderRecommendation('Updating colour suggestions…');
   clearReview();
 }
@@ -135,7 +137,11 @@ function renderRecommendation(message) {
     : 'Using only your four loaded filaments. Matching colours stay exact; remaining regions use the blend recipes below.';
   document.querySelectorAll('[data-reel-view]').forEach(button=>{
     button.setAttribute('aria-pressed',String(button.dataset.reelView===state.reelView && state.previewMode==='result'));
-    button.disabled=button.dataset.reelView==='recommended' && !result;
+    const unavailable=button.dataset.reelView==='recommended' ? !result
+      : state.workflow==='model' && !state.modelApplied;
+    button.disabled=unavailable;
+    button.title=button.dataset.reelView==='loaded' && unavailable
+      ? 'Apply a suggested palette first to compare its exported result.' : '';
   });
   $("userecommended").disabled=!result;
   $("userecommended").hidden=!result;
@@ -184,6 +190,7 @@ function requestRecommendation() {
 }
 function showReelView(view) {
   if(view==='recommended' && !state.recommendation) return;
+  if(view==='loaded' && state.workflow==='model' && !state.modelApplied) return;
   setReelView(view);
   if(state.strategy==='source') {
     state.strategy='blend';
@@ -634,6 +641,11 @@ function clearReview() {
   renderExport();
 }
 
+function modelPalettePending() {
+  return state.workflow==='model' && state.strategy!=='source' && !state.modelApplied
+    && !(state.reelView==='recommended' && state.recommendation);
+}
+
 /** What the export would write for the selected strategy. */
 function resultPlan() {
   const assessed = state.assessed;
@@ -643,6 +655,8 @@ function resultPlan() {
     return { mapping: {}, recipes: [], kept: [], physical: reels,
              blocked: assessed ? "Analysing the selected colours…" : "tick at least one object" };
   }
+  if(modelPalettePending()) return {mapping:{},recipes:[],kept:[],physical:reels,
+    blocked:"choose and apply a suggested palette"};
   if (state.strategy === "source") {
     const used = assessed.used;
     if (used.length > 4) {
@@ -693,6 +707,10 @@ function resultPlan() {
 function renderOutcome(payload=resultPlan()) {
   const host=$("colouroutcome");
   if(!state.assessed || !state.objects.length) { host.replaceChildren(); return; }
+  if(modelPalettePending()) {
+    host.innerHTML='<strong>Original model colours</strong><p class="hint">No palette has been applied yet. Select a suggestion to preview its blend recipes and colour changes.</p>';
+    return;
+  }
   const outcome=payload.outcome || describeColourMapping(state.assessed.sourceColors,payload);
   const {counts,rows}=outcome;
   const tally=[`${counts.preserved} matched to reels`,

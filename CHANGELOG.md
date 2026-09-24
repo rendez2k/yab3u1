@@ -7,6 +7,11 @@ section here together.
 
 ## Unreleased — experimental U1 reel-change export
 
+Full Spectrum review 2.6.0-preview.5 disables Applied until a palette has
+actually been applied. Changing model search choices restores the Original
+view while suggestions are recalculated, and shows a pending-selection message
+instead of interpreting the placeholder reels as unresolved model colours.
+
 Full Spectrum review 2.6.0-preview.4 has two starting modes. The default
 model-first workflow compares original-colour sets and blends the remaining
 colours, with Keep exact controls and an optional owned-filament filter.
