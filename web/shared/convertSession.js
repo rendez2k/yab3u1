@@ -381,6 +381,8 @@ export class ConvertSession {
         includeUnused: [],
         types: reply.meta.types.slice(),
         warnings: (reply.meta.warnings || []).slice(),
+        negativeVolumes: Boolean(reply.meta.negativeVolumes),
+        customLayerActions: Boolean(reply.meta.customLayerActions),
         mixtures: (reply.summary && reply.summary.mixtures) || [],
         plates: reply.meta.plates.map((entry) => ({ id: entry.id, name: entry.name })),
         plateId: reply.meta.plates.length ? reply.meta.plates[0].id : null,

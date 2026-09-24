@@ -15,7 +15,7 @@ import { planLayout } from "./shared/layout.js";
 import { supportOf, transferSettings } from "./shared/printSettings.js";
 import { initBatch } from "./batch-page.js";
 
-const VERSION = "2.6.0-preview.4";
+const VERSION = "2.6.0-preview.5";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -28,6 +28,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "Negative cutout volumes now open in the main converter and keep their roles and transforms in Snapmaker, Bambu and Orca projects. Prusa multi-volume output remains unsupported; preview cutouts must be checked in the slicer.",
   "Unused filaments start unticked on the main converter. Restore any individually before export; model colours, part defaults and reserved process slots are kept.",
   "Fixed Snapmaker Orca reverting transferred quality, strength and support settings to preset defaults on opening an export. Download a fresh conversion to apply this fix to older files.",
   "Bulk conversion: add several projects, choose one destination and download a ZIP with one 3MF per plate plus a conversion report. Files run one at a time; stopping keeps completed outputs.",
@@ -161,7 +162,7 @@ function renderOutput(entry) {
       : ". Open it as a project in the destination slicer and choose your own "
         + "printer and filament profile there; no machine settings are copied across.")
     + applied
-    + (entry.target === "bambu"
+    + (entry.target === "bambu" && !session.state?.negativeVolumes
       ? " Bambu Studio may ask you to map the file's colours to your own "
         + "filaments: its colour dialog reads the file's filament list and may "
         + "rebind it to your AMS, and the file itself carries no printer or "
@@ -308,6 +309,8 @@ function renderChoices(state) {
       + `data-palette="${esc(signature)}">${options}</select></div>`;
   }).join("");
   $("convertmap").innerHTML = rows;
+  $("negativevolumes").hidden = !state.negativeVolumes;
+  $("layeractions").hidden = !state.customLayerActions;
   const unused = state.filamentUsage?.unused || [];
   $("unusedfilaments").innerHTML = unused.length ? `<strong>${unused.length} unused filament${unused.length===1?'':'s'} found</strong><p>Unticked filaments are left out of the export. Tick any you want to keep. Changing this selection resets slot assignments.</p>`
     + unused.map(id=>`<label style="display:flex;align-items:center;gap:8px;margin:8px 0"><input type="checkbox" data-unused="${id}" ${state.includeUnused.includes(id)?'checked':''}><span class="swatch" style="background:${esc(hex(state.colours[id-1]))}"></span>Keep unused filament ${id} · ${esc(swatchLabel(state.colours[id-1]))}</label>`).join('') : '';

@@ -124,7 +124,7 @@ export function applyMatrix(m, point) {
 
 // ---------------------------------------------------------------- reading ----
 
-export function readProject(entries) {
+export function readProject(entries, options = {}) {
   const main = text(entries, MODEL_FILE);
   if (main === null) {
     throw new ProjectError("this archive has no 3D/3dmodel.model, so it is not a 3MF");
@@ -150,29 +150,32 @@ export function readProject(entries) {
   readMixtures(entries, project);
   guessKind(project);
   if (project.kind === "prusa") refusePrusaVolumeRanges(project);
-  refuseHiddenRoles(project);
+  refuseHiddenRoles(project, options.allowNegative === true);
   return project;
 }
 
-/** A control volume is not printed geometry, and this writer cannot say so.
- *
- * Every part this tool writes is declared `normal_part`, so a negative volume, a
- * parameter modifier or a support blocker read from the source would be
- * *solidified*: a hole filled in, a blocker printed.  Refuse the project rather
- * than change what it means -- the same stop the Python reader makes.
- */
-function refuseHiddenRoles(project) {
+/** The converter preserves native negative parts. Other modifier roles still
+ * require settings handling that this reader/writer does not provide. The
+ * recolour workflow stays guarded until its cutout preview is supported. */
+function refuseHiddenRoles(project, allowNegative = false) {
   for (const meta of project.meta.values()) {
     for (const part of meta.parts || []) {
       if (isHiddenPart(part.subtype)) {
+        if (part.subtype === "negative_part") {
+          if (allowNegative) continue;
+          throw new ProjectError(`${meta.name || 'This model'} contains a negative cutout volume. Use the main 3MF converter to preserve it in a Snapmaker, Bambu or Orca project; Full Spectrum recolouring does not support cutout models yet.`);
+        }
         throw new ProjectError(`${meta.name || "an object"} has a `
           + `${part.subtype} volume (a negative, modifier or support-blocker part). `
-          + "This tool writes every part as printable geometry, so it would fill in "
-          + "or print something the model meant to remove; it will not open this "
-          + "project");
+          + "The settings and behaviour of this volume type cannot yet be carried across faithfully, so this project cannot be opened.");
       }
     }
   }
+}
+
+export function hasNegativeVolumes(project, objectIds = null) {
+  return [...project.meta.values()].some(meta=>(!objectIds || objectIds.map(String).includes(String(meta.id)))
+    && (meta.parts || []).some(part=>part.subtype==='negative_part'));
 }
 
 /** PrusaSlicer volumes are triangle ranges inside one mesh.
@@ -843,7 +846,10 @@ export function selectionBounds(project, plateId, objectIds) {
     const object = project.objects.get(objectId);
     if (!object) continue;
     const item = matrixFromText(itemTransform);
+    const meta = project.meta.get(String(objectId));
     for (const component of object.components) {
+      const part = meta?.parts?.find(part=>String(part.id)===String(component.objectid));
+      if (part && isHiddenPart(part.subtype)) continue;
       const member = component.path ? component.path.replace(/^\//, "") : MODEL_FILE;
       const local = meshBox(project.entries, member, component.objectid, cache);
       if (!local) continue;
@@ -1973,7 +1979,10 @@ export function exportProject(project, plateId, objectIds, options) {
   // The printer-agnostic Bambu export: a standard colour model with no project
   // settings at all, so Bambu keeps the user's own printer/process/filaments and
   // centres the model on their real bed (the non-project import path).
-  const standard = convert && target === "bambu";
+  // Negative volumes need native project metadata, not the colour-model import.
+  const negative = hasNegativeVolumes(project, objectIds || eligibleObjects(project, plateId));
+  const standard = convert && target === "bambu" && !negative;
+  if (negative && target === 'prusa') throw new ProjectError('This selection contains negative cutout volumes. Prusa multi-volume export is not supported yet; choose Snapmaker Orca, Bambu Studio or OrcaSlicer to preserve them.');
   const reels = options.physical || options.reels || [];
   if (convert) {
     refuseMixtures(project, "convert");

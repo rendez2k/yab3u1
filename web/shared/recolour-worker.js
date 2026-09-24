@@ -39,6 +39,8 @@ function metaOf(parsed) {
     types: parsed.types.slice(),
     baseExtruder: parsed.baseExtruder,
     warnings: parsed.warnings.slice(),
+    negativeVolumes: project.hasNegativeVolumes(parsed),
+    customLayerActions: [...parsed.entries].some(([name,bytes])=>/custom_gcode_per_(?:layer|print_z)\.xml$/i.test(name) && /<(?:layer|code)\b/.test(new TextDecoder().decode(bytes))),
     // The narrow slice the optional preservation control may carry; null when the
     // source states nothing.
     sourceSettings: parsed.sourceSettings || null,
@@ -296,7 +298,7 @@ self.onmessage = async (event) => {
       const started = Date.now();
       const entries = await readZip(new Uint8Array(message.bytes));
       post({ type: "progress", id, stage: "zip", ms: Date.now() - started });
-      const parsed = project.readProject(entries);
+      const parsed = project.readProject(entries, {allowNegative: message.light === true});
       post({ type: "progress", id, stage: "parse", ms: Date.now() - started });
       loaded = { entries, project: parsed };
       geometry = null;                    // a new file has new geometry

@@ -7,6 +7,15 @@ section here together.
 
 ## Unreleased — experimental U1 reel-change export
 
+Main converter review 2.6.0-preview.5 allows native negative cutout volumes.
+Snapmaker, Bambu and Orca exports retain the cutter meshes, volume roles and
+component transforms, including on clones. Bambu uses a native project for
+these selections. Cutting tools are excluded from printable layout bounds.
+Prusa multi-volume output and Full Spectrum cutout recolouring remain guarded;
+the page explains that browser previews do not perform Boolean subtraction.
+Files with custom layer actions now display a reminder that printer-specific
+pauses/G-code must be recreated in the destination slicer.
+
 Main converter review 2.6.0-preview.4 deselects unused filament entries by
 default and lets each one be restored with a checkbox. The export compacts the
 selected palette and remaps painted facets and part defaults together. Usage is
