@@ -141,6 +141,14 @@
   #mappingdetails { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 6px; }
   #mappingdetails summary:focus-visible, #project summary:focus-visible, #plannercard > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
   #strategyhint { max-width: 72ch; min-height: 3em; }
+  #recommendation { border-top: 1px solid var(--line); padding-top: 18px; margin-top: 18px; }
+  #recommendation h3 { font-size: 16px; margin: 0 0 10px; }
+  #recommendedreels { list-style: none; padding: 0; display: grid; gap: 10px; }
+  #recommendedreels li { display: flex; align-items: start; gap: 6px; overflow-wrap: anywhere; }
+  #recommendedreels .swatch { flex: 0 0 18px; height: 18px; margin-top: 3px; }
+  #reels > .field { flex: 1 1 150px; max-width: 220px; }
+  #reels { align-items: stretch; }
+  #reels .reelname { flex: 1; max-width: 24ch; overflow-wrap: anywhere; }
   #exportcard .check { align-items: start; margin: 16px 0; }
   #exportcard .check input { margin-top: 5px; flex-shrink: 0; }
   #plannercard > summary .hint { font-weight: 400; }
@@ -250,15 +258,29 @@
         <label class="field">Spool Studio data file <input type="file" accept=".json,application/json" data-stock-file></label>
       </details>
     </details>
+    <section id="recommendation" aria-labelledby="recommendheading">
+      <h3 id="recommendheading">Recommended for this model</h3>
+      <p class="hint" id="recommendstatus" role="status">Load a model to suggest colours.</p>
+      <ul id="recommendedreels"></ul>
+      <div class="row">
+        <div class="segs" role="group" aria-label="Filaments to preview">
+          <button type="button" data-reel-view="loaded" aria-pressed="true">Loaded</button>
+          <button type="button" data-reel-view="recommended" aria-pressed="false" disabled>Recommended</button>
+        </div>
+        <button type="button" id="userecommended" disabled>Use recommended colours</button>
+      </div>
+      <p class="hint">Compare before changing reels. Applying updates this page's slot colours; it does not change anything on your printer.</p>
+    </section>
   </div>
 
   <div class="card hidden" id="mixcard">
     <h2>3. Compare the result</h2>
+    <p class="hint" id="reelviewnote" role="status">Previewing loaded filaments.</p>
     <div class="segs" id="strategy" role="group" aria-label="What the export does">
       <button type="button" data-strategy="source" aria-pressed="false">
         Original colours</button>
       <button type="button" data-strategy="solid" aria-pressed="false">
-        Loaded reels</button>
+        Solid colours</button>
       <button type="button" data-strategy="blend" aria-pressed="true">
         Predicted blends</button>
     </div>

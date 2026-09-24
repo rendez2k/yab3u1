@@ -13,6 +13,7 @@ import { thumbnailSizes } from "./shared/thumbnail.js";
 import { RecolourWorker } from "./shared/workerClient.js";
 import { readZip } from "./zip.js";
 import { mountSpoolImport } from "./shared/spoolImport.js";
+import { colourName } from "./shared/assignment.js";
 
 const REEL_KEY = "yab3u1-web-reels";
 const VERSION = "2.6.0-preview";
@@ -29,6 +30,8 @@ const state = {
   // What the export does with the file's colours: keep them, substitute them onto
   // the reels (with per-colour overrides), or use the blends that are ticked.
   strategy: "blend", overrides: {}, recipeKey: "", reviewed: false,
+  stock: null, locked: [false,false,false,false], recommendation: null, reelView: "loaded",
+  loadedTuning: null,
   // Bumped on every upload so a slow read of the previous file cannot land on top
   // of the new one and re-approve colours the user never reviewed.
   epoch: 0,
@@ -48,13 +51,96 @@ function defaultReels() {
 state.reels = defaultReels();
 
 function saveReels() {
-  try { localStorage.setItem(REEL_KEY, JSON.stringify(state.reels)); } catch (e) { /* fine */ }
+  try { localStorage.setItem(REEL_KEY, JSON.stringify(state.reels.map(({color,type})=>({color,type})))); } catch (e) { /* fine */ }
 }
 
-mountSpoolImport({ host: $("spoolimport"), getReels: () => state.reels, apply: (reels) => {
+const spoolImport = mountSpoolImport({ host: $("spoolimport"), getReels: () => state.reels, apply: (reels) => {
   state.reels = reels;
   saveReels(); clearReview(); renderReels(); refresh();
-} });
+}, onStock: rows => { state.stock=rows; invalidateRecommendation(); refresh(); } });
+
+let recommendationWorker=null, recommendationKey='';
+function activeReels() {
+  return state.reelView==='recommended' && state.recommendation ? state.recommendation.reels : state.reels;
+}
+function setReelView(view) {
+  if(view===state.reelView) return;
+  if(view==='recommended') {
+    state.loadedTuning={overrides:state.overrides,ticked:state.ticked,recipeKey:state.recipeKey};
+    state.overrides={}; state.ticked=new Set(); state.recipeKey='';
+  } else if(state.loadedTuning) {
+    Object.assign(state,state.loadedTuning); state.loadedTuning=null;
+  }
+  state.reelView=view;
+}
+function invalidateRecommendation() {
+  recommendationWorker?.terminate(); recommendationWorker=null; recommendationKey='';
+  state.recommendation=null; setReelView('loaded');
+  renderRecommendation('Updating colour suggestions…');
+  clearReview();
+}
+function renderRecommendation(message) {
+  const result=state.recommendation;
+  $("recommendedreels").innerHTML=result ? result.reels.map((r,i)=>
+    `<li><span class="swatch" style="background:${esc(r.color)}"></span><span>Slot ${i+1} · ${esc(r.name || colourName(r.color))} · ${esc(r.color)}${state.locked[i]?' · locked':''}</span></li>`).join('') : '';
+  if(message) $("recommendstatus").textContent=message;
+  else if(result) $("recommendstatus").textContent=(result.rough
+    ? 'Approximate colours to look for, using model swatches. Connect Spool Studio to suggest filaments you own. '
+    : 'Suggested from your Spool Studio collection; locked slots stay as loaded. ')
+    + (result.score < result.loadedScore-.1 ? 'This set has a closer estimated colour match than the loaded set. '
+      : result.score > result.loadedScore+.1 ? 'The loaded set scores better than this available set. '
+      : 'No meaningful estimated improvement over the loaded set. ')
+    + result.type+' · Swatch estimates, not calibrated print colours.';
+  document.querySelectorAll('[data-reel-view]').forEach(button=>{
+    button.setAttribute('aria-pressed',String(button.dataset.reelView===state.reelView));
+    button.disabled=button.dataset.reelView==='recommended' && !result;
+  });
+  $("userecommended").disabled=!result;
+  $("reelviewnote").textContent=state.strategy==='source' ? "Showing the file's original colours; loaded and recommended reels are not used."
+    : state.reelView==='recommended' ? 'Previewing recommended filaments. Loaded slots are unchanged; apply this set before exporting.'
+    : 'Previewing loaded filaments.';
+}
+function requestRecommendation() {
+  if(!state.assessed) return;
+  const input={sources:state.assessed.sourceColors,loaded:state.reels,stock:state.stock,
+    locked:state.locked,blends:state.strategy!=='solid'};
+  const key=JSON.stringify(input);
+  if(key===recommendationKey) { renderRecommendation(); return; }
+  invalidateRecommendation(); recommendationKey=key;
+  renderRecommendation('Finding a suggested set of four colours…');
+  const worker=new Worker(new URL('./shared/recommendWorker.js',import.meta.url),{type:'module'});
+  recommendationWorker=worker;
+  function finish(result,error) {
+    if(recommendationWorker!==worker) return;
+    worker.terminate(); recommendationWorker=null;
+    state.recommendation=result || null;
+    renderRecommendation(error);
+  }
+  worker.onmessage=({data})=>finish(data.result,data.error);
+  worker.onerror=()=>finish(null,'Colour suggestions could not be calculated. Change a slot or reconnect your library to try again.');
+  worker.postMessage(input);
+}
+document.querySelectorAll('[data-reel-view]').forEach(button=>button.addEventListener('click',()=>{
+  if(button.dataset.reelView==='recommended' && !state.recommendation) return;
+  setReelView(button.dataset.reelView);
+  if(state.strategy==='source') {
+    state.strategy='blend';
+    document.querySelectorAll('[data-strategy]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.strategy==='blend')));
+  }
+  state.previewMode='result';
+  document.querySelectorAll('[data-preview]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.preview==='result')));
+  clearReview(); refresh(); renderRecommendation();
+}));
+$("userecommended").addEventListener('click',()=>{
+  if(!state.recommendation) return;
+  state.reels=state.recommendation.reels.map(({color,type,name})=>({color,type,name}));
+  if(state.strategy==='source') {
+    state.strategy='blend';
+    document.querySelectorAll('[data-strategy]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.strategy==='blend')));
+  }
+  state.reelView='loaded'; state.loadedTuning=null; state.overrides={}; state.recipeKey='';
+  saveReels(); clearReview(); renderReels(); refresh();
+});
 
 // ------------------------------------------------------------------ loading ---
 
@@ -193,6 +279,7 @@ function setLoading(active) {
 }
 
 function resetForUpload() {
+  invalidateRecommendation();
   $("loadedmodel").classList.add("hidden");
   $("prepareswaps").disabled = true;
   $("preparestatus").textContent = "";
@@ -309,12 +396,15 @@ function renderReels() {
   $("reels").innerHTML = state.reels.map((reel, index) =>
     `<div class="field"><label for="reel${index}">Slot ${index + 1}</label>`
     + `<input type="color" id="reel${index}" value="${esc(reel.color)}">`
-    + `<select data-type="${index}">${["PLA", "PETG", "ABS", "TPU", "ASA", "PA"]
+    + `<span class="hint reelname" id="reelname${index}">${esc(reel.name || colourName(reel.color))}</span>`
+    + `<select aria-label="Slot ${index+1} material" data-type="${index}">${["PLA", "PETG", "ABS", "TPU", "ASA", "PA"]
       .map((type) => `<option${type === reel.type ? " selected" : ""}>${type}</option>`)
-      .join("")}</select></div>`).join("");
+      .join("")}</select><label class="check"><input type="checkbox" data-lock="${index}"${state.locked[index]?' checked':''}>Lock slot ${index+1}</label></div>`).join("");
   state.reels.forEach((reel, index) => {
     $(`reel${index}`).addEventListener("input", (event) => {
       state.reels[index].color = event.target.value.toUpperCase();
+      delete state.reels[index].name;
+      $(`reelname${index}`).textContent=colourName(state.reels[index].color);
       saveReels();
       clearReview();
       refresh();
@@ -323,14 +413,18 @@ function renderReels() {
   $("reels").querySelectorAll("select[data-type]").forEach((select) => {
     select.addEventListener("change", () => {
       state.reels[Number(select.getAttribute("data-type"))].type = select.value;
+      delete state.reels[Number(select.dataset.type)].name;
+      $(`reelname${select.dataset.type}`).textContent=colourName(state.reels[Number(select.dataset.type)].color);
       saveReels();
       clearReview();
       refresh();
     });
   });
-  $("reelnote").textContent = "These four are the reels you have loaded. Everything "
-    + "below is compared against them; a predicted blend never replaces a reel that "
-    + "already matches exactly.";
+  $("reels").querySelectorAll('[data-lock]').forEach(box=>box.addEventListener('change',()=>{
+    state.locked[Number(box.dataset.lock)]=box.checked; refresh();
+  }));
+  $("reelnote").textContent = "Set the four reels currently loaded. Lock any slots you want to keep when suggesting a different set.";
+  spoolImport.refresh();
 }
 
 // -------------------------------------------------------------- assessment ----
@@ -340,6 +434,8 @@ let assessToken = 0;
 async function refresh() {
   if (!state.project) return;
   if (!state.objects.length) {
+    invalidateRecommendation();
+    renderRecommendation('Select at least one object to suggest colours.');
     // The tokens move first: a reply already on its way must not repopulate a
     // selection the user has just cleared.
     assessToken += 1;
@@ -367,6 +463,7 @@ async function refresh() {
     return;
   }
   let assessed;
+  invalidateRecommendation();
   try {
     // The whole-XML assessment happens in the worker; the UI thread only ever
     // waits for a result (and drops it if the selection changed meanwhile).
@@ -388,12 +485,13 @@ async function refresh() {
 /** Everything that follows an assessment, with the assessment already in hand. */
 function useAssessed(assessed) {
   state.assessed = assessed;
+  requestRecommendation();
   const surfaceColours = new Set(assessed.used || []).size;
   const extraColours = Math.max(0, state.project.paletteCount - surfaceColours);
   $("palettenote").textContent = extraColours
     ? `${surfaceColours} colours found on the selected model; ${extraColours} other palette entries are not used on its surface. The sliced-file check can confirm which can be left out of the reel load, including support and purge use.`
     : "";
-  state.mix = planMixtures(assessed.sourceColors, state.reels);
+  state.mix = planMixtures(assessed.sourceColors, activeReels());
   state.recipes = state.mix.recipes;
   /* Ticking belongs to one recipe set. A new set starts fully ticked; an empty set
      means the user turned every blend off, and that must stay off. */
@@ -413,6 +511,7 @@ function useAssessed(assessed) {
 
 function clearReview() {
   state.reviewed = false;
+  $("exportlog").replaceChildren();
   const box = $("review");
   if (box) box.checked = false;
   renderExport();
@@ -421,15 +520,16 @@ function clearReview() {
 /** What the export would write for the selected strategy. */
 function resultPlan() {
   const assessed = state.assessed;
-  const slots = state.reels.map((reel) => norm(reel.color));
+  const reels = activeReels();
+  const slots = reels.map((reel) => norm(reel.color));
   if (!assessed || !state.mix) {
-    return { mapping: {}, recipes: [], kept: [], physical: state.reels,
+    return { mapping: {}, recipes: [], kept: [], physical: reels,
              blocked: assessed ? "Analysing the selected colours…" : "tick at least one object" };
   }
   if (state.strategy === "source") {
     const used = assessed.used;
     if (used.length > 4) {
-      return { mapping: {}, recipes: [], kept: [], physical: state.reels,
+      return { mapping: {}, recipes: [], kept: [], physical: reels,
                blocked: `this selection uses ${used.length} colours, so the file's own `
                  + "colours cannot all fit in four slots" };
     }
@@ -448,7 +548,7 @@ function resultPlan() {
     for (const [source, slot] of Object.entries(state.overrides)) {
       if (Number(slot) > 0) mapping[source] = Number(slot);
     }
-    return { mapping, recipes: [], kept: [], physical: state.reels };
+    return { mapping, recipes: [], kept: [], physical: reels };
   }
   const kept = state.recipes.filter((recipe) => state.ticked.has(recipe.id));
   const ids = new Map(kept.map((recipe, index) => [recipe.id, 5 + index]));
@@ -467,19 +567,19 @@ function resultPlan() {
   }
   return { recipes: kept.map((recipe) => ({ a: recipe.a, b: recipe.b,
                                             percent: recipe.percent })),
-           mapping, kept, physical: state.reels };
+           mapping, kept, physical: reels };
 }
 
 function renderMix(assessed) {
   const payload = resultPlan();
-  const slots = state.reels.map((reel) => norm(reel.color));
-  const rows = comparison(assessed.sourceColors, payload.mapping, slots);
+  const slots = activeReels().map((reel) => norm(reel.color));
+  const rows = comparison(assessed.sourceColors, payload.mapping, [...slots,...payload.kept.map(r=>r.color)]);
   const blendMode = state.strategy === "blend";
   $("strategyhint").textContent = state.strategy === "source"
     ? "Keep the model's original filament colours. This choice does not use your loaded reel colours; this page can keep up to four original colours."
     : blendMode
-      ? "Approximate the model's colours using your loaded reels and suggested blends. Shades are estimates, not a guarantee of the printed colour. Open the mapping below to adjust individual colours."
-      : "Use only your loaded reel colours, with no blends. Each source colour goes to its closest reel unless you change its mapping below.";
+      ? "Approximate the model's colours using the selected set and suggested blends. Shades are estimates, not a guarantee of the printed colour. Open the mapping below to adjust individual colours."
+      : "Use only the selected reel colours, with no blends. Each source colour goes to its closest reel unless you change its mapping below.";
   $("maptable").innerHTML = "<table><thead><tr><th>Source</th><th>In the file</th>"
     + "<th>Export result</th><th>Closest blend</th><th>Difference</th>"
     + "<th>Use</th></tr></thead>"
@@ -552,6 +652,7 @@ function renderMix(assessed) {
 document.querySelectorAll("[data-strategy]").forEach((button) => {
   button.addEventListener("click", () => {
     state.strategy = button.getAttribute("data-strategy");
+    if(state.strategy==='source') setReelView('loaded');
     // A treatment choice should show its result, even after inspecting Original.
     state.previewMode = "result";
     document.querySelectorAll("[data-preview]").forEach((view) =>
@@ -689,10 +790,11 @@ function paletteOf(payload, mode) {
     });
     return table;
   }
-  state.reels.forEach((reel, index) => { table[index + 1] = norm(reel.color); });
+  const reels=activeReels();
+  reels.forEach((reel, index) => { table[index + 1] = norm(reel.color); });
   payload.kept.forEach((recipe, index) => {
-    table[5 + index] = mixHex(norm(state.reels[recipe.a - 1].color),
-                              norm(state.reels[recipe.b - 1].color),
+    table[5 + index] = mixHex(norm(reels[recipe.a - 1].color),
+                              norm(reels[recipe.b - 1].color),
                               recipe.percent);
   });
   return table;
@@ -706,7 +808,7 @@ function renderExport() {
   const mixtures = payload.recipes.length;
   const reviewBox = $("review");
   const blocking = !state.objects.length ? "tick at least one object"
-    : payload.blocked;
+    : state.reelView==='recommended' ? 'use recommended colours to apply this set, or switch back to Loaded' : payload.blocked;
   const needsReview = state.strategy !== "source" && !blocking;
   reviewBox.parentElement.classList.toggle("hidden", !needsReview);
   reviewBox.checked = state.reviewed;
@@ -733,7 +835,7 @@ function exportRevision() {
   return JSON.stringify({epoch: state.epoch, plate: state.plateId,
     objects: state.objects, target: state.target, reels: state.reels,
     physical: payload.physical, mapping: payload.mapping, recipes: payload.recipes,
-    strategy: state.strategy, reviewed: state.reviewed});
+    strategy: state.strategy, reviewed: state.reviewed, reelView:state.reelView});
 }
 
 $("export").addEventListener("click", async () => {

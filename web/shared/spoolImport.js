@@ -93,7 +93,7 @@ export function parseSpoolStock(text) {
   return { rows, omitted };
 }
 
-export function mountSpoolImport({ host, getReels, apply }) {
+export function mountSpoolImport({ host, getReels, apply, onStock = () => {} }) {
   let rows = [], epoch = 0, cancelRequest = null;
   const file = host.querySelector('[data-stock-file]');
   const status = host.querySelector('[data-stock-status]');
@@ -105,11 +105,13 @@ export function mountSpoolImport({ host, getReels, apply }) {
   const connect = host.querySelector('[data-stock-connect]'), cancel = host.querySelector('[data-stock-cancel]');
   function load(result) {
     rows = result.rows; chosen.clear(); search.value = ''; render(); picker.hidden = !rows.length;
+    onStock(rows);
     status.textContent = `${rows.length} available filament colours. ${result.omitted ? `${result.omitted} unsupported or unavailable entries left out. ` : ''}`
       + (rows.length ? 'Choose the reel loaded in each slot, then apply. Refresh from Spool Studio after stock changes.' : 'No supported stock colours to choose. Check your library in Spool Studio.');
   }
   connect.onclick = () => {
     epoch++; rows = []; chosen.clear(); picker.hidden = true; slots.replaceChildren();
+    onStock(null);
     if (cancelRequest) cancelRequest();
     connect.disabled = true; cancel.hidden = false;
     const stop = requestSpoolStock({receive:load,status:text=>{status.textContent=text;},done:()=>{
@@ -143,6 +145,7 @@ export function mountSpoolImport({ host, getReels, apply }) {
     if (cancelRequest) cancelRequest();
     const selected = file.files[0], token = ++epoch;
     rows = []; chosen.clear(); picker.hidden = true; slots.replaceChildren();
+    onStock(null);
     if (!selected) return;
     status.textContent = 'Reading filament colours…';
     try {
@@ -157,7 +160,7 @@ export function mountSpoolImport({ host, getReels, apply }) {
   applyButton.onclick = () => {
     const next = getReels().map((reel, slot) => {
       const row = rows[chosen.get(slot)];
-      return row ? { color: row.color, type: row.type } : { ...reel };
+      return row ? { color: row.color, type: row.type, name:row.name } : { ...reel };
     });
     apply(next);
     status.textContent = `${chosen.size} slot${chosen.size === 1 ? '' : 's'} updated. Check the recolouring result below. Slicer filament profiles are chosen separately.`;
@@ -166,6 +169,8 @@ export function mountSpoolImport({ host, getReels, apply }) {
   host.querySelector('[data-stock-clear]').onclick = () => {
     if (cancelRequest) cancelRequest();
     epoch++; rows = []; chosen.clear(); slots.replaceChildren(); picker.hidden = true; file.value = '';
+    onStock(null);
     status.textContent = 'Imported library cleared. Your loaded slot colours are unchanged.';
   };
+  return { refresh: render };
 }

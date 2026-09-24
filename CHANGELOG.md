@@ -7,6 +7,15 @@ section here together.
 
 ## Unreleased — experimental U1 reel-change export
 
+Added Loaded vs Recommended filament sets. Without a stock library, the page
+suggests named approximate colours; with Spool Studio, it searches available
+filaments of one material. Slots can be locked. A bounded background search
+scores individual source colours equally, considers the exporter's blend rules,
+and labels predictions as estimates. Comparing a recommendation never changes
+loaded slots or permits export until applied. Stock, selection and slot changes
+cancel stale searches. Blend differences now include virtual palette colours
+instead of showing "unknown" for a valid mixture.
+
 Simplified Full Spectrum into printer/model, loaded filaments, visual comparison
 and export. The preview now comes before the expandable colour mapping and blend
 recipes. Original, loaded-reel and predicted-blend choices explain their effect
