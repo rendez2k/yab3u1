@@ -86,7 +86,7 @@
           padding: 16px 18px; margin-bottom: 16px;
           box-shadow: 0 1px 2px rgba(15, 23, 42, .05),
                       0 10px 24px -18px rgba(15, 23, 42, .22); }
-  .card.hidden, .hidden { display: none; }
+  .hidden { display: none !important; }
   .hint { color: var(--dim); font-size: 13px; }
   button, select, input[type=file] {
     font: inherit; color: var(--fg); background: var(--panel2);
@@ -143,9 +143,6 @@
   #strategyhint { max-width: 72ch; min-height: 3em; }
   #recommendation { border-top: 1px solid var(--line); padding-top: 18px; margin-top: 18px; }
   #recommendation h3 { font-size: 16px; margin: 0 0 10px; }
-  #recommendedreels { list-style: none; padding: 0; display: grid; gap: 10px; }
-  #recommendedreels li { display: flex; align-items: start; gap: 6px; overflow-wrap: anywhere; }
-  #recommendedreels .swatch { flex: 0 0 18px; height: 18px; margin-top: 3px; }
   #reels > .field { flex: 1 1 150px; max-width: 220px; }
   #reels { align-items: stretch; }
   #reels .reelname { flex: 1; max-width: 24ch; overflow-wrap: anywhere; }
@@ -174,6 +171,99 @@
            background: var(--accent); border-radius: 14px; padding: 7px 11px;
            font-weight: 600; margin-right: 8px; }
   footer { color: var(--dim); font-size: 12.5px; text-align: center; padding: 24px; }
+
+  /* Full Spectrum workspace: the model and its palette share one working view. */
+  main { max-width: 1440px; padding-top: 28px; }
+  header { padding-inline: max(22px, calc((100vw - 1396px) / 2)); }
+  .studiointro { margin: 0 0 24px; }
+  .studiointro h2 { font-size: clamp(24px, 3vw, 34px); letter-spacing: -.025em; margin: 0 0 4px; }
+  .studiointro p { margin: 0; color: var(--dim); }
+  .card { padding: 24px; background: color-mix(in oklab, var(--panel) 94%, var(--mint)); }
+  #destinationcard { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(280px, 1.6fr); gap: 0 32px; }
+  #destinationcard > h2 { grid-column: 1 / -1; }
+  #destinationcard > .field { grid-column: 1; grid-row: 2; }
+  #destinationnote { grid-column: 1; grid-row: 3; margin-bottom: 0; }
+  #destinationcard #drop, #loadedmodel { grid-column: 2; grid-row: 2 / 4; margin: 0; }
+  #loaderror, #project { grid-column: 1 / -1; }
+  #loaderror:empty { display: none; }
+  #project { grid-row: 4; margin-top: 12px; padding-top: 4px; }
+  .studio { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(380px, 1fr); gap: 20px; align-items: start; }
+  .palettecolumn { min-width: 0; }
+  main:has(#loadedmodel:not(.hidden)) .studiointro,
+  #destinationcard:has(#loadedmodel:not(.hidden)) > h2 { display: none; }
+  #destinationcard:has(#loadedmodel:not(.hidden)) { padding-block: 16px; }
+  #mixcard { position: sticky; top: 20px; min-width: 0; }
+  .sectionhead { display: flex; gap: 12px; align-items: baseline; justify-content: space-between; flex-wrap: wrap; margin-bottom: 20px; }
+  .sectionhead h2 { margin: 0; font-size: 20px; letter-spacing: -.02em; }
+  .sectionhead a { color: var(--dim); font-size: 12px; text-underline-offset: 3px; }
+  #previewcard { margin-top: 0; }
+  .previewtoolbar { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .previewtoolbar button { font-size: 13px; }
+  #preview { height: clamp(350px, 52vh, 620px); border-radius: 16px; margin-top: 16px; }
+  #reelviewnote { margin-bottom: 8px; }
+  .previewdetails summary { font-size: 12px; color: var(--dim); cursor: pointer; min-height: 32px; }
+  #reels { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; }
+  #reels > .field { max-width: none; gap: 8px; font-size: 12px; }
+  #reels input[type=color] { width: 100%; height: 62px; padding: 3px; border: 1px solid var(--line); background: var(--panel); border-radius: 12px; cursor: pointer; }
+  #reels input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+  #reels input[type=color]::-webkit-color-swatch { border: 0; border-radius: 8px; }
+  #reels input[type=color]::-moz-color-swatch { border: 0; border-radius: 8px; }
+  #reels select { padding-inline: 6px; font-size: 12px; }
+  #reels .check { font-size: 11px; gap: 3px; }
+  #reels .reelname { font-size: 12px; }
+  .paletteheading { font-size: 14px; margin: 0 0 12px; }
+  #reelnote, .applyhint { font-size: 12px; }
+  #spoolimport { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 8px; }
+  #spoolimport summary { font-size: 13px; }
+  #recommendation { margin-top: 12px; padding-top: 20px; }
+  #recommendstatus { font-size: 12px; margin-bottom: 16px; }
+  #palettechoices { display: grid; gap: 10px; margin-bottom: 16px; }
+  .palettechoice { text-align: left; width: 100%; padding: 14px; background: var(--panel); border-radius: 16px; }
+  .palettechoice[aria-pressed=true] { border-color: var(--focus); background: var(--mint); }
+  .palettechoice:hover { border-color: var(--focus); }
+  .palettetitle { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 10px; font-size: 13px; }
+  .palettetitle small { color: var(--dim); font-weight: 400; }
+  .palettechips { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
+  .palettechip { min-width: 0; font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+  .palettechip i { display: block; height: 36px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; }
+  #userecommended, #export { width: 100%; }
+  #morepalettes { width: 100%; margin-bottom: 12px; }
+  #exportcard { padding-top: 20px; }
+  #exportcard h2 { margin-bottom: 8px; }
+  #exportcard .check { font-size: 12px; }
+  #advanced > summary { min-height: 44px; display: flex; align-items: center; gap: 14px; cursor: pointer; font-weight: 650; list-style: none; }
+  #advanced > summary::after { content: '+'; margin-left: auto; font-size: 24px; font-weight: 400; }
+  #advanced[open] > summary::after { content: '−'; }
+  .advancedcontent { padding-top: 24px; border-top: 1px solid var(--line); margin-top: 12px; }
+  #plannercard { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 8px; }
+  #advanced:focus-visible, summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+  button:not(:disabled), summary { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+  @media (max-width: 900px) {
+    .studio { grid-template-columns: minmax(0,1fr); gap: 0; }
+    #mixcard { position: static; }
+    #destinationcard { display: block; }
+    #destinationcard #drop, #loadedmodel { margin-top: 16px; }
+    #preview { height: 380px; }
+  }
+  @media (max-width: 430px) {
+    main { padding-top: 20px; }
+    .card { padding: 16px; }
+    .studiointro h2 { font-size: 26px; }
+    #preview { height: 300px; }
+    #reels { gap: 8px; }
+    header { display: grid; grid-template-columns: 38px minmax(0,1fr) auto auto; gap: 8px 12px; padding: 12px 16px; }
+    header .brandmark { grid-column: 1; grid-row: 1; }
+    header .title { grid-column: 2 / -1; grid-row: 1; }
+    h1 { font-size: 16px; }
+    header .role { font-size: 11px; }
+    #version { grid-column: 1 / 3; grid-row: 2; justify-self: start; }
+    header .navlink { grid-column: 3; grid-row: 2; margin-left: 0; }
+    #theme { grid-column: 4; grid-row: 2; }
+    #advanced > summary { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; }
+    #advanced > summary .hint { max-width: none; }
+    #advanced > summary .hint { font-size: 12px; }
+  }
 </style>
 </head>
 <body>
@@ -191,8 +281,9 @@
   <button id="theme" type="button">Theme</button>
 </header>
 <main>
+  <div class="studiointro"><h2>Find your model’s next colours.</h2><p>Compare what’s loaded with what could work. Make it yours.</p></div>
   <div class="card" id="destinationcard" style="margin-top:16px">
-    <h2>1. Choose your printer and model</h2>
+    <h2>Choose your printer and model</h2>
     <div class="field">
       <label for="target">Printer / output format</label>
       <select id="target"></select>
@@ -233,8 +324,26 @@
   </details>
   </div>
 
+  <div class="studio">
+<section class="card hidden" id="mixcard" aria-labelledby="previewheading">
+    <div class="sectionhead"><h2 id="previewheading">See your colours in 3D</h2><a id="advancedlink" href="#advanced">Advanced controls</a></div>
+  <div class="hidden" id="previewcard">
+    <div class="previewtoolbar"><div class="segs" role="group" aria-label="Preview colours">
+      <button type="button" data-preview="original" aria-pressed="false">Original</button>
+      <button type="button" data-reel-view="loaded" aria-pressed="true">Loaded</button>
+      <button type="button" data-reel-view="recommended" aria-pressed="false" disabled>Recommended</button>
+    </div>
+    <button type="button" id="previewreset" >Reset view</button></div>
+    <canvas id="preview" width="800" height="600" aria-label="Interactive 3D model preview"></canvas>
+    <p class="hint" id="reelviewnote" role="status">Previewing loaded filaments.</p>
+    <details class="previewdetails"><summary>Uncalibrated colour estimate · preview details</summary>
+    <p class="hint" id="previewnote"></p></details>
+  </div>
+  </section>
+  <div class="palettecolumn">
   <div class="card hidden" id="reelscard">
-    <h2>2. Choose your loaded filaments</h2>
+    <div class="sectionhead"><h2>Your palette</h2><span class="hint">4 physical slots</span></div>
+    <h3 class="paletteheading">Loaded filaments</h3>
     <div class="row" id="reels"></div>
     <p class="hint" id="reelnote" style="margin-top:12px"></p>
     <details id="spoolimport">
@@ -261,21 +370,30 @@
     <section id="recommendation" aria-labelledby="recommendheading">
       <h3 id="recommendheading">Recommended for this model</h3>
       <p class="hint" id="recommendstatus" role="status">Load a model to suggest colours.</p>
-      <ul id="recommendedreels"></ul>
-      <div class="row">
-        <div class="segs" role="group" aria-label="Filaments to preview">
-          <button type="button" data-reel-view="loaded" aria-pressed="true">Loaded</button>
-          <button type="button" data-reel-view="recommended" aria-pressed="false" disabled>Recommended</button>
-        </div>
-        <button type="button" id="userecommended" disabled>Use recommended colours</button>
-      </div>
-      <p class="hint">Compare before changing reels. Applying updates this page's slot colours; it does not change anything on your printer.</p>
+      <div id="palettechoices" role="group" aria-label="Recommended palettes"></div>
+      <button type="button" id="morepalettes" aria-expanded="false" aria-controls="palettechoices" hidden>More palettes</button>
+      <button type="button" class="primary" id="userecommended" disabled>Apply palette</button>
+      <p class="hint applyhint">Choose a palette to preview it. Apply when you want to use it in your export.</p>
     </section>
   </div>
 
-  <div class="card hidden" id="mixcard">
-    <h2>3. Compare the result</h2>
-    <p class="hint" id="reelviewnote" role="status">Previewing loaded filaments.</p>
+  <div class="card hidden" id="exportcard">
+    <h2>Export your project</h2>
+    <p class="hint" id="exportnote" role="status"></p>
+    <label class="check"><input type="checkbox" id="review">
+      I have checked the colour mapping and accept the substitutions and predicted blends.</label>
+    <div class="row">
+      <button type="button" class="primary" id="export">Download the project</button>
+    </div>
+    <div id="exportlog" class="hint"></div>
+  </div>
+
+  </div>
+  </div>
+  <details class="card" id="advanced">
+    <summary>Advanced <span class="hint">Colour treatment, mapping &amp; reel changes</span></summary>
+    <div class="advancedcontent">
+    <h2>Colour treatment</h2>
     <div class="segs" id="strategy" role="group" aria-label="What the export does">
       <button type="button" data-strategy="source" aria-pressed="false">
         Original colours</button>
@@ -286,35 +404,13 @@
     </div>
     <p class="hint" id="strategyhint" role="status"></p>
 
-  <div class="hidden" id="previewcard">
-    <div class="segs" role="group" aria-label="Preview view">
-      <button type="button" data-preview="original" aria-pressed="false">Original</button>
-      <button type="button" data-preview="result" aria-pressed="true">Result</button>
-    </div>
-    <button type="button" id="previewreset" style="margin-left:8px">Reset view</button>
-    <canvas id="preview" width="800" height="420"></canvas>
-    <p class="hint" id="previewnote"></p>
-  </div>
     <details id="mappingdetails">
       <summary>Review colour mapping and blend recipes</summary>
       <div id="maptable"></div>
       <div id="mixlist"></div>
       <p class="hint" id="mixnote"></p>
     </details>
-  </div>
-
-  <div class="card hidden" id="exportcard">
-    <h2>4. Export your project</h2>
-    <p class="hint" id="exportnote" role="status"></p>
-    <label class="check"><input type="checkbox" id="review">
-      I have checked the colour mapping and accept the substitutions and predicted blends.</label>
-    <div class="row">
-      <button type="button" class="primary" id="export">Download the project</button>
-    </div>
-    <div id="exportlog" class="hint"></div>
-  </div>
-
-  <details class="card" id="plannercard">
+  <details id="plannercard">
     <summary>Keep the original colours with reel changes <span class="hint">· U1 experimental</span></summary>
     <p class="hint">Keep more than four original colours by changing reels between layers.
       Start with an all-PLA model and a U1 with 0.4 mm nozzles. The slice must fit four colours per layer.</p>
@@ -344,6 +440,8 @@
     <p class="hint" id="gcodemember" role="status" aria-live="polite"></p>
     <div id="planout" class="hidden" style="margin-top:12px"></div>
     <div class="row" id="plandownloads" style="margin-top:10px"></div>
+  </details>
+    </div>
   </details>
 </main>
 <footer>Colour prediction is an uncalibrated estimate from swatch values. Reel-change exports

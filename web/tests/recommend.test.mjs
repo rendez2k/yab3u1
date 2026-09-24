@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {recommendPalette} from '../shared/recommend.js';
+import {recommendPalette, paletteScore} from '../shared/recommend.js';
 const loaded=['#FFFFFF','#000000','#3D9140','#FF9500'].map(color=>({color,type:'PLA'}));
 const sources={1:'#0080C0',2:'#FF0000',3:'#FFFFFF',4:'#000000',5:'#C5C263'};
 const before=JSON.stringify({sources,loaded});
@@ -9,6 +9,13 @@ assert(rough.rough); assert.equal(rough.reels.length,4);
 assert(rough.score<rough.loadedScore);
 assert.equal(JSON.stringify({sources,loaded}),before);
 assert(rough.reels.every(r=>r.name && r.type==='PLA'));
+const ranked=[rough,...rough.alternatives];
+assert(ranked.length>=3 && ranked.length<=6);
+assert.equal(new Set(ranked.map(p=>p.reels.map(r=>r.color).sort().join(','))).size,ranked.length);
+ranked.forEach((p,i)=>{
+  assert.equal(p.score,paletteScore(sources,p.reels));
+  if(i) assert(p.score>=ranked[i-1].score);
+});
 const stock=rough.reels.map((r,i)=>({...r,name:`Brand ${i} · ${r.name}`}));
 stock.push({color:'#FFFF00',type:'PETG',name:'Other material'});
 const owned=recommendPalette({sources,loaded,stock});
@@ -17,8 +24,11 @@ assert(owned.reels.every(r=>stock.some(s=>s.name===r.name && s.color===r.color))
 assert.equal(new Set(owned.reels.map(r=>r.type)).size,1);
 const locked=recommendPalette({sources,loaded,stock,locked:[false,false,true,false]});
 assert.equal(locked.reels[2].color,loaded[2].color);
+assert(locked.alternatives.every(p=>p.reels[2].color===loaded[2].color));
+assert(owned.alternatives.every(p=>p.reels.every(r=>stock.some(s=>s.name===r.name && s.color===r.color))));
 const all=recommendPalette({sources,loaded,stock:[],locked:[true,true,true,true]});
 assert.deepEqual(all.reels.map(r=>r.color),loaded.map(r=>r.color));
+assert.equal(all.alternatives.length,0);
 assert.throws(()=>recommendPalette({sources,loaded,stock:[]}),/Not enough/);
 assert.throws(()=>recommendPalette({sources:{},loaded}),/readable/);
 assert.throws(()=>recommendPalette({sources,loaded:[loaded[0],{...loaded[1],type:'PETG'},...loaded.slice(2)],locked:[true,true]}),/different materials/);

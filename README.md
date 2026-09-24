@@ -229,6 +229,17 @@ it or to name your reels first.
 
 ## Recolouring onto your own reels, with Full Spectrum mixing
 
+The Full Spectrum review workspace puts the model beside its palette on desktop,
+with an Original / Loaded / Recommended comparison. Recommendations show one
+suggested set and two alternatives; **More palettes** reveals additional distinct
+sets when available. Without Spool Studio these are approximate named swatches;
+with a shared library they use available filaments of one material. **Keep slot**
+locks a physical position. Previewing a set does not alter loaded reels: **Apply
+palette** makes it the export palette. The search is bounded and ranks uncalibrated
+colour estimates, not measured print accuracy or a guaranteed global optimum.
+**Advanced** contains colour treatment, individual mappings, blend recipes and
+the experimental U1 reel-change workflow.
+
 A painted model is rarely painted in the colours you have loaded. The page treats
 the four reels you tell it about as the palette you are printing onto, and offers
 three honest ways across:

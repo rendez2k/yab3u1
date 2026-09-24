@@ -26,6 +26,7 @@ export function recommendPalette({ sources, loaded, stock = null, locked = [], b
     : stock;
   const types = fixedType ? [fixedType] : [...new Set(candidates.map(r=>r.type))].sort();
   let best = null;
+  const options = [];
   for (const type of types) {
     const seen = new Set();
     let pool = candidates.filter(r=>r.type===type && norm(r.color)).map(r=>({...r,color:norm(r.color)}))
@@ -94,6 +95,20 @@ export function recommendPalette({ sources, loaded, stock = null, locked = [], b
     const reels=ids.map((id,i)=>fixed[i] || {...pool[id]});
     const cost=paletteScore(sources,reels,blends); // Respect the actual recipe cap.
     if(!best || cost<best.score) best={reels,score:cost,type};
+    options.push({reels,score:cost,type});
+    // Offer genuinely different sets, not permutations of the same four colours.
+    // Limit expensive recipe-cap scoring to the strongest neighbouring palettes.
+    const neighbours=[];
+    for(let slot=0;slot<4;slot++) if(!locked[slot]) {
+      for(let i=0;i<pool.length;i++) if(!ids.includes(i)) {
+        const trial=ids.slice(); trial[slot]=i;
+        neighbours.push({ids:trial,cost:score(trial)});
+      }
+    }
+    for(const trial of neighbours.sort((a,b)=>a.cost-b.cost).slice(0,8)) {
+      const alternative=trial.ids.map((id,i)=>fixed[i] || {...pool[id]});
+      options.push({reels:alternative,score:paletteScore(sources,alternative,blends),type});
+    }
   }
   if(!best) throw Error('Not enough distinct colours in one material to recommend four slots. Unlock a slot or add more available filaments.');
   const loadedScore=paletteScore(sources,loaded,blends);
@@ -102,5 +117,13 @@ export function recommendPalette({ sources, loaded, stock = null, locked = [], b
   if(current.every(Boolean) && new Set(current.map(r=>r.type)).size===1 && loadedScore<=best.score) {
     best={reels:current,score:loadedScore,type:current[0].type};
   }
-  return {...best,rough,loadedScore};
+  // Prefer the loaded slot order on equal scores before deduplicating sets.
+  options.unshift(best);
+  const unique=new Map();
+  for(const option of options.sort((a,b)=>a.score-b.score)) {
+    const key=option.type+':'+option.reels.map(r=>norm(r.color)).sort().join(',');
+    if(!unique.has(key)) unique.set(key,option);
+  }
+  const ranked=[...unique.values()].slice(0,6);
+  return {...ranked[0],rough,loadedScore,alternatives:ranked.slice(1)};
 }

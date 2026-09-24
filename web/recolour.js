@@ -31,7 +31,7 @@ const state = {
   // the reels (with per-colour overrides), or use the blends that are ticked.
   strategy: "blend", overrides: {}, recipeKey: "", reviewed: false,
   stock: null, locked: [false,false,false,false], recommendation: null, reelView: "loaded",
-  loadedTuning: null,
+  loadedTuning: null, recommendationOptions: [], recommendationIndex: 0, showMorePalettes: false,
   // Bumped on every upload so a slow read of the previous file cannot land on top
   // of the new one and re-approve colours the user never reviewed.
   epoch: 0,
@@ -75,29 +75,47 @@ function setReelView(view) {
 }
 function invalidateRecommendation() {
   recommendationWorker?.terminate(); recommendationWorker=null; recommendationKey='';
-  state.recommendation=null; setReelView('loaded');
+  state.recommendation=null; state.recommendationOptions=[]; state.recommendationIndex=0; state.showMorePalettes=false; setReelView('loaded');
   renderRecommendation('Updating colour suggestions…');
   clearReview();
 }
 function renderRecommendation(message) {
   const result=state.recommendation;
-  $("recommendedreels").innerHTML=result ? result.reels.map((r,i)=>
-    `<li><span class="swatch" style="background:${esc(r.color)}"></span><span>Slot ${i+1} · ${esc(r.name || colourName(r.color))} · ${esc(r.color)}${state.locked[i]?' · locked':''}</span></li>`).join('') : '';
+  const focusedPalette=document.activeElement?.dataset?.palette;
+  const choices=state.recommendationOptions.map((option,index)=>({option,index}))
+    .filter(({index})=>state.showMorePalettes || index<3 || (state.reelView==='recommended' && index===state.recommendationIndex));
+  $("palettechoices").innerHTML=choices.map(({option,index})=>
+    `<button type="button" class="palettechoice" data-palette="${index}" aria-pressed="${state.reelView==='recommended' && state.recommendationIndex===index && state.previewMode==='result'}" aria-label="Preview ${index===0?'recommended palette':`alternative ${index}`}">
+      <span class="palettetitle"><strong>${index===0?'Recommended':`Alternative ${index}`}</strong><small>${esc(option.type)}${state.reelView==='recommended' && state.recommendationIndex===index?' · Selected':''}</small></span>
+      <span class="palettechips">${option.reels.map((r,i)=>`<span class="palettechip"><i style="background:${esc(r.color)}"></i>${i+1} · ${esc(r.name || colourName(r.color))}${state.locked[i]?' · locked':''}</span>`).join('')}</span>
+    </button>`).join('');
+  $("palettechoices").querySelectorAll('[data-palette]').forEach(button=>button.addEventListener('click',()=>{
+    state.recommendationIndex=Number(button.dataset.palette);
+    const option=state.recommendationOptions[state.recommendationIndex];
+    state.recommendation={...state.recommendation,...option};
+    if(state.reelView==='recommended') { state.overrides={}; state.ticked=new Set(); state.recipeKey=''; }
+    showReelView('recommended');
+  }));
+  if(focusedPalette!==undefined) $("palettechoices").querySelector(`[data-palette="${Number(focusedPalette)}"]`)?.focus({preventScroll:true});
+  $("morepalettes").hidden=state.recommendationOptions.length<=3;
+  $("morepalettes").textContent=state.showMorePalettes ? 'Fewer palettes' : 'More palettes';
+  $("morepalettes").setAttribute('aria-expanded',String(state.showMorePalettes));
   if(message) $("recommendstatus").textContent=message;
   else if(result) $("recommendstatus").textContent=(result.rough
-    ? 'Approximate colours to look for, using model swatches. Connect Spool Studio to suggest filaments you own. '
-    : 'Suggested from your Spool Studio collection; locked slots stay as loaded. ')
-    + (result.score < result.loadedScore-.1 ? 'This set has a closer estimated colour match than the loaded set. '
-      : result.score > result.loadedScore+.1 ? 'The loaded set scores better than this available set. '
-      : 'No meaningful estimated improvement over the loaded set. ')
-    + result.type+' · Swatch estimates, not calibrated print colours.';
+    ? 'Approximate colours to look for. '
+    : 'From your Spool Studio collection. ')
+    + (result.score < result.loadedScore-.1 ? 'Estimated closer than loaded.'
+      : result.score > result.loadedScore+.1 ? 'Your loaded set scores better.'
+      : 'Similar estimated match to loaded.');
   document.querySelectorAll('[data-reel-view]').forEach(button=>{
-    button.setAttribute('aria-pressed',String(button.dataset.reelView===state.reelView));
+    button.setAttribute('aria-pressed',String(button.dataset.reelView===state.reelView && state.previewMode==='result'));
     button.disabled=button.dataset.reelView==='recommended' && !result;
   });
   $("userecommended").disabled=!result;
+  document.querySelectorAll('[data-preview]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.preview===state.previewMode)));
   $("reelviewnote").textContent=state.strategy==='source' ? "Showing the file's original colours; loaded and recommended reels are not used."
-    : state.reelView==='recommended' ? 'Previewing recommended filaments. Loaded slots are unchanged; apply this set before exporting.'
+    : state.previewMode==='original' ? 'Original colours from your file.'
+    : state.reelView==='recommended' ? `Previewing ${state.recommendationIndex ? `alternative ${state.recommendationIndex}` : 'recommended filaments'}. Apply this palette before exporting.`
     : 'Previewing loaded filaments.';
 }
 function requestRecommendation() {
@@ -114,23 +132,30 @@ function requestRecommendation() {
     if(recommendationWorker!==worker) return;
     worker.terminate(); recommendationWorker=null;
     state.recommendation=result || null;
+    state.recommendationOptions=result ? [result,...result.alternatives] : [];
+    state.recommendationIndex=0;
     renderRecommendation(error);
   }
   worker.onmessage=({data})=>finish(data.result,data.error);
   worker.onerror=()=>finish(null,'Colour suggestions could not be calculated. Change a slot or reconnect your library to try again.');
   worker.postMessage(input);
 }
-document.querySelectorAll('[data-reel-view]').forEach(button=>button.addEventListener('click',()=>{
-  if(button.dataset.reelView==='recommended' && !state.recommendation) return;
-  setReelView(button.dataset.reelView);
+function showReelView(view) {
+  if(view==='recommended' && !state.recommendation) return;
+  setReelView(view);
   if(state.strategy==='source') {
     state.strategy='blend';
     document.querySelectorAll('[data-strategy]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.strategy==='blend')));
   }
   state.previewMode='result';
-  document.querySelectorAll('[data-preview]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.preview==='result')));
   clearReview(); refresh(); renderRecommendation();
-}));
+}
+document.querySelectorAll('[data-reel-view]').forEach(button=>button.addEventListener('click',()=>showReelView(button.dataset.reelView)));
+$("morepalettes").addEventListener('click',()=>{
+  state.showMorePalettes=!state.showMorePalettes;
+  // Collapsing alternatives never changes the selected palette or its overrides.
+  renderRecommendation();
+});
 $("userecommended").addEventListener('click',()=>{
   if(!state.recommendation) return;
   state.reels=state.recommendation.reels.map(({color,type,name})=>({color,type,name}));
@@ -139,7 +164,12 @@ $("userecommended").addEventListener('click',()=>{
     document.querySelectorAll('[data-strategy]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.strategy==='blend')));
   }
   state.reelView='loaded'; state.loadedTuning=null; state.overrides={}; state.recipeKey='';
+  state.previewMode='result';
   saveReels(); clearReview(); renderReels(); refresh();
+});
+$("advancedlink").addEventListener('click',()=>{
+  $("advanced").open=true;
+  $("advanced").querySelector('summary').focus({preventScroll:true});
 });
 
 // ------------------------------------------------------------------ loading ---
@@ -399,7 +429,7 @@ function renderReels() {
     + `<span class="hint reelname" id="reelname${index}">${esc(reel.name || colourName(reel.color))}</span>`
     + `<select aria-label="Slot ${index+1} material" data-type="${index}">${["PLA", "PETG", "ABS", "TPU", "ASA", "PA"]
       .map((type) => `<option${type === reel.type ? " selected" : ""}>${type}</option>`)
-      .join("")}</select><label class="check"><input type="checkbox" data-lock="${index}"${state.locked[index]?' checked':''}>Lock slot ${index+1}</label></div>`).join("");
+      .join("")}</select><label class="check"><input type="checkbox" aria-label="Keep slot ${index+1} in recommendations" data-lock="${index}"${state.locked[index]?' checked':''}>Keep slot</label></div>`).join("");
   state.reels.forEach((reel, index) => {
     $(`reel${index}`).addEventListener("input", (event) => {
       state.reels[index].color = event.target.value.toUpperCase();
@@ -682,6 +712,7 @@ document.querySelectorAll("[data-preview]").forEach((button) => {
     state.previewMode = button.getAttribute("data-preview");
     document.querySelectorAll("[data-preview]").forEach((other) =>
       other.setAttribute("aria-pressed", String(other === button)));
+    renderRecommendation();
     refreshPreview();
   });
 });
@@ -808,7 +839,7 @@ function renderExport() {
   const mixtures = payload.recipes.length;
   const reviewBox = $("review");
   const blocking = !state.objects.length ? "tick at least one object"
-    : state.reelView==='recommended' ? 'use recommended colours to apply this set, or switch back to Loaded' : payload.blocked;
+    : state.reelView==='recommended' ? 'apply the selected palette, or switch back to Loaded' : payload.blocked;
   const needsReview = state.strategy !== "source" && !blocking;
   reviewBox.parentElement.classList.toggle("hidden", !needsReview);
   reviewBox.checked = state.reviewed;
