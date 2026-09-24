@@ -73,9 +73,10 @@ export function candidateRecipes(reels, ratios = RATIOS) {
 
 /** Compare every source colour with a single reel and with the best mixture. */
 export function planMixtures(sourceColors, reels, ratios = RATIOS,
-                             maxRecipes = 6) {
+                             maxRecipes = 6, credibleOnly = false) {
   const slotColors = reels.map((r) => norm((r || {}).color));
-  const candidates = candidateRecipes(reels, ratios);
+  const candidates = candidateRecipes(reels, ratios).filter(recipe=>!credibleOnly ||
+    plausibleBlend(slotColors[recipe.a-1],slotColors[recipe.b-1],recipe.color));
   const rows = [];
   const used = new Map();
   Object.keys(sourceColors).map(Number).sort((a, b) => a - b).forEach((source) => {
@@ -206,4 +207,43 @@ export function mappingFromPlan(plan, useMixtures = true) {
     }
   }
   return mapping;
+}
+
+// A basic physical sanity check, not a substitute for filament calibration.
+// Two neutral reels cannot yield a strongly chromatic shade. The uncalibrated
+// polynomial occasionally predicts one; never present that as printable coverage.
+export function plausibleBlend(first, second, predicted) {
+  const spread=value=>{
+    const rgb=hexToRgb(value);
+    return rgb ? Math.max(...rgb)-Math.min(...rgb) : Infinity;
+  };
+  return !(spread(first)<=8 && spread(second)<=8 && spread(predicted)>16);
+}
+
+/** Interactive Full Spectrum planning rejects implausible predictions before
+ * choosing a recipe, so a rejected nearest prediction cannot hide a valid one. */
+export function planBlends(sourceColors,reels) {
+  return planMixtures(sourceColors,reels,RATIOS,6,true);
+}
+
+/** Describe the effective export mapping, including overrides and unticked recipes.
+ * In blend mode a non-matching single reel is unresolved, never a silent fallback.
+ */
+export function describeColourMapping(sourceColors, payload, strictBlends = false) {
+  const rows = Object.entries(sourceColors || {}).map(([source, value]) => {
+    const original=norm(value), slot=Number(payload.mapping[source]);
+    const recipe=slot>4 ? payload.kept?.[slot-5] : null;
+    const result=payload.source ? original : norm(recipe?.color || payload.physical?.[slot-1]?.color);
+    const implausible=recipe && !plausibleBlend(payload.physical?.[recipe.a-1]?.color,
+      payload.physical?.[recipe.b-1]?.color,result);
+    const kind=payload.source ? 'preserved' : recipe ? (strictBlends && implausible ? 'unresolved' : 'blended')
+      : result && distance(original,result)<=.5 ? 'preserved'
+      : strictBlends || !result ? 'unresolved' : 'substituted';
+    return {source:Number(source),original,result,slot,recipe,kind};
+  });
+  const counts={preserved:0,blended:0,substituted:0,unresolved:0};
+  rows.forEach(row=>counts[row.kind]++);
+  return {rows,counts,sourceCount:new Set(rows.map(r=>r.original)).size,
+    outputCount:new Set(rows.filter(r=>r.kind!=='unresolved').map(r=>r.result)).size,
+    blendCount:new Set(rows.filter(r=>r.kind==='blended').map(r=>r.slot)).size};
 }

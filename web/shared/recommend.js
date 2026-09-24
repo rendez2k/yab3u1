@@ -1,16 +1,18 @@
 // Bounded palette search. Swatches estimate appearance, not physical calibration.
 import { distance, norm } from './colour.js';
 import { colourName } from './assignment.js';
-import { mixHex, planMixtures, RATIOS, MIN_IMPROVEMENT, POOR_COVERAGE } from './mix.js';
+import { mixHex, planBlends, plausibleBlend, RATIOS, MIN_IMPROVEMENT, POOR_COVERAGE } from './mix.js';
 
 const BASICS = ['#FFFFFF','#000000','#808080','#FF0000','#0080C0','#0000FF',
   '#008000','#00FF00','#FFFF00','#FF9500','#00FFFF','#FF00FF','#800080','#8B4513','#FFC0CB'];
 const objective = errors => errors.reduce((a,b)=>a+b,0)/errors.length + .35*Math.max(...errors);
+const usable=(row,reels)=>row.choice==='mixture' && plausibleBlend(reels[row.mixture.a-1].color,reels[row.mixture.b-1].color,row.mixture.color);
 
 export function paletteScore(sources, reels, blends = true) {
-  const plan = planMixtures(sources, reels);
-  const errors = plan.rows.map(row => blends && row.choice === 'mixture' ? row.mixture.error : row.solid.error);
-  return errors.length && errors.every(Number.isFinite) ? objective(errors) : Infinity;
+  const plan = planBlends(sources, reels);
+  const errors = plan.rows.map(row => blends && usable(row,reels) ? row.mixture.error : row.solid.error);
+  const unresolved=blends ? plan.rows.filter(row=>!row.exact && !usable(row,reels)).length : 0;
+  return errors.length && errors.every(Number.isFinite) ? unresolved*1000+objective(errors) : Infinity;
 }
 
 export function recommendPalette({ sources, loaded, stock = null, locked = [], blends = true }) {
@@ -53,7 +55,8 @@ export function recommendPalette({ sources, loaded, stock = null, locked = [], b
       // Match the export's slot ordering: the polynomial need not be symmetric.
       const key = `${a},${b}`;
       if(!pairs.has(key)) {
-        const shades=RATIOS.map(p=>mixHex(pool[a].color,pool[b].color,p));
+        const shades=RATIOS.map(p=>mixHex(pool[a].color,pool[b].color,p))
+          .filter(shade=>plausibleBlend(pool[a].color,pool[b].color,shade));
         pairs.set(key,colours.map(c=>Math.min(...shades.map(shade=>distance(c,shade)))));
       }
       return pairs.get(key);
@@ -67,7 +70,8 @@ export function recommendPalette({ sources, loaded, stock = null, locked = [], b
         if(blends && direct>.5) for(let a=0;a<ids.length;a++) for(let b=a+1;b<ids.length;b++) {
           if(ids[a]!==null && ids[b]!==null) mixed=Math.min(mixed,pair(ids[a],ids[b])[c]);
         }
-        return mixed<=POOR_COVERAGE && direct-mixed>=MIN_IMPROVEMENT ? mixed : direct;
+        const acceptable=mixed<=POOR_COVERAGE && direct-mixed>=MIN_IMPROVEMENT;
+        return acceptable ? mixed : direct+(blends && direct>.5 ? 1000 : 0);
       }));
     }
     let ids=fixed.map(r=>r ? pool.findIndex(p=>p.color===norm(r.color)) : null);
@@ -124,6 +128,7 @@ export function recommendPalette({ sources, loaded, stock = null, locked = [], b
     const key=option.type+':'+option.reels.map(r=>norm(r.color)).sort().join(',');
     if(!unique.has(key)) unique.set(key,option);
   }
-  const ranked=[...unique.values()].slice(0,6);
+  const ranked=[...unique.values()].slice(0,6).map(option=>({...option,
+    unresolved:blends ? planBlends(sources,option.reels).rows.filter(row=>!row.exact && !usable(row,option.reels)).length : 0}));
   return {...ranked[0],rough,loadedScore,alternatives:ranked.slice(1)};
 }

@@ -238,7 +238,16 @@ locks a physical position. Previewing a set does not alter loaded reels: **Apply
 palette** makes it the export palette. The search is bounded and ranks uncalibrated
 colour estimates, not measured print accuracy or a guaranteed global optimum.
 **Advanced** contains colour treatment, individual mappings, blend recipes and
-the experimental U1 reel-change workflow.
+the experimental U1 reel-change workflow. In the default blend mode,
+non-matching colours must use an enabled blend: there is no silent fallback to a
+solid reel. Unresolved regions are highlighted pink and block export. The summary
+beside the preview lists matched, blended, substituted and unresolved colours.
+Solid replacement is available only through the explicit Solid colours treatment.
+Recommendations prioritise complete estimated blend coverage; incomplete sets
+are labelled with their unresolved colour count. A basic sanity check rejects
+strongly coloured predictions from two neutral reels. This is not calibration:
+the alien example still has an unresolved fifth colour with the current bounded
+pair-blend search, so it cannot be exported in blend mode as a complete match.
 
 A painted model is rarely painted in the colours you have loaded. The page treats
 the four reels you tell it about as the palette you are printing onto, and offers

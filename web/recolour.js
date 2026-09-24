@@ -6,7 +6,7 @@
 // The renderer is shared with the local page.
 
 import { comparison, norm, suggestMapping } from "./shared/colour.js";
-import { mappingFromPlan, mixHex, planMixtures } from "./shared/mix.js";
+import { describeColourMapping, mappingFromPlan, mixHex, planBlends, plausibleBlend } from "./shared/mix.js";
 import { Preview } from "./shared/preview.js";
 import { LABELS, RECOLOUR_TARGETS } from "./shared/targets.js";
 import { thumbnailSizes } from "./shared/thumbnail.js";
@@ -86,7 +86,7 @@ function renderRecommendation(message) {
     .filter(({index})=>state.showMorePalettes || index<3 || (state.reelView==='recommended' && index===state.recommendationIndex));
   $("palettechoices").innerHTML=choices.map(({option,index})=>
     `<button type="button" class="palettechoice" data-palette="${index}" aria-pressed="${state.reelView==='recommended' && state.recommendationIndex===index && state.previewMode==='result'}" aria-label="Preview ${index===0?'recommended palette':`alternative ${index}`}">
-      <span class="palettetitle"><strong>${index===0?'Recommended':`Alternative ${index}`}</strong><small>${esc(option.type)}${state.reelView==='recommended' && state.recommendationIndex===index?' · Selected':''}</small></span>
+      <span class="palettetitle"><strong>${index===0?'Recommended':`Alternative ${index}`}</strong><small>${esc(option.type)}${state.strategy!=='solid' && option.unresolved ? ` · ${option.unresolved} unresolved` : ''}${state.reelView==='recommended' && state.recommendationIndex===index?' · Selected':''}</small></span>
       <span class="palettechips">${option.reels.map((r,i)=>`<span class="palettechip"><i style="background:${esc(r.color)}"></i>${i+1} · ${esc(r.name || colourName(r.color))}${state.locked[i]?' · locked':''}</span>`).join('')}</span>
     </button>`).join('');
   $("palettechoices").querySelectorAll('[data-palette]').forEach(button=>button.addEventListener('click',()=>{
@@ -104,7 +104,8 @@ function renderRecommendation(message) {
   else if(result) $("recommendstatus").textContent=(result.rough
     ? 'Approximate colours to look for. '
     : 'From your Spool Studio collection. ')
-    + (result.score < result.loadedScore-.1 ? 'Estimated closer than loaded.'
+    + (state.strategy!=='solid' && result.unresolved ? `${result.unresolved} colour(s) still need a suitable blend.`
+      : result.score < result.loadedScore-.1 ? 'Estimated closer than loaded.'
       : result.score > result.loadedScore+.1 ? 'Your loaded set scores better.'
       : 'Similar estimated match to loaded.');
   document.querySelectorAll('[data-reel-view]').forEach(button=>{
@@ -115,7 +116,7 @@ function renderRecommendation(message) {
   document.querySelectorAll('[data-preview]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.preview===state.previewMode)));
   $("reelviewnote").textContent=state.strategy==='source' ? "Showing the file's original colours; loaded and recommended reels are not used."
     : state.previewMode==='original' ? 'Original colours from your file.'
-    : state.reelView==='recommended' ? `Previewing ${state.recommendationIndex ? `alternative ${state.recommendationIndex}` : 'recommended filaments'}. Apply this palette before exporting.`
+    : state.reelView==='recommended' ? `Previewing ${state.recommendationIndex ? `alternative ${state.recommendationIndex}` : 'recommended filaments'}. ${resultPlan().blocked ? 'Resolve the colours below before exporting.' : 'Apply this palette before exporting.'}`
     : 'Previewing loaded filaments.';
 }
 function requestRecommendation() {
@@ -521,8 +522,9 @@ function useAssessed(assessed) {
   $("palettenote").textContent = extraColours
     ? `${surfaceColours} colours found on the selected model; ${extraColours} other palette entries are not used on its surface. The sliced-file check can confirm which can be left out of the reel load, including support and purge use.`
     : "";
-  state.mix = planMixtures(assessed.sourceColors, activeReels());
-  state.recipes = state.mix.recipes;
+  state.mix = planBlends(assessed.sourceColors, activeReels());
+  state.recipes = state.mix.recipes.filter(recipe=>plausibleBlend(
+    activeReels()[recipe.a-1].color,activeReels()[recipe.b-1].color,recipe.color));
   /* Ticking belongs to one recipe set. A new set starts fully ticked; an empty set
      means the user turned every blend off, and that must stay off. */
   const key = JSON.stringify(state.recipes.map((r) => [r.id, r.a, r.b, r.percent]));
@@ -595,20 +597,43 @@ function resultPlan() {
   for (const [source, slot] of Object.entries(state.overrides)) {
     if (Number(slot) > 0) mapping[source] = Number(slot);
   }
-  return { recipes: kept.map((recipe) => ({ a: recipe.a, b: recipe.b,
+  const payload = { recipes: kept.map((recipe) => ({ a: recipe.a, b: recipe.b,
                                             percent: recipe.percent })),
            mapping, kept, physical: reels };
+  payload.outcome=describeColourMapping(assessed.sourceColors,payload,true);
+  if(payload.outcome.counts.unresolved) payload.blocked=`${payload.outcome.counts.unresolved} source colour(s) have no suitable enabled blend. Change reels or explicitly choose Solid colours in Advanced`;
+  return payload;
+}
+
+function renderOutcome(payload=resultPlan()) {
+  const host=$("colouroutcome");
+  if(!state.assessed || !state.objects.length) { host.replaceChildren(); return; }
+  const outcome=payload.outcome || describeColourMapping(state.assessed.sourceColors,payload);
+  const {counts,rows}=outcome;
+  const tally=[`${counts.preserved} matched to reels`,
+    `${counts.blended} using blends`,
+    ...(counts.substituted ? [`${counts.substituted} substituted`] : []),
+    ...(counts.unresolved ? [`${counts.unresolved} unresolved`] : [])].join(' · ');
+  const colours=outcome.sourceCount;
+  const name=colourName;
+  const swatch=hex=>`<span class="swatch" style="background:${esc(hex)}" title="${esc(hex)}"></span>`;
+  const changed=rows.filter(r=>r.kind!=='preserved');
+  host.innerHTML=`<strong>${state.previewMode==='original' ? 'Selected export: ' : ''}${colours} source colours · ${outcome.blendCount ? `${outcome.blendCount} blend recipe${outcome.blendCount===1?'':'s'}` : 'No blends'}</strong>
+    <p class="hint">${esc(tally)}</p>
+    <ul>${changed.map(row=>`<li>${swatch(row.original)}<span>${esc(name(row.original))} <small>${esc(row.original)}</small> → ${row.kind==='unresolved' ? '<strong>No suitable enabled blend</strong>' : row.kind==='blended' ? `slot ${row.recipe.a} + ${row.recipe.percent}% of slot ${row.recipe.b}` : `${swatch(row.result)}${esc(name(row.result))}`}</span></li>`).join('')}</ul>
+    ${counts.unresolved ? '<p class="outcomewarning">Export blocked. Unresolved regions are highlighted pink in Loaded and Recommended views; pink is not an output filament.</p>' : counts.substituted ? '<p class="hint">Solid-colour replacement is selected. The listed source colours will change.</p>' : counts.blended ? '<p class="hint">Blend shades are uncalibrated estimates; they may differ in print.</p>' : ''}`;
 }
 
 function renderMix(assessed) {
   const payload = resultPlan();
+  renderOutcome(payload);
   const slots = activeReels().map((reel) => norm(reel.color));
   const rows = comparison(assessed.sourceColors, payload.mapping, [...slots,...payload.kept.map(r=>r.color)]);
   const blendMode = state.strategy === "blend";
   $("strategyhint").textContent = state.strategy === "source"
     ? "Keep the model's original filament colours. This choice does not use your loaded reel colours; this page can keep up to four original colours."
     : blendMode
-      ? "Approximate the model's colours using the selected set and suggested blends. Shades are estimates, not a guarantee of the printed colour. Open the mapping below to adjust individual colours."
+      ? "Approximate the model's colours using the selected set and suggested blends. Matching reel colours stay unchanged; extra colours need an enabled blend. Unresolved colours block export. Shades are uncalibrated estimates."
       : "Use only the selected reel colours, with no blends. Each source colour goes to its closest reel unless you change its mapping below.";
   $("maptable").innerHTML = "<table><thead><tr><th>Source</th><th>In the file</th>"
     + "<th>Export result</th><th>Closest blend</th><th>Difference</th>"
@@ -616,13 +641,16 @@ function renderMix(assessed) {
     + "<tbody>" + rows.map((row) => {
       const mixRow = (state.mix.rows || []).find((item) => item.source === row.source);
       const blend = mixRow && mixRow.mixture
-        ? `${mixRow.mixture.color} (${mixRow.mixture.error})` : "none improves";
+        ? plausibleBlend(slots[mixRow.mixture.a-1],slots[mixRow.mixture.b-1],mixRow.mixture.color)
+          ? `${mixRow.mixture.color} (${mixRow.mixture.error})` : 'Rejected: neutral reels cannot make this shade'
+        : "none improves";
+      const unresolved=payload.outcome?.rows.some(r=>r.source===row.source && r.kind==='unresolved');
       const chosen = state.strategy === "source" ? row.original
         : (payload.mapping[row.source] > 4
           ? (payload.kept[payload.mapping[row.source] - 5] || {}).color || row.result
           : slots[(payload.mapping[row.source] || 1) - 1]);
       const options = ["<option value=\"0\">"
-        + (blendMode ? "planned blend / nearest" : "nearest") + "</option>"]
+        + (blendMode ? "matching reel / blend" : "nearest") + "</option>"]
         .concat([1, 2, 3, 4].map((slot) =>
           `<option value="${slot}"${Number(state.overrides[row.source]) === slot
             ? " selected" : ""}>slot ${slot} · ${esc(slots[slot - 1])}</option>`))
@@ -630,10 +658,10 @@ function renderMix(assessed) {
       return `<tr><td>colour ${row.source}</td>`
         + `<td><span class="swatch" style="background:${esc(row.original)}"></span>`
         + `${esc(row.original)}</td>`
-        + `<td><span class="swatch" style="background:${esc(chosen)}"></span>`
-        + `${esc(chosen)}</td>`
+        + `<td><span class="swatch" style="background:${unresolved ? "#FF00FF" : esc(chosen)}"></span>`
+        + `${unresolved ? "Unresolved — no suitable enabled blend" : esc(chosen)}</td>`
         + `<td>${esc(blend)}</td>`
-        + `<td>${esc(row.verdict)}${row.distance === null ? "" : ` (${row.distance})`}</td>`
+        + `<td>${unresolved ? "unresolved" : esc(row.verdict)}${unresolved || row.distance === null ? "" : ` (${row.distance})`}</td>`
         + (state.strategy === "source"
           ? '<td class="hint">kept</td>'
           : `<td><select data-source="${row.source}">${options}</select></td>`)
@@ -667,7 +695,8 @@ function renderMix(assessed) {
       refresh();
     });
   });
-  $("mixnote").textContent = state.mix.advice
+  $("mixnote").textContent = (state.mix.recipes.length!==state.recipes.length
+    ? 'An implausible prediction was rejected: neutral reels cannot create a strongly coloured shade.' : state.mix.advice)
     + (state.strategy === "source"
       ? ` Keeping the file's own ${assessed.used.length} colour(s) in slots 1-`
         + `${assessed.used.length}; no substitution and no mixture.`
@@ -741,9 +770,14 @@ async function refreshPreview() {
     return;
   }
   const payload = resultPlan();
+  renderOutcome(payload);
   const table = paletteOf(payload, state.previewMode);
   const mapping = state.previewMode === "result" && state.strategy !== "source"
-    ? payload.mapping : null;
+    ? {...payload.mapping} : null;
+  // Unresolved regions are a diagnostic highlight, not a printable substitution.
+  if(mapping) for(const row of payload.outcome?.rows || []) if(row.kind==='unresolved') {
+    const id=100000+row.source; mapping[row.source]=id; table[id]='#FF00FF';
+  }
   let soup;
   try {
     soup = await background().preview(state.plateId, state.objects,
@@ -783,7 +817,7 @@ function applyPreview(soup, fit) {
     ? state.lastPositions : new Float32Array(0);
   if (!positions.length && soup.triangles) {
     $("previewnote").textContent = "the preview geometry had to be fetched again; "
-      + "press Original/Result to retry";
+      + "press Original or Loaded to retry";
     return;
   }
   state.preview.setSoup(positions, soup.colors, { fit });
@@ -809,6 +843,7 @@ function applyPreview(soup, fit) {
     + (state.previewMode === "original" ? " Showing the file's own colours."
        : (state.strategy === "source"
          ? " Showing the file's own colours, which this export keeps."
+         : resultPlan().outcome?.counts.unresolved ? " Pink regions are unresolved; export is blocked."
          : " Showing the colours this export would write."));
 }
 
@@ -835,11 +870,12 @@ function paletteOf(payload, mode) {
 
 function renderExport() {
   const payload = resultPlan();
+  renderOutcome(payload);
   const target = state.target;
   const mixtures = payload.recipes.length;
   const reviewBox = $("review");
   const blocking = !state.objects.length ? "tick at least one object"
-    : state.reelView==='recommended' ? 'apply the selected palette, or switch back to Loaded' : payload.blocked;
+    : payload.blocked || (state.reelView==='recommended' ? 'apply the selected palette, or switch back to Loaded' : null);
   const needsReview = state.strategy !== "source" && !blocking;
   reviewBox.parentElement.classList.toggle("hidden", !needsReview);
   reviewBox.checked = state.reviewed;

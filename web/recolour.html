@@ -201,6 +201,14 @@
   .previewtoolbar button { font-size: 13px; }
   #preview { height: clamp(350px, 52vh, 620px); border-radius: 16px; margin-top: 16px; }
   #reelviewnote { margin-bottom: 8px; }
+  #colouroutcome { margin: 14px 0; padding: 14px 0; border-block: 1px solid var(--line); font-size: 13px; }
+  #colouroutcome:empty { display: none; }
+  #colouroutcome p { margin: 6px 0; }
+  #colouroutcome ul { list-style: none; padding: 0; margin: 8px 0; }
+  #colouroutcome li { display: flex; align-items: baseline; gap: 4px; margin-top: 8px; overflow-wrap: anywhere; }
+  #colouroutcome .swatch { flex-shrink: 0; }
+  #colouroutcome small { color: var(--dim); }
+  .outcomewarning { color: var(--bad); }
   .previewdetails summary { font-size: 12px; color: var(--dim); cursor: pointer; min-height: 32px; }
   #reels { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; }
   #reels > .field { max-width: none; gap: 8px; font-size: 12px; }
@@ -336,6 +344,7 @@
     <button type="button" id="previewreset" >Reset view</button></div>
     <canvas id="preview" width="800" height="600" aria-label="Interactive 3D model preview"></canvas>
     <p class="hint" id="reelviewnote" role="status">Previewing loaded filaments.</p>
+    <div id="colouroutcome" role="status" aria-live="polite"></div>
     <details class="previewdetails"><summary>Uncalibrated colour estimate · preview details</summary>
     <p class="hint" id="previewnote"></p></details>
   </div>

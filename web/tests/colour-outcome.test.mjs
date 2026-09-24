@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict';
+import {describeColourMapping,planMixtures,mappingFromPlan,mixHex,plausibleBlend,planBlends} from '../shared/mix.js';
+import {recommendPalette} from '../shared/recommend.js';
+import {colourName} from '../shared/assignment.js';
+const sources={1:'#0080C0',2:'#FF0000',3:'#FFFFFF',4:'#000000',5:'#C5C263'};
+const physical=['#FF0000','#000000','#FFFFFF','#0080C0'].map(color=>({color,type:'PLA'}));
+const plan=planMixtures(sources,physical);
+const payload={physical,mapping:mappingFromPlan(plan),kept:plan.recipes};
+const strict=describeColourMapping(sources,payload,true);
+assert.deepEqual(strict.counts,{preserved:4,blended:0,substituted:0,unresolved:1});
+assert.equal(strict.rows.find(r=>r.kind==='unresolved').original,'#C5C263');
+assert.equal(strict.blendCount,0);
+assert.equal(strict.outputCount,4);
+const solid=describeColourMapping(sources,payload,false);
+assert.equal(solid.counts.substituted,1);
+assert.equal(solid.counts.unresolved,0);
+const best=recommendPalette({sources,loaded:physical});
+assert.equal(best.unresolved,1); // No credible fifth colour in this bounded palette search.
+assert(!plausibleBlend('#FFFFFF','#000000','#647DA0'));
+assert(plausibleBlend('#FFFFFF','#000000','#888888'));
+const neutrals=['#FFFFFF','#000000','#888888','#CCCCCC'].map(color=>({color,type:'PLA'}));
+assert.equal(planBlends({1:'#0080C0'},neutrals).recipes.length,0);
+const mixedSources={1:mixHex('#FF0000','#0080C0',50),2:'#FF0000',3:'#0080C0'};
+const mixed=planMixtures(mixedSources,physical);
+const mixedPayload={physical,mapping:mappingFromPlan(mixed),kept:mixed.recipes};
+const description=describeColourMapping(mixedSources,mixedPayload,true);
+assert.deepEqual(description.counts,{preserved:2,blended:1,substituted:0,unresolved:0});
+assert.equal(description.blendCount,1);
+const unchecked={...mixedPayload,kept:[],mapping:mappingFromPlan(mixed,false)};
+assert.equal(describeColourMapping(mixedSources,unchecked,true).counts.unresolved,1);
+const implausible={physical,mapping:{1:5},kept:[{a:2,b:3,color:'#647DA0',percent:50}]};
+assert.equal(describeColourMapping({1:'#0080C0'},implausible,true).counts.unresolved,1);
+const override={...payload,mapping:{...payload.mapping,2:3}};
+assert.equal(describeColourMapping(sources,override,true).counts.unresolved,2);
+assert.equal(describeColourMapping(sources,{...payload,source:true},true).counts.preserved,5);
+assert.equal(colourName('#C5C263'),'Muted yellow-green');
+console.log('Colour outcome checks passed: strict blends, explicit replacement, disabled recipes, overrides, preservation and real-model coverage.');
+
