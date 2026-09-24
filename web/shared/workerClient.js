@@ -99,6 +99,8 @@ export class RecolourWorker {
                                        options.preserveSourceSettings === true,
                                      carrySettings: options.carrySettings !== false,
                                      supportMode: options.supportMode || "auto",
+                                     u1Nozzle: options.u1Nozzle || "auto",
+                                     filamentProfiles: options.filamentProfiles || [],
                                      assignmentMode: options.assignmentMode || null,
                                      removeUnused: options.removeUnused === true,
                                      includeUnused: options.includeUnused || [],

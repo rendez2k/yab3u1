@@ -42,6 +42,12 @@ PUBLIC_FILES = (
     "shared/assignment.js",
     "shared/batchSession.js",
     "shared/batchZipWorker.js",
+    "shared/bundle.js",
+    "shared/bundleWorker.js",
+    "shared/filamentPicker.js",
+    "shared/filamentProfiles.js",
+    "shared/u1ProfileData.js",
+    "shared/u1Profiles.js",
     "shared/colour.js",
     "shared/convertSession.js",
     "shared/fdmMix.js",
@@ -136,6 +142,8 @@ class SiteBuild(unittest.TestCase):
         for rel in built_files(self.out):
             lowered = rel.lower()
             for marker in FORBIDDEN:
+                if marker == "u1" and rel in ("shared/u1ProfileData.js", "shared/u1Profiles.js"):
+                    continue
                 self.assertNotIn(marker, lowered, f"{rel} should not be published")
 
     def test_manifest_records_the_same_inventory(self):

@@ -94,7 +94,7 @@ function findEOCD(u8) {
 }
 
 /** Read every member as { name -> Uint8Array }. */
-export async function readZip(u8) {
+export async function readZip(u8, { include = null, onEntry = null } = {}) {
   if (u8.length < 22 || u8[0] !== 0x50 || u8[1] !== 0x4b) {
     throw new Error("not a ZIP/3MF archive");
   }
@@ -117,6 +117,7 @@ export async function readZip(u8) {
 
   const decoder = new TextDecoder("utf-8");
   const out = new Map();
+  const seen = new Set();
   let expanded = 0;
   let p = cdOffset;
   for (let i = 0; i < count; i++) {
@@ -130,10 +131,16 @@ export async function readZip(u8) {
     const localAt = dv.getUint32(p + 42, true);
     const name = decoder.decode(u8.subarray(p + 46, p + 46 + nameLen));
 
-    if (out.has(name)) {
+    if (seen.has(name)) {
       // Two members with one name would let the second silently replace the
       // first, which is how a "harmless" zip hides different geometry.
       throw new Error(`damaged archive: ${name} is stored more than once`);
+    }
+    seen.add(name);
+    onEntry?.({name, size:rawSize});
+    if (include && !include(name)) {
+      p += 46 + nameLen + extraLen + commentLen;
+      continue;
     }
     // the local header carries its own name/extra lengths, and they can differ
     if (dv.getUint32(localAt, true) !== SIG_LOCAL) {
@@ -181,7 +188,7 @@ export async function readZip(u8) {
     out.set(name, data);
     p += 46 + nameLen + extraLen + commentLen;
   }
-  if (out.size === 0) throw new Error("archive contains no files");
+  if (out.size === 0 && !include) throw new Error("archive contains no files");
   return out;
 }
 

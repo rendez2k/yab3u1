@@ -3,6 +3,7 @@ import { TARGETS } from "./targets.js";
 import { targetLayout, planLayout } from "./layout.js";
 import { planningAllowance, transferSettings } from "./printSettings.js";
 import { thumbnailSizes } from "./thumbnail.js";
+import {buildU1Profile, constrainLayers} from './u1Profiles.js';
 
 export const MAX_BATCH_FILES = 50;
 export const MAX_BATCH_OUTPUT = 256 * 1024 * 1024;
@@ -41,7 +42,7 @@ export class BatchSession {
   status(text) { if (!this.closed) this.hooks.status?.(text); }
   row(index, status, detail) { if (!this.closed) this.hooks.row?.(index, { status, detail }); }
 
-  async run(input, { target = "snapmaker", keepSettings = true } = {}) {
+  async run(input, { target = "snapmaker", keepSettings = true, u1Nozzle = "auto" } = {}) {
     if (this.busy || this.closed) return null;
     const files = Array.from(input);
     if (!files.length || files.length > MAX_BATCH_FILES) throw new Error("Choose 1–50 files per batch.");
@@ -106,8 +107,12 @@ export class BatchSession {
                 width: Math.max(270, size[0] + allowance.padding * 2 + 10),
                 depth: Math.max(270, size[1] + allowance.padding * 2 + 10) }), ...allowance };
               if (planLayout(measured.bounds, layout).blocked) throw new Error("This plate's group does not fit the U1 with print/tower clearance. Arrange it in Single file or the slicer.");
-              entry.settings = keepSettings ? sources.map((source, n) => ({ object: objects[n]?.name || objects[n]?.id || "Global",
-                ...transferSettings(source, target, { object: target !== "snapmaker" }) })) : [];
+              const profile=target==='snapmaker' ? buildU1Profile(meta.sourceSettings,meta.types,u1Nozzle,{carry:keepSettings}) : null;
+              entry.settings = keepSettings ? sources.map((source, n) => {
+                const transfer=transferSettings(source,target,{object:target!=='snapmaker',baseline:profile?.cfg});
+                if(profile)transfer.skipped.push(...constrainLayers(transfer.values,profile.match));
+                return {object:objects[n]?.name || objects[n]?.id || 'Global',...transfer};
+              }) : [];
               entry.notes = [...(meta.warnings || []), ...allowance.footprintNotes];
               const colors = Object.fromEntries(meta.colors.map((color, i) => [i + 1, color]));
               const mapping = Object.fromEntries(meta.colors.map((_, i) => [i + 1, i + 1]));
@@ -116,7 +121,7 @@ export class BatchSession {
                 { size: sizes.main, small: sizes.small, layout });
               if (this.cancelled) throw new Error("Stopped");
               const output = await this.worker.convert(plate.id, null, target, mapping, stem(file.name),
-                { layout, thumbnails, preserveSourceSettings: keepSettings, carrySettings: keepSettings,
+                { layout, thumbnails, u1Nozzle, preserveSourceSettings: keepSettings, carrySettings: keepSettings,
                   supportMode: "auto", assignmentMode: "slots" });
               if (this.cancelled) throw new Error("Stopped");
               const data = output.bytes instanceof Uint8Array ? output.bytes : new Uint8Array(output.bytes);
@@ -127,7 +132,7 @@ export class BatchSession {
               outputBytes += length;
               outputCount += 1;
               Object.assign(entry, { status: "converted", output: name, bytes: length,
-                ...(output.settings ? { supportDecision: output.settings.support } : {}) });
+                ...(output.settings ? { supportDecision: output.settings.support, profile:output.settings.profile, nozzle:output.settings.nozzle, materials:output.settings.materials, profileNotes:output.settings.notes } : {}) });
             } catch (error) {
               Object.assign(entry, { status: this.cancelled ? "cancelled" : "failed", message: messageOf(error) });
             }

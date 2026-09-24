@@ -5,6 +5,22 @@ The version shown on the page comes from `VERSION` in `web/convert-page.js` (and
 the collapsed "What's new" block in the footer. Bump those constants and add a
 section here together.
 
+## 2.6.1-preview.1 — Profile matching and ZIP bundles (review only)
+
+- Drop a ZIP bundle to discover its 3MF projects without expanding unrelated STL
+  files. Analyse source family/printer, nozzle, materials, unused entries,
+  dimensions, U1 planning fit, cutouts and custom layer actions before conversion.
+- Bundle official Snapmaker Orca v2.4.0 material and process data. Match the source
+  nozzle or choose 0.2/0.4/0.6/0.8 mm; select the nearest process and constrain
+  transferred layer heights to its nozzle limits. Blend export remains 0.4 mm.
+- Retain slower absolute source speeds/accelerations and cap higher ones to the
+  chosen destination process. Automatic/relative values keep destination defaults.
+- Choose filament presets from the source project, the U1 catalogue or a resolved
+  JSON import. Carry reviewed material properties across U1/Bambu/Orca/Prusa;
+  omit foreign machine commands and report incomplete portable preset data.
+- Include the selected profile, nozzle, materials and adjustments in batch reports.
+  Unsupported material/nozzle combinations fail explicitly instead of using PLA.
+
 ## 2.6.0 — Full Spectrum palettes and converter improvements
 
 Promoted the reviewed converter and Full Spectrum workflow to production.

@@ -28,6 +28,8 @@ import {
   bambuConfig, check as checkRecipes, checkTypes, normalise as normaliseTarget,
   palette, prusaSpectrumJson, snapmakerConfig, virtualId,
 } from "./targets.js";
+import { readFilamentProfiles, applyFilamentProfiles, prusaFilamentConfig } from './filamentProfiles.js';
+import { buildU1Profile, conservativeSpeeds, constrainLayers } from './u1Profiles.js';
 import { BASE_SETTINGS } from "../base_settings.js";
 
 export const SNAPMAKER_SPECTRUM_APPLICATION = "BambuStudio-2.3.5";
@@ -214,6 +216,8 @@ function readPalette(entries, project) {
       // carry into a printer-agnostic model: a layer height and the support
       // intent.  Nothing else -- no printer, process or filament settings.
       project.sourceSettings = pickleSourceSettings(cfg);
+      project.sourcePrinter = String(cfg.printer_settings_id || cfg.printer_model || '').slice(0,200);
+      project.filamentProfiles=readFilamentProfiles(cfg,project.types);
       return;
     }
   }
@@ -234,6 +238,9 @@ function readPalette(entries, project) {
       project.paletteSource = extruder.length ? "extruder_colour" : "filament_colour";
       project.paletteCount = project.colors.length;
       project.sourceSettings = picklePrusaSettings(read);
+      project.sourcePrinter = read('printer_settings_id').join(';').slice(0,200);
+      const fcfg=Object.fromEntries(['filament_settings_id','filament_vendor','temperature','first_layer_temperature','bed_temperature','first_layer_bed_temperature','extrusion_multiplier','filament_max_volumetric_speed','filament_density','filament_diameter'].map(k=>[k,read(k)]));
+      project.filamentProfiles=readFilamentProfiles(fcfg,project.types);
       return;
     }
   }
@@ -1758,14 +1765,15 @@ function supportSplit(attrs) {
 function sourceSettingMetadata(project, objectId, target = "bambu", options = {}, painted = false) {
   const source = { ...(project.sourceSettings || {}),
                    ...(project.meta.get(objectId)?.settings || {}) };
-  const report = transferSettings(source, target, { object: true });
+  const report = transferSettings(source, target, { object: true, baseline: options.u1Profile?.cfg });
+  if (target === 'snapmaker' && options.u1Profile) constrainLayers(report.values, options.u1Profile.match);
   if (target === "snapmaker" && painted && options.supportMode !== "off"
       && report.values.enable_support === "0") report.values.enable_support = "1";
   if (target === "snapmaker" && options.supportMode === "off") report.values.enable_support = "0";
   if (target === "snapmaker" && options.supportMode === "on") {
     report.values.enable_support = "1";
-    report.values.support_type = BASE_SETTINGS.support_type;
-    report.values.support_threshold_angle = BASE_SETTINGS.support_threshold_angle;
+    report.values.support_type = (options.u1Profile?.cfg || BASE_SETTINGS).support_type;
+    report.values.support_threshold_angle = (options.u1Profile?.cfg || BASE_SETTINGS).support_threshold_angle;
   }
   return Object.entries(report.values).map(([key, value]) =>
     `<metadata${target === "prusa" ? ' type="object"' : ""} key="${key}" value="${esc(value)}"/>`).join("");
@@ -1912,7 +1920,7 @@ export function convertProject(project, plateId, objectIds, options = {}) {
   const palette = [];
   for (let index = 1; index <= size; index += 1) {
     palette.push({ color: project.colors[index - 1] || "#FFFFFF",
-                   type: project.types[index - 1] || "PLA" });
+                   type: project.types[index - 1] || "PLA", profile:options.filamentProfiles?.[index-1] || null });
   }
   const mapping = {};
   for (let index = 1; index <= size; index += 1) mapping[index] = index;
@@ -1965,6 +1973,7 @@ export function convertProject(project, plateId, objectIds, options = {}) {
     // The U1 target's own controls: whether the source's compatible print settings
     // travel, and which support decision wins.  Both belong to the snapshot the
     // page wrote, so a control change invalidates an export already in flight.
+    u1Nozzle: options.u1Nozzle || "auto",
     carrySettings: options.carrySettings !== false,
     supportMode: normaliseSupportMode(options.supportMode),
     thumbnails: options.thumbnails || null,
@@ -1990,7 +1999,7 @@ export function exportProject(project, plateId, objectIds, options) {
   // centres the model on their real bed (the non-project import path).
   // Negative volumes need native project metadata, not the colour-model import.
   const negative = hasNegativeVolumes(project, objectIds || eligibleObjects(project, plateId));
-  const standard = convert && target === "bambu" && !negative;
+  const standard = convert && target === "bambu" && !negative && !(options.physical || []).some(r=>r.profile);
   if (negative && target === 'prusa') throw new ProjectError('This selection contains negative cutout volumes. Prusa multi-volume export is not supported yet; choose Snapmaker Orca, Bambu Studio or OrcaSlicer to preserve them.');
   const reels = options.physical || options.reels || [];
   if (convert) {
@@ -2029,6 +2038,9 @@ export function exportProject(project, plateId, objectIds, options) {
   Object.entries(options.mapping || {}).forEach(([source, id]) => {
     mapping[Number(source)] = Number(id);
   });
+  const u1Profile = target === 'snapmaker' ? buildU1Profile(project.sourceSettings, reelTypes,
+    options.u1Nozzle || 'auto', {blends: recipes.length > 0, carry: options.carrySettings !== false}) : null;
+  options = {...options, u1Profile};
   const table = palette(reelColours, reelTypes, recipes);
   const colours = { };
   table.physical.forEach((colour, index) => { colours[index + 1] = colour; });
@@ -2397,12 +2409,9 @@ export function exportProject(project, plateId, objectIds, options) {
   // honestly (and for the tests to read without unpacking the archive).
   let settingNotes = null;
   if (target === "snapmaker") {
-    const cfg = JSON.parse(JSON.stringify(BASE_SETTINGS));
+    const cfg = JSON.parse(JSON.stringify(u1Profile.cfg));
     cfg.filament_colour = table.physical.map((colour) => `${colour}FF`);
     cfg.extruder_colour = table.physical.slice();
-    cfg.filament_type = reelTypes.slice();
-    cfg.filament_settings_id = table.physical.map(() => "Generic PLA");
-    cfg.nozzle_diameter = table.physical.map(() => "0.4");
     snapmakerConfig(cfg, table.physical, reelTypes, recipes);
     // The U1 compatibility the original converter always had: the source's own
     // print intent where this Orca accepts it, and its support decision.  Both are
@@ -2414,9 +2423,18 @@ export function exportProject(project, plateId, objectIds, options) {
     const support = supportOf(project.sourceSettings);
     const supportNote = applySupport(cfg, support, mode, painted);
     const carried = carryPrintSettings(cfg, project.sourceSettings, carry);
+    const speed = carry ? conservativeSpeeds(project.sourceSettings, u1Profile.cfg) : {values:{},notes:[]};
+    Object.assign(cfg, speed.values);
+    carried.push(...Object.keys(speed.values));
+    const layerNotes = constrainLayers(cfg, u1Profile.match);
+    const filamentReport=applyFilamentProfiles(cfg,reels,{u1:true});
+    u1Profile.filamentKeys.push(...filamentReport.keys);
     const overrides = setProcessOverrides(cfg, carried, recipes.length > 0);
+    cfg.different_settings_to_system[0] = [...new Set([...overrides, ...u1Profile.processKeys])].sort().join(';');
+    for (let i=0; i<reelTypes.length; i++) cfg.different_settings_to_system[i+1] = u1Profile.filamentKeys.join(';');
+    cfg.different_settings_to_system[reelTypes.length+1] = 'nozzle_diameter;min_layer_height;max_layer_height';
     settingNotes = { carry, supportMode: mode, carried, support: supportNote,
-                     supportsPainted: painted, overrides };
+                     supportsPainted: painted, overrides: cfg.different_settings_to_system[0].split(";"), profile: u1Profile.match.process.name, nozzle: u1Profile.match.nozzle, materials: cfg.filament_settings_id.slice(), notes: [...u1Profile.match.notes, ...speed.notes, ...layerNotes, ...filamentReport.notes] };
     members.set(SRC_BBL_PROJECT, encoder.encode(JSON.stringify(cfg, null, 4)));
   } else if (target === "bambu" || target === "orca") {
     if (standard) {
@@ -2430,6 +2448,10 @@ export function exportProject(project, plateId, objectIds, options) {
       // OrcaSlicer reads Bambu Studio's project schema; only the application name
       // and the label differ.
       const cfg = bambuConfig(table.physical, reelTypes, recipes);
+      const filamentReport=applyFilamentProfiles(cfg,reels);
+      for(const key of filamentReport.keys) if(recipes.length && cfg[key].length===reels.length)
+        cfg[key]=cfg[key].concat(recipes.map(r=>cfg[key][r.a-1]));
+      settingNotes={materials:cfg.filament_settings_id.slice(),notes:filamentReport.notes};
       members.set(SRC_BBL_PROJECT, encoder.encode(JSON.stringify(cfg, null, 4)));
       spec = { cfg };
     }
@@ -2447,6 +2469,19 @@ export function exportProject(project, plateId, objectIds, options) {
     members.set(PRUSA_SPECTRUM_JSON,
                 encoder.encode(prusaSpectrumJson(table.physical, reelTypes, recipes)));
     members.set(PRUSA_MODEL_CONFIG, encoder.encode(prusaModelConfig(rootObjects, project, options)));
+    if(reels.some(r=>r.profile)) {
+      cfg.filament_settings_id=reels.map(r=>r.profile?.name || `Generic ${r.type || 'PLA'}`);
+      const filamentReport=applyFilamentProfiles(cfg,reels);
+      if(recipes.length) {
+        // Virtual entries inherit their first component's filament properties.
+        for(const [key,values] of Object.entries(cfg)) if(Array.isArray(values) && values.length===reels.length)
+          cfg[key]=values.concat(recipes.map(r=>values[r.a-1]));
+      }
+      members.set(SRC_PRUSA_PRINT,encoder.encode(prusaFilamentConfig(cfg)));
+      for(const key of filamentReport.keys) if(recipes.length && cfg[key].length===reels.length)
+        cfg[key]=cfg[key].concat(recipes.map(r=>cfg[key][r.a-1]));
+      settingNotes={materials:cfg.filament_settings_id.slice(),notes:filamentReport.notes};
+    }
     spec = { cfg };
   }
 

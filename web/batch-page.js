@@ -1,9 +1,13 @@
+import { buildU1Profile, detectNozzle, profileDescription } from './shared/u1Profiles.js';
 import { BatchSession, MAX_BATCH_FILES } from "./shared/batchSession.js";
 import { RecolourWorker } from "./shared/workerClient.js";
+import {targetLayout, planLayout} from './shared/layout.js';
+import {planningAllowance, transferSettings} from './shared/printSettings.js';
 
 export function initBatch() {
   const $ = id => document.getElementById(id);
-  let files = [], rows = [], outputUrl = null;
+  let files = [], rows = [], outputUrl = null, analysing = false, analysisWorker = null;
+  const analysed=new WeakMap();
   const say = text => { $("batchstatus").textContent = text; };
   const release = () => {
     if (outputUrl) URL.revokeObjectURL(outputUrl);
@@ -23,18 +27,18 @@ export function initBatch() {
     });
 
   function setMode(bulk) {
-    if (engine.busy) return;
+    if (engine.busy || analysing) return;
     $("singlepanel").classList.toggle("hidden", bulk);
     $("batchpanel").classList.toggle("hidden", !bulk);
     $("mode-single").setAttribute("aria-pressed", String(!bulk));
     $("mode-bulk").setAttribute("aria-pressed", String(bulk));
   }
   function controls(running) {
-    for (const id of ["batchfile", "batchtarget", "batchsettings", "batchclear", "mode-single", "mode-bulk"]) $(id).disabled = running;
+    for (const id of ["batchfile", "batchtarget", "batchnozzle", "batchsettings", "batchclear", "mode-single", "mode-bulk"]) $(id).disabled = running;
     $("batchdrop").setAttribute("aria-disabled", String(running));
     $("batchdrop").tabIndex = running ? -1 : 0;
     $("batchgo").disabled = running || !files.length;
-    $("batchcancel").classList.toggle("hidden", !running);
+    $("batchcancel").classList.toggle("hidden", !running || analysing);
     $("batchcancel").disabled = false;
     rows.forEach(r => { r.remove.disabled = running; });
   }
@@ -49,7 +53,7 @@ export function initBatch() {
       name.textContent = file.name;
       const detail = document.createElement("span");
       detail.className = "hint batchdetail";
-      detail.textContent = `${(file.size / 1048576).toFixed(1)} MB`;
+      detail.textContent = analysed.has(file) ? describe(analysed.get(file)) : `${(file.size / 1048576).toFixed(1)} MB · Not yet analysed`;
       info.append(name, detail);
       const status = document.createElement("span");
       status.className = "batchstate";
@@ -72,16 +76,80 @@ export function initBatch() {
     $("batchprogress").classList.add("hidden");
     controls(false);
   }
-  function addFiles(incoming) {
-    if (engine.busy) return;
-    setMode(true);
-    const list = Array.from(incoming);
-    const available = MAX_BATCH_FILES - files.length;
-    files.push(...list.slice(0, available));
-    release(); render();
-    say(list.length > available ? `Added ${available} files. The batch limit is 50; ${list.length - available} were not added.`
-      : `${files.length} files ready. Choose a format, then convert.`);
-    $("batchdrop").focus();
+  function describe(meta) {
+    if(meta.error) return `Cannot read: ${meta.error}`;
+    const target=$('batchtarget').value;
+    const source=meta.kind==='bambu' ? 'Bambu/Orca-family 3MF' : meta.kind==='prusa' ? 'Prusa-family 3MF' : '3MF';
+    let text=`${source} project · ${meta.plates.length} plate(s) · ${meta.colors.length} filament entries`;
+    if(meta.sourcePrinter) text+=` · ${meta.sourcePrinter}`;
+    if(meta.filamentUsage) text+=` (${meta.filamentUsage.unused.length} unused)`;
+    const nozzle=detectNozzle(meta.sourceSettings);
+    text+=` · source nozzle: ${nozzle ? nozzle+' mm' : 'unknown or mixed'}. `;
+    if(target==='snapmaker') {
+      try {text+=profileDescription(buildU1Profile(meta.sourceSettings,meta.types,$('batchnozzle').value,{carry:$('batchsettings').checked}));}
+      catch(error){text+=`Needs attention: ${error.message}`;}
+    } else text+=`Convert to ${target}; choose your printer and nozzle in the destination slicer. `;
+    if(meta.negativeVolumes) text+=' Contains negative cutouts; Prusa export is unsupported. ';
+    if(meta.customLayerActions) text+=' Recreate source pauses/custom G-code in the destination slicer. ';
+    for(const plate of meta.plates) {
+      const measured=plate.measurement;
+      const plateName=plate.name || `Plate ${meta.plates.indexOf(plate)+1}`;
+      if(!measured?.bounds) {text+=` ${plateName}: no printable geometry. `;continue;}
+      const size=measured.bounds.max.map((v,i)=>v-measured.bounds.min[i]);
+      text+=` ${plateName}: ${size.map(v=>v.toFixed(1)).join(' × ')} mm. `;
+      const ids=new Set(plate.objectIds.map(String));
+      const objects=(meta.objectSettings || []).filter(o=>ids.has(String(o.id)));
+      const sources=(objects.length?objects:[{}]).map(o=>({...meta.sourceSettings,...o.settings}));
+      const allowance=planningAllowance(sources,target,$('batchsettings').checked,'auto',measured.supportsPainted);
+      if(target==='snapmaker') {
+        const plan=planLayout(measured.bounds,{...targetLayout(target,{copies:1,spacing:5,tower:true}),...allowance});
+        text+=plan.blocked?'Needs rearranging: does not fit the U1 with print/tower clearance. ':'Fits the U1 planning area after centring. ';
+      }
+      text+=allowance.footprintNotes.join(' ')+' ';
+      const transferred=transferSettings(meta.sourceSettings,target);
+      if($('batchsettings').checked)text+=`${Object.keys(transferred.values || {}).length} compatible global settings found. `;
+    }
+    return text+(meta.warnings || []).join(' ');
+  }
+  async function addFiles(incoming) {
+    if(engine.busy || analysing) return;
+    setMode(true); analysing=true; controls(true);
+    const additions=[], notes=[];
+    try {
+      for(const file of Array.from(incoming)) {
+        if(/\.zip$/i.test(file.name)) {
+          say(`Reading bundle ${file.name}…`);
+          analysisWorker=new RecolourWorker(new URL('./shared/bundleWorker.js',import.meta.url));
+          try {
+            if(file.size>96*1048576) throw new Error('ZIP exceeds the 96 MB input limit.');
+            const bytes=await file.arrayBuffer();
+            const bundle=await analysisWorker.request('unpack',{bytes},{transfer:[bytes]});
+            additions.push(...bundle.files.map(f=>new File([f.bytes],f.name,{type:'application/3mf'})));
+            notes.push(`${file.name}: ${bundle.files.length} 3MF projects. ${bundle.ignored.length} other files not converted: ${bundle.ignored.map(f=>f.name.split('/').pop()).join(', ') || 'none'}. STL files contain geometry only, without painted project settings.`);
+          } catch(error) {notes.push(`${file.name}: ${error.message}`);}
+          finally {analysisWorker?.dispose('Bundle read');analysisWorker=null;}
+        } else if(/\.3mf$/i.test(file.name)) additions.push(file);
+        else notes.push(`${file.name}: unsupported input; choose a 3MF project or ZIP bundle.`);
+      }
+      const accepted=additions.slice(0,MAX_BATCH_FILES-files.length);
+      if(accepted.length<additions.length) notes.push('The batch limit is 50 projects; additional projects were not added.');
+      files.push(...accepted); release();render();controls(true);
+      $('batchbundleinfo').textContent=notes.join(' ');
+      for(const file of accepted) {
+        say(`Analysing ${file.name}…`);
+        analysisWorker=new RecolourWorker();
+        try {
+          if(file.size>96*1048576) throw new Error('Project exceeds 96 MB.');
+          const bytes=await file.arrayBuffer();
+          const reply=await analysisWorker.load(bytes,{light:true});
+          for(const plate of reply.meta.plates) plate.measurement=await analysisWorker.bounds(plate.id,null);
+          analysed.set(file,reply.meta);
+        } catch(error) {analysed.set(file,{error:error.message});}
+        finally {analysisWorker?.dispose('Analysis complete');analysisWorker=null;}
+        render();controls(true);
+      }
+      say(`${files.length} projects analysed. Review the details, choose a destination, then convert.`);
+    } finally {analysing=false;controls(false);}
   }
   $("mode-single").addEventListener("click", () => setMode(false));
   $("mode-bulk").addEventListener("click", () => setMode(true));
@@ -103,10 +171,11 @@ export function initBatch() {
     $("batchdrop").classList.remove("over"); addFiles(event.dataTransfer.files);
   });
   $("batchclear").addEventListener("click", () => {
+    $('batchbundleinfo').textContent='';
     files = []; release(); render(); say("Add files to start a batch.");
     $("batchdrop").focus();
   });
-  for (const id of ["batchtarget", "batchsettings"]) $(id).addEventListener("change", () => {
+  for (const id of ["batchtarget", "batchsettings", "batchnozzle"]) $(id).addEventListener("change", () => {
     release(); render(); say("Options updated. Convert to create a new ZIP.");
   });
   $("batchcancel").addEventListener("click", () => {
@@ -114,13 +183,13 @@ export function initBatch() {
     say("Stopping. Completed outputs will be kept in the ZIP.");
   });
   $("batchgo").addEventListener("click", async () => {
-    if (engine.busy || !files.length) return;
+    if (engine.busy || analysing || !files.length) return;
     release(); render(); controls(true);
     $("batchprogress").classList.remove("hidden");
     $("batchprogress").max = files.length;
     $("batchprogress").value = 0;
     try {
-      const result = await engine.run(files, { target: $("batchtarget").value, keepSettings: $("batchsettings").checked });
+      const result = await engine.run(files, { target: $("batchtarget").value, keepSettings: $("batchsettings").checked, u1Nozzle: $("batchnozzle").value });
       if (!result) return;
       const { report } = result;
       outputUrl = URL.createObjectURL(new Blob([result.bytes], { type: "application/zip" }));
@@ -140,7 +209,7 @@ export function initBatch() {
     } catch (error) { say(`The ZIP could not be created: ${error.message}. Try fewer files.`); }
     finally { controls(false); }
   });
-  window.addEventListener("pagehide", () => { engine.close(); release(); });
+  window.addEventListener("pagehide", () => { engine.close(); analysisWorker?.dispose("Page closed"); release(); });
   render();
   return { addFiles };
 }

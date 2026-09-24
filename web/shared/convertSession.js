@@ -70,6 +70,8 @@ export class ConvertSession {
     // support decision follows the source until the user overrides it.
     this.carrySettings = true;
     this.supportMode = "auto";
+    this.u1Nozzle = "auto";
+    this.filamentProfiles = [];
     this.output = null;     // {url, name, target, bytes, mapping}
     this.busy = false;
     this.renderThumbnail = null;   // set by the page: never save without one
@@ -333,6 +335,14 @@ export class ConvertSession {
 
   /** Choose which support decision a U1 export writes: "auto" (the source's own),
    *  "on" (the U1 profile's defaults) or "off". */
+  setFilamentProfile(index, profile) {
+    this.filamentProfiles[index]=profile; this.invalidate(); this.hooks.settings?.();
+  }
+  setU1Nozzle(value) {
+    if (!['auto','0.2','0.4','0.6','0.8'].includes(value) || value===this.u1Nozzle) return false;
+    this.u1Nozzle=value; this.invalidate(); this.hooks.settings?.(); return true;
+  }
+
   setSupportMode(mode) {
     const next = ["auto", "on", "off"].includes(mode) ? mode : "auto";
     if (next === this.supportMode) return false;
@@ -406,6 +416,7 @@ export class ConvertSession {
         supportsPainted: Boolean(reply.summary && reply.summary.supportsPainted),
         filename: file.name || "",
         sourceSettings: reply.meta.sourceSettings || null,
+        filamentProfiles:reply.meta.filamentProfiles || [],
         objectSettings: reply.meta.objectSettings || [],
         summary: reply.summary || null,
       };
@@ -430,6 +441,8 @@ export class ConvertSession {
       // page shows those values rather than an inherited override.
       this.carrySettings = true;
       this.supportMode = "auto";
+    this.u1Nozzle = "auto";
+    this.filamentProfiles = [];
       this.layoutProblem = "";
       if (this.hooks.loaded) this.hooks.loaded(this.state);
       if (this.hooks.layout) this.hooks.layout(this.layout);
@@ -537,6 +550,8 @@ export class ConvertSession {
       preserveSourceSettings: this.preserveSourceSettings,
       carrySettings: this.carrySettings,
       supportMode: this.supportMode,
+      u1Nozzle: this.u1Nozzle,
+      filamentProfiles: structuredClone(this.filamentProfiles),
       title: this.state.title,
       colours: this.state.colours.slice(),
     };
@@ -572,6 +587,8 @@ export class ConvertSession {
                                                     layout: snapshot.layout,
                                                     preserveSourceSettings:
                                                       snapshot.preserveSourceSettings,
+                                                    u1Nozzle: snapshot.u1Nozzle,
+                                                    filamentProfiles: snapshot.filamentProfiles,
                                                     carrySettings:
                                                       snapshot.carrySettings,
                                                     supportMode:

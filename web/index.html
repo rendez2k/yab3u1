@@ -428,10 +428,10 @@
   <div id="singlepanel">
   <div id="convertdrop" role="button" tabindex="0"
        aria-label="Choose a 3MF file to convert">
-    <strong>Drop a .3mf here</strong>
+    <strong>Drop a .3mf or ZIP bundle here</strong>
     <span>or click to choose a file &mdash; PrusaSlicer, Bambu Studio, OrcaSlicer or
       Snapmaker Orca projects</span>
-    <input type="file" id="convertfile" accept=".3mf" multiple aria-label="3MF files to convert">
+    <input type="file" id="convertfile" accept=".3mf,.zip" multiple aria-label="3MF files to convert">
   </div>
 
   <div id="loaderror" class="card hidden" role="alert" aria-live="polite"></div>
@@ -514,6 +514,9 @@
     <fieldset class="settings" id="settingsbox">
       <legend>Print settings</legend>
       <div id="u1settings">
+        <label for="u1nozzle">Nozzle fitted to your U1</label>
+        <select id="u1nozzle"><option value="auto">Match source nozzle</option><option value="0.2">0.2 mm nozzle</option><option value="0.4">0.4 mm nozzle</option><option value="0.6">0.6 mm nozzle</option><option value="0.8">0.8 mm nozzle</option></select>
+        <p class="hint" id="u1profilenote" role="status"></p>
         <label class="check">
           <input type="checkbox" id="carrysettings" checked>
           Carry the source's own compatible print settings</label>
@@ -531,6 +534,7 @@
       <label class="check" id="bambukeep">
         <input type="checkbox" id="preservesettings" checked>
         Carry the source's compatible print settings</label>
+      <details><summary>Filament brand presets (optional)</summary><div id="filamentprofiles"></div></details>
       <p class="hint" id="sourcesettings" role="status" aria-live="polite"></p>
       <details id="settingdetails"><summary>Settings transfer details</summary>
         <div class="hint" id="settinglist"></div></details>
@@ -581,12 +585,16 @@
     <p class="hint">Add Prusa, Bambu, Orca or Snapmaker projects and choose one output format.
       Every plate gets its own 3MF, with colours, existing objects and copies kept together.</p>
     <div id="batchdrop" role="button" tabindex="0" aria-label="Add 3MF files to the batch">
-      <strong>Drop your .3mf files here</strong>
+      <strong>Drop your .3mf files or ZIP bundles here</strong>
       <span>or click to add files · up to 50 files, 96 MB each</span>
-      <input id="batchfile" type="file" accept=".3mf" multiple class="hidden" aria-label="Add 3MF files">
+      <input id="batchfile" type="file" accept=".3mf,.zip" multiple class="hidden" aria-label="Add 3MF files">
     </div>
+    <p class="hint" id="batchbundleinfo" role="status"></p>
     <div class="row batchoptions">
       <div class="field grow">
+        <label for="batchnozzle">U1 nozzle for this batch</label>
+        <select id="batchnozzle"><option value="auto">Match source nozzle</option><option value="0.2">0.2 mm nozzle</option><option value="0.4">0.4 mm nozzle</option><option value="0.6">0.6 mm nozzle</option><option value="0.8">0.8 mm nozzle</option></select>
+        <p class="hint">Match each source automatically, or choose your fitted nozzle for every file. Profiles and adjustments are listed in the ZIP report.</p>
         <label for="batchtarget">Convert all to</label>
         <select id="batchtarget">
           <option value="snapmaker">Snapmaker Orca (U1)</option>

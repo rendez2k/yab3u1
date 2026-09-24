@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { BatchSession, MAX_BATCH_OUTPUT } from "../shared/batchSession.js";
 
 const file = (name = "model.3mf", size = 4) => ({ name, size, arrayBuffer: async () => new ArrayBuffer(4) });
-const meta = { colors: ["#FF0000", "#FFFFFF"], warnings: [], sourceSettings: {
+const meta = { colors: ["#FF0000", "#FFFFFF"], types:['PLA','PLA'], warnings: [], sourceSettings: {
   sparse_infill_density: "7%", sparse_infill_pattern: "gyroid", seam_position: "back" },
   plates: [{ id: 1, name: "First", objectIds: ["1"] }, { id: 2, name: "Second", objectIds: ["2"] }] };
 function harness({ failFirst = false, convert = null, load = null, plates = null } = {}) {

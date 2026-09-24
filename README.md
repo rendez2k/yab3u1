@@ -11,6 +11,12 @@ identifiers did not.
 
 Open **[yab3d.uk](https://yab3d.uk)**. The original Netlify address remains available.
 
+The `codex/u1-profile-matching` review branch adds ZIP bundle analysis, official
+U1 material/nozzle/process matching, conservative speed transfer and optional
+brand filament presets. See the changelog for its limits. Brand presets come
+from the source 3MF or resolved JSON imports; this is not a universal brand
+catalogue. All analysis and conversion remain local and free.
+
 Three ways to use the project, with different workflows:
 
 | | where | what it is |

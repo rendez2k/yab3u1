@@ -32,6 +32,7 @@ function post(message, transfer) {
 function metaOf(parsed) {
   return {
     kind: parsed.kind,
+    sourcePrinter: parsed.sourcePrinter || '',
     title: parsed.title || "",
     paletteCount: parsed.paletteCount,
     paletteSource: parsed.paletteSource,
@@ -44,6 +45,7 @@ function metaOf(parsed) {
     // The narrow slice the optional preservation control may carry; null when the
     // source states nothing.
     sourceSettings: parsed.sourceSettings || null,
+    filamentProfiles: parsed.filamentProfiles || [],
     // Per-object intent, for files whose settings live on the objects (our own
     // standard output does this): the opt-in must stay usable on reimport.
     objectSettings: [...parsed.meta.values()]
@@ -421,6 +423,8 @@ self.onmessage = async (event) => {
                                              carrySettings:
                                                message.carrySettings !== false,
                                              supportMode: message.supportMode || "auto",
+                                             u1Nozzle: message.u1Nozzle || "auto",
+                                             filamentProfiles: message.filamentProfiles || [],
                                              thumbnails: message.thumbnails || null });
       if (built.problems.length) {
         post({ type: "error", id, message: built.problems[0] });

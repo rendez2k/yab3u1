@@ -1,13 +1,13 @@
+import { PROFILE_SOURCE_KEYS, SPEED_ALIASES, conservativeSpeeds } from './u1Profiles.js';
 import { BASE_SETTINGS } from "../base_settings.js";
 
 // The reviewed print-intent transfer for supported slicer projects.
 //
 // Based on the original converter's allowlist, expanded with explicit destination
 // mappings for designer settings across the browser's supported slicers. Nothing here
-// describes a *printer* or a *filament*: bed and filament temperatures, speeds,
-// accelerations, retraction, purge and prime-tower numbers, toolchange and machine
-// g-code and the bed geometry all belong to the machine that wrote the file, and
-// copying them onto a U1 prints worse than the U1 profile does.
+// imports source machine commands, bed geometry, retraction or purge settings.
+// Reviewed absolute speeds and accelerations retain lower source values and are
+// capped to the selected U1 process. Material properties have a separate picker.
 
 /* Settings that describe the print the user asked for, rather than the printer or
    the filament that produced the file. */
@@ -60,7 +60,7 @@ export const CARRY_KEYS = [
  */
 export function setProcessOverrides(cfg, carried, blends = false) {
   const keys = new Set([
-    ...carried.filter((key) => CARRY_KEYS.includes(key)),
+    ...carried.filter((key) => CARRY_KEYS.includes(key) || key in SPEED_ALIASES),
     "enable_support", "support_type", "support_threshold_angle",
   ]);
   if (blends) {
@@ -151,7 +151,7 @@ export const SUPPORT_KEYS = [
 export const SOURCE_KEYS = [...new Set([
   ...CARRY_KEYS,
   ...Object.values(PRUSA_ALIASES).flat(),
-  ...SUPPORT_KEYS,
+  ...SUPPORT_KEYS, ...PROFILE_SOURCE_KEYS,
 ])];
 
 export const SUPPORT_MODES = ["auto", "on", "off"];
@@ -222,7 +222,7 @@ const PRUSA_NAMES = {
 };
 
 /** Compatible object-level print settings and explicit omissions, by target. */
-export function transferSettings(source, target, { object = false } = {}) {
+export function transferSettings(source, target, { object = false, baseline = BASE_SETTINGS } = {}) {
   const values = {}, skipped = [];
   for (const key of CARRY_KEYS) {
     const present = source && [key, ...(PRUSA_ALIASES[key] || [])].some((k) => k in source);
@@ -239,6 +239,10 @@ export function transferSettings(source, target, { object = false } = {}) {
     if (value === undefined || !name) { skipped.push(key); continue; }
     if (key === "support_style" && value === "tree_organic" && ["snapmaker", "orca"].includes(target)) value = "organic";
     values[name] = value;
+  }
+  if (target === 'snapmaker') {
+    const speed = conservativeSpeeds(source, baseline);
+    Object.assign(values, speed.values); skipped.push(...speed.notes);
   }
   const support = supportOf(source);
   if (support) {

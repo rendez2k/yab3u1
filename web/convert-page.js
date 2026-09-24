@@ -13,9 +13,11 @@ import { Preview } from "./shared/preview.js";
 import { thumbnailSizes } from "./shared/thumbnail.js";
 import { planLayout } from "./shared/layout.js";
 import { supportOf, transferSettings } from "./shared/printSettings.js";
+import { renderFilamentPicker } from './shared/filamentPicker.js';
+import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1Profiles.js';
 import { initBatch } from "./batch-page.js";
 
-const VERSION = "2.6.0";
+const VERSION = "2.6.1-preview.1";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -28,6 +30,9 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "ZIP bundles: find the 3MF projects inside, list skipped STL and other files, and analyse source formats, materials, nozzle sizes and plate fit before converting.",
+  "U1 profiles now match 0.2, 0.4, 0.6 and 0.8 mm nozzles and material-specific presets. Lower source speeds are retained; higher values are capped to the selected U1 process.",
+  "Optional filament presets: choose from the source project or import resolved brand JSON presets. U1 exports also offer bundled Snapmaker profiles. Reviewed material properties transfer across all four output formats.",
   "Arrange slots offers all four U1 positions, even for fewer colours. A colour assigned to slot 4 stays in slot 4; any empty gap is unused by the model.",
   "U1 layouts keep 4 mm clear at every bed edge for spiral lifting. Compacted exports no longer retain extra filament diameter entries that could create an unnamed preset.",
   "Negative cutout volumes now open in the main converter and keep their roles and transforms in Snapmaker, Bambu and Orca projects. Prusa multi-volume output remains unsupported; preview cutouts must be checked in the slicer.",
@@ -411,7 +416,18 @@ function syncSettings() {
   const objects = (state?.objectSettings || []).filter(o => !ids || ids.map(String).includes(String(o.id)));
   const source = { ...(state?.sourceSettings || {}), ...(objects[0]?.settings || {}) };
   const enabled = isU1 ? session.carrySettings : session.preserveSourceSettings;
-  const report = transferSettings(source, session.target, { object: !isU1 });
+  if(state)renderFilamentPicker($('filamentprofiles'),{types:state.types,source:state.filamentProfiles,selected:session.filamentProfiles,
+    target:session.target,nozzle:session.u1Nozzle,sourceSettings:state.sourceSettings,
+    onChange:(index,preset)=>{if(index===null)syncSettings();else session.setFilamentProfile(index,preset);}});
+  let profile = null;
+  session.profileError='';
+  $('u1nozzle').value=session.u1Nozzle;
+  try {
+    if (isU1 && state) profile=buildU1Profile(state.sourceSettings, session.activeColourIds().map(id=>state.types[id-1] || 'PLA'), session.u1Nozzle, {carry:enabled});
+    $('u1profilenote').textContent=profile ? profileDescription(profile) : '';
+  } catch(error) { session.profileError=error.message; $('u1profilenote').textContent=error.message; }
+  const report = transferSettings(source, session.target, { object: !isU1, baseline:profile?.cfg });
+  if(profile) report.skipped.push(...constrainLayers(report.values,profile.match));
   const applied = enabled ? Object.entries(report.values).map(([key, value]) => ({ key, value })) : [];
   $("carrysettings").checked = session.carrySettings;
   $("preservesettings").checked = session.preserveSourceSettings;
@@ -498,7 +514,7 @@ function syncLayout() {
     + note.join(" · ");
   // An invalid or impossible layout blocks the export outright.
   const go = $("convertgo");
-  if (go) go.disabled = Boolean(problem) || session.busy || !session.state;
+  if (go) go.disabled = Boolean(problem) || Boolean(session.profileError) || session.busy || !session.state;
   if ($("layoutfill")) $("layoutfill").disabled = Boolean(problem) || !session.state;
 }
 
@@ -703,7 +719,7 @@ const input = $("convertfile");
 const drop = $("convertdrop");
 const batch = initBatch();
 function openFiles(files) {
-  if (files.length > 1) batch.addFiles(files);
+  if (files.length > 1 || /\.zip$/i.test(files[0]?.name || "")) batch.addFiles(files);
   else if (files[0]) session.load(files[0]);
 }
 
@@ -786,6 +802,7 @@ $("preservesettings").addEventListener("change", () => {
 // The U1 controls: the same two decisions the original converter took from the
 // command line, now on the page.  Every change invalidates the open download, so a
 // file written before the tick cannot be saved after it.
+$('u1nozzle').addEventListener('change',()=>session.setU1Nozzle($('u1nozzle').value));
 $("carrysettings").addEventListener("change", () => {
   session.setCarrySettings($("carrysettings").checked);
 });

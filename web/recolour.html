@@ -305,6 +305,11 @@
     <div class="field">
       <label for="target">Printer / output format</label>
       <select id="target"></select>
+      <div id="spectrumprofile">
+        <label for="spectrumnozzle">Nozzle fitted to your U1</label>
+        <select id="spectrumnozzle"><option value="auto">Match source nozzle</option><option value="0.2">0.2 mm nozzle</option><option value="0.4">0.4 mm nozzle</option><option value="0.6">0.6 mm nozzle</option><option value="0.8">0.8 mm nozzle</option></select>
+        <p class="hint" id="spectrumprofilenote" role="status"></p>
+      </div>
     </div>
     <p class="hint" id="destinationnote" role="status"></p>
   <div id="drop" role="button" tabindex="0" aria-label="Choose a 3MF file to open">
@@ -412,6 +417,7 @@
 
   <div class="card hidden" id="exportcard">
     <h2>Export your project</h2>
+    <details><summary>Filament brand presets (optional)</summary><div id="spectrumfilaments"></div></details>
     <p class="hint" id="exportnote" role="status"></p>
     <label class="check"><input type="checkbox" id="review">
       <span id="reviewtext">I have checked the colour mapping and accept the substitutions and predicted blends.</span></label>

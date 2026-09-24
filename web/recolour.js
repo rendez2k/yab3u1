@@ -16,7 +16,10 @@ import { mountSpoolImport } from "./shared/spoolImport.js";
 import { colourName } from "./shared/assignment.js";
 
 const REEL_KEY = "yab3u1-web-reels";
-const VERSION = "2.6.0";
+import { renderFilamentPicker } from './shared/filamentPicker.js';
+import { buildU1Profile, profileDescription } from './shared/u1Profiles.js';
+
+const VERSION = "2.6.1-preview.1";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -24,7 +27,7 @@ const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
 }[c]));
 
 const state = {
-  entries: null, project: null, plateId: null, objects: [], reels: [], target: "snapmaker",
+  entries: null, project: null, plateId: null, objects: [], reels: [], target: "snapmaker", u1Nozzle: "auto",
   mix: null, mapping: {}, recipes: [], ticked: new Set(),
   previewMode: "original", preview: null, previewGeometry: "", previewFailed: "",
   // What the export does with the file's colours: keep them, substitute them onto
@@ -319,7 +322,7 @@ function restartWorker() {
 /** Rebuild the light structures the page renders from, out of worker metadata. */
 function applyMeta(meta, assessed) {
   state.project = {
-    kind: meta.kind,
+    kind: meta.kind, sourceSettings:meta.sourceSettings, filamentProfiles:meta.filamentProfiles || [],
     title: meta.title,
     colors: meta.colors,
     types: meta.types,
@@ -537,6 +540,7 @@ function renderReels() {
     select.addEventListener("change", () => {
       state.reels[Number(select.getAttribute("data-type"))].type = select.value;
       delete state.reels[Number(select.dataset.type)].name;
+      delete state.reels[Number(select.dataset.type)].profile;
       $(`reelname${select.dataset.type}`).textContent=colourName(state.reels[Number(select.dataset.type)].color);
       saveReels();
       clearReview();
@@ -831,6 +835,9 @@ $("review").addEventListener("change", () => {
   state.reviewed = $("review").checked;
   renderExport();
 });
+$('spectrumnozzle').addEventListener('change',()=>{
+  state.u1Nozzle=$('spectrumnozzle').value; clearReview(); renderExport();
+});
 $("target").addEventListener("change", () => {
   state.target = $("target").value;
   cancelPlan();
@@ -971,14 +978,28 @@ function paletteOf(payload, mode) {
 // ------------------------------------------------------------------ export ----
 
 function renderExport() {
+  $('spectrumprofile').classList.toggle('hidden',state.target!=='snapmaker');
+  let profileError='';
+  try {
+    const payload=resultPlan();
+    if(state.project && state.target==='snapmaker') {
+      const types=(payload.physical || state.reels).map(r=>r.type || 'PLA');
+      const profile=buildU1Profile(state.project.sourceSettings,types,state.u1Nozzle,{blends:payload.recipes.length>0});
+      $('spectrumprofilenote').textContent=profileDescription(profile);
+    }
+  } catch(error) { profileError=error.message; $('spectrumprofilenote').textContent=profileError; }
   const payload = resultPlan();
   renderOutcome(payload);
+  $('spectrumfilaments').parentElement.classList.toggle('hidden',state.strategy==='source');
+  if(state.project && state.strategy!=='source')renderFilamentPicker($('spectrumfilaments'),{types:state.reels.map(r=>r.type),source:state.project.filamentProfiles,
+    selected:state.reels.map(r=>r.profile),target:state.target,nozzle:state.u1Nozzle,sourceSettings:state.project.sourceSettings,
+    onChange:(index,preset)=>{if(index!==null)state.reels[index].profile=preset;clearReview();renderExport();}});
   const target = state.target;
   const mixtures = payload.recipes.length;
   const reviewBox = $("review");
-  const blocking = !state.objects.length ? "tick at least one object"
+  const blocking = profileError || (!state.objects.length ? "tick at least one object"
     : state.strategy!=='source' && state.workflow==='model' && !state.modelApplied && state.reelView!=='recommended' ? "choose and apply a model palette"
-    : payload.blocked || (state.reelView==='recommended' ? 'apply the selected palette or blend settings' : null);
+    : payload.blocked || (state.reelView==='recommended' ? 'apply the selected palette or blend settings' : null));
   const needsReview = state.strategy !== "source" && !blocking;
   reviewBox.parentElement.classList.toggle("hidden", !needsReview);
   reviewBox.checked = state.reviewed;
@@ -1006,7 +1027,7 @@ function renderExport() {
 function exportRevision() {
   const payload = resultPlan();
   return JSON.stringify({epoch: state.epoch, plate: state.plateId,
-    objects: state.objects, target: state.target, reels: state.reels,
+    objects: state.objects, target: state.target, reels: state.reels, u1Nozzle:state.u1Nozzle,
     physical: payload.physical, mapping: payload.mapping, recipes: payload.recipes,
     strategy: state.strategy, reviewed: state.reviewed, reelView:state.reelView});
 }
@@ -1048,7 +1069,7 @@ $("export").addEventListener("click", async () => {
     const built = await background().export(state.plateId, state.objects, {
       target: state.target, reels: state.reels, physical: payload.physical,
       mapping: payload.mapping, recipes: payload.recipes,
-      title: state.project.title,
+      title: state.project.title, u1Nozzle:state.u1Nozzle,
       thumbnails: { main: rendered.main, small: rendered.small || null },
     });
     if (exportRevision() !== revision) return;

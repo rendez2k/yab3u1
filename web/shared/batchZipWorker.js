@@ -19,6 +19,8 @@ self.onmessage = async ({ data }) => {
         `Stopped early: ${report.cancelled ? "yes" : "no"}`, "", ...report.notes, "", ...report.entries.flatMap(e => [
           `${e.status.toUpperCase()}: ${e.source}${e.plate ? ` / ${e.plate}` : ""}`,
           e.output ? `  Output: ${e.output}` : `  ${e.message || ""}`,
+          ...(e.profile ? [`  Profile: ${e.profile}`, `  Nozzle: ${e.nozzle} mm`, `  Materials: ${(e.materials || []).join(', ')}`] : []),
+          ...(e.profileNotes || []).map(n => `  Profile note: ${n}`),
           ...(e.notes || []).map(n => `  Note: ${n}`),
           ...(e.settings || []).filter(s => s.skipped.length).map(s => `  Not transferred (${s.object}): ${s.skipped.join(", ")}`),
         ]), "", "Full transferred values are listed in conversion-report.json."].join("\n");

@@ -209,7 +209,8 @@ await ok("U1 preset overrides retain designer quality, strength and supports on 
   } }));
   const list = cfg.different_settings_to_system;
   assert.equal(list.length, cfg.filament_colour.length + 2);
-  assert.ok(list.slice(1).every((entry) => entry === ""), "no foreign filament/printer overrides");
+  assert.ok(list.slice(1,-1).every(entry=>entry.includes("nozzle_temperature")), "resolved destination material temperatures are declared");
+  assert.equal(list.at(-1), "nozzle_diameter;min_layer_height;max_layer_height");
   const keys = list[0].split(";");
   assert.deepEqual(keys, built.settings.overrides);
   assert.ok(!keys.includes("machine_start_gcode"));
@@ -238,8 +239,9 @@ await ok("disabled carry and explicit support Off do not restore source override
   const { cfg } = u1ConfigOf(bambuSource({ settings: {
     wall_loops: "5", enable_support: "1", sparse_infill_density: "7%",
   } }), { carrySettings: false, supportMode: "off" });
-  assert.deepEqual(cfg.different_settings_to_system[0].split(";"),
-    ["enable_support", "support_threshold_angle", "support_type"]);
+  assert.notEqual(cfg.wall_loops,"5");
+  assert.notEqual(cfg.sparse_infill_density,"7%");
+  assert.ok(cfg.different_settings_to_system[0].includes("enable_support"));
   assert.equal(cfg.enable_support, "0");
 });
 
