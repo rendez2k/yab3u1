@@ -50,6 +50,19 @@ for (const target of ["snapmaker", "bambu", "orca", "prusa"]) {
 console.log("PASS all formats, every plate, settings, thumbnails, naming and worker cleanup");
 
 {
+ const h=harness();
+ const result=await h.session.run([file()],{u1Nozzle:'0.2',keepSettings:false,layerHeight:{mode:'custom',value:'0.1'}});
+ assert.equal(result.report.outputs,2);
+ assert.equal(result.report.entries[0].layerHeights[0].height,.1);
+ assert.deepEqual(h.calls[0][5].layerHeight,{mode:'custom',value:'0.1'});
+ const bad=harness();
+ const refused=await bad.session.run([file()],{u1Nozzle:'0.2',layerHeight:{mode:'custom',value:'0.2'}});
+ assert.equal(refused.report.outputs,0);
+ assert.equal(bad.calls.length,0,'invalid height rejected before writing');
+ assert.match(refused.report.entries[0].message,/Custom layer height/);
+}
+
+{
   const h = harness({ failFirst: true });
   const result = await h.session.run([file("broken.3mf"), file("good.3mf")]);
   assert.equal(result.report.entries[0].message, "Broken archive");

@@ -596,6 +596,12 @@
         <label for="batchnozzle">U1 nozzle for this batch</label>
         <select id="batchnozzle"><option value="auto">Match source nozzle</option><option value="0.2">0.2 mm nozzle</option><option value="0.4">0.4 mm nozzle</option><option value="0.6">0.6 mm nozzle</option><option value="0.8">0.8 mm nozzle</option></select>
         <p class="hint">Match each source automatically, or choose your fitted nozzle for every file. Profiles and adjustments are listed in the ZIP report.</p>
+        <div id="batchlayers">
+          <label for="batchlayermode">Layer height</label>
+          <select id="batchlayermode"><option value="preserve">Preserve designer settings</option><option value="preset">Use printer preset</option><option value="custom">Custom layer height</option></select>
+          <div id="batchcustomlayer" class="hidden"><label for="batchlayerheight">Layer height in mm</label><input id="batchlayerheight" type="number" min="0.01" max="0.56" step="0.01" value="0.20"></div>
+          <p class="hint">Regular layers: keep each designer’s height where the nozzle supports it, use the nozzle’s standard preset, or set one height for the batch. First-layer height is checked separately. Review each file’s changes below before converting.</p>
+        </div>
         <label for="batchtarget">Convert all to</label>
         <select id="batchtarget">
           <option value="snapmaker">Snapmaker Orca (U1)</option>

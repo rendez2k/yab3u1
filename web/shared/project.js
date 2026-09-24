@@ -29,7 +29,7 @@ import {
   palette, prusaSpectrumJson, snapmakerConfig, virtualId,
 } from "./targets.js";
 import { readFilamentProfiles, applyFilamentProfiles, prusaFilamentConfig } from './filamentProfiles.js';
-import { buildU1Profile, conservativeSpeeds, constrainLayers } from './u1Profiles.js';
+import { buildU1Profile, conservativeSpeeds, constrainLayers, resolveLayerHeight } from './u1Profiles.js';
 import { BASE_SETTINGS } from "../base_settings.js";
 
 export const SNAPMAKER_SPECTRUM_APPLICATION = "BambuStudio-2.3.5";
@@ -1765,8 +1765,12 @@ function supportSplit(attrs) {
 function sourceSettingMetadata(project, objectId, target = "bambu", options = {}, painted = false) {
   const source = { ...(project.sourceSettings || {}),
                    ...(project.meta.get(objectId)?.settings || {}) };
+  if (target==='snapmaker' && options.layerHeight && options.carrySettings===false) {
+    return `<metadata key="layer_height" value="${resolveLayerHeight(source,options.u1Profile.match,options.layerHeight).height}"/>`;
+  }
   const report = transferSettings(source, target, { object: true, baseline: options.u1Profile?.cfg });
   if (target === 'snapmaker' && options.u1Profile) constrainLayers(report.values, options.u1Profile.match);
+  if (target==='snapmaker' && options.layerHeight) report.values.layer_height=String(resolveLayerHeight(source,options.u1Profile.match,options.layerHeight).height);
   if (target === "snapmaker" && painted && options.supportMode !== "off"
       && report.values.enable_support === "0") report.values.enable_support = "1";
   if (target === "snapmaker" && options.supportMode === "off") report.values.enable_support = "0";
@@ -1977,6 +1981,7 @@ export function convertProject(project, plateId, objectIds, options = {}) {
     // travel, and which support decision wins.  Both belong to the snapshot the
     // page wrote, so a control change invalidates an export already in flight.
     u1Nozzle: options.u1Nozzle || "auto",
+    layerHeight: options.layerHeight || null,
     carrySettings: options.carrySettings !== false,
     supportMode: normaliseSupportMode(options.supportMode),
     thumbnails: options.thumbnails || null,
@@ -2042,7 +2047,7 @@ export function exportProject(project, plateId, objectIds, options) {
     mapping[Number(source)] = Number(id);
   });
   const u1Profile = target === 'snapmaker' ? buildU1Profile(project.sourceSettings, reelTypes,
-    options.u1Nozzle || 'auto', {blends: recipes.length > 0, carry: options.carrySettings !== false}) : null;
+    options.u1Nozzle || 'auto', {blends: recipes.length > 0, carry: options.carrySettings !== false, layerHeight:options.layerHeight}) : null;
   options = {...options, u1Profile};
   const table = palette(reelColours, reelTypes, recipes);
   const colours = { };
@@ -2314,7 +2319,7 @@ export function exportProject(project, plateId, objectIds, options) {
     // from the facet's own reference.
     const extruderOf = (value) => (standard ? ""
       : `<metadata key="extruder" value="${value}"/>`);
-    const preserve = target === "snapmaker" ? options.carrySettings !== false
+    const preserve = target === "snapmaker" ? options.carrySettings !== false || Boolean(options.layerHeight)
       : options.preserveSourceSettings;
     const sourceId = String(root.objectId);
     if (preserve && target === "snapmaker" && !paintedByObject.has(sourceId)) {
@@ -2434,6 +2439,10 @@ export function exportProject(project, plateId, objectIds, options) {
     Object.assign(cfg, speed.values);
     carried.push(...Object.keys(speed.values));
     const layerNotes = constrainLayers(cfg, u1Profile.match);
+    if(options.layerHeight) {
+      const layer=resolveLayerHeight(project.sourceSettings,u1Profile.match,options.layerHeight);
+      cfg.layer_height=String(layer.height); carried.push('layer_height'); layerNotes.push(layer.text);
+    }
     const filamentReport=applyFilamentProfiles(cfg,reels,{u1:true});
     u1Profile.filamentKeys.push(...filamentReport.keys);
     const overrides = setProcessOverrides(cfg, carried, recipes.length > 0);

@@ -27,14 +27,15 @@ export function detectNozzle(source = {}) {
   return null;
 }
 
-export function matchU1Profile(source = {}, nozzle = 'auto', { blends = false, carry = true } = {}) {
+export function matchU1Profile(source = {}, nozzle = 'auto', { blends = false, carry = true, layerHeight = null } = {}) {
   const detected = detectNozzle(source);
   const diameter = nozzle === 'auto' ? (detected || '0.4') : String(nozzle);
   if (!NOZZLES.includes(diameter)) throw new Error('Choose a supported U1 nozzle: 0.2, 0.4, 0.6 or 0.8 mm.');
   const machine = U1_PROFILES.machines.find(m=>String(first(m.nozzle_diameter))===diameter);
   const candidates = U1_PROFILES.processes.filter(p=>p.compatible_printers?.includes(machine.name)
     && (blends && diameter==='0.4' ? p.name.includes('Color Mixing') : !p.name.includes('Color Mixing')));
-  const height = carry ? number(source?.layer_height) : NaN;
+  const height = layerHeight?.mode === 'preset' ? NaN : layerHeight?.mode === 'custom' ? number(layerHeight.value)
+    : carry || layerHeight?.mode === 'preserve' ? number(source?.layer_height) : NaN;
   const wanted = blends ? 0.1 : Number.isFinite(height) && height>0 ? height : Number(diameter)/2;
   candidates.sort((a,b)=>Math.abs(number(a.layer_height)-wanted)-Math.abs(number(b.layer_height)-wanted));
   const process = candidates[0];
@@ -115,6 +116,23 @@ export function constrainLayers(values, match) {
     }
   }
   return notes;
+}
+
+/** Shared by the pre-conversion review and exporter: never silently clamp a custom choice. */
+export function resolveLayerHeight(source, match, choice = {mode:'preserve'}) {
+  const mode=choice.mode || 'preserve', original=number(source?.layer_height);
+  if (!['preserve','preset','custom'].includes(mode)) throw new Error('Choose a layer-height mode.');
+  const fallback=number(match.process.layer_height);
+  let height=mode==='custom' ? number(choice.value) : mode==='preset'
+    ? number(matchU1Profile({},match.nozzle,{carry:false}).process.layer_height) : original;
+  let reason=mode==='custom' ? 'custom batch height' : mode==='preset' ? 'standard nozzle preset' : 'designer height preserved';
+  if (!(height>=match.minLayer && height<=match.maxLayer)) {
+    if(mode==='custom') throw new Error(`Custom layer height must be ${match.minLayer}–${match.maxLayer} mm for the ${match.nozzle} mm nozzle.`);
+    height=fallback;
+    reason=Number.isFinite(original) ? `outside the ${match.minLayer}–${match.maxLayer} mm nozzle range` : 'source height unspecified; using nozzle preset';
+  }
+  return {mode,source:Number.isFinite(original)?original:null,height,reason,
+    text:`Layer height: ${Number.isFinite(original)?original+' mm':'unspecified'} → ${height} mm (${reason}).`};
 }
 
 export function profileDescription(profile) {

@@ -100,6 +100,7 @@ export class RecolourWorker {
                                      carrySettings: options.carrySettings !== false,
                                      supportMode: options.supportMode || "auto",
                                      u1Nozzle: options.u1Nozzle || "auto",
+                                     layerHeight: options.layerHeight || null,
                                      filamentProfiles: options.filamentProfiles || [],
                                      assignmentMode: options.assignmentMode || null,
                                      removeUnused: options.removeUnused === true,

@@ -5,6 +5,17 @@ The version shown on the page comes from `VERSION` in `web/convert-page.js` (and
 the collapsed "What's new" block in the footer. Bump those constants and add a
 section here together.
 
+## 2.6.1-preview.3 — Bulk layer-height choices (review only)
+
+- U1 bulk conversion defaults to preserving each designer’s regular layer height,
+  with standard nozzle-preset and custom-height alternatives. The layer choice is
+  independent of carrying other compatible print settings.
+- Show source and output heights, reasons for nozzle-related adjustments, and
+  object overrides before conversion. Custom values outside any selected nozzle’s
+  supported range block conversion. Reports include the applied heights.
+- Global and object settings use the same height calculation as the review.
+  First-layer heights retain the existing separate compatibility checks.
+
 ## 2.6.1-preview.2 — Textured model colour import (review only)
 
 - Full Spectrum now opens native negative-cutout projects and preserves cutout

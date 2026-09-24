@@ -424,6 +424,7 @@ self.onmessage = async (event) => {
                                                message.carrySettings !== false,
                                              supportMode: message.supportMode || "auto",
                                              u1Nozzle: message.u1Nozzle || "auto",
+                                             layerHeight: message.layerHeight || null,
                                              filamentProfiles: message.filamentProfiles || [],
                                              thumbnails: message.thumbnails || null });
       if (built.problems.length) {

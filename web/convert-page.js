@@ -18,7 +18,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.1-preview.2";
+const VERSION = "2.6.1-preview.3";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -31,6 +31,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "Bulk U1 layer heights: preserve each designer’s settings, use a standard nozzle preset or choose a custom height. Review source-to-output heights before conversion; incompatible custom heights are blocked.",
   "Import textured GLB, OBJ/MTL texture ZIPs and dense vertex-colour 3MFs. Compare a reduced 2–16 colour palette, edit swatches, confirm size and orientation, then convert or use Full Spectrum.",
   "ZIP bundles: find the 3MF projects inside, list skipped STL and other files, and analyse source formats, materials, nozzle sizes and plate fit before converting.",
   "U1 profiles now match 0.2, 0.4, 0.6 and 0.8 mm nozzles and material-specific presets. Lower source speeds are retained; higher values are capped to the selected U1 process.",

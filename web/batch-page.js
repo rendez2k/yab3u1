@@ -1,4 +1,4 @@
-import { buildU1Profile, detectNozzle, profileDescription } from './shared/u1Profiles.js';
+import { buildU1Profile, matchU1Profile, detectNozzle, profileDescription, resolveLayerHeight } from './shared/u1Profiles.js';
 import { BatchSession, MAX_BATCH_FILES } from "./shared/batchSession.js";
 import { RecolourWorker } from "./shared/workerClient.js";
 import {targetLayout, planLayout} from './shared/layout.js';
@@ -8,6 +8,14 @@ export function initBatch({onTextureBundle}={}) {
   const $ = id => document.getElementById(id);
   let files = [], rows = [], outputUrl = null, analysing = false, analysisWorker = null;
   const analysed=new WeakMap();
+  let invalidLayers=false;
+  const layerChoice=()=>({mode:$('batchlayermode').value,value:$('batchlayerheight').value});
+  function layerSummary(meta) {
+    if(meta.error || $('batchtarget').value!=='snapmaker')return '';
+    const match=matchU1Profile(meta.sourceSettings,$('batchnozzle').value,{carry:$('batchsettings').checked,layerHeight:layerChoice()});
+    const sources=[{name:'Global',settings:{}},...(meta.objectSettings || []).filter(o=>o.settings?.layer_height!==undefined)];
+    return sources.map(o=>`${o.name || o.id}: ${resolveLayerHeight({...meta.sourceSettings,...o.settings},match,layerChoice()).text}`).join(' ');
+  }
   const say = text => { $("batchstatus").textContent = text; };
   const release = () => {
     if (outputUrl) URL.revokeObjectURL(outputUrl);
@@ -34,15 +42,18 @@ export function initBatch({onTextureBundle}={}) {
     $("mode-bulk").setAttribute("aria-pressed", String(bulk));
   }
   function controls(running) {
-    for (const id of ["batchfile", "batchtarget", "batchnozzle", "batchsettings", "batchclear", "mode-single", "mode-bulk"]) $(id).disabled = running;
+    for (const id of ["batchfile", "batchtarget", "batchnozzle", "batchsettings", "batchlayermode", "batchlayerheight", "batchclear", "mode-single", "mode-bulk"]) $(id).disabled = running;
     $("batchdrop").setAttribute("aria-disabled", String(running));
     $("batchdrop").tabIndex = running ? -1 : 0;
-    $("batchgo").disabled = running || !files.length;
+    $("batchgo").disabled = running || !files.length || invalidLayers;
     $("batchcancel").classList.toggle("hidden", !running || analysing);
     $("batchcancel").disabled = false;
     rows.forEach(r => { r.remove.disabled = running; });
   }
   function render() {
+    invalidLayers=false;
+    $('batchlayers').classList.toggle('hidden',$('batchtarget').value!=='snapmaker');
+    $('batchcustomlayer').classList.toggle('hidden',$('batchlayermode').value!=='custom');
     $("batchgo").classList.add("primary");
     $("batchgo").textContent = "Convert files";
     $("batchqueue").replaceChildren();
@@ -55,6 +66,10 @@ export function initBatch({onTextureBundle}={}) {
       detail.className = "hint batchdetail";
       detail.textContent = analysed.has(file) ? describe(analysed.get(file)) : `${(file.size / 1048576).toFixed(1)} MB · Not yet analysed`;
       info.append(name, detail);
+      const layers=document.createElement('p');layers.className='hint';
+      try {layers.textContent=analysed.has(file)?layerSummary(analysed.get(file)):'';}
+      catch(error){layers.textContent=`Needs attention: ${error.message}`;layers.setAttribute('role','alert');invalidLayers=true;}
+      info.append(layers);
       const status = document.createElement("span");
       status.className = "batchstate";
       status.textContent = "Queued";
@@ -86,7 +101,7 @@ export function initBatch({onTextureBundle}={}) {
     const nozzle=detectNozzle(meta.sourceSettings);
     text+=` · source nozzle: ${nozzle ? nozzle+' mm' : 'unknown or mixed'}. `;
     if(target==='snapmaker') {
-      try {text+=profileDescription(buildU1Profile(meta.sourceSettings,meta.types,$('batchnozzle').value,{carry:$('batchsettings').checked}));}
+      try {text+=profileDescription(buildU1Profile(meta.sourceSettings,meta.types,$('batchnozzle').value,{carry:$('batchsettings').checked,layerHeight:layerChoice()}));}
       catch(error){text+=`Needs attention: ${error.message}`;}
     } else text+=`Convert to ${target}; choose your printer and nozzle in the destination slicer. `;
     if(meta.negativeVolumes) text+=' Contains negative cutouts; Prusa export is unsupported. ';
@@ -177,21 +192,22 @@ export function initBatch({onTextureBundle}={}) {
     files = []; release(); render(); say("Add files to start a batch.");
     $("batchdrop").focus();
   });
-  for (const id of ["batchtarget", "batchsettings", "batchnozzle"]) $(id).addEventListener("change", () => {
+  for (const id of ["batchtarget", "batchsettings", "batchnozzle", "batchlayermode", "batchlayerheight"]) $(id).addEventListener("change", () => {
     release(); render(); say("Options updated. Convert to create a new ZIP.");
   });
+  $('batchlayerheight').addEventListener('input',()=>{release();render();});
   $("batchcancel").addEventListener("click", () => {
     engine.cancel(); $("batchcancel").disabled = true;
     say("Stopping. Completed outputs will be kept in the ZIP.");
   });
   $("batchgo").addEventListener("click", async () => {
-    if (engine.busy || analysing || !files.length) return;
+    if (engine.busy || analysing || !files.length || invalidLayers) return;
     release(); render(); controls(true);
     $("batchprogress").classList.remove("hidden");
     $("batchprogress").max = files.length;
     $("batchprogress").value = 0;
     try {
-      const result = await engine.run(files, { target: $("batchtarget").value, keepSettings: $("batchsettings").checked, u1Nozzle: $("batchnozzle").value });
+      const result = await engine.run(files, { target: $("batchtarget").value, keepSettings: $("batchsettings").checked, u1Nozzle: $("batchnozzle").value, layerHeight:layerChoice() });
       if (!result) return;
       const { report } = result;
       outputUrl = URL.createObjectURL(new Blob([result.bytes], { type: "application/zip" }));

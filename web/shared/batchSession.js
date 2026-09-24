@@ -3,7 +3,7 @@ import { TARGETS } from "./targets.js";
 import { targetLayout, planLayout } from "./layout.js";
 import { planningAllowance, transferSettings } from "./printSettings.js";
 import { thumbnailSizes } from "./thumbnail.js";
-import {buildU1Profile, constrainLayers} from './u1Profiles.js';
+import {buildU1Profile, constrainLayers, resolveLayerHeight} from './u1Profiles.js';
 
 export const MAX_BATCH_FILES = 50;
 export const MAX_BATCH_OUTPUT = 256 * 1024 * 1024;
@@ -42,14 +42,15 @@ export class BatchSession {
   status(text) { if (!this.closed) this.hooks.status?.(text); }
   row(index, status, detail) { if (!this.closed) this.hooks.row?.(index, { status, detail }); }
 
-  async run(input, { target = "snapmaker", keepSettings = true, u1Nozzle = "auto" } = {}) {
+  async run(input, { target = "snapmaker", keepSettings = true, u1Nozzle = "auto", layerHeight = null } = {}) {
     if (this.busy || this.closed) return null;
     const files = Array.from(input);
     if (!files.length || files.length > MAX_BATCH_FILES) throw new Error("Choose 1–50 files per batch.");
     if (!TARGETS.includes(target)) throw new Error("Choose a supported destination format.");
+    layerHeight=target==='snapmaker' ? {...(layerHeight || {mode:'preserve'})} : null;
     this.busy = true;
     this.cancelled = false;
-    const report = { tool: "YAB3D", target, keepSettings, started: new Date().toISOString(),
+    const report = { tool: "YAB3D", target, keepSettings, layerHeight, started: new Date().toISOString(),
       notes: ["Each source plate is exported separately; its objects and existing copies are kept and centred as a group.",
         "Colours and filament order are preserved. No resizing, extra clones or palette reduction.",
         "Compatible global and object settings are transferred; part/modifier overrides and some slicer-specific settings are not supported.",
@@ -107,10 +108,12 @@ export class BatchSession {
                 width: Math.max(270, size[0] + allowance.padding * 2 + 10),
                 depth: Math.max(270, size[1] + allowance.padding * 2 + 10) }), ...allowance };
               if (planLayout(measured.bounds, layout).blocked) throw new Error("This plate's group does not fit the U1 with print/tower clearance. Arrange it in Single file or the slicer.");
-              const profile=target==='snapmaker' ? buildU1Profile(meta.sourceSettings,meta.types,u1Nozzle,{carry:keepSettings}) : null;
+              const profile=target==='snapmaker' ? buildU1Profile(meta.sourceSettings,meta.types,u1Nozzle,{carry:keepSettings,layerHeight}) : null;
+              entry.layerHeights=profile ? sources.map((source,n)=>({object:objects[n]?.name || objects[n]?.id || 'Global',...resolveLayerHeight(source,profile.match,layerHeight)})) : [];
               entry.settings = keepSettings ? sources.map((source, n) => {
                 const transfer=transferSettings(source,target,{object:target!=='snapmaker',baseline:profile?.cfg});
                 if(profile)transfer.skipped.push(...constrainLayers(transfer.values,profile.match));
+                if(profile)transfer.values.layer_height=String(resolveLayerHeight(source,profile.match,layerHeight).height);
                 return {object:objects[n]?.name || objects[n]?.id || 'Global',...transfer};
               }) : [];
               entry.notes = [...(meta.warnings || []), ...allowance.footprintNotes];
@@ -121,7 +124,7 @@ export class BatchSession {
                 { size: sizes.main, small: sizes.small, layout });
               if (this.cancelled) throw new Error("Stopped");
               const output = await this.worker.convert(plate.id, null, target, mapping, stem(file.name),
-                { layout, thumbnails, u1Nozzle, preserveSourceSettings: keepSettings, carrySettings: keepSettings,
+                { layout, thumbnails, u1Nozzle, layerHeight, preserveSourceSettings: keepSettings, carrySettings: keepSettings,
                   supportMode: "auto", assignmentMode: "slots" });
               if (this.cancelled) throw new Error("Stopped");
               const data = output.bytes instanceof Uint8Array ? output.bytes : new Uint8Array(output.bytes);
