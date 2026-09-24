@@ -5,6 +5,32 @@ The version shown on the page comes from `VERSION` in `web/convert-page.js` (and
 the collapsed "What's new" block in the footer. Bump those constants and add a
 section here together.
 
+## 2.6.1-preview.2 — Textured model colour import (review only)
+
+- Full Spectrum now opens native negative-cutout projects and preserves cutout
+  roles and placements during recolouring, blends and cloning. Cutters do not
+  require filament slots. The preview explains that cuts are applied by the
+  slicer; unsupported Prusa cutout export is blocked before download.
+- Import static, uncompressed GLB 2 models with embedded base-colour textures,
+  material colours or vertex colours; import triangulated OBJ + MTL + PNG/JPEG
+  texture ZIPs and standard vertex-colour 3MFs, including per-corner colours.
+- Reduce appearance to 2–16 editable filament colour groups using surface-area
+  weighted colour clustering. Compare sampled source and reduced colours in 3D,
+  confirm the source up axis and intended height, then continue into the main
+  converter or Full Spectrum without uploading the model.
+- Prepared 3MFs assemble the source parts into one indexed painted mesh. Every
+  triangle is retained; only the preview is simplified. Texture samples and
+  per-corner gradients become one colour per face, so small details may change.
+- Decode only local embedded/bundled PNG/JPEG images, sample textures at up to
+  4096 pixels per side, and cap inputs at 96 MiB / 2.5 million triangles.
+  External images, compressed/sparse geometry, animation, transparency and
+  unsupported material/geometry extensions fail explicitly. OBJ polygon faces
+  must be triangulated first. This does not perform mesh repair or import slicer
+  supports/process settings in the appearance-only workflow.
+- Verified the supplied Hi3D robot GLB and OBJ ZIP in the browser and round-tripped
+  its 1,981,484-triangle colour 3MF through palette reduction. Synthetic exports
+  cover all four supported destination formats.
+
 ## 2.6.1-preview.1 — Profile matching and ZIP bundles (review only)
 
 - Drop a ZIP bundle to discover its 3MF projects without expanding unrelated STL

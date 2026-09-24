@@ -13,7 +13,7 @@ function fixture(role='negative_part') {
  ['Metadata/project_settings.config',enc.encode(JSON.stringify({filament_colour:['#FFFFFF'],filament_type:['PLA']}))]
  ]);
 }
-assert.throws(()=>p.readProject(fixture()),/negative cutout/,'recolour workflow stays guarded');
+assert.throws(()=>p.readProject(fixture()),/negative cutout/,'callers must opt into native cutout preservation');
 assert.throws(()=>p.readProject(fixture('modifier_part'),{allowNegative:true}),/modifier_part/);
 const source=p.readProject(fixture(),{allowNegative:true});
 assert.equal(p.selectionBounds(source,1,null).min[2],0,'cutout must not push the printable model above the bed');
@@ -93,3 +93,45 @@ if(existsSync(path)) {
  console.log('PASS real ghost fill:',instances.length,'copies, 4mm edge clearance, three named filament presets');
 }
 console.log('negative volumes ok');
+
+const reels=['#FFFFFF','#000000','#FF0000','#0080C0'].map(color=>({color,type:'PLA'}));
+for(const target of ['snapmaker','bambu','orca']) {
+ const options={target,reels,mapping:{1:target==='orca'?2:5},recipes:target==='orca'?[]:[{a:1,b:2,percent:50}],layout:{copies:2,spacing:5,width:270,depth:270,tower:false}};
+ const recolourSource=p.readProject(fixture(),{allowNegative:true});
+ recolourSource.meta.get('9').parts[1].extruder=8;
+ const member='3D/Objects/parts.model';
+ recolourSource.entries.set(member,enc.encode(dec.decode(recolourSource.entries.get(member)).replace(mesh(2,-20),mesh(2,-20).replace('<triangle v1=', '<triangle paint_color="FF" v1='))));
+ const out=p.exportProject(recolourSource,1,null,options);
+ assert.deepEqual(out.problems,[]);
+ const again=p.readProject(out.entries,{allowNegative:true});
+ assert.equal(p.selectionInstances(again,1,null).length,2);
+ for(const meta of again.meta.values()) {
+  assert.equal(meta.parts.filter(part=>part.subtype==='negative_part').length,1);
+  assert.equal(meta.parts.find(part=>part.subtype==='negative_part').extruder,1);
+  assert.equal(meta.parts.find(part=>part.subtype==='normal_part').extruder,options.mapping[1]);
+ }
+ assert.equal(p.selectionBounds(again,1,null).min[2],0);
+ assert.ok(!dec.decode(out.entries.get(member)).includes('paint_color="FF"'),'non-printing cutter paint cannot demand a missing reel');
+ console.log('PASS recolour cutout, blend/solid mapping, unused cutter slot and clones:',target);
+}
+assert.throws(()=>p.exportProject(source,1,null,{target:'prusa',reels}),/Prusa multi-volume/);
+if(process.env.TEST_REAL_CUTOUT==='1') for(const filename of ['CATS3D.174 - SuperMan Final Cats3D Studio.3mf','CATS3D.173 - Ghost with heart Final Cats3D STudio.3mf']) {
+ const file='C:/Users/rende/Desktop/'+filename;
+ if(!existsSync(file))continue;
+ const model=p.readProject(await readZip(readFileSync(file)),{allowNegative:true});
+ for(const plate of model.plates) {
+  const assessed=p.analyse(model,plate.id,null);
+  const before=p.eligibleObjects(model,plate.id).flatMap(id=>model.meta.get(id)?.parts||[]).filter(part=>part.subtype==='negative_part');
+  const used=assessed.objects.filter(o=>o.selected).flatMap(o=>o.colours.map(c=>c.extruder));
+  for(const target of ['snapmaker','bambu']) {
+   const mapping=Object.fromEntries(used.map((id,i)=>[id,i===0?5:1+i%4]));
+   const out=p.exportProject(model,plate.id,null,{target,reels,mapping,recipes:[{a:1,b:2,percent:50}]});
+   assert.deepEqual(out.problems,[]);
+   const again=p.readProject(out.entries,{allowNegative:true});
+   const after=[...again.meta.values()].flatMap(m=>m.parts).filter(part=>part.subtype==='negative_part');
+   assert.deepEqual(after.map(p=>p.name),before.map(p=>p.name));
+   assert.deepEqual(p.selectionBounds(again,1,null).max.map((n,i)=>+(n-p.selectionBounds(again,1,null).min[i]).toFixed(4)),p.selectionBounds(model,plate.id,null).max.map((n,i)=>+(n-p.selectionBounds(model,plate.id,null).min[i]).toFixed(4)));
+   console.log('PASS real Full Spectrum cutouts + blend:',filename,plate.id,target,after.length);
+  }
+ }
+}

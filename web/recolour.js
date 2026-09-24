@@ -17,9 +17,10 @@ import { colourName } from "./shared/assignment.js";
 
 const REEL_KEY = "yab3u1-web-reels";
 import { renderFilamentPicker } from './shared/filamentPicker.js';
+import {createTextureImport} from './shared/textureImport.js';
 import { buildU1Profile, profileDescription } from './shared/u1Profiles.js';
 
-const VERSION = "2.6.1-preview.1";
+const VERSION = "2.6.1-preview.2";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -345,7 +346,9 @@ function setBusy(text) {
   if (node) node.textContent = text || "";
 }
 
+const textureImporter=createTextureImport({buttonHost:document.getElementById('destinationcard'),onAccept:file=>load(file)});
 async function load(file) {
+  if(/\.(glb|zip)$/i.test(file.name)){textureImporter.open(file);return;}
   const epoch = (state.epoch += 1);
   // Any assessment or preview already in flight belongs to the previous file.
   assessToken += 1;
@@ -386,6 +389,7 @@ async function load(file) {
     state.entries = null;
     $("drop").classList.remove("hidden");
     $("loaderror").textContent = `That file could not be read: ${error.message}. Choose another file.`;
+    if(/colour group|colours.*at most|per-corner colours/.test(error.message))textureImporter.open(file);
   } finally {
     if (epoch === state.epoch) setLoading(false);
     if (epoch === state.epoch) setBusy("");
@@ -996,8 +1000,10 @@ function renderExport() {
     onChange:(index,preset)=>{if(index!==null)state.reels[index].profile=preset;clearReview();renderExport();}});
   const target = state.target;
   const mixtures = payload.recipes.length;
+  const negative = state.project && [...state.project.meta.values()].some(meta => state.objects.map(String).includes(String(meta.id)) && (meta.parts || []).some(part => part.subtype === 'negative_part'));
+  $('cutoutnote').classList.toggle('hidden', !negative);
   const reviewBox = $("review");
-  const blocking = profileError || (!state.objects.length ? "tick at least one object"
+  const blocking = profileError || (negative && target === 'prusa' ? 'negative cutouts require Snapmaker Orca or Bambu Studio output' : '') || (!state.objects.length ? "tick at least one object"
     : state.strategy!=='source' && state.workflow==='model' && !state.modelApplied && state.reelView!=='recommended' ? "choose and apply a model palette"
     : payload.blocked || (state.reelView==='recommended' ? 'apply the selected palette or blend settings' : null));
   const needsReview = state.strategy !== "source" && !blocking;

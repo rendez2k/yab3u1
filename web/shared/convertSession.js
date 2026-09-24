@@ -450,7 +450,7 @@ export class ConvertSession {
     } catch (error) {
       if (token !== this.epoch) return null;
       this.setStatus(`That file could not be read: ${error.message}`);
-      if (this.hooks.error) this.hooks.error(error.message);
+      if (this.hooks.error) this.hooks.error(error.message, file);
       return null;
     } finally {
       if (token === this.epoch && this.hooks.settled) this.hooks.settled();

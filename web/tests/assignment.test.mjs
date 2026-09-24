@@ -31,6 +31,8 @@ const USER = ["#3F8E43", "#000000", "#FFFFFF", "#8E9089"];
 
 await ok("the four reported colours have plain names beside their hex", () => {
   assert.equal(colourName("#3F8E43"), "Green");
+  assert.equal(colourName("#80836C"), "Muted yellow-green");
+  assert.equal(colourName("#C5BDB2"), "Beige");
   assert.equal(colourName("#000000"), "Black");
   assert.equal(colourName("#FFFFFF"), "White");
   assert.equal(colourName("#8E9089"), "Grey");

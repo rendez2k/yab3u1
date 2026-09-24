@@ -300,7 +300,7 @@ self.onmessage = async (event) => {
       const started = Date.now();
       const entries = await readZip(new Uint8Array(message.bytes));
       post({ type: "progress", id, stage: "zip", ms: Date.now() - started });
-      const parsed = project.readProject(entries, {allowNegative: message.light === true});
+      const parsed = project.readProject(entries, {allowNegative: true});
       post({ type: "progress", id, stage: "parse", ms: Date.now() - started });
       loaded = { entries, project: parsed };
       geometry = null;                    // a new file has new geometry

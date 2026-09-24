@@ -4,7 +4,7 @@ import { RecolourWorker } from "./shared/workerClient.js";
 import {targetLayout, planLayout} from './shared/layout.js';
 import {planningAllowance, transferSettings} from './shared/printSettings.js';
 
-export function initBatch() {
+export function initBatch({onTextureBundle}={}) {
   const $ = id => document.getElementById(id);
   let files = [], rows = [], outputUrl = null, analysing = false, analysisWorker = null;
   const analysed=new WeakMap();
@@ -114,7 +114,7 @@ export function initBatch() {
   async function addFiles(incoming) {
     if(engine.busy || analysing) return;
     setMode(true); analysing=true; controls(true);
-    const additions=[], notes=[];
+    const additions=[], notes=[];let textureFile=null;
     try {
       for(const file of Array.from(incoming)) {
         if(/\.zip$/i.test(file.name)) {
@@ -124,6 +124,7 @@ export function initBatch() {
             if(file.size>96*1048576) throw new Error('ZIP exceeds the 96 MB input limit.');
             const bytes=await file.arrayBuffer();
             const bundle=await analysisWorker.request('unpack',{bytes},{transfer:[bytes]});
+            if(!bundle.files.length && bundle.ignored.some(f=>/\.obj$/i.test(f.name)) && incoming.length===1 && !files.length && onTextureBundle){textureFile=file;continue;}
             additions.push(...bundle.files.map(f=>new File([f.bytes],f.name,{type:'application/3mf'})));
             notes.push(`${file.name}: ${bundle.files.length} 3MF projects. ${bundle.ignored.length} other files not converted: ${bundle.ignored.map(f=>f.name.split('/').pop()).join(', ') || 'none'}. STL files contain geometry only, without painted project settings.`);
           } catch(error) {notes.push(`${file.name}: ${error.message}`);}
@@ -150,6 +151,7 @@ export function initBatch() {
       }
       say(`${files.length} projects analysed. Review the details, choose a destination, then convert.`);
     } finally {analysing=false;controls(false);}
+    if(textureFile){setMode(false);onTextureBundle(textureFile);}
   }
   $("mode-single").addEventListener("click", () => setMode(false));
   $("mode-bulk").addEventListener("click", () => setMode(true));

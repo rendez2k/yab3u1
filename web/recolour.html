@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="texture-import.css">
 <link rel="icon" type="image/png" href="assets/yab3d-mark-96.png">
 <title>YAB3D &mdash; Full Spectrum 3MF recolour, preview and reel-change plan</title>
 <meta name="description" content="YAB3D&rsquo;s Full Spectrum page: recolour a painted 3MF onto your own four reels, preview the predicted blends and write a Snapmaker Orca, Bambu Studio or PrusaSlicer project. Runs entirely in your browser.">
@@ -313,14 +314,14 @@
     </div>
     <p class="hint" id="destinationnote" role="status"></p>
   <div id="drop" role="button" tabindex="0" aria-label="Choose a 3MF file to open">
-    <strong>Drop a .3mf here</strong>
+    <strong>Drop a .3mf, GLB or OBJ ZIP here</strong>
     <div class="hint" style="margin-top:6px">Everything runs in this page: nothing is
       uploaded, and no model leaves your machine.</div>
     <div class="hint" id="loadstatus" role="status" aria-live="polite"
          style="margin-top:6px"></div>
     <button type="button" id="loadcancel" class="hidden"
             style="margin-top:8px">Choose another file</button>
-    <input type="file" id="file" accept=".3mf" style="display:none"
+    <input type="file" id="file" accept=".3mf,.glb,.zip" style="display:none"
            aria-label="3MF file to recolour">
   </div>
   <p id="loaderror" class="bad" role="alert"></p>
@@ -359,6 +360,7 @@
     <button type="button" id="previewreset" >Reset view</button></div>
     <canvas id="preview" width="800" height="600" aria-label="Interactive 3D model preview"></canvas>
     <p class="hint" id="reelviewnote" role="status">Previewing loaded filaments.</p>
+    <p class="hint hidden" id="cutoutnote">Negative cutouts are preserved in Snapmaker and Bambu exports. This preview shows the outer surfaces without applying the cuts; check the sliced result. Prusa export is unavailable for this selection.</p>
     <div id="colouroutcome" role="status" aria-live="polite"></div>
     <details class="previewdetails"><summary>Uncalibrated colour estimate · preview details</summary>
     <p class="hint" id="previewnote"></p></details>

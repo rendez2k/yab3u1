@@ -16,8 +16,9 @@ import { supportOf, transferSettings } from "./shared/printSettings.js";
 import { renderFilamentPicker } from './shared/filamentPicker.js';
 import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1Profiles.js';
 import { initBatch } from "./batch-page.js";
+import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.1-preview.1";
+const VERSION = "2.6.1-preview.2";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -30,6 +31,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "Import textured GLB, OBJ/MTL texture ZIPs and dense vertex-colour 3MFs. Compare a reduced 2–16 colour palette, edit swatches, confirm size and orientation, then convert or use Full Spectrum.",
   "ZIP bundles: find the 3MF projects inside, list skipped STL and other files, and analyse source formats, materials, nozzle sizes and plate fit before converting.",
   "U1 profiles now match 0.2, 0.4, 0.6 and 0.8 mm nozzles and material-specific presets. Lower source speeds are retained; higher values are capped to the selected U1 process.",
   "Optional filament presets: choose from the source project or import resolved brand JSON presets. U1 exports also offer bundled Snapmaker profiles. Reviewed material properties transfer across all four output formats.",
@@ -211,7 +213,10 @@ const session = new ConvertSession(() => new RecolourWorker(), {
     syncSettings();
   },
   output: (entry) => renderOutput(entry),
-  error: (message) => showError("This file could not be used", message),
+  error: (message,file) => {
+    showError("This file could not be used", message);
+    if(file && /colour group|colours.*at most|per-corner colours/.test(message))textureImporter.open(file);
+  },
   busy: (busy) => {
     syncLayout();
   },
@@ -717,9 +722,11 @@ function resetPreview() {
 
 const input = $("convertfile");
 const drop = $("convertdrop");
-const batch = initBatch();
+const textureImporter=createTextureImport({buttonHost:document.getElementById('singlepanel'),onAccept:file=>session.load(file)});
+const batch = initBatch({onTextureBundle:file=>textureImporter.open(file)});
 function openFiles(files) {
-  if (files.length > 1 || /\.zip$/i.test(files[0]?.name || "")) batch.addFiles(files);
+  if(files.length===1 && /\.glb$/i.test(files[0].name))textureImporter.open(files[0]);
+  else if (files.length > 1 || /\.zip$/i.test(files[0]?.name || "")) batch.addFiles(files);
   else if (files[0]) session.load(files[0]);
 }
 

@@ -17,6 +17,14 @@ brand filament presets. See the changelog for its limits. Brand presets come
 from the source 3MF or resolved JSON imports; this is not a universal brand
 catalogue. All analysis and conversion remain local and free.
 
+The same review also adds **Import a textured model** on both pages. Drop a GLB
+or an OBJ/MTL/texture ZIP, or use this step for a dense vertex-colour 3MF. Choose
+2–16 colour groups, edit their swatches, compare the preview and confirm size and
+orientation. Continue into conversion/Full Spectrum or download the prepared
+3MF. This is appearance reduction, not mesh repair; it keeps the indexed
+triangles but approximates textures and gradients with one colour per face.
+Supported format subsets and size limits are documented in the changelog.
+
 Three ways to use the project, with different workflows:
 
 | | where | what it is |

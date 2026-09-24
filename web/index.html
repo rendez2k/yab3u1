@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="texture-import.css">
 <title>YAB3D &mdash; 3MF between Snapmaker, Bambu, Orca and Prusa</title>
 <link rel="icon" type="image/png" href="assets/yab3d-mark-96.png">
 <meta name="description" content="YAB3D, the Yet Another Bloody 3D Tool: convert 3MF projects between Snapmaker Orca, Bambu Studio, OrcaSlicer and PrusaSlicer in any direction, keeping every filament, the multi-colour painting and the geometry. Convert, recolour or arrange the filament slots. Runs entirely in your browser.">
@@ -428,10 +429,10 @@
   <div id="singlepanel">
   <div id="convertdrop" role="button" tabindex="0"
        aria-label="Choose a 3MF file to convert">
-    <strong>Drop a .3mf or ZIP bundle here</strong>
+    <strong>Drop a .3mf, GLB or ZIP bundle here</strong>
     <span>or click to choose a file &mdash; PrusaSlicer, Bambu Studio, OrcaSlicer or
       Snapmaker Orca projects</span>
-    <input type="file" id="convertfile" accept=".3mf,.zip" multiple aria-label="3MF files to convert">
+    <input type="file" id="convertfile" accept=".3mf,.zip,.glb" multiple aria-label="3MF files to convert">
   </div>
 
   <div id="loaderror" class="card hidden" role="alert" aria-live="polite"></div>

@@ -157,15 +157,15 @@ export function readProject(entries, options = {}) {
 }
 
 /** The converter preserves native negative parts. Other modifier roles still
- * require settings handling that this reader/writer does not provide. The
- * recolour workflow stays guarded until its cutout preview is supported. */
+ * require settings handling that this reader/writer does not provide. UI
+ * callers must explain that the preview does not perform boolean subtraction. */
 function refuseHiddenRoles(project, allowNegative = false) {
   for (const meta of project.meta.values()) {
     for (const part of meta.parts || []) {
       if (isHiddenPart(part.subtype)) {
         if (part.subtype === "negative_part") {
           if (allowNegative) continue;
-          throw new ProjectError(`${meta.name || 'This model'} contains a negative cutout volume. Use the main 3MF converter to preserve it in a Snapmaker, Bambu or Orca project; Full Spectrum recolouring does not support cutout models yet.`);
+          throw new ProjectError(`${meta.name || 'This model'} contains a negative cutout volume. Enable native negative-volume preservation to open it.`);
         }
         throw new ProjectError(`${meta.name || "an object"} has a `
           + `${part.subtype} volume (a negative, modifier or support-blocker part). `
@@ -1780,7 +1780,7 @@ function sourceSettingMetadata(project, objectId, target = "bambu", options = {}
 }
 
 /** The object blocks one member keeps, with paint remapped and names renamed. */
-function copyMemberObjects(project, member, keep, mapping, target, rename, highest) {
+function copyMemberObjects(project, member, keep, mapping, target, rename, highest, negativeOnly = new Set()) {
   const blob = text(project.entries, member);
   if (blob === null) throw new ProjectError(`${member} is in the object graph but not `
     + "in the archive");
@@ -1791,6 +1791,9 @@ function copyMemberObjects(project, member, keep, mapping, target, rename, highe
     const id = attr(match[1], "id");
     if (id === null || !keep.has(String(id))) continue;
     let body = match[0];
+    // Cutters do not consume filament. Their colour annotations must not require
+    // an extra physical reel; geometry and the native negative role are retained.
+    if (negativeOnly.has(`${member}|${id}`)) body = body.replace(PAINT_RE_G, '');
     body = body.replace(PAINT_RE_G, (full, value) => {
       let out = value;
       if (value) {
@@ -2115,6 +2118,7 @@ export function exportProject(project, plateId, objectIds, options) {
   // default filament, read from the same metadata the paint path uses.  Resolved
   // before the member copy, because a facet with no paint reference needs it then.
   const innerBase = new Map();
+  const negativeOnly = new Set(), printableRefs = new Set();
   for (const [objectId] of instances) {
     if (!chosen.has(String(objectId))) continue;
     const object = project.objects.get(String(objectId));
@@ -2132,6 +2136,8 @@ export function exportProject(project, plateId, objectIds, options) {
       const part = metaParts.find((item) => item.id === ref.id);
       const value = positive(part && part.extruder) ?? positive(meta && meta.extruder) ?? 1;
       const key = `${ref.member}|${ref.id}`;
+      if (part?.subtype === 'negative_part') negativeOnly.add(key);
+      else printableRefs.add(key);
       if (innerBase.has(key) && innerBase.get(key) !== value) {
         throw new ProjectError(`${ref.member} object ${ref.id} is referenced with two `
           + `different base filaments (${innerBase.get(key)} and ${value}), so an `
@@ -2140,12 +2146,13 @@ export function exportProject(project, plateId, objectIds, options) {
       innerBase.set(key, value);
     }
   }
+  for (const key of printableRefs) negativeOnly.delete(key);
   for (const [member, keep] of needed) {
     blocksByMember.set(member, standard
       ? copyMemberObjectsStandard(project, member, keep, mapping,
                                   { base: innerBase,
                                     paletteSize: table.physical.length }, rename)
-      : copyMemberObjects(project, member, keep, mapping, target, rename, highest));
+      : copyMemberObjects(project, member, keep, mapping, target, rename, highest, convert ? new Set() : negativeOnly));
   }
 
   if (target === "prusa") {
@@ -2222,7 +2229,7 @@ export function exportProject(project, plateId, objectIds, options) {
       const sourceExtruder = positive(part && part.extruder)
         ?? positive(meta && meta.extruder) ?? 1;
       parts.push({ id: String(component.objectid), name: (part && part.name) || name,
-                   extruder: resolveExtruder(project, mapping, highest, sourceExtruder,
+                   extruder: !convert && part?.subtype === 'negative_part' ? 1 : resolveExtruder(project, mapping, highest, sourceExtruder,
                                              `${name} (${member} object `
                                              + `${component.objectid})`),
                    subtype: (part && part.subtype) || "normal_part" });
