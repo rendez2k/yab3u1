@@ -7,6 +7,13 @@ section here together.
 
 ## Unreleased — experimental U1 reel-change export
 
+Simplified Full Spectrum into printer/model, loaded filaments, visual comparison
+and export. The preview now comes before the expandable colour mapping and blend
+recipes. Original, loaded-reel and predicted-blend choices explain their effect
+and switch the preview back to the result. Plate/object selection and experimental
+reel-change planning remain available in expandable sections. Review consent stays
+next to export and is cleared whenever the treatment changes.
+
 Added direct Spool Studio stock sharing under Loaded reels, using Strata's
 one-time consent flow. Connect, approve sharing in Spool Studio, then choose
 filaments per slot and apply their colour/material. Exact origin, popup, nonce

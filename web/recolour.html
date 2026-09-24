@@ -130,6 +130,23 @@
   .segs { flex-wrap: wrap; max-width: 100%; }
   .reciperows li, .hint, .facts { overflow-wrap: anywhere; }
   #maptable table { min-width: 520px; }
+  #destinationcard > h2, #reelscard > h2, #mixcard > h2, #exportcard > h2 { font-size: 18px; }
+  #destinationcard #drop { margin-top: 20px; padding: 20px; }
+  #loadedmodel { align-items: center; margin-top: 16px; }
+  #modelname { flex: 1 1 220px; overflow-wrap: anywhere; }
+  #project { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 16px; }
+  #project summary, #mappingdetails summary, #plannercard > summary { cursor: pointer; font-weight: 600; min-height: 44px; padding: 10px 0; }
+  #previewcard { margin-top: 18px; }
+  #previewcard canvas { margin-top: 12px; }
+  #mappingdetails { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 6px; }
+  #mappingdetails summary:focus-visible, #project summary:focus-visible, #plannercard > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  #strategyhint { max-width: 72ch; min-height: 3em; }
+  #exportcard .check { align-items: start; margin: 16px 0; }
+  #exportcard .check input { margin-top: 5px; flex-shrink: 0; }
+  #plannercard > summary .hint { font-weight: 400; }
+  ::selection { color: var(--on-accent); background: var(--accent); }
+  input { caret-color: var(--focus); }
+  #maptable, pre { scrollbar-color: var(--dim) var(--panel2); }
   @media (max-width: 430px) {
     main { padding: 0 12px 40px; }
     .card { padding: 12px; }
@@ -167,12 +184,12 @@
 </header>
 <main>
   <div class="card" id="destinationcard" style="margin-top:16px">
+    <h2>1. Choose your printer and model</h2>
     <div class="field">
       <label for="target">Printer / output format</label>
       <select id="target"></select>
     </div>
     <p class="hint" id="destinationnote" role="status"></p>
-  </div>
   <div id="drop" role="button" tabindex="0" aria-label="Choose a 3MF file to open">
     <strong>Drop a .3mf here</strong>
     <div class="hint" style="margin-top:6px">Everything runs in this page: nothing is
@@ -185,9 +202,13 @@
            aria-label="3MF file to recolour">
   </div>
   <p id="loaderror" class="bad" role="alert"></p>
+  <div class="row hidden" id="loadedmodel">
+    <strong id="modelname"></strong>
+    <button type="button" id="replacefile">Choose another model</button>
+  </div>
 
-  <div class="card hidden" id="project">
-    <h2>Plate &amp; objects</h2>
+  <details class="hidden" id="project">
+    <summary>Plate &amp; objects</summary>
     <div class="facts hint" id="pfacts"></div>
     <p class="hint" id="palettenote"></p>
     <div class="row" style="margin-top:12px">
@@ -201,10 +222,11 @@
       <div id="objects" style="margin-top:6px"></div>
     </div>
     <p class="hint" id="selhint"></p>
+  </details>
   </div>
 
   <div class="card hidden" id="reelscard">
-    <h2>Loaded reels</h2>
+    <h2>2. Choose your loaded filaments</h2>
     <div class="row" id="reels"></div>
     <p class="hint" id="reelnote" style="margin-top:12px"></p>
     <details id="spoolimport">
@@ -231,27 +253,19 @@
   </div>
 
   <div class="card hidden" id="mixcard">
-    <h2>Recolouring: the closest reel, or a predicted blend</h2>
+    <h2>3. Compare the result</h2>
     <div class="segs" id="strategy" role="group" aria-label="What the export does">
       <button type="button" data-strategy="source" aria-pressed="false">
-        Keep the file's colours</button>
+        Original colours</button>
       <button type="button" data-strategy="solid" aria-pressed="false">
-        Substitute onto the reels</button>
+        Loaded reels</button>
       <button type="button" data-strategy="blend" aria-pressed="true">
-        Use the blends</button>
+        Predicted blends</button>
     </div>
-    <div id="maptable"></div>
-    <div id="mixlist"></div>
-    <p class="hint" id="mixnote"></p>
-    <div class="row" style="margin-top:12px">
-      <label class="check"><input type="checkbox" id="review">
-        I have reviewed the mapping, recipes and predicted shades above</label>
-    </div>
-  </div>
+    <p class="hint" id="strategyhint" role="status"></p>
 
-  <div class="card hidden" id="previewcard">
-    <h2>Preview &mdash; original and result</h2>
-    <div class="segs">
+  <div class="hidden" id="previewcard">
+    <div class="segs" role="group" aria-label="Preview view">
       <button type="button" data-preview="original" aria-pressed="false">Original</button>
       <button type="button" data-preview="result" aria-pressed="true">Result</button>
     </div>
@@ -259,18 +273,27 @@
     <canvas id="preview" width="800" height="420"></canvas>
     <p class="hint" id="previewnote"></p>
   </div>
+    <details id="mappingdetails">
+      <summary>Review colour mapping and blend recipes</summary>
+      <div id="maptable"></div>
+      <div id="mixlist"></div>
+      <p class="hint" id="mixnote"></p>
+    </details>
+  </div>
 
   <div class="card hidden" id="exportcard">
-    <h2>Export</h2>
+    <h2>4. Export your project</h2>
+    <p class="hint" id="exportnote" role="status"></p>
+    <label class="check"><input type="checkbox" id="review">
+      I have checked the colour mapping and accept the substitutions and predicted blends.</label>
     <div class="row">
       <button type="button" class="primary" id="export">Download the project</button>
     </div>
-    <p class="hint" id="exportnote"></p>
     <div id="exportlog" class="hint"></div>
   </div>
 
-  <div class="card" id="plannercard">
-    <h2>Print with manual reel changes <span class="hint">· U1 experimental</span></h2>
+  <details class="card" id="plannercard">
+    <summary>Keep the original colours with reel changes <span class="hint">· U1 experimental</span></summary>
     <p class="hint">Keep more than four original colours by changing reels between layers.
       Start with an all-PLA model and a U1 with 0.4 mm nozzles. The slice must fit four colours per layer.</p>
     <ol class="hint">
@@ -299,7 +322,7 @@
     <p class="hint" id="gcodemember" role="status" aria-live="polite"></p>
     <div id="planout" class="hidden" style="margin-top:12px"></div>
     <div class="row" id="plandownloads" style="margin-top:10px"></div>
-  </div>
+  </details>
 </main>
 <footer>Colour prediction is an uncalibrated estimate from swatch values. Reel-change exports
   need a real U1 slice. Nothing here slices for you or sends files to your printer.

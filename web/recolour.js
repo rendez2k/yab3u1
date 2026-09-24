@@ -60,6 +60,7 @@ mountSpoolImport({ host: $("spoolimport"), getReels: () => state.reels, apply: (
 
 $("drop").addEventListener("click", () => $("file").click());
 $("file").addEventListener("click", (event) => event.stopPropagation());
+$("replacefile").addEventListener("click", () => $("file").click());
 $("drop").addEventListener("keydown", (event) => {
   // The drop zone is a button for the keyboard too.
   if (event.key === "Enter" || event.key === " ") {
@@ -165,6 +166,8 @@ async function load(file) {
     state.plateId = state.project.plates.length ? state.project.plates[0].id : null;
     state.objects = [];
     show();
+    $("modelname").textContent = file.name;
+    $("loadedmodel").classList.remove("hidden");
     $("drop").classList.add("hidden");
     window.__loadTiming = { ms: result.ms, triangles: result.assessed.counts.triangles };
   } catch (error) {
@@ -190,6 +193,7 @@ function setLoading(active) {
 }
 
 function resetForUpload() {
+  $("loadedmodel").classList.add("hidden");
   $("prepareswaps").disabled = true;
   $("preparestatus").textContent = "";
   cancelPlan();
@@ -471,6 +475,11 @@ function renderMix(assessed) {
   const slots = state.reels.map((reel) => norm(reel.color));
   const rows = comparison(assessed.sourceColors, payload.mapping, slots);
   const blendMode = state.strategy === "blend";
+  $("strategyhint").textContent = state.strategy === "source"
+    ? "Keep the model's original filament colours. This choice does not use your loaded reel colours; this page can keep up to four original colours."
+    : blendMode
+      ? "Approximate the model's colours using your loaded reels and suggested blends. Shades are estimates, not a guarantee of the printed colour. Open the mapping below to adjust individual colours."
+      : "Use only your loaded reel colours, with no blends. Each source colour goes to its closest reel unless you change its mapping below.";
   $("maptable").innerHTML = "<table><thead><tr><th>Source</th><th>In the file</th>"
     + "<th>Export result</th><th>Closest blend</th><th>Difference</th>"
     + "<th>Use</th></tr></thead>"
@@ -543,6 +552,10 @@ function renderMix(assessed) {
 document.querySelectorAll("[data-strategy]").forEach((button) => {
   button.addEventListener("click", () => {
     state.strategy = button.getAttribute("data-strategy");
+    // A treatment choice should show its result, even after inspecting Original.
+    state.previewMode = "result";
+    document.querySelectorAll("[data-preview]").forEach((view) =>
+      view.setAttribute("aria-pressed", String(view.dataset.preview === "result")));
     document.querySelectorAll("[data-strategy]").forEach((other) =>
       other.setAttribute("aria-pressed", String(other === button)));
     clearReview();
@@ -703,17 +716,11 @@ function renderExport() {
     ? `Cannot export yet: ${blocking}.`
     : mixtures
     ? (target === "snapmaker"
-      ? `${mixtures} reviewed recipe(s) will be written as the U1's native `
-        + "mixed_filament_definitions rows, with the four physical slots left at four."
-      : `${mixtures} reviewed recipe(s) will be written in ${LABELS[target]}'s own `
-        + "format. A foreign project is portable: it carries the geometry, the parts, "
-        + "the palette and the recipes, and none of the U1's printer or G-code "
-        + "settings.")
+      ? `Download a Snapmaker Orca project with four physical reels and ${mixtures} blend recipe(s). Check the settings and slice it before printing.`
+      : `Download a ${LABELS[target]} project with your model, colours and ${mixtures} blend recipe(s). Choose your printer and check the print settings in the slicer.`)
     : state.strategy === "source"
-      ? "Each source colour keeps its own slot and its own filament; no substitution "
-        + "and no mixture."
-      : "Every source colour is written onto one of your four reels, exactly as the "
-        + "table above shows.";
+      ? `Download a ${LABELS[target]} project keeping each source colour in its own slot. Check the settings and slice it before printing.`
+      : `Download a ${LABELS[target]} project using the four loaded reels and the colour mapping above. Check the settings and slice it before printing.`;
   if (!blocking && target === "prusa") {
     $("exportnote").textContent += " Open the file as a project in PrusaSlicer with a "
       + "four-extruder profile: the palette lives in the Full Spectrum description, "
