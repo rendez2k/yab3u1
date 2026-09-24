@@ -157,3 +157,63 @@ export function recommendPalette({sources,loaded,stock=null,locked=[],blends=tru
       : 'Not enough distinct colours in one material to search four slots. Unlock a slot or add available filaments.'};
   return {...ranked[0],found:true,rough,loadedScore,alternatives:ranked.slice(1),approximateOptions,search};
 }
+
+/** Two explicit workflows. Model-first does not use the saved printer palette. */
+export function recommendWorkflow({mode='model', sources, loaded, stock=null, type='PLA', keepExact=[], weights={}, blends=true}) {
+  const colours=[...new Set(Object.values(sources || {}).map(norm).filter(Boolean))];
+  if(!colours.length) throw Error('Select a model with readable colours.');
+  const options=[], approximateOptions=[];
+  const search={evaluated:0,candidates:0,bounded:false};
+  function consider(reels) {
+    search.evaluated++;
+    if(keepExact.some(color=>!reels.some(r=>norm(r.color)===norm(color)))) return;
+    let result=outcomeFor(sources,reels,blends);
+    if(result.unresolved && blends) result=outcomeFor(sources,reels,true,true);
+    if(result.unresolved) return;
+    const rows=result.outcome.rows;
+    let total=0,error=0;
+    for(const row of rows) {
+      const weight=Math.max(1,Number(weights[norm(row.original)]) || 1);
+      total+=weight; error+=weight*distance(row.original,row.result);
+    }
+    // Facet counts are an approximate prominence signal, not measured surface area.
+    result.score=error/total + .15*Math.max(...rows.map(r=>distance(r.original,r.result)));
+    const option={reels:reels.map(r=>({...r})),type:reels[0].type,...result,usesLoaded:mode==='loaded'};
+    (result.approximate ? approximateOptions : options).push(option);
+  }
+  if(mode==='loaded') {
+    if(loaded.length!==4) throw Error('Set all four loaded filaments.');
+    // Never search replacements in this mode, including when a library is connected.
+    consider(loaded);
+  } else {
+    if(keepExact.length>4) throw Error('Keep at most four original colours exact; the remaining colours need blends.');
+    let pool=colours.map(color=>({color,type,name:colourName(color)}));
+    if(stock!==null) {
+      const owned=[...new Map(stock.filter(r=>material(r)===type && norm(r.color)).map(r=>[norm(r.color),{...r,color:norm(r.color),type}])).values()];
+      // Retain two closest owned options per source colour, then cap work in the worker.
+      pool=[...new Map(colours.flatMap(color=>owned.slice().sort((a,b)=>distance(color,a.color)-distance(color,b.color)).slice(0,2)).map(r=>[r.color,r])).values()];
+      if(pool.length>16) { pool=pool.slice(0,16); search.bounded=true; }
+    }
+    search.candidates=pool.length;
+    if(pool.length && pool.length<4) {
+      const reels=pool.slice(); while(reels.length<4) reels.push({...pool[0]});
+      consider(reels);
+    } else {
+      const selected=[];
+      function visit(start) {
+        if(selected.length===4) {consider(selected);return;}
+        for(let i=start;i<=pool.length-(4-selected.length);i++) {
+          selected.push(pool[i]); visit(i+1); selected.pop();
+        }
+      }
+      visit(0);
+    }
+  }
+  const rank=(a,b)=>b.outcome.counts.preserved-a.outcome.counts.preserved || a.score-b.score;
+  options.sort(rank); approximateOptions.sort(rank);
+  const rough=mode==='model' && stock===null;
+  const common={rough,search,loadedScore:0,alternatives:options.slice(1,6),approximateOptions:approximateOptions.slice(0,6),
+    reason:mode==='loaded' ? 'These loaded reels cannot make a distinct blend for every source colour. Adjust the reels or review Solid colours in Advanced.'
+      : 'No complete blend palette found with these choices. Try different Keep exact choices or turn off the owned-filaments filter.'};
+  return options.length ? {...options[0],...common,found:true} : {...common,found:false};
+}

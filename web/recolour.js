@@ -16,7 +16,7 @@ import { mountSpoolImport } from "./shared/spoolImport.js";
 import { colourName } from "./shared/assignment.js";
 
 const REEL_KEY = "yab3u1-web-reels";
-const VERSION = "2.6.0-preview.3";
+const VERSION = "2.6.0-preview.4";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -26,10 +26,11 @@ const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
 const state = {
   entries: null, project: null, plateId: null, objects: [], reels: [], target: "snapmaker",
   mix: null, mapping: {}, recipes: [], ticked: new Set(),
-  previewMode: "result", preview: null, previewGeometry: "", previewFailed: "",
+  previewMode: "original", preview: null, previewGeometry: "", previewFailed: "",
   // What the export does with the file's colours: keep them, substitute them onto
   // the reels (with per-colour overrides), or use the blends that are ticked.
   strategy: "blend", overrides: {}, recipeKey: "", reviewed: false, approximate: false,
+  workflow: "model", modelType: "PLA", keepExact: [], useOwned: false, modelApplied: false, modeReels: {},
   stock: null, locked: [false,false,false,false], recommendation: null, recommendationSearch: null, reelView: "loaded",
   loadedTuning: null, recommendationOptions: [], recommendationIndex: 0, showMorePalettes: false,
   // Bumped on every upload so a slow read of the previous file cannot land on top
@@ -48,16 +49,20 @@ function defaultReels() {
           { color: "#3D9140", type: "PLA" }, { color: "#FF9500", type: "PLA" }];
 }
 
-state.reels = defaultReels();
+state.modeReels.loaded = defaultReels();
+state.modeReels.model = ['#FFFFFF','#000000','#0080C0','#FF0000'].map(color=>({color,type:'PLA'}));
+state.reels = state.modeReels.model.map(r=>({...r}));
 
 function saveReels() {
+  if(state.workflow!=="loaded") return;
   try { localStorage.setItem(REEL_KEY, JSON.stringify(state.reels.map(({color,type})=>({color,type})))); } catch (e) { /* fine */ }
 }
 
 const spoolImport = mountSpoolImport({ host: $("spoolimport"), getReels: () => state.reels, apply: (reels) => {
+  if(state.workflow!=="loaded") switchWorkflow("loaded");
   state.reels = reels;
   saveReels(); clearReview(); renderReels(); refresh();
-}, onStock: rows => { state.stock=rows; invalidateRecommendation(); refresh(); } });
+}, onStock: rows => { state.stock=rows; if(rows===null) state.useOwned=false; renderWorkflow(); invalidateRecommendation(); refresh(); } });
 
 let recommendationWorker=null, recommendationKey='';
 function activeReels() {
@@ -76,7 +81,7 @@ function setReelView(view) {
 function invalidateRecommendation() {
   recommendationWorker?.terminate(); recommendationWorker=null; recommendationKey='';
   state.recommendation=null; state.recommendationOptions=[]; state.recommendationIndex=0; state.showMorePalettes=false; setReelView('loaded');
-  state.recommendationSearch=null;
+  state.recommendationSearch=null; state.modelApplied=false;
   renderRecommendation('Updating colour suggestions…');
   clearReview();
 }
@@ -98,6 +103,7 @@ function paletteCoverage(option) {
   return `<span class="palettecoverage">${detail}<span>${counts.preserved} matched to reels · ${blendCount} blend recipe${blendCount===1?'':'s'}</span>${recipes.map(row=>`<span>${esc(colourName(row.original))} (${esc(row.original)}) → <i class="swatch" style="background:${esc(row.result)}"></i> ${esc(colourName(row.result))} (${esc(row.result)})${distance(row.original,row.result)>25?' · large change':distance(row.original,row.result)>12?' · noticeable change':''}<br>${100-row.recipe.percent}% slot ${row.recipe.a} + ${row.recipe.percent}% slot ${row.recipe.b}</span>`).join('')}</span>`;
 }
 function renderRecommendation(message) {
+  renderWorkflow();
   $("recommendstatus").dataset.busy=String(Boolean(recommendationWorker));
   const result=state.recommendation;
   const focusedPalette=document.activeElement?.dataset?.palette;
@@ -106,7 +112,7 @@ function renderRecommendation(message) {
   $("palettechoices").innerHTML=choices.map(({option,index})=>
     `<button type="button" class="palettechoice${option.approximate?' approximate':''}" data-palette="${index}" aria-pressed="${state.reelView==='recommended' && state.recommendationIndex===index && state.previewMode==='result'}">
       <span class="palettetitle"><strong>${paletteTitle(option,index)}</strong><small>${esc(option.type)}${state.reelView==='recommended' && state.recommendationIndex===index?' · Selected':''}</small></span>
-      <span class="palettechips">${option.reels.map((r,i)=>`<span class="palettechip"><i style="background:${esc(r.color)}"></i>${i+1} · ${esc(r.name || colourName(r.color))}${state.locked[i]?' · locked':''}</span>`).join('')}</span>
+      <span class="palettechips">${option.reels.map((r,i)=>`<span class="palettechip"><i style="background:${esc(r.color)}"></i>${i+1} · ${esc(r.name || colourName(r.color))}</span>`).join('')}</span>
       ${paletteCoverage(option)}
     </button>`).join('');
   $("palettechoices").querySelectorAll('[data-palette]').forEach(button=>button.addEventListener('click',()=>{
@@ -121,15 +127,12 @@ function renderRecommendation(message) {
   $("morepalettes").textContent=state.showMorePalettes ? 'Fewer palettes' : 'More palettes';
   $("morepalettes").setAttribute('aria-expanded',String(state.showMorePalettes));
   if(message) $("recommendstatus").textContent=message;
-  else if(state.recommendationSearch?.found===false && result) $("recommendstatus").textContent='No close reproduction found. These blends approximate the missing colours. Compare the original and predicted shades, then choose whether the changes work for you.';
+  else if(state.recommendationSearch?.found===false && result) $("recommendstatus").textContent=(state.workflow==='model' ? 'Load one of these sets of original colours and blend the remainder. ' : 'These recipes use only your four loaded filaments. ') + 'No close reproduction found: compare the original and predicted shades before accepting changes.';
   else if(state.recommendationSearch?.found===false) $("recommendstatus").textContent=state.recommendationSearch.reason
-    + ' Try unlocking slots or connect Spool Studio to search the filaments you own. To accept colour replacements instead, choose Solid colours in Advanced. This is a search result, not proof that no palette could work.';
-  else if(result) $("recommendstatus").textContent=(result.rough
-    ? 'Approximate colours to look for. '
-    : 'From your Spool Studio collection. ')
-    + (result.approximate ? 'Approximate blends: review the colour changes before applying.' : result.score < result.loadedScore-.1 ? 'Estimated closer than loaded.'
-      : result.score > result.loadedScore+.1 ? 'Your loaded set scores better.'
-      : 'Similar estimated match to loaded.');
+    + ' This is a search result, not proof that no palette could work.';
+  else if(result) $("recommendstatus").textContent=state.workflow==='model'
+    ? `${result.rough ? 'Original model colours to load.' : 'Closest options from your Spool Studio collection.'} Keep as many originals as possible and blend the rest. Ranking uses colour error and approximate prominence from painted-facet counts.`
+    : 'Using only your four loaded filaments. Matching colours stay exact; remaining regions use the blend recipes below.';
   document.querySelectorAll('[data-reel-view]').forEach(button=>{
     button.setAttribute('aria-pressed',String(button.dataset.reelView===state.reelView && state.previewMode==='result'));
     button.disabled=button.dataset.reelView==='recommended' && !result;
@@ -137,22 +140,31 @@ function renderRecommendation(message) {
   $("userecommended").disabled=!result;
   $("userecommended").hidden=!result;
   $("applypalettehint").hidden=!result;
-  $("userecommended").textContent=result?.approximate ? 'Apply approximate palette' : 'Apply palette';
+  $("userecommended").textContent=state.workflow==='loaded' ? 'Use these blend settings' : result?.approximate ? 'Use this palette and approximate blends' : 'Use this palette';
   $("applypalettehint").textContent='Choose a palette to preview it. Apply when you want to use it in your export. Blend shades are estimates, not guaranteed print colours.';
   document.querySelectorAll('[data-preview]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.preview===state.previewMode)));
   $("reelviewnote").textContent=state.strategy==='source' ? "Showing the file's original colours; loaded and recommended reels are not used."
     : state.previewMode==='original' ? 'Original colours from your file.'
     : state.reelView==='recommended' ? `Previewing ${paletteTitle(result,state.recommendationIndex).toLowerCase()}. ${resultPlan().blocked ? 'Resolve the colours below before exporting.' : 'Apply this palette before exporting.'}`
-    : 'Previewing loaded filaments.';
+    : state.workflow==='model' ? (state.modelApplied ? 'Previewing the palette selected for export.' : 'Choose a suggested palette to preview.') : 'Previewing loaded filaments.';
 }
 function requestRecommendation() {
   if(!state.assessed) return;
-  const input={sources:state.assessed.sourceColors,loaded:state.reels,stock:state.stock,
-    locked:state.locked,blends:state.strategy!=='solid'};
-  const key=JSON.stringify(input);
+  const weights={};
+  for(const object of state.assessed.objects || []) if(object.selected) for(const colour of object.colours || []) {
+    const key=norm(colour.color); weights[key]=(weights[key] || 0)+colour.painted_triangles*Math.max(1,object.instances || 1);
+  }
+  const sourceColours=Object.values(state.assessed.sourceColors).map(norm);
+  state.keepExact=state.keepExact.filter(c=>sourceColours.includes(c));
+  const input={mode:state.workflow,sources:state.assessed.sourceColors,
+    loaded:state.workflow==='loaded' ? state.reels : [],
+    stock:state.workflow==='model' && state.useOwned ? state.stock : null,
+    type:state.modelType,keepExact:state.workflow==='model' ? state.keepExact : [],
+    weights,blends:state.strategy!=='solid'};
+  const key=JSON.stringify({...input,loaded:input.loaded.map(({color,type})=>({color,type}))});
   if(key===recommendationKey) { renderRecommendation(); return; }
   invalidateRecommendation(); recommendationKey=key;
-  renderRecommendation('Finding a suggested set of four colours…');
+  renderRecommendation(state.workflow==='model' ? 'Comparing sets of original model colours…' : 'Calculating blends from your loaded filaments…');
   const worker=new Worker(new URL('./shared/recommendWorker.js',import.meta.url),{type:'module'});
   recommendationWorker=worker;
   renderRecommendation('Comparing reels and blend recipes…');
@@ -164,6 +176,7 @@ function requestRecommendation() {
     state.recommendation=state.recommendationOptions.length ? {...result,...state.recommendationOptions[0]} : null;
     state.recommendationIndex=0;
     renderRecommendation(error);
+    if(state.recommendation && !error && state.strategy!=="source") showReelView("recommended");
   }
   worker.onmessage=({data})=>finish(data.result,data.error);
   worker.onerror=()=>finish(null,'Colour suggestions could not be calculated. Change a slot or reconnect your library to try again.');
@@ -187,6 +200,7 @@ $("morepalettes").addEventListener('click',()=>{
 });
 $("userecommended").addEventListener('click',()=>{
   if(!state.recommendation) return;
+  state.modelApplied=state.workflow==='model';
   state.approximate=Boolean(state.recommendation.approximate);
   state.reels=state.recommendation.reels.map(({color,type,name})=>({color,type,name}));
   if(state.strategy==='source') {
@@ -195,12 +209,52 @@ $("userecommended").addEventListener('click',()=>{
   }
   state.reelView='loaded'; state.loadedTuning=null; state.overrides={}; state.recipeKey='';
   state.previewMode='result';
-  saveReels(); clearReview(); renderReels(); refresh();
+  saveReels(); clearReview(); renderReels(); renderWorkflow(); refresh();
 });
 $("advancedlink").addEventListener('click',()=>{
   $("advanced").open=true;
   $("advanced").querySelector('summary').focus({preventScroll:true});
 });
+
+function renderWorkflow() {
+  const model=state.workflow==='model';
+  document.querySelectorAll('[data-workflow]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.workflow===state.workflow)));
+  $("modelchoices").hidden=!model;
+  $("loadedcontrols").hidden=model && !state.modelApplied;
+  $("reelheading").textContent=model ? 'Palette selected for export' : 'Loaded filaments';
+  $("workflowhint").textContent=model
+    ? "Which filaments should I load? Start with the model’s original colours, keep as many exact as possible and make the others with blends."
+    : "What can I make with these filaments? Keep the four loaded reels fixed and find their closest achievable blends.";
+  $("recommendheading").textContent=model ? 'Colours to load + colours to blend' : 'Blends from your loaded filaments';
+  document.querySelector('[data-reel-view="loaded"]').textContent=model ? 'Applied' : 'Loaded';
+  document.querySelector('[data-reel-view="recommended"]').textContent=model ? 'Suggested' : 'Blend result';
+  $("useowned").disabled=state.stock===null;
+  $("useowned").checked=state.useOwned;
+  $("ownedhint").textContent=state.stock===null ? 'Connect Spool Studio below to limit suggestions to filaments you own.' : `${state.stock.length} available filaments in your connected collection.`;
+  const colours=[...new Set(Object.values(state.assessed?.sourceColors || {}).map(norm))];
+  const signature=JSON.stringify([colours,state.keepExact]);
+  if($("exactcolours").dataset.signature!==signature) {
+    $("exactcolours").dataset.signature=signature;
+    $("exactcolours").innerHTML=colours.map(c=>`<label class="check"><input type="checkbox" data-exact="${c}" ${state.keepExact.includes(c)?'checked':''}><i class="swatch" style="background:${c}"></i>Keep ${esc(colourName(c))} exact (${c})</label>`).join('');
+    $("exactcolours").querySelectorAll('[data-exact]').forEach(box=>box.addEventListener('change',()=>{
+      state.keepExact=[...$("exactcolours").querySelectorAll('[data-exact]:checked')].map(b=>b.dataset.exact);
+      invalidateRecommendation(); refresh();
+    }));
+  }
+}
+function switchWorkflow(mode) {
+  if(mode===state.workflow) return;
+  state.modeReels[state.workflow]=state.reels.map(r=>({...r}));
+  state.workflow=mode;
+  state.reels=state.modeReels[mode].map(r=>({...r}));
+  invalidateRecommendation();
+  state.approximate=false; state.overrides={}; state.ticked=new Set(); state.recipeKey='';
+  state.previewMode='original';
+  renderReels(); renderWorkflow(); refresh();
+}
+document.querySelectorAll('[data-workflow]').forEach(b=>b.addEventListener('click',()=>switchWorkflow(b.dataset.workflow)));
+$("modelmaterial").addEventListener('change',()=>{state.modelType=$("modelmaterial").value;invalidateRecommendation();refresh();});
+$("useowned").addEventListener('change',()=>{state.useOwned=$("useowned").checked;invalidateRecommendation();refresh();});
 
 // ------------------------------------------------------------------ loading ---
 
@@ -461,7 +515,7 @@ function renderReels() {
     + `<span class="hint reelname" id="reelname${index}">${esc(reel.name || colourName(reel.color))}</span>`
     + `<select aria-label="Slot ${index+1} material" data-type="${index}">${["PLA", "PETG", "ABS", "TPU", "ASA", "PA"]
       .map((type) => `<option${type === reel.type ? " selected" : ""}>${type}</option>`)
-      .join("")}</select><label class="check"><input type="checkbox" aria-label="Keep slot ${index+1} in recommendations" data-lock="${index}"${state.locked[index]?' checked':''}>Keep slot</label></div>`).join("");
+      .join("")}</select></div>`).join("");
   state.reels.forEach((reel, index) => {
     $(`reel${index}`).addEventListener("input", (event) => {
       state.reels[index].color = event.target.value.toUpperCase();
@@ -485,7 +539,7 @@ function renderReels() {
   $("reels").querySelectorAll('[data-lock]').forEach(box=>box.addEventListener('change',()=>{
     state.locked[Number(box.dataset.lock)]=box.checked; refresh();
   }));
-  $("reelnote").textContent = "Set the four reels currently loaded. Lock any slots you want to keep when suggesting a different set.";
+  $("reelnote").textContent = state.workflow==="loaded" ? "Set exactly what is loaded, including CMYK if that is your set. We keep these reels fixed and calculate their blends." : "These are the four reels selected for export. Load them in this order before printing.";
   spoolImport.refresh();
 }
 
@@ -905,7 +959,8 @@ function renderExport() {
   const mixtures = payload.recipes.length;
   const reviewBox = $("review");
   const blocking = !state.objects.length ? "tick at least one object"
-    : payload.blocked || (state.reelView==='recommended' ? 'apply the selected palette, or switch back to Loaded' : null);
+    : state.strategy!=='source' && state.workflow==='model' && !state.modelApplied && state.reelView!=='recommended' ? "choose and apply a model palette"
+    : payload.blocked || (state.reelView==='recommended' ? 'apply the selected palette or blend settings' : null);
   const needsReview = state.strategy !== "source" && !blocking;
   reviewBox.parentElement.classList.toggle("hidden", !needsReview);
   reviewBox.checked = state.reviewed;

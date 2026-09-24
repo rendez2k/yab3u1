@@ -1,5 +1,5 @@
-import { recommendPalette } from './recommend.js';
+import { recommendWorkflow } from './recommend.js';
 self.onmessage = ({data}) => {
-  try { self.postMessage({result:recommendPalette(data)}); }
+  try { self.postMessage({result:recommendWorkflow(data)}); }
   catch(error) { self.postMessage({error:error.message}); }
 };

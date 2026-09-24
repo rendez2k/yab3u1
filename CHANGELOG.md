@@ -7,6 +7,15 @@ section here together.
 
 ## Unreleased — experimental U1 reel-change export
 
+Full Spectrum review 2.6.0-preview.4 has two starting modes. The default
+model-first workflow compares original-colour sets and blends the remaining
+colours, with Keep exact controls and an optional owned-filament filter.
+Loaded-filament mode fixes all four reels (including CMYK) and computes only
+their results. The palettes stay separate across mode changes. Model ranking
+prefers exact matches, then colour error weighted by painted-facet counts as
+an approximate prominence signal, not measured surface area. Approximate
+results still require explicit application and acceptance before export.
+
 Main converter review 2.6.0-preview.7 offers all four physical U1 slots even
 when a file contains fewer colours. Arrange slots preserves the chosen numbers
 through unused-colour cleanup; unassigned gaps use neutral placeholder entries

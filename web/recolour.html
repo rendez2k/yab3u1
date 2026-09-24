@@ -210,6 +210,9 @@
   #colouroutcome small { color: var(--dim); }
   .outcomewarning { color: var(--bad); }
   .previewdetails summary { font-size: 12px; color: var(--dim); cursor: pointer; min-height: 32px; }
+  .workflowmodes { display:flex; flex-wrap:wrap; margin:12px 0; }
+  #modelchoices { margin:16px 0; }
+  #exactcolours { margin:12px 0; gap:12px; }
   #reels { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; }
   #reels > .field { max-width: none; gap: 8px; font-size: 12px; }
   #reels input[type=color] { width: 100%; height: 62px; padding: 3px; border: 1px solid var(--line); background: var(--panel); border-radius: 12px; cursor: pointer; }
@@ -296,7 +299,7 @@
   <button id="theme" type="button">Theme</button>
 </header>
 <main>
-  <div class="studiointro"><h2>Find your model’s next colours.</h2><p>Compare what’s loaded with what could work. Make it yours.</p></div>
+  <div class="studiointro"><h2>Keep your model’s colours.</h2><p>Choose the best reels for the model, or work with the filaments already loaded.</p></div>
   <div class="card" id="destinationcard" style="margin-top:16px">
     <h2>Choose your printer and model</h2>
     <div class="field">
@@ -359,9 +362,23 @@
   <div class="palettecolumn">
   <div class="card hidden" id="reelscard">
     <div class="sectionhead"><h2>Your palette</h2><span class="hint">4 physical slots</span></div>
-    <h3 class="paletteheading">Loaded filaments</h3>
+    <div class="segs workflowmodes" role="group" aria-label="Filament starting point">
+      <button type="button" data-workflow="model" aria-pressed="true">Best colours for this model</button>
+      <button type="button" data-workflow="loaded" aria-pressed="false">Use my loaded filaments</button>
+    </div>
+    <p class="hint" id="workflowhint"></p>
+    <div id="modelchoices">
+      <label class="field">Filament material <select id="modelmaterial"><option>PLA</option><option>PETG</option><option>ABS</option><option>TPU</option><option>ASA</option><option>PA</option></select></label>
+      <p class="hint">Keep any essential original colours exact (up to four). We compare the remaining combinations and blend the missing colours.</p>
+      <div id="exactcolours" class="row"></div>
+      <label class="check"><input type="checkbox" id="useowned"> Choose from my Spool Studio filaments only</label>
+      <p class="hint" id="ownedhint"></p>
+    </div>
+    <div id="loadedcontrols" hidden>
+    <h3 class="paletteheading" id="reelheading">Loaded filaments</h3>
     <div class="row" id="reels"></div>
     <p class="hint" id="reelnote" style="margin-top:12px"></p>
+    </div>
     <details id="spoolimport">
       <summary>Use my Spool Studio filaments</summary>
       <p class="hint">Bring in the filaments you own, then choose which reel is in each slot.
