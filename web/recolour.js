@@ -79,15 +79,29 @@ function invalidateRecommendation() {
   renderRecommendation('Updating colour suggestions…');
   clearReview();
 }
+function paletteTitle(option,index) {
+  return index ? `Alternative ${index}` : option.unresolved ? 'Closest palette · incomplete' : 'Recommended';
+}
+function paletteCoverage(option) {
+  const {counts,rows,blendCount}=option.outcome;
+  const missing=[...new Set(rows.filter(row=>row.kind==='unresolved').map(row=>row.original))];
+  const recipes=rows.filter(row=>row.kind==='blended');
+  const detail=missing.length
+    ? `<strong>Cannot reproduce all colours</strong><span>No suitable blend for: ${missing.map(color=>`${esc(colourName(color))} (${esc(color)})`).join(', ')}.</span>`
+    : counts.substituted ? `<strong>${counts.substituted} source colour(s) replaced</strong><span>Solid colours selected; no extra shades are created.</span>`
+    : `<strong>All source colours covered in the estimate</strong>`;
+  return `<span class="palettecoverage">${detail}<span>${counts.preserved} matched to reels · ${blendCount} blend recipe${blendCount===1?'':'s'}</span>${recipes.map(row=>`<span>${esc(colourName(row.original))} (${esc(row.original)}) → ${100-row.recipe.percent}% slot ${row.recipe.a} + ${row.recipe.percent}% slot ${row.recipe.b}</span>`).join('')}</span>`;
+}
 function renderRecommendation(message) {
   const result=state.recommendation;
   const focusedPalette=document.activeElement?.dataset?.palette;
   const choices=state.recommendationOptions.map((option,index)=>({option,index}))
     .filter(({index})=>state.showMorePalettes || index<3 || (state.reelView==='recommended' && index===state.recommendationIndex));
   $("palettechoices").innerHTML=choices.map(({option,index})=>
-    `<button type="button" class="palettechoice" data-palette="${index}" aria-pressed="${state.reelView==='recommended' && state.recommendationIndex===index && state.previewMode==='result'}" aria-label="Preview ${index===0?'recommended palette':`alternative ${index}`}">
-      <span class="palettetitle"><strong>${index===0?'Recommended':`Alternative ${index}`}</strong><small>${esc(option.type)}${state.strategy!=='solid' && option.unresolved ? ` · ${option.unresolved} unresolved` : ''}${state.reelView==='recommended' && state.recommendationIndex===index?' · Selected':''}</small></span>
+    `<button type="button" class="palettechoice" data-palette="${index}" aria-pressed="${state.reelView==='recommended' && state.recommendationIndex===index && state.previewMode==='result'}">
+      <span class="palettetitle"><strong>${paletteTitle(option,index)}</strong><small>${esc(option.type)}${state.reelView==='recommended' && state.recommendationIndex===index?' · Selected':''}</small></span>
       <span class="palettechips">${option.reels.map((r,i)=>`<span class="palettechip"><i style="background:${esc(r.color)}"></i>${i+1} · ${esc(r.name || colourName(r.color))}${state.locked[i]?' · locked':''}</span>`).join('')}</span>
+      ${paletteCoverage(option)}
     </button>`).join('');
   $("palettechoices").querySelectorAll('[data-palette]').forEach(button=>button.addEventListener('click',()=>{
     state.recommendationIndex=Number(button.dataset.palette);
@@ -104,7 +118,8 @@ function renderRecommendation(message) {
   else if(result) $("recommendstatus").textContent=(result.rough
     ? 'Approximate colours to look for. '
     : 'From your Spool Studio collection. ')
-    + (state.strategy!=='solid' && result.unresolved ? `${result.unresolved} colour(s) still need a suitable blend.`
+    + (state.strategy!=='solid' && state.recommendationOptions.every(option=>option.unresolved) ? 'No complete palette found. These are the closest sets found, but each leaves colours unresolved. Four reels cannot reproduce every combination of source colours.'
+      : state.strategy!=='solid' && result.unresolved ? 'The selected palette is incomplete. Choose a complete suggestion or change the reels.'
       : result.score < result.loadedScore-.1 ? 'Estimated closer than loaded.'
       : result.score > result.loadedScore+.1 ? 'Your loaded set scores better.'
       : 'Similar estimated match to loaded.');
@@ -113,10 +128,14 @@ function renderRecommendation(message) {
     button.disabled=button.dataset.reelView==='recommended' && !result;
   });
   $("userecommended").disabled=!result;
+  $("userecommended").textContent=result?.unresolved ? 'Use incomplete palette' : 'Apply palette';
+  $("applypalettehint").textContent=result?.unresolved
+    ? 'You can use this as a starting point. Export stays blocked until every colour has a suitable reel or enabled blend. Applying it does not resolve the missing colours.'
+    : 'Choose a palette to preview it. Apply when you want to use it in your export. Blend shades are estimates, not guaranteed print colours.';
   document.querySelectorAll('[data-preview]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.preview===state.previewMode)));
   $("reelviewnote").textContent=state.strategy==='source' ? "Showing the file's original colours; loaded and recommended reels are not used."
     : state.previewMode==='original' ? 'Original colours from your file.'
-    : state.reelView==='recommended' ? `Previewing ${state.recommendationIndex ? `alternative ${state.recommendationIndex}` : 'recommended filaments'}. ${resultPlan().blocked ? 'Resolve the colours below before exporting.' : 'Apply this palette before exporting.'}`
+    : state.reelView==='recommended' ? `Previewing ${paletteTitle(result,state.recommendationIndex).toLowerCase()}. ${resultPlan().blocked ? 'Resolve the colours below before exporting.' : 'Apply this palette before exporting.'}`
     : 'Previewing loaded filaments.';
 }
 function requestRecommendation() {
@@ -621,7 +640,7 @@ function renderOutcome(payload=resultPlan()) {
   host.innerHTML=`<strong>${state.previewMode==='original' ? 'Selected export: ' : ''}${colours} source colours · ${outcome.blendCount ? `${outcome.blendCount} blend recipe${outcome.blendCount===1?'':'s'}` : 'No blends'}</strong>
     <p class="hint">${esc(tally)}</p>
     <ul>${changed.map(row=>`<li>${swatch(row.original)}<span>${esc(name(row.original))} <small>${esc(row.original)}</small> → ${row.kind==='unresolved' ? '<strong>No suitable enabled blend</strong>' : row.kind==='blended' ? `slot ${row.recipe.a} + ${row.recipe.percent}% of slot ${row.recipe.b}` : `${swatch(row.result)}${esc(name(row.result))}`}</span></li>`).join('')}</ul>
-    ${counts.unresolved ? '<p class="outcomewarning">Export blocked. Unresolved regions are highlighted pink in Loaded and Recommended views; pink is not an output filament.</p>' : counts.substituted ? '<p class="hint">Solid-colour replacement is selected. The listed source colours will change.</p>' : counts.blended ? '<p class="hint">Blend shades are uncalibrated estimates; they may differ in print.</p>' : ''}`;
+    ${counts.unresolved ? '<p class="outcomewarning">Export blocked. Unresolved regions are highlighted pink in Loaded and Suggested views; pink is not an output filament.</p>' : counts.substituted ? '<p class="hint">Solid-colour replacement is selected. The listed source colours will change.</p>' : counts.blended ? '<p class="hint">Blend shades are uncalibrated estimates; they may differ in print.</p>' : ''}`;
 }
 
 function renderMix(assessed) {

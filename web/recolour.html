@@ -234,6 +234,8 @@
   .palettechips { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
   .palettechip { min-width: 0; font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
   .palettechip i { display: block; height: 36px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; }
+  .palettecoverage { display: block; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; line-height: 1.5; }
+  .palettecoverage > span { display: block; margin-top: 4px; }
   #userecommended, #export { width: 100%; }
   #morepalettes { width: 100%; margin-bottom: 12px; }
   #exportcard { padding-top: 20px; }
@@ -339,7 +341,7 @@
     <div class="previewtoolbar"><div class="segs" role="group" aria-label="Preview colours">
       <button type="button" data-preview="original" aria-pressed="false">Original</button>
       <button type="button" data-reel-view="loaded" aria-pressed="true">Loaded</button>
-      <button type="button" data-reel-view="recommended" aria-pressed="false" disabled>Recommended</button>
+      <button type="button" data-reel-view="recommended" aria-pressed="false" disabled>Suggested</button>
     </div>
     <button type="button" id="previewreset" >Reset view</button></div>
     <canvas id="preview" width="800" height="600" aria-label="Interactive 3D model preview"></canvas>
@@ -377,12 +379,12 @@
       </details>
     </details>
     <section id="recommendation" aria-labelledby="recommendheading">
-      <h3 id="recommendheading">Recommended for this model</h3>
+      <h3 id="recommendheading">Palette suggestions</h3>
       <p class="hint" id="recommendstatus" role="status">Load a model to suggest colours.</p>
-      <div id="palettechoices" role="group" aria-label="Recommended palettes"></div>
+      <div id="palettechoices" role="group" aria-label="Suggested palettes"></div>
       <button type="button" id="morepalettes" aria-expanded="false" aria-controls="palettechoices" hidden>More palettes</button>
       <button type="button" class="primary" id="userecommended" disabled>Apply palette</button>
-      <p class="hint applyhint">Choose a palette to preview it. Apply when you want to use it in your export.</p>
+      <p class="hint applyhint" id="applypalettehint">Choose a palette to preview it. Apply when you want to use it in your export.</p>
     </section>
   </div>
 

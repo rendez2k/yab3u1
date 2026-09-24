@@ -1,7 +1,7 @@
 // Bounded palette search. Swatches estimate appearance, not physical calibration.
 import { distance, norm } from './colour.js';
 import { colourName } from './assignment.js';
-import { mixHex, planBlends, plausibleBlend, RATIOS, MIN_IMPROVEMENT, POOR_COVERAGE } from './mix.js';
+import { describeColourMapping, mappingFromPlan, mixHex, planBlends, plausibleBlend, RATIOS, MIN_IMPROVEMENT, POOR_COVERAGE } from './mix.js';
 
 const BASICS = ['#FFFFFF','#000000','#808080','#FF0000','#0080C0','#0000FF',
   '#008000','#00FF00','#FFFF00','#FF9500','#00FFFF','#FF00FF','#800080','#8B4513','#FFC0CB'];
@@ -128,7 +128,12 @@ export function recommendPalette({ sources, loaded, stock = null, locked = [], b
     const key=option.type+':'+option.reels.map(r=>norm(r.color)).sort().join(',');
     if(!unique.has(key)) unique.set(key,option);
   }
-  const ranked=[...unique.values()].slice(0,6).map(option=>({...option,
-    unresolved:blends ? planBlends(sources,option.reels).rows.filter(row=>!row.exact && !usable(row,option.reels)).length : 0}));
+  const ranked=[...unique.values()].slice(0,6).map(option=>{
+    const plan=planBlends(sources,option.reels);
+    const outcome=describeColourMapping(sources,{
+      mapping:mappingFromPlan(plan,blends),physical:option.reels,kept:blends ? plan.recipes : [],
+    },blends);
+    return {...option,outcome,unresolved:outcome.counts.unresolved};
+  });
   return {...ranked[0],rough,loadedScore,alternatives:ranked.slice(1)};
 }
