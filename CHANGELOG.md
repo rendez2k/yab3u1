@@ -7,6 +7,11 @@ section here together.
 
 ## Unreleased — experimental U1 reel-change export
 
+Main converter review 2.6.0-preview.6 keeps a 4 mm U1 bed-edge clearance
+for spiral lifting, in addition to clone spacing and print-addition allowances.
+The exported filament diameter count now matches the selected colour count,
+preventing a phantom unnamed filament preset in compacted U1 projects.
+
 Main converter review 2.6.0-preview.5 allows native negative cutout volumes.
 Snapmaker, Bambu and Orca exports retain the cutter meshes, volume roles and
 component transforms, including on clones. Bambu uses a native project for

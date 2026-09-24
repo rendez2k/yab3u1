@@ -206,14 +206,14 @@ await ok("U1 fill ignores a larger source bed and configures every copy", async 
   });
   const reread = project.readProject(built.entries);
   const all = project.selectionInstances(reread, 1, null);
-  assert.equal(all.length, 12, "only the U1 capacity, and all copies on its plate");
-  assert.equal(new Set(all.map(([id]) => id)).size, 12, "distinct configured roots");
+  assert.equal(all.length, 11, "only the U1 capacity, and all copies on its plate");
+  assert.equal(new Set(all.map(([id]) => id)).size, 11, "distinct configured roots");
   for (const [id] of all) {
     assert.equal(Number(reread.meta.get(id).extruder), 2);
     assert.equal(Number(reread.meta.get(id).parts[0].extruder), 2);
     const bounds = project.selectionBounds(reread, 1, [id]);
-    assert.ok(bounds.min[0] >= 0.5 && bounds.max[0] <= 270.5);
-    assert.ok(bounds.min[1] >= 1 && bounds.max[1] <= 271);
+    assert.ok(bounds.min[0] >= 4.5 && bounds.max[0] <= 266.5);
+    assert.ok(bounds.min[1] >= 5 && bounds.max[1] <= 267);
     assert.ok(Math.abs(bounds.min[2]) < 1e-6);
   }
   assert.equal([...built.entries.keys()].filter((key) => key.startsWith("3D/Objects/")).length, 1);
@@ -260,6 +260,25 @@ await ok("Frankenstein fits six with corner tower room and no overlapping copies
   assert.equal(single.cells.length, 1);
   assert.deepEqual(single.cells[0], [135, 135]);
   assert.equal(planLayout(bounds, { ...options, tower: false }).capacity, 6);
+});
+
+await ok("U1 margin includes print additions, partial grids and no tower", () => {
+  const bounds = {min:[-15,-25,-3], max:[15,25,47]};
+  for (const tower of [true, false]) for (const copies of [1, 3, 99]) {
+    const options = targetLayout("snapmaker", {copies, spacing:5, tower, padding:2});
+    const plan = planLayout(bounds, options);
+    assert.equal(plan.edgeMargin, 4);
+    for (const offset of layoutOffsets(bounds, plan, options.centre)) {
+      for (let axis=0; axis<2; axis++) {
+        const bedMin=options.centre[axis]-135;
+        assert.ok(bounds.min[axis]+offset[axis]-2 >= bedMin+4-1e-7);
+        assert.ok(bounds.max[axis]+offset[axis]+2 <= bedMin+270-4+1e-7);
+      }
+    }
+  }
+  const oversized={min:[0,0,0], max:[263,10,10]};
+  assert.equal(planLayout(oversized,targetLayout("snapmaker",{})).blocked,true);
+  assert.equal(planLayout(oversized,{width:270,depth:270}).blocked,false);
 });
 
 if (failures.length) {

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFileSync, existsSync} from 'node:fs';
+import {snapmakerConfig} from '../shared/targets.js';
 import {readZip} from '../zip.js';
 import * as p from '../shared/project.js';
 const enc=new TextEncoder(), dec=new TextDecoder();
@@ -55,5 +56,28 @@ if(existsSync(path)) {
   }
   console.log('PASS real ghost plate',plate.id,target,'cutout and mesh preserved');
  }
+}
+for (const count of [1,3,4,5,8]) {
+ const cfg={filament_diameter:['1.75','1.75','1.75','1.75']};
+ snapmakerConfig(cfg,Array(count).fill('#FFFFFF'),Array(count).fill('PLA'),[]);
+ assert.equal(cfg.filament_diameter.length,count,'preset validation sees only actual filaments');
+}
+if(existsSync(path)) {
+ const ghost=p.readProject(await readZip(readFileSync(path)),{allowNegative:true});
+ const layout={copies:99,spacing:5,width:270,depth:270,tower:true};
+ const built=p.convertProject(ghost,1,null,{target:'snapmaker',removeUnused:true,layout});
+ const cfg=JSON.parse(dec.decode(built.entries.get('Metadata/project_settings.config')));
+ assert.equal(cfg.filament_colour.length,3);
+ assert.equal(cfg.filament_diameter.length,3);
+ assert.equal(cfg.filament_settings_id.length,3);
+ assert.ok(cfg.filament_settings_id.every(Boolean));
+ const again=p.readProject(built.entries,{allowNegative:true});
+ const instances=p.selectionInstances(again,1,null);
+ for(const [id] of instances) {
+  const bounds=p.selectionBounds(again,1,[id]);
+  assert.ok(bounds.min[0]>=4.5-1e-6 && bounds.max[0]<=266.5+1e-6);
+  assert.ok(bounds.min[1]>=5-1e-6 && bounds.max[1]<=267+1e-6);
+ }
+ console.log('PASS real ghost fill:',instances.length,'copies, 4mm edge clearance, three named filament presets');
 }
 console.log('negative volumes ok');

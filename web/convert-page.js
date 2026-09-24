@@ -15,7 +15,7 @@ import { planLayout } from "./shared/layout.js";
 import { supportOf, transferSettings } from "./shared/printSettings.js";
 import { initBatch } from "./batch-page.js";
 
-const VERSION = "2.6.0-preview.5";
+const VERSION = "2.6.0-preview.6";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -28,6 +28,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "U1 layouts keep 4 mm clear at every bed edge for spiral lifting. Compacted exports no longer retain extra filament diameter entries that could create an unnamed preset.",
   "Negative cutout volumes now open in the main converter and keep their roles and transforms in Snapmaker, Bambu and Orca projects. Prusa multi-volume output remains unsupported; preview cutouts must be checked in the slicer.",
   "Unused filaments start unticked on the main converter. Restore any individually before export; model colours, part defaults and reserved process slots are kept.",
   "Fixed Snapmaker Orca reverting transferred quality, strength and support settings to preset defaults on opening an export. Download a fresh conversion to apply this fix to older files.",
@@ -475,6 +476,7 @@ function syncLayout() {
     }
     if (plan.capped) note.push(`only ${plan.capacity} fit, so that is what is written`);
     if (plan.padding) note.push(`${plan.padding.toFixed(1)} mm extra clearance per side for print additions`);
+    if (plan.edgeMargin) note.push(`${plan.edgeMargin} mm kept clear at every bed edge for spiral lifting`);
     note.push(...plan.footprintNotes);
   }
   note.push(session.target === "snapmaker"

@@ -179,6 +179,9 @@ export function snapmakerConfig(cfg, physicalColors, physicalTypes, recipes) {
   cfg.extruder_colour = colours.slice();
   cfg.filament_type = physicalTypes.map((t) => t || "PLA");
   cfg.nozzle_diameter = new Array(total).fill("0.4");
+  // Orca uses diameter count to validate filament presets. A leftover fourth
+  // diameter in a three-colour project creates a phantom, unnamed preset.
+  cfg.filament_diameter = new Array(total).fill("1.75");
   for (const key of BAMBU_ONLY_KEYS) delete cfg[key];
   if (!recipes.length) return cfg;
   Object.assign(cfg, {

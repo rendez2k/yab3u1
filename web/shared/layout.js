@@ -13,11 +13,11 @@ export const TOWER_RESERVE_PER_SIDE = 25;
 /** U1 exports include a machine profile; other targets use an editable area. */
 export function targetLayout(target, options = {}) {
   if (target === "snapmaker") return { ...options, width: 270, depth: 270,
-    maxHeight: 270.05, centre: [135.5, 136],
+    edgeMargin: 4, maxHeight: 270.05, centre: [135.5, 136],
     // Local bed coordinates. Allows for the U1 baseline tower at (13, 211),
     // its brim and ribs. This is a planning allowance; slicing determines size.
     towerBox: { min: [0, 200], max: [60, 270] } };
-  const { maxHeight, towerBox, ...layout } = options;
+  const { maxHeight, towerBox, edgeMargin, ...layout } = options;
   return { ...layout, centre: target === "bambu" ? [0, 0]
     : [Number(options.width) / 2, Number(options.depth) / 2] };
 }
@@ -74,15 +74,17 @@ export function layoutCapacity(size, options = {}) {
   const corner = options.tower && options.towerBox;
   const reserve = options.tower && !corner
     ? 2 * (Number(options.towerReserve) || TOWER_RESERVE_PER_SIDE) : 0;
-  const usableWidth = width - reserve;
+  const edgeMargin = Math.max(0, Number(options.edgeMargin) || 0);
+  const usableWidth = width - reserve - 2 * edgeMargin;
+  const usableDepth = depth - 2 * edgeMargin;
   const columns = Math.floor((usableWidth + spacing) / (size[0] + spacing));
-  const rows = Math.floor((depth + spacing) / (size[1] + spacing));
+  const rows = Math.floor((usableDepth + spacing) / (size[1] + spacing));
   // Nothing fits is a real answer: the page must block, not write an out-of-bounds
   // file.  Zero columns/rows mean exactly that.
   const safeColumns = Math.max(0, Math.min(columns, 64));
   const safeRows = Math.max(0, Math.min(rows, 64));
-  const cells = corner ? cornerCells(size, width, depth, safeColumns, safeRows,
-                                    spacing, corner) : null;
+  const cells = corner ? insetCornerCells(size, width, depth, safeColumns, safeRows,
+                                    spacing, corner, edgeMargin) : null;
   return {
     columns: safeColumns,
     rows: safeRows,
@@ -92,7 +94,15 @@ export function layoutCapacity(size, options = {}) {
             safeRows ? safeRows * size[1] + (safeRows - 1) * spacing : 0],
     reserve,
     usableWidth,
+    edgeMargin,
   };
+}
+
+// Keep the tower in bed coordinates while packing inside the edge clearance.
+function insetCornerCells(size, width, depth, columns, rows, spacing, box, margin) {
+  const shifted = { min: box.min.map(v => v - margin), max: box.max.map(v => v - margin) };
+  return cornerCells(size, width - 2 * margin, depth - 2 * margin,
+    columns, rows, spacing, shifted).map(([x, y]) => [x + margin, y + margin]);
 }
 
 /** Slide a grid to the bed or obstacle edges, keeping the most clear cells.
@@ -154,9 +164,9 @@ export function planLayout(bounds, options = {}) {
   if (cells && copies > 0 && copies < grid.capacity) {
     // Try a compact block for a partial plate, keeping a single copy centred.
     const columns = Math.min(grid.columns, copies);
-    const compact = cornerCells(size, Number(options.width), Number(options.depth),
+    const compact = insetCornerCells(size, Number(options.width), Number(options.depth),
       columns, Math.ceil(copies / columns), Math.max(0, Number(options.spacing) || 0),
-      options.towerBox);
+      options.towerBox, grid.edgeMargin);
     if (compact.length >= copies) cells = compact;
   }
   return {
@@ -177,6 +187,7 @@ export function planLayout(bounds, options = {}) {
     cells: cells ? cells.slice(0, copies) : null,
     reserve: grid.reserve,
     usableWidth: grid.usableWidth,
+    edgeMargin: grid.edgeMargin,
     capped: asked > copies,
     blocked: copies < 1,
   };
@@ -228,5 +239,5 @@ export function layoutOffsets(bounds, plan, centre = [0, 0]) {
 /** The identity signature of a layout: part of every cache key and revision. */
 export function layoutSignature(plan) {
   return `${plan.copies}x${plan.spacing}@${plan.width}x${plan.depth}`
-    + (plan.tower ? "+tower" : "");
+    + (plan.tower ? "+tower" : "") + `+edge${plan.edgeMargin || 0}`;
 }
