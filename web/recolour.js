@@ -16,7 +16,7 @@ import { mountSpoolImport } from "./shared/spoolImport.js";
 import { colourName } from "./shared/assignment.js";
 
 const REEL_KEY = "yab3u1-web-reels";
-const VERSION = "2.6.0-preview.5";
+const VERSION = "2.6.0";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({

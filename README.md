@@ -17,7 +17,7 @@ Three ways to use the project, with different workflows:
 | --- | --- | --- |
 | **`U1 Converter` shortcut** | this machine | local web UI (`u1ui.py` + `u1ui.html`), reads your installed Orca profiles and can verify a plate by slicing |
 | **`u1convert.py`** | any machine with Python | the command line tool; `--fill-bed`, `--verify`, `--supports`, `--colors` |
-| **`web/`** | any static host — live at <https://yab3u1.netlify.app> | [browser version](#the-browser-version-web) — v2.5.1, the whole conversion in the page, nothing uploaded |
+| **`web/`** | any static host — live at <https://yab3d.uk> | [browser version](#the-browser-version-web) — v2.6.0, the whole conversion in the page, nothing uploaded |
 
 A local replacement for [bl2u1.nbn.cat](https://bl2u1.nbn.cat) /
 [josuanbn/bl2u1](https://github.com/josuanbn/bl2u1) that actually works on
@@ -96,7 +96,7 @@ web/
 ```
 
 The pages report their own version (`VERSION` in `web/convert-page.js` and
-`web/recolour.js`); the live deployment is **v2.5.1**.
+`web/recolour.js`); the live deployment is **v2.6.0**.
 
 **Deploying.** The Python UI cannot go on a static host — it needs your Orca
 install and the slicer — but the browser converter can, and that is what
@@ -229,29 +229,29 @@ it or to name your reels first.
 
 ## Recolouring onto your own reels, with Full Spectrum mixing
 
-The Full Spectrum review workspace puts the model beside its palette on desktop,
-with an Original / Loaded / Recommended comparison. Recommendations show one
-suggested set and two alternatives; **More palettes** reveals additional distinct
-sets when available. Without Spool Studio these are approximate named swatches;
-with a shared library they use available filaments of one material. **Keep slot**
-locks a physical position. Previewing a set does not alter loaded reels: **Apply
-palette** makes it the export palette. The search is bounded and ranks uncalibrated
-colour estimates, not measured print accuracy or a guaranteed global optimum.
+The Full Spectrum workspace puts the model beside its palette on desktop.
+**Best colours for this model** compares sets of original model colours, keeping
+as many exact as possible and blending the remaining shades. **Keep exact**
+preserves essential colours. **Use my loaded filaments** instead fixes the four
+reels you specify, including CMYK sets. Spool Studio can supply owned filaments.
+Suggestions show one set and two alternatives; **More palettes** reveals more
+when available. Previewing a set does not alter the export: **Apply palette**
+selects it. Applied is unavailable until a palette has actually been applied.
+The search ranks uncalibrated estimates, not measured print accuracy or a
+guaranteed global optimum; searches of owned libraries are bounded.
 **Advanced** contains colour treatment, individual mappings, blend recipes and
 the experimental U1 reel-change workflow. In the default blend mode,
 non-matching colours must use an enabled blend: there is no silent fallback to a
 solid reel. Unresolved regions are highlighted pink and block export. The summary
 beside the preview lists matched, blended, substituted and unresolved colours.
 Solid replacement is available only through the explicit Solid colours treatment.
-Recommendations prioritise complete estimated blend coverage; incomplete sets
-are labelled with their unresolved colour count. A basic sanity check rejects
-strongly coloured predictions from two neutral reels. This is not calibration:
-the alien example still has an unresolved fifth colour with the current bounded
-pair-blend search, so it cannot be exported in blend mode as a complete match.
+Suggestions distinguish close predicted matches from approximate blend palettes.
+When a close match is unavailable, each approximation shows the changed shade
+and recipe and requires explicit acceptance before export. The alien example
+can produce a fifth shade, but the available blend may differ substantially from
+the original colour. Pink marks unresolved regions, never an output filament.
 
-A painted model is rarely painted in the colours you have loaded. The page treats
-the four reels you tell it about as the palette you are printing onto, and offers
-three honest ways across:
+The colour treatment controls offer three approaches:
 
 * **Direct** — when the selection needs four colours or fewer, they print from
   slots 1-4 exactly as the file has them.
@@ -259,10 +259,9 @@ three honest ways across:
   closest loaded reel in CIELAB (CIE94), shown side by side with the original,
   and nothing is substituted until you accept the mapping. The row for each
   colour is a dropdown, so any match can be overridden.
-* **A mixture, when mixing actually helps** — the page predicts every two-reel
-  blend at 25/50/75 % with the MIT FilamentMixer polynomial and compares it with
-  the nearest single reel. A recipe is offered only when it comes closer; a
-  colour that already matches a reel is left alone, and two different materials
+* **Blends** — the page predicts two-reel blends at 25/50/75 % with Prusa FDM
+  Mixer v7. Exact reel matches stay unchanged; missing colours use close or
+  explicitly accepted approximate blends. Two different materials
   are never blended. Tick the recipes you want, tick that you have reviewed the
   predicted shades, and the export writes them.
 
@@ -328,7 +327,7 @@ G-code (or a selected G-code member inside a sliced 3MF), including extrusion
 for supports, infill and purging. It reports initial reels and changes between
 layers. A report alone does not modify the slice or insert pauses.
 
-**Preview branch: U1 reel-change export.** The experimental browser workflow adds
+**Experimental U1 reel-change export.** The browser workflow adds
 an actual postprocessor, separate from normal 3MF conversion. Choose Snapmaker U1
 at the top of the Full Spectrum page, load the original model and download its
 slice-only project. It has logical extruders for the original palette, reviewed

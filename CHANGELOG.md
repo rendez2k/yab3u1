@@ -5,7 +5,17 @@ The version shown on the page comes from `VERSION` in `web/convert-page.js` (and
 the collapsed "What's new" block in the footer. Bump those constants and add a
 section here together.
 
-## Unreleased — experimental U1 reel-change export
+## 2.6.0 — Full Spectrum palettes and converter improvements
+
+Promoted the reviewed converter and Full Spectrum workflow to production.
+Choose original model colours to load and blend the remaining shades, or work
+with four fixed loaded filaments. Suggested blends show the predicted colour
+changes and require acceptance before export. Spool Studio sharing, unused
+filament selection, spare U1 slot assignments, native negative cutouts and
+U1 bed-edge clearance are included. Blend predictions remain uncalibrated
+estimates; the U1 reel-change tool remains explicitly experimental.
+
+Development and validation notes for this release follow.
 
 Full Spectrum review 2.6.0-preview.5 disables Applied until a palette has
 actually been applied. Changing model search choices restores the Original
@@ -116,8 +126,8 @@ palette and designer settings, regardless of recolouring choices, with thumbnail
 Validated automated two-pause cases, failed/tampered inputs, cancellation,
 desktop/mobile layouts, and real alien project preparation. The installed
 Snapmaker CLI still crashes during plate initialisation. The user confirmed native
-GUI slicing and supplied its G-code; physical printer validation is outstanding. This feature remains on a review
-build and is not part of the stable v2.5.1 release.
+GUI slicing and supplied its G-code; physical printer validation is outstanding.
+The reel-change feature is included in v2.6.0 with its experimental label.
 
 ## 2.5.1 — retain custom settings when Snapmaker loads its preset
 
