@@ -7,6 +7,7 @@
 
 import { distance, nearest, norm } from "./colour.js";
 import { MIX_COEFFICIENTS, MIX_INTERCEPT, MIX_POWERS } from "./mix_model.js";
+import { mixFdmHex, FDM_MODEL } from './fdmMix.js';
 
 export const RATIOS = [25, 50, 75];
 export const MIN_IMPROVEMENT = 2.0;
@@ -54,7 +55,7 @@ export function mixHex(first, second, percent) {
 
 const material = (reel) => String((reel || {}).type || "PLA").trim().toUpperCase();
 
-export function candidateRecipes(reels, ratios = RATIOS) {
+export function candidateRecipes(reels, ratios = RATIOS, predictor = mixHex) {
   const out = [];
   const colors = reels.map((r) => norm((r || {}).color));
   for (let a = 0; a < colors.length; a += 1) {
@@ -63,7 +64,7 @@ export function candidateRecipes(reels, ratios = RATIOS) {
       if (material(reels[a]) !== material(reels[b])) continue;
       for (const percent of ratios) {
         out.push({ a: a + 1, b: b + 1, percent,
-                   color: mixHex(colors[a], colors[b], percent),
+                   color: predictor(colors[a], colors[b], percent),
                    materials: material(reels[a]) });
       }
     }
@@ -73,9 +74,9 @@ export function candidateRecipes(reels, ratios = RATIOS) {
 
 /** Compare every source colour with a single reel and with the best mixture. */
 export function planMixtures(sourceColors, reels, ratios = RATIOS,
-                             maxRecipes = 6, credibleOnly = false) {
+                             maxRecipes = 6, credibleOnly = false, predictor = mixHex) {
   const slotColors = reels.map((r) => norm((r || {}).color));
-  const candidates = candidateRecipes(reels, ratios).filter(recipe=>!credibleOnly ||
+  const candidates = candidateRecipes(reels, ratios, predictor).filter(recipe=>!credibleOnly ||
     plausibleBlend(slotColors[recipe.a-1],slotColors[recipe.b-1],recipe.color));
   const rows = [];
   const used = new Map();
@@ -223,7 +224,9 @@ export function plausibleBlend(first, second, predicted) {
 /** Interactive Full Spectrum planning rejects implausible predictions before
  * choosing a recipe, so a rejected nearest prediction cannot hide a valid one. */
 export function planBlends(sourceColors,reels) {
-  return planMixtures(sourceColors,reels,RATIOS,6,true);
+  const plan=planMixtures(sourceColors,reels,RATIOS,6,true,mixFdmHex);
+  plan.recipes.forEach(recipe=>{recipe.model=FDM_MODEL;});
+  return plan;
 }
 
 /** Describe the effective export mapping, including overrides and unticked recipes.

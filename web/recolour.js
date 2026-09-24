@@ -6,7 +6,7 @@
 // The renderer is shared with the local page.
 
 import { comparison, norm, suggestMapping } from "./shared/colour.js";
-import { describeColourMapping, mappingFromPlan, mixHex, planBlends, plausibleBlend } from "./shared/mix.js";
+import { describeColourMapping, mappingFromPlan, planBlends, plausibleBlend } from "./shared/mix.js";
 import { Preview } from "./shared/preview.js";
 import { LABELS, RECOLOUR_TARGETS } from "./shared/targets.js";
 import { thumbnailSizes } from "./shared/thumbnail.js";
@@ -16,7 +16,7 @@ import { mountSpoolImport } from "./shared/spoolImport.js";
 import { colourName } from "./shared/assignment.js";
 
 const REEL_KEY = "yab3u1-web-reels";
-const VERSION = "2.6.0-preview";
+const VERSION = "2.6.0-preview.2";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -30,7 +30,7 @@ const state = {
   // What the export does with the file's colours: keep them, substitute them onto
   // the reels (with per-colour overrides), or use the blends that are ticked.
   strategy: "blend", overrides: {}, recipeKey: "", reviewed: false,
-  stock: null, locked: [false,false,false,false], recommendation: null, reelView: "loaded",
+  stock: null, locked: [false,false,false,false], recommendation: null, recommendationSearch: null, reelView: "loaded",
   loadedTuning: null, recommendationOptions: [], recommendationIndex: 0, showMorePalettes: false,
   // Bumped on every upload so a slow read of the previous file cannot land on top
   // of the new one and re-approve colours the user never reviewed.
@@ -76,11 +76,12 @@ function setReelView(view) {
 function invalidateRecommendation() {
   recommendationWorker?.terminate(); recommendationWorker=null; recommendationKey='';
   state.recommendation=null; state.recommendationOptions=[]; state.recommendationIndex=0; state.showMorePalettes=false; setReelView('loaded');
+  state.recommendationSearch=null;
   renderRecommendation('Updating colour suggestions…');
   clearReview();
 }
 function paletteTitle(option,index) {
-  return index ? `Alternative ${index}` : option.unresolved ? 'Closest palette · incomplete' : 'Recommended';
+  return index ? `Alternative ${index}` : 'Recommended';
 }
 function paletteCoverage(option) {
   const {counts,rows,blendCount}=option.outcome;
@@ -115,12 +116,12 @@ function renderRecommendation(message) {
   $("morepalettes").textContent=state.showMorePalettes ? 'Fewer palettes' : 'More palettes';
   $("morepalettes").setAttribute('aria-expanded',String(state.showMorePalettes));
   if(message) $("recommendstatus").textContent=message;
+  else if(state.recommendationSearch?.found===false) $("recommendstatus").textContent=state.recommendationSearch.reason
+    + ' Try unlocking slots or connect Spool Studio to search the filaments you own. To accept colour replacements instead, choose Solid colours in Advanced. This is a search result, not proof that no palette could work.';
   else if(result) $("recommendstatus").textContent=(result.rough
     ? 'Approximate colours to look for. '
     : 'From your Spool Studio collection. ')
-    + (state.strategy!=='solid' && state.recommendationOptions.every(option=>option.unresolved) ? 'No complete palette found. These are the closest sets found, but each leaves colours unresolved. Four reels cannot reproduce every combination of source colours.'
-      : state.strategy!=='solid' && result.unresolved ? 'The selected palette is incomplete. Choose a complete suggestion or change the reels.'
-      : result.score < result.loadedScore-.1 ? 'Estimated closer than loaded.'
+    + (result.score < result.loadedScore-.1 ? 'Estimated closer than loaded.'
       : result.score > result.loadedScore+.1 ? 'Your loaded set scores better.'
       : 'Similar estimated match to loaded.');
   document.querySelectorAll('[data-reel-view]').forEach(button=>{
@@ -128,10 +129,10 @@ function renderRecommendation(message) {
     button.disabled=button.dataset.reelView==='recommended' && !result;
   });
   $("userecommended").disabled=!result;
-  $("userecommended").textContent=result?.unresolved ? 'Use incomplete palette' : 'Apply palette';
-  $("applypalettehint").textContent=result?.unresolved
-    ? 'You can use this as a starting point. Export stays blocked until every colour has a suitable reel or enabled blend. Applying it does not resolve the missing colours.'
-    : 'Choose a palette to preview it. Apply when you want to use it in your export. Blend shades are estimates, not guaranteed print colours.';
+  $("userecommended").hidden=!result;
+  $("applypalettehint").hidden=!result;
+  $("userecommended").textContent='Apply palette';
+  $("applypalettehint").textContent='Choose a palette to preview it. Apply when you want to use it in your export. Blend shades are estimates, not guaranteed print colours.';
   document.querySelectorAll('[data-preview]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.preview===state.previewMode)));
   $("reelviewnote").textContent=state.strategy==='source' ? "Showing the file's original colours; loaded and recommended reels are not used."
     : state.previewMode==='original' ? 'Original colours from your file.'
@@ -151,8 +152,9 @@ function requestRecommendation() {
   function finish(result,error) {
     if(recommendationWorker!==worker) return;
     worker.terminate(); recommendationWorker=null;
-    state.recommendation=result || null;
-    state.recommendationOptions=result ? [result,...result.alternatives] : [];
+    state.recommendationSearch=result || null;
+    state.recommendation=result?.found ? result : null;
+    state.recommendationOptions=result?.found ? [result,...result.alternatives] : [];
     state.recommendationIndex=0;
     renderRecommendation(error);
   }
@@ -617,7 +619,7 @@ function resultPlan() {
     if (Number(slot) > 0) mapping[source] = Number(slot);
   }
   const payload = { recipes: kept.map((recipe) => ({ a: recipe.a, b: recipe.b,
-                                            percent: recipe.percent })),
+                                            percent: recipe.percent, model: recipe.model })),
            mapping, kept, physical: reels };
   payload.outcome=describeColourMapping(assessed.sourceColors,payload,true);
   if(payload.outcome.counts.unresolved) payload.blocked=`${payload.outcome.counts.unresolved} source colour(s) have no suitable enabled blend. Change reels or explicitly choose Solid colours in Advanced`;
@@ -878,9 +880,7 @@ function paletteOf(payload, mode) {
   const reels=activeReels();
   reels.forEach((reel, index) => { table[index + 1] = norm(reel.color); });
   payload.kept.forEach((recipe, index) => {
-    table[5 + index] = mixHex(norm(reels[recipe.a - 1].color),
-                              norm(reels[recipe.b - 1].color),
-                              recipe.percent);
+    table[5 + index] = recipe.color;
   });
   return table;
 }

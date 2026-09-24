@@ -44,6 +44,7 @@ PUBLIC_FILES = (
     "shared/batchZipWorker.js",
     "shared/colour.js",
     "shared/convertSession.js",
+    "shared/fdmMix.js",
     "shared/layout.js",
     "shared/mix.js",
     "shared/mix_model.js",
@@ -66,6 +67,9 @@ PUBLIC_FILES = (
     "shared/targets.js",
     "shared/thumbnail.js",
     "shared/workerClient.js",
+    "shared/vendor/prusa-fdm/color.js",
+    "shared/vendor/prusa-fdm/yule-nielsen.js",
+    "shared/vendor/prusa-fdm/prusa-fdm-mixer.js",
     "zip.js",
 )
 

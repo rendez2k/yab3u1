@@ -7,6 +7,16 @@ section here together.
 
 ## Unreleased — experimental U1 reel-change export
 
+Full Spectrum review 2.6.0-preview.2 now uses Prusa FDM Mixer v7 for layer-colour
+predictions, with the upstream MIT licence and fixed revision included. The
+palette search checks four-reel combinations together, keeps only complete
+predicted coverage, and shows no suggestions or Apply button when none qualify.
+Large libraries use a diverse pool of at most 32 candidates plus locked reels.
+Preview and exported virtual colours use the same predictor; native two-reel
+25/50/75% recipes remain unchanged. The model is calibrated upstream on
+Prusament PLA, not validated on the user's filaments or printer. See
+docs/full-spectrum-research.md for findings and verification.
+
 Added Loaded vs Recommended filament sets. Without a stock library, the page
 suggests named approximate colours; with Spool Studio, it searches available
 filaments of one material. Slots can be locked. A bounded background search

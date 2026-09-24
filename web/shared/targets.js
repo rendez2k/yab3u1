@@ -15,6 +15,7 @@
 
 import { norm } from "./colour.js";
 import { mixHex } from "./mix.js";
+import { mixFdmHex, FDM_MODEL } from './fdmMix.js';
 
 export const TARGETS = ["snapmaker", "bambu", "orca", "prusa"];
 // The recolour page's blends are only written to the dialects whose native
@@ -162,7 +163,7 @@ export function palette(physicalColors, physicalTypes, recipes) {
   const physical = physicalColors.map((c) => norm(c) || "#FFFFFF");
   const virtual = recipes.map((recipe, index) => ({
     id: virtualId(physical.length, index),
-    color: mixHex(physical[recipe.a - 1], physical[recipe.b - 1], recipe.percent),
+    color: (recipe.model===FDM_MODEL ? mixFdmHex : mixHex)(physical[recipe.a - 1], physical[recipe.b - 1], recipe.percent),
     a: recipe.a, b: recipe.b, percent: recipe.percent,
     type: physicalTypes[recipe.a - 1] || "PLA",
   }));

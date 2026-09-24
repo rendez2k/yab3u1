@@ -15,7 +15,7 @@ const solid=describeColourMapping(sources,payload,false);
 assert.equal(solid.counts.substituted,1);
 assert.equal(solid.counts.unresolved,0);
 const best=recommendPalette({sources,loaded:physical});
-assert.equal(best.unresolved,1); // No credible fifth colour in this bounded palette search.
+assert.equal(best.found,false); // Incomplete sets are not offered as recommendations.
 assert(!plausibleBlend('#FFFFFF','#000000','#647DA0'));
 assert(plausibleBlend('#FFFFFF','#000000','#888888'));
 const neutrals=['#FFFFFF','#000000','#888888','#CCCCCC'].map(color=>({color,type:'PLA'}));
