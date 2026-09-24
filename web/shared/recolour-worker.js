@@ -304,10 +304,10 @@ self.onmessage = async (event) => {
       geometryBuilds = self.__geometryBuilds = 0;
       const meta = metaOf(parsed);
       const plateId = parsed.plates.length ? parsed.plates[0].id : null;
-      // A pure conversion only needs the shape of the file: the palette, the
-      // plates and a triangle count.  It must not pay for the recolour mesh
-      // preparation (or the per-facet state scan) it will never draw.
+      // Conversion checks filament usage off the UI thread, but avoids building
+      // preview geometry until requested. The usage result is cached for export.
       if (message.light === true) {
+        meta.filamentUsage = project.conversionUsage(parsed);
         const summary = project.summary(parsed, plateId);
         post({ type: "loaded", id, meta, light: true, summary,
                ms: Date.now() - started });
@@ -408,6 +408,8 @@ self.onmessage = async (event) => {
       const built = project.convertProject(parsed, message.plateId, message.objects,
                                            { target: message.target,
                                              mapping: message.mapping || {},
+                                             removeUnused: message.removeUnused === true,
+                                             includeUnused: message.includeUnused || [],
                                              assignmentMode: message.assignmentMode
                                                || null,
                                              title: message.title,
@@ -425,7 +427,8 @@ self.onmessage = async (event) => {
       const bytes = await writeZip([...built.entries].map(([name, data]) =>
         ({ name, data })));
       post({ type: "converted", id, bytes, ms: Date.now() - started,
-             thumbnails: built.thumbnails, settings: built.settings || null },
+             thumbnails: built.thumbnails, settings: built.settings || null,
+             colours: Object.values(built.colours) },
            [bytes.buffer]);
       return;
     }

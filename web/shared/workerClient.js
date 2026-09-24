@@ -100,10 +100,13 @@ export class RecolourWorker {
                                      carrySettings: options.carrySettings !== false,
                                      supportMode: options.supportMode || "auto",
                                      assignmentMode: options.assignmentMode || null,
+                                     removeUnused: options.removeUnused === true,
+                                     includeUnused: options.includeUnused || [],
                                      thumbnails: options.thumbnails || null })
       .then((reply) => ({ bytes: reply.bytes, ms: reply.ms,
                           thumbnails: reply.thumbnails || null,
-                          settings: reply.settings || null }));
+                          settings: reply.settings || null,
+                          colours: reply.colours || null }));
   }
 
   dispose(reason = "a new file was chosen, so the old worker was stopped") {

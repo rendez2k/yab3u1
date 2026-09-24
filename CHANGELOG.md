@@ -7,6 +7,13 @@ section here together.
 
 ## Unreleased — experimental U1 reel-change export
 
+Main converter review 2.6.0-preview.4 deselects unused filament entries by
+default and lets each one be restored with a checkbox. The export compacts the
+selected palette and remaps painted facets and part defaults together. Usage is
+checked across the whole file; process-selected slots are conservatively kept,
+and uncertain paint or modifier usage leaves the palette intact. Changing the
+selection resets assignments and invalidates any previous download.
+
 Review 2.6.0-preview.3 adds explicitly labelled approximate blend palettes when
 close reproduction is unavailable, including a choice using the loaded reels.
 Each card lists original and predicted colour swatches/names and its recipe;

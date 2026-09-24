@@ -404,6 +404,27 @@ await ok("U1 uses its own bed while generic targets retain the user's area", asy
   assert.equal(session.layout.width, 256);
 });
 
+await ok('unused filaments start deselected and can be restored without stale exports', async () => {
+  const fixture=project('unused');
+  fixture.meta.filamentUsage={kept:[1,3],unused:[2]};
+  const worker=new FakeWorker(fixture);
+  const session=new ConvertSession(()=>worker,{},urls);
+  await load(session,worker,'unused.3mf');
+  assert.deepEqual(session.activeColourIds(),[1,3]);
+  assert.equal(session.setSource(1,2),false);
+  session.setUnused(2,true);
+  assert.deepEqual(session.activeColourIds(),[1,2,3]);
+  session.setSource(1,2);
+  const pending=session.convert('bambu');
+  await tick();
+  assert.deepEqual(worker.calls.at(-1).options.includeUnused,[2]);
+  session.setUnused(2,false);
+  worker.releaseAll();
+  assert.equal(await pending,null);
+  assert.deepEqual(session.rule,identityRule(3));
+  assert.deepEqual(session.activeColourIds(),[1,3]);
+});
+
 if (failures.length) {
   console.error(`\n${failures.length} race check(s) failed`);
   process.exitCode = 1;

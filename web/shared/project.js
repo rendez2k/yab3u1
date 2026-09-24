@@ -1592,7 +1592,7 @@ function copyMemberObjectsStandard(project, member, keep, mapping, settings, ren
     }
     const base = settings.base.get(`${member}|${id}`) || 1;
     const rebuilt = standardMesh(vertices[1], triangles[1], {
-      mapping, group, base, paletteSize: settings.paletteSize,
+      mapping, group, base, paletteSize: settings.paletteSize, sourcePaletteSize: project.colors.length,
       where: `${member} object ${id}`,
     });
     body = body.replace(vertices[0], `<vertices>${rebuilt.vertices}</vertices>`)
@@ -1663,9 +1663,9 @@ function standardMesh(verticesXml, trianglesXml, options) {
       const indices = piece.triangle.map((corner) =>
         (Array.isArray(corner) ? addPoint(corner) : corner));
       const state = piece.state || options.base;
-      if (!Number.isInteger(state) || state < 1 || state > options.paletteSize) {
+      if (!Number.isInteger(state) || state < 1 || state > options.sourcePaletteSize) {
         throw new ProjectError(`${options.where} prints in filament ${state}, and `
-          + `this file's palette describes ${options.paletteSize} filament(s)`);
+          + `this file's palette describes ${options.sourcePaletteSize} filament(s)`);
       }
       const colour = Math.max(0, (options.mapping[state] ?? state) - 1);
       if (colour >= options.paletteSize) {
@@ -1854,6 +1854,51 @@ function copyMemberObjects(project, member, keep, mapping, target, rename, highe
  *                          permuted to match, with the paint and the default
  *                          extruders rewritten to the same slots.
  */
+const conversionUsageCache = new WeakMap();
+/** Conservative whole-project usage: paint, part defaults and process references.
+ * Keep numbered process slots (and their prefix) stable because slicer-specific
+ * support/infill selectors are not all translated by the settings writer. */
+export function conversionUsage(project) {
+  if (conversionUsageCache.has(project)) return conversionUsageCache.get(project);
+  const count = project.colors.length;
+  const used = new Set();
+  let reservedThrough = 0, uncertain = false;
+  try {
+    for (const plate of project.plates) {
+      if (!eligibleObjects(project, plate.id).length) continue;
+      const report = analyse(project, plate.id, null);
+      report.used.forEach(id => used.add(id));
+      if (report.counts.undecodable_paint) uncertain = true;
+    }
+    for (const meta of project.meta.values()) {
+      for (const entry of [meta, ...(meta.parts || [])]) {
+        if (isHiddenPart(entry.subtype)) uncertain = true;
+        if (positive(entry.extruder)) used.add(positive(entry.extruder));
+      }
+    }
+    // Also retain the writer's fallback for unassigned parts.
+    used.add(1);
+    const selector = /(?:support(?:_material)?(?:_interface)?|wall|sparse_infill|solid_infill|perimeter|infill)_(?:extruder|filament)/;
+    for (const [name, bytes] of project.entries) {
+      if (!/\.(?:config|xml)$/i.test(name)) continue;
+      const blob = new TextDecoder().decode(bytes);
+      const refs = [
+        ...blob.matchAll(/"([\w]+)"\s*:\s*(?:\[\s*)?"?(\d+)"?/g),
+        ...blob.matchAll(/^\s*;?\s*(\w+)\s*=\s*(\d+)\s*$/gm),
+        ...blob.matchAll(/key="(\w+)"\s+value="(\d+)"/g),
+      ];
+      for (const match of refs) if (selector.test(match[1])) reservedThrough = Math.max(reservedThrough, Number(match[2]));
+      // Custom tool-change sequences cannot safely be renumbered here.
+      if (/custom_gcode_per_print_z/i.test(name) && /<code\b/.test(blob)) uncertain = true;
+    }
+  } catch (error) { uncertain = true; }
+  for (let id = 1; id <= Math.min(count, reservedThrough); id++) used.add(id);
+  const kept = Array.from({length:count}, (_,i)=>i+1).filter(id=>uncertain || used.has(id));
+  const result = { kept, unused: Array.from({length:count}, (_,i)=>i+1).filter(id=>!kept.includes(id)), uncertain, reservedThrough: Math.min(count,reservedThrough) };
+  conversionUsageCache.set(project, result);
+  return result;
+}
+
 export function convertProject(project, plateId, objectIds, options = {}) {
   // A virtual blend is not one more solid reel: refuse before anything is built.
   refuseMixtures(project, "convert");
@@ -1880,6 +1925,17 @@ export function convertProject(project, plateId, objectIds, options = {}) {
       throw new ProjectError(`this slot arrangement cannot be written: ${problem}`);
     }
     physical = arrange(palette, rule);
+  }
+  if (options.removeUnused === true) {
+    const usage = conversionUsage(project);
+    const kept = [...new Set([...usage.kept, ...(options.includeUnused || []).filter(id=>usage.unused.includes(id))])];
+    const destinations = [...new Set([...kept.map(id=>mapping[id]), ...Array.from({length:usage.reservedThrough},(_,i)=>i+1)])].sort((a,b)=>a-b);
+    const compact = new Map(destinations.map((id,index)=>[id,index+1]));
+    physical = destinations.map(id=>physical[id-1]);
+    for (const source of Object.keys(mapping)) {
+      if (kept.includes(Number(source))) mapping[source] = compact.get(mapping[source]);
+      else delete mapping[source];
+    }
   }
   return exportProject(project, plateId, objectIds, {
     target: options.target,

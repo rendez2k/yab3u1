@@ -725,6 +725,34 @@ await ok("a real five-colour Prusa alien converts to Bambu with every filament",
     + `${count(text).toLocaleString()} triangles, paint rewritten`);
 });
 
+await ok('unused slots compact across all targets without changing painted colours', () => {
+  const parsed = project.readProject(source({...FIVE, base:1, codes:['4','0C','2C']}));
+  assert.deepEqual(project.conversionUsage(parsed).unused,[2,4]);
+  for (const target of ['snapmaker','bambu','orca','prusa']) {
+    const built = project.convertProject(parsed,1,null,{target,assignmentMode:'slots',removeUnused:true});
+    assert.deepEqual(Object.values(built.colours),[FIVE.colours[0],FIVE.colours[2],FIVE.colours[4]]);
+    assert.deepEqual(built.mapping,{1:1,3:2,5:3});
+    const reopened=project.readProject(built.entries);
+    assert.equal(reopened.colors.length,3);
+    const used=project.analyse(reopened,reopened.plates[0].id,null).sourceColors;
+    assert.deepEqual(new Set(Object.values(used)),new Set([FIVE.colours[0],FIVE.colours[2],FIVE.colours[4]]));
+  }
+  const restored=project.convertProject(parsed,1,null,{target:'orca',assignmentMode:'slots',removeUnused:true,includeUnused:[4]});
+  assert.equal(Object.values(restored.colours).length,4);
+  assert.equal(restored.mapping[4],3);
+});
+
+await ok('support-only filament selectors retain their numbered slots', () => {
+  const entries=source({...FIVE,base:1,codes:['4']});
+  const cfg=JSON.parse(decoder.decode(entries.get('Metadata/project_settings.config')));
+  cfg.support_interface_filament=['4'];
+  entries.set('Metadata/project_settings.config',encoder.encode(JSON.stringify(cfg)));
+  const parsed=project.readProject(entries);
+  assert.deepEqual(project.conversionUsage(parsed).unused,[5]);
+  const built=project.convertProject(parsed,1,null,{target:'snapmaker',removeUnused:true});
+  assert.equal(Object.values(built.colours).length,4);
+});
+
 if (failures.length) {
   console.error(`\n${failures.length} conversion check(s) failed`);
   process.exitCode = 1;

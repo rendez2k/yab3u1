@@ -82,6 +82,26 @@ export class ConvertSession {
     return this.rules[this.assignmentMode] || {};
   }
 
+  activeColourIds() {
+    if (!this.state) return [];
+    const usage = this.state.filamentUsage;
+    return this.state.colours.map((_,i)=>i+1).filter(id=>!usage || usage.kept.includes(id) || this.state.includeUnused.includes(id));
+  }
+
+  setUnused(source, include) {
+    if (!this.state?.filamentUsage?.unused.includes(source)) return false;
+    const selected = new Set(this.state.includeUnused);
+    if (include) selected.add(source); else selected.delete(source);
+    this.state.includeUnused = [...selected];
+    // A changed palette starts fresh so a now-excluded slot cannot remain a
+    // destination of an earlier arrangement or repaint.
+    const count = this.state.colours.length;
+    this.rules = { [SLOTS]: identityRule(count), [REPAINT]: identityRule(count) };
+    this.invalidate();
+    if (this.hooks.loaded) this.hooks.loaded(this.state);
+    return true;
+  }
+
   planningLayout() {
     const ids = this.state?.plates.find(p => String(p.id) === String(this.state.plateId))?.objectIds;
     const objects = (this.state?.objectSettings || []).filter(o => !ids || ids.map(String).includes(String(o.id)));
@@ -357,6 +377,8 @@ export class ConvertSession {
         title: reply.meta.title && !/^(model|untitled|u1 project)$/i.test(reply.meta.title.trim())
           ? reply.meta.title : String(file.name || "model").replace(/\.3mf$/i, ""),
         colours: reply.meta.colors.slice(),
+        filamentUsage: reply.meta.filamentUsage || null,
+        includeUnused: [],
         types: reply.meta.types.slice(),
         warnings: (reply.meta.warnings || []).slice(),
         mixtures: (reply.summary && reply.summary.mixtures) || [],
@@ -434,6 +456,7 @@ export class ConvertSession {
     const rule = this.rule;
     if (!this.state || !(from in rule)) return false;
     if (!Number.isInteger(to) || to < 1 || to > this.state.colours.length) return false;
+    if (!this.activeColourIds().includes(from) || !this.activeColourIds().includes(to)) return false;
     if (rule[from] === to) return false;
     if (this.assignmentMode === SLOTS) {
       const displaced = Object.keys(rule).map(Number)
@@ -496,6 +519,7 @@ export class ConvertSession {
       // writing must not let it publish, and the page's thumbnail has to be
       // drawn with the palette *this* mode writes.
       assignmentMode: this.assignmentMode,
+      includeUnused: this.state.includeUnused.slice(),
       layout: this.planningLayout(),
       preserveSourceSettings: this.preserveSourceSettings,
       carrySettings: this.carrySettings,
@@ -530,6 +554,8 @@ export class ConvertSession {
                                                   snapshot.target, snapshot.mapping,
                                                   snapshot.title,
                                                   { thumbnails,
+                                                    removeUnused: true,
+                                                    includeUnused: snapshot.includeUnused,
                                                     layout: snapshot.layout,
                                                     preserveSourceSettings:
                                                       snapshot.preserveSourceSettings,
@@ -550,7 +576,7 @@ export class ConvertSession {
         plateId: snapshot.plateId,
         mapping: snapshot.mapping,
         assignmentMode: snapshot.assignmentMode,
-        colours: snapshot.colours,
+        colours: built.colours || snapshot.colours,
         bytes: bytes.length,
         ms: built.ms || 0,
         // What the export really did with the source's print intent: the page

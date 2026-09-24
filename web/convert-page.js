@@ -15,7 +15,7 @@ import { planLayout } from "./shared/layout.js";
 import { supportOf, transferSettings } from "./shared/printSettings.js";
 import { initBatch } from "./batch-page.js";
 
-const VERSION = "2.6.0-preview";
+const VERSION = "2.6.0-preview.4";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -28,6 +28,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "Unused filaments start unticked on the main converter. Restore any individually before export; model colours, part defaults and reserved process slots are kept.",
   "Fixed Snapmaker Orca reverting transferred quality, strength and support settings to preset defaults on opening an export. Download a fresh conversion to apply this fix to older files.",
   "Bulk conversion: add several projects, choose one destination and download a ZIP with one 3MF per plate plus a conversion report. Files run one at a time; stopping keeps completed outputs.",
   "Compatible designer quality, strength and support settings now travel to every target by default, with a transfer-details list.",
@@ -246,12 +247,13 @@ function paletteTable(colours) {
 /** One label shape everywhere a filament is chosen: the slot number, the plain
  *  name, then the hex that tells two similar shades apart. */
 function optionsFor(palette) {
-  return palette.map((colour, index) =>
-    `<option value="${index + 1}">${index + 1} · ${esc(colourName(colour))} · `
-    + `${esc(hex(colour))}</option>`).join("");
+  const active = session.activeColourIds();
+  return palette.map((colour, index) => active.includes(index+1) ?
+    `<option value="${index + 1}">${active.indexOf(index+1)+1} · ${esc(colourName(colour))} · `
+    + `${esc(hex(colour))}</option>` : '').join("");
 }
 
-const paletteSignature = (palette) => palette.map((colour) => hex(colour)).join(",");
+const paletteSignature = (palette) => palette.map((colour) => hex(colour)).join(",") + ':' + session.activeColourIds().join(',');
 
 /** Point a select at one palette, keeping the choice that is already made.
  *
@@ -293,6 +295,7 @@ function renderChoices(state) {
 
   const rows = state.colours.map((colour, index) => {
     const source = index + 1;
+    if (!session.activeColourIds().includes(source)) return '';
     return `<div class="maprow" data-source="${source}">`
       + `<span class="swatch" style="background:${esc(hex(colour))}" aria-hidden="true"></span>`
       + `<span class="mapid">${source} · ${esc(colourName(colour))} · `
@@ -305,6 +308,10 @@ function renderChoices(state) {
       + `data-palette="${esc(signature)}">${options}</select></div>`;
   }).join("");
   $("convertmap").innerHTML = rows;
+  const unused = state.filamentUsage?.unused || [];
+  $("unusedfilaments").innerHTML = unused.length ? `<strong>${unused.length} unused filament${unused.length===1?'':'s'} found</strong><p>Unticked filaments are left out of the export. Tick any you want to keep. Changing this selection resets slot assignments.</p>`
+    + unused.map(id=>`<label style="display:flex;align-items:center;gap:8px;margin:8px 0"><input type="checkbox" data-unused="${id}" ${state.includeUnused.includes(id)?'checked':''}><span class="swatch" style="background:${esc(hex(state.colours[id-1]))}"></span>Keep unused filament ${id} · ${esc(swatchLabel(state.colours[id-1]))}</label>`).join('') : '';
+  $("unusedfilaments").querySelectorAll('[data-unused]').forEach(input=>input.addEventListener('change',()=>{session.setUnused(Number(input.dataset.unused),input.checked);refreshPreview();}));
 
   $("convertpick").classList.remove("hidden");
   syncMode();
@@ -315,7 +322,7 @@ function renderChoices(state) {
   window.__convertLoaded = { kind: state.kind, colours: state.colours.length,
                              triangles: summary.triangles || 0,
                              plates: state.plates.length };
-  setStatus(`${state.title || "model"}: ${state.colours.length} source filament(s), `
+  setStatus(`${state.title || "model"}: ${session.activeColourIds().length} of ${state.colours.length} source filaments selected${unused.length ? ` · ${unused.length-state.includeUnused.length} unused left out` : ''}, `
     + `${(summary.triangles || 0).toLocaleString()} triangles on `
     + `${state.plates.length} plate(s). Nothing has been uploaded.`);
 }
@@ -544,7 +551,7 @@ function syncRule() {
       slots
         ? `<b>${esc(colourName(colours[source - 1]))}</b> `
           + `(${esc(hex(colours[source - 1]))}) prints from filament `
-          + `<b>${destination}</b>`
+          + `<b>${session.activeColourIds().indexOf(destination)+1}</b>`
         : `<b>${source}</b> ${esc(swatchLabel(colours[source - 1]))} &rarr; `
           + `<b>${destination}</b> ${esc(swatchLabel(colours[destination - 1]))}`
     ).join(", ")
