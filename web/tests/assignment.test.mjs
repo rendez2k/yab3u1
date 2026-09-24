@@ -168,6 +168,14 @@ await ok("a rule that is silent about a colour keeps that colour where it is", (
   assert.equal(isIdentity({ 1: 2, 2: 1, 3: 3, 4: 4 }), false);
 });
 
+await ok('a spare physical slot leaves a hole without changing output appearance', () => {
+  const colours=['#FFFFFF','#000000','#C12E1F'];
+  const plan=assignmentPlan('slots',colours,{3:4});
+  assert.deepEqual(plan.palette,['#FFFFFF','#000000',null,'#C12E1F']);
+  assert.equal(bijectionProblem(plan.mapping,3,4),null);
+  for(let id=1;id<=3;id++) assert.equal(plan.palette[plan.mapping[id]-1],colours[id-1]);
+});
+
 if (failures.length) {
   console.error(`\n${failures.length} assignment check(s) failed`);
   process.exitCode = 1;

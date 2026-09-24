@@ -78,6 +78,18 @@ if(existsSync(path)) {
   assert.ok(bounds.min[0]>=4.5-1e-6 && bounds.max[0]<=266.5+1e-6);
   assert.ok(bounds.min[1]>=5-1e-6 && bounds.max[1]<=267+1e-6);
  }
+ const slotted=p.convertProject(ghost,1,null,{target:'snapmaker',assignmentMode:'slots',mapping:{3:4},removeUnused:true,layout});
+ assert.equal(slotted.mapping[3],4);
+ const slottedCfg=JSON.parse(dec.decode(slotted.entries.get('Metadata/project_settings.config')));
+ assert.equal(slottedCfg.filament_colour[3],'#C12E1FFF');
+ assert.equal(slottedCfg.filament_diameter.length,4);
+ assert.equal(slottedCfg.filament_settings_id.length,4);
+ const slottedProject=p.readProject(slotted.entries,{allowNegative:true});
+ for(const meta of slottedProject.meta.values()) {
+  assert.equal(Number(meta.parts.find(part=>part.name==='ghost with heart.obj_6').extruder),4);
+  assert.ok(meta.parts.every(part=>Number(part.extruder)!==3),'unused slot has no assigned parts');
+ }
+ console.log('PASS real ghost red stays in slot 4, all clones retain cutouts and slot 3 is unused');
  console.log('PASS real ghost fill:',instances.length,'copies, 4mm edge clearance, three named filament presets');
 }
 console.log('negative volumes ok');

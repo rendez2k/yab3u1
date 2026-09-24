@@ -88,6 +88,14 @@ export class ConvertSession {
     return this.state.colours.map((_,i)=>i+1).filter(id=>!usage || usage.kept.includes(id) || this.state.includeUnused.includes(id));
   }
 
+  physicalSlots() { return this.target === "snapmaker" && this.assignmentMode === SLOTS; }
+
+  destinationIds() {
+    return this.physicalSlots()
+      ? Array.from({length: Math.max(4, this.state?.colours.length || 0)}, (_,i)=>i+1)
+      : this.activeColourIds();
+  }
+
   setUnused(source, include) {
     if (!this.state?.filamentUsage?.unused.includes(source)) return false;
     const selected = new Set(this.state.includeUnused);
@@ -180,12 +188,16 @@ export class ConvertSession {
       this.genericArea = { width: this.layout.width, depth: this.layout.depth };
     }
     this.target = target;
+    if (target !== "snapmaker" && this.state && Object.values(this.rules[SLOTS]).some(id => !this.activeColourIds().includes(id))) {
+      this.rules[SLOTS] = identityRule(this.state.colours.length);
+    }
     this.layout = targetLayout(target, { ...this.layout, ...this.genericArea });
     if (target === "snapmaker" && /^(width|depth) /.test(this.layoutProblem || "")) {
       this.layoutProblem = "";
     }
     this.invalidate();
     if (this.hooks.layout) this.hooks.layout(this.layout);
+    if (this.hooks.rule) this.hooks.rule(this.rule);
     return true;
   }
 
@@ -457,8 +469,7 @@ export class ConvertSession {
     const to = Number(destination);
     const rule = this.rule;
     if (!this.state || !(from in rule)) return false;
-    if (!Number.isInteger(to) || to < 1 || to > this.state.colours.length) return false;
-    if (!this.activeColourIds().includes(from) || !this.activeColourIds().includes(to)) return false;
+    if (!this.activeColourIds().includes(from) || !this.destinationIds().includes(to)) return false;
     if (rule[from] === to) return false;
     if (this.assignmentMode === SLOTS) {
       const displaced = Object.keys(rule).map(Number)
@@ -500,7 +511,7 @@ export class ConvertSession {
   /** The sources whose destination is not their own filament, in order. */
   changes() {
     return Object.keys(this.rule).map(Number).sort((a, b) => a - b)
-      .filter((source) => this.rule[source] !== source)
+      .filter((source) => this.activeColourIds().includes(source) && this.rule[source] !== source)
       .map((source) => ({ source, destination: this.rule[source] }));
   }
 

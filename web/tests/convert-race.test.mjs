@@ -411,7 +411,7 @@ await ok('unused filaments start deselected and can be restored without stale ex
   const session=new ConvertSession(()=>worker,{},urls);
   await load(session,worker,'unused.3mf');
   assert.deepEqual(session.activeColourIds(),[1,3]);
-  assert.equal(session.setSource(1,2),false);
+  assert.equal(session.setSource(1,2),true, "unused U1 slot can receive a used colour");
   session.setUnused(2,true);
   assert.deepEqual(session.activeColourIds(),[1,2,3]);
   session.setSource(1,2);
@@ -423,6 +423,28 @@ await ok('unused filaments start deselected and can be restored without stale ex
   assert.equal(await pending,null);
   assert.deepEqual(session.rule,identityRule(3));
   assert.deepEqual(session.activeColourIds(),[1,3]);
+});
+
+await ok('three source colours can use physical U1 slot four and swap occupied slots', async () => {
+  const worker=new FakeWorker(project('three colours'));
+  const session=new ConvertSession(()=>worker,{},urls);
+  await load(session,worker,'three.3mf');
+  assert.deepEqual(session.destinationIds(),[1,2,3,4]);
+  assert.equal(session.setSource(3,4),true);
+  assert.deepEqual(session.rule,{1:1,2:2,3:4});
+  session.setSource(1,4);
+  assert.deepEqual(session.rule,{1:4,2:2,3:1});
+  session.reset();
+  assert.deepEqual(session.rule,identityRule(3));
+  session.setSource(3,4);
+  session.setAssignmentMode('repaint');
+  assert.deepEqual(session.destinationIds(),[1,2,3]);
+  assert.equal(session.setSource(3,4),false);
+  session.setAssignmentMode('slots');
+  assert.equal(session.rule[3],4);
+  session.setTarget('bambu');
+  assert.deepEqual(session.destinationIds(),[1,2,3]);
+  assert.deepEqual(session.rule,identityRule(3));
 });
 
 if (failures.length) {

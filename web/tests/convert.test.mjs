@@ -725,15 +725,17 @@ await ok("a real five-colour Prusa alien converts to Bambu with every filament",
     + `${count(text).toLocaleString()} triangles, paint rewritten`);
 });
 
-await ok('unused slots compact across all targets without changing painted colours', () => {
+await ok('unused colours compact on portable targets and preserve physical U1 numbering', () => {
   const parsed = project.readProject(source({...FIVE, base:1, codes:['4','0C','2C']}));
   assert.deepEqual(project.conversionUsage(parsed).unused,[2,4]);
   for (const target of ['snapmaker','bambu','orca','prusa']) {
     const built = project.convertProject(parsed,1,null,{target,assignmentMode:'slots',removeUnused:true});
-    assert.deepEqual(Object.values(built.colours),[FIVE.colours[0],FIVE.colours[2],FIVE.colours[4]]);
-    assert.deepEqual(built.mapping,{1:1,3:2,5:3});
+    assert.deepEqual(Object.values(built.colours),target==='snapmaker'
+      ? [FIVE.colours[0],'#FFFFFF',FIVE.colours[2],'#FFFFFF',FIVE.colours[4]]
+      : [FIVE.colours[0],FIVE.colours[2],FIVE.colours[4]]);
+    assert.deepEqual(built.mapping,target==='snapmaker'?{1:1,3:3,5:5}:{1:1,3:2,5:3});
     const reopened=project.readProject(built.entries);
-    assert.equal(reopened.colors.length,3);
+    assert.equal(reopened.colors.length,target==='snapmaker'?5:3);
     const used=project.analyse(reopened,reopened.plates[0].id,null).sourceColors;
     assert.deepEqual(new Set(Object.values(used)),new Set([FIVE.colours[0],FIVE.colours[2],FIVE.colours[4]]));
   }

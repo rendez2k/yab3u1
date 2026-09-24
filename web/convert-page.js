@@ -15,7 +15,7 @@ import { planLayout } from "./shared/layout.js";
 import { supportOf, transferSettings } from "./shared/printSettings.js";
 import { initBatch } from "./batch-page.js";
 
-const VERSION = "2.6.0-preview.6";
+const VERSION = "2.6.0-preview.7";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -28,6 +28,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "Arrange slots offers all four U1 positions, even for fewer colours. A colour assigned to slot 4 stays in slot 4; any empty gap is unused by the model.",
   "U1 layouts keep 4 mm clear at every bed edge for spiral lifting. Compacted exports no longer retain extra filament diameter entries that could create an unnamed preset.",
   "Negative cutout volumes now open in the main converter and keep their roles and transforms in Snapmaker, Bambu and Orca projects. Prusa multi-volume output remains unsupported; preview cutouts must be checked in the slicer.",
   "Unused filaments start unticked on the main converter. Restore any individually before export; model colours, part defaults and reserved process slots are kept.",
@@ -150,7 +151,11 @@ function renderOutput(entry) {
       : " The source's print settings were left at the U1 profile's own values.")
       + ` ${cap(entry.settings.support)}.`
     : "";
-  setStatus(`Wrote ${entry.name} with ${entry.colours.length} filament(s)`
+  const filamentSummary = rearranged && entry.target === "snapmaker"
+    && entry.colours.length > session.activeColourIds().length
+    ? `${entry.colours.length} slot entries (${session.activeColourIds().length} selected colours; gaps are unused)`
+    : `${entry.colours.length} filament(s)`;
+  setStatus(`Wrote ${entry.name} with ${filamentSummary}`
     + (changed.length
       ? (rearranged
         ? `, with ${changed.length} colour(s) printed from another filament and `
@@ -250,12 +255,15 @@ function paletteTable(colours) {
  *  name, then the hex that tells two similar shades apart. */
 function optionsFor(palette) {
   const active = session.activeColourIds();
-  return palette.map((colour, index) => active.includes(index+1) ?
-    `<option value="${index + 1}">${active.indexOf(index+1)+1} · ${esc(colourName(colour))} · `
-    + `${esc(hex(colour))}</option>` : '').join("");
+  const occupied = new Set(active.map(id=>session.rule[id]));
+  return session.destinationIds().map(id => {
+    if (session.physicalSlots() && !occupied.has(id)) return `<option value="${id}">${id} · Unused slot</option>`;
+    const colour = palette[id-1];
+    return `<option value="${id}">${session.physicalSlots() ? id : active.indexOf(id)+1} · ${esc(colourName(colour))} · ${esc(hex(colour))}</option>`;
+  }).join("");
 }
 
-const paletteSignature = (palette) => palette.map((colour) => hex(colour)).join(",") + ':' + session.activeColourIds().join(',');
+const paletteSignature = (palette) => JSON.stringify([palette, session.activeColourIds(), session.destinationIds(), session.rule, session.physicalSlots()]);
 
 /** Point a select at one palette, keeping the choice that is already made.
  *
@@ -516,7 +524,9 @@ function syncMode() {
     node.checked = node.value === mode;
   });
   const hint = $("convertmaphint");
-  if (hint) hint.textContent = MODE_HINT[mode];
+  if (hint) hint.textContent = session.physicalSlots()
+    ? "Choose the physical U1 slot where each colour is loaded. All four slots are available, including unused ones. Moving onto an occupied slot swaps its colour. Unused slots have no model regions assigned."
+    : MODE_HINT[mode];
   const note = $("previewmodehint");
   if (note) {
     note.textContent = mode === SLOTS
@@ -531,6 +541,7 @@ function syncMode() {
  *  line from the session. */
 function syncRule() {
   if (!session.state) return;
+  syncMode();
   const { colours } = session.state;
   // What this mode really writes: an arranged slot has a rearranged palette, so
   // the swatch shows the colour that will be in that slot, not the one that was
@@ -556,15 +567,15 @@ function syncRule() {
       slots
         ? `<b>${esc(colourName(colours[source - 1]))}</b> `
           + `(${esc(hex(colours[source - 1]))}) prints from filament `
-          + `<b>${session.activeColourIds().indexOf(destination)+1}</b>`
+          + `<b>${session.physicalSlots() ? destination : session.activeColourIds().indexOf(destination)+1}</b>`
         : `<b>${source}</b> ${esc(swatchLabel(colours[source - 1]))} &rarr; `
           + `<b>${destination}</b> ${esc(swatchLabel(colours[destination - 1]))}`
     ).join(", ")
       + (changes.length > 6 ? `, and ${changes.length - 6} more` : "")
       + (slots
-        ? `; ${colours.length - changes.length} other filament(s) keep their own `
+        ? `; ${session.activeColourIds().length - changes.length} other filament(s) keep their own `
           + "colour, and every colour keeps its appearance."
-        : `; ${colours.length - changes.length} other filament(s) keep their own `
+        : `; ${session.activeColourIds().length - changes.length} other filament(s) keep their own `
           + "colour.")
     : (slots
       ? "Chosen for export: every colour keeps its own filament and its own "

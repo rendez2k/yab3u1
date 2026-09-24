@@ -1926,16 +1926,25 @@ export function convertProject(project, plateId, objectIds, options = {}) {
   let physical = palette;
   if (slots) {
     const rule = completeRule(mapping, size);
-    const problem = size ? bijectionProblem(rule, size) : null;
+    const problem = size ? bijectionProblem(rule, size, options.target === "snapmaker" ? Math.max(4, size) : size) : null;
     if (problem) {
       throw new ProjectError(`this slot arrangement cannot be written: ${problem}`);
     }
-    physical = arrange(palette, rule);
+    physical = arrange(palette, rule, Math.max(size, ...Object.values(rule)))
+      .map(reel => reel || {color: "#FFFFFF", type: "PLA"});
   }
   if (options.removeUnused === true) {
     const usage = conversionUsage(project);
     const kept = [...new Set([...usage.kept, ...(options.includeUnused || []).filter(id=>usage.unused.includes(id))])];
     const destinations = [...new Set([...kept.map(id=>mapping[id]), ...Array.from({length:usage.reservedThrough},(_,i)=>i+1)])].sort((a,b)=>a-b);
+    // Physical U1 slot numbers must survive unused-colour cleanup. A neutral
+    // unused entry holds any gap; no model region is assigned to that entry.
+    if (slots && options.target === "snapmaker") {
+      const occupied = new Set(destinations);
+      const last = Math.max(...destinations);
+      destinations.splice(0, destinations.length, ...Array.from({length:last}, (_,i)=>i+1));
+      physical = physical.map((reel,i) => occupied.has(i+1) ? reel : {color:"#FFFFFF",type:"PLA"});
+    }
     const compact = new Map(destinations.map((id,index)=>[id,index+1]));
     physical = destinations.map(id=>physical[id-1]);
     for (const source of Object.keys(mapping)) {

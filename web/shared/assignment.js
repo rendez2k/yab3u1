@@ -10,8 +10,8 @@
 //            their colours merge; this is what "reassign filaments" always did.
 //   slots    the palette is written rearranged: every colour travels to the slot
 //            it was sent to and the paint names that slot, so the model keeps
-//            exactly the appearance it had.  The map is therefore a bijection
-//            over the whole palette, and a destination that is already taken
+//            exactly the appearance it had.  Each source has a distinct destination
+//            (spare physical slots may remain empty), and a destination that is already taken
 //            displaces the colour sitting there back to the vacated slot.
 //
 // Everything here is offline and deterministic: no names are looked up over the
@@ -61,16 +61,16 @@ export function isIdentity(rule) {
 /**
  * Why `rule` cannot be a slot arrangement over `count` filaments, or null.
  *
- * Arranging slots keeps every colour, so the map has to be a complete bijection:
+ * Arranging slots keeps every colour, so the map must be one-to-one:
  * every source names a destination, and no two sources name the same one.
  */
-export function bijectionProblem(rule, count) {
+export function bijectionProblem(rule, count, capacity = count) {
   const seen = new Map();
   for (let source = 1; source <= count; source += 1) {
     const at = Number((rule || {})[source]);
-    if (!Number.isInteger(at) || at < 1 || at > count) {
+    if (!Number.isInteger(at) || at < 1 || at > capacity) {
       return `colour ${source} is sent to filament ${at}, which is outside the `
-        + `${count} filament(s) this file has`;
+        + `${capacity} available filament slot(s)`;
     }
     if (seen.has(at)) {
       return `colours ${seen.get(at)} and ${source} both ask for filament ${at}, and `
@@ -87,22 +87,20 @@ export function bijectionProblem(rule, count) {
  * `slotSources(4, {1:3, 3:1})` gives `[3, 2, 1, 4]`: slot 1 holds source 3, slot
  * 2 keeps source 2, slot 3 holds source 1, slot 4 keeps source 4.
  */
-export function slotSources(count, rule) {
-  const order = new Array(count);
+export function slotSources(count, rule, capacity = count) {
+  const order = new Array(capacity).fill(null);
+  const completed = completeRule(rule, count);
   for (let source = 1; source <= count; source += 1) {
-    const at = Number((rule || {})[source]);
-    if (Number.isInteger(at) && at >= 1 && at <= count) order[at - 1] = source;
-  }
-  for (let index = 0; index < count; index += 1) {
-    if (order[index] === undefined) order[index] = index + 1;
+    const at = Number(completed[source]);
+    if (Number.isInteger(at) && at >= 1 && at <= capacity) order[at - 1] = source;
   }
   return order;
 }
 
 /** The palette in slot order after an arrangement: colours and types travel
  *  together, so a material never stays behind with the colour it belonged to. */
-export function arrange(list, rule) {
-  return slotSources(list.length, rule).map((source) => list[source - 1]);
+export function arrange(list, rule, capacity = list.length) {
+  return slotSources(list.length, rule, capacity).map((source) => source === null ? null : list[source - 1]);
 }
 
 /**
@@ -119,7 +117,7 @@ export function assignmentPlan(mode, colours, rule) {
   // mode -- is the repaint the writer always did, so a caller that forgets the
   // mode cannot accidentally move someone's colours.
   if (mode === SLOTS) {
-    return { mode: SLOTS, palette: arrange(list, mapping), mapping };
+    return { mode: SLOTS, palette: arrange(list, mapping, Math.max(list.length, ...Object.values(mapping))), mapping };
   }
   return { mode: REPAINT, palette: list, mapping };
 }

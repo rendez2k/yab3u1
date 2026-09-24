@@ -7,6 +7,12 @@ section here together.
 
 ## Unreleased — experimental U1 reel-change export
 
+Main converter review 2.6.0-preview.7 offers all four physical U1 slots even
+when a file contains fewer colours. Arrange slots preserves the chosen numbers
+through unused-colour cleanup; unassigned gaps use neutral placeholder entries
+with no model parts painted to them. Repaint mode still offers only actual
+source colours. Moving onto an occupied slot swaps colours as before.
+
 Main converter review 2.6.0-preview.6 keeps a 4 mm U1 bed-edge clearance
 for spiral lifting, in addition to clone spacing and print-addition allowances.
 The exported filament diameter count now matches the selected colour count,
