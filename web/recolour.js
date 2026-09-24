@@ -5,7 +5,7 @@
 // The browser engine has parity tests against the local Python implementation.
 // The renderer is shared with the local page.
 
-import { comparison, norm, suggestMapping } from "./shared/colour.js";
+import { comparison, distance, norm, suggestMapping } from "./shared/colour.js";
 import { describeColourMapping, mappingFromPlan, planBlends, plausibleBlend } from "./shared/mix.js";
 import { Preview } from "./shared/preview.js";
 import { LABELS, RECOLOUR_TARGETS } from "./shared/targets.js";
@@ -16,7 +16,7 @@ import { mountSpoolImport } from "./shared/spoolImport.js";
 import { colourName } from "./shared/assignment.js";
 
 const REEL_KEY = "yab3u1-web-reels";
-const VERSION = "2.6.0-preview.2";
+const VERSION = "2.6.0-preview.3";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -29,7 +29,7 @@ const state = {
   previewMode: "result", preview: null, previewGeometry: "", previewFailed: "",
   // What the export does with the file's colours: keep them, substitute them onto
   // the reels (with per-colour overrides), or use the blends that are ticked.
-  strategy: "blend", overrides: {}, recipeKey: "", reviewed: false,
+  strategy: "blend", overrides: {}, recipeKey: "", reviewed: false, approximate: false,
   stock: null, locked: [false,false,false,false], recommendation: null, recommendationSearch: null, reelView: "loaded",
   loadedTuning: null, recommendationOptions: [], recommendationIndex: 0, showMorePalettes: false,
   // Bumped on every upload so a slow read of the previous file cannot land on top
@@ -80,8 +80,12 @@ function invalidateRecommendation() {
   renderRecommendation('Updating colour suggestions…');
   clearReview();
 }
+function activeApproximation() {
+  return state.reelView==='recommended' ? Boolean(state.recommendation?.approximate) : state.approximate;
+}
 function paletteTitle(option,index) {
-  return index ? `Alternative ${index}` : 'Recommended';
+  return option.approximate ? (option.usesLoaded ? 'Approximation with loaded reels' : 'Approximate blend palette')
+    : index ? `Close-match alternative ${index}` : 'Closest reproduction';
 }
 function paletteCoverage(option) {
   const {counts,rows,blendCount}=option.outcome;
@@ -90,16 +94,17 @@ function paletteCoverage(option) {
   const detail=missing.length
     ? `<strong>Cannot reproduce all colours</strong><span>No suitable blend for: ${missing.map(color=>`${esc(colourName(color))} (${esc(color)})`).join(', ')}.</span>`
     : counts.substituted ? `<strong>${counts.substituted} source colour(s) replaced</strong><span>Solid colours selected; no extra shades are created.</span>`
-    : `<strong>All source colours covered in the estimate</strong>`;
-  return `<span class="palettecoverage">${detail}<span>${counts.preserved} matched to reels · ${blendCount} blend recipe${blendCount===1?'':'s'}</span>${recipes.map(row=>`<span>${esc(colourName(row.original))} (${esc(row.original)}) → ${100-row.recipe.percent}% slot ${row.recipe.a} + ${row.recipe.percent}% slot ${row.recipe.b}</span>`).join('')}</span>`;
+    : option.approximate ? '<strong>Approximation · colours will change</strong>' : `<strong>All source colours closely covered in the estimate</strong>`;
+  return `<span class="palettecoverage">${detail}<span>${counts.preserved} matched to reels · ${blendCount} blend recipe${blendCount===1?'':'s'}</span>${recipes.map(row=>`<span>${esc(colourName(row.original))} (${esc(row.original)}) → <i class="swatch" style="background:${esc(row.result)}"></i> ${esc(colourName(row.result))} (${esc(row.result)})${distance(row.original,row.result)>25?' · large change':distance(row.original,row.result)>12?' · noticeable change':''}<br>${100-row.recipe.percent}% slot ${row.recipe.a} + ${row.recipe.percent}% slot ${row.recipe.b}</span>`).join('')}</span>`;
 }
 function renderRecommendation(message) {
+  $("recommendstatus").dataset.busy=String(Boolean(recommendationWorker));
   const result=state.recommendation;
   const focusedPalette=document.activeElement?.dataset?.palette;
   const choices=state.recommendationOptions.map((option,index)=>({option,index}))
-    .filter(({index})=>state.showMorePalettes || index<3 || (state.reelView==='recommended' && index===state.recommendationIndex));
+    .filter(({option,index})=>state.showMorePalettes || index<3 || option.usesLoaded || (option.approximate && state.recommendationOptions.findIndex(p=>p.approximate)===index) || (state.reelView==='recommended' && index===state.recommendationIndex));
   $("palettechoices").innerHTML=choices.map(({option,index})=>
-    `<button type="button" class="palettechoice" data-palette="${index}" aria-pressed="${state.reelView==='recommended' && state.recommendationIndex===index && state.previewMode==='result'}">
+    `<button type="button" class="palettechoice${option.approximate?' approximate':''}" data-palette="${index}" aria-pressed="${state.reelView==='recommended' && state.recommendationIndex===index && state.previewMode==='result'}">
       <span class="palettetitle"><strong>${paletteTitle(option,index)}</strong><small>${esc(option.type)}${state.reelView==='recommended' && state.recommendationIndex===index?' · Selected':''}</small></span>
       <span class="palettechips">${option.reels.map((r,i)=>`<span class="palettechip"><i style="background:${esc(r.color)}"></i>${i+1} · ${esc(r.name || colourName(r.color))}${state.locked[i]?' · locked':''}</span>`).join('')}</span>
       ${paletteCoverage(option)}
@@ -112,16 +117,17 @@ function renderRecommendation(message) {
     showReelView('recommended');
   }));
   if(focusedPalette!==undefined) $("palettechoices").querySelector(`[data-palette="${Number(focusedPalette)}"]`)?.focus({preventScroll:true});
-  $("morepalettes").hidden=state.recommendationOptions.length<=3;
+  $("morepalettes").hidden=!state.showMorePalettes && choices.length===state.recommendationOptions.length;
   $("morepalettes").textContent=state.showMorePalettes ? 'Fewer palettes' : 'More palettes';
   $("morepalettes").setAttribute('aria-expanded',String(state.showMorePalettes));
   if(message) $("recommendstatus").textContent=message;
+  else if(state.recommendationSearch?.found===false && result) $("recommendstatus").textContent='No close reproduction found. These blends approximate the missing colours. Compare the original and predicted shades, then choose whether the changes work for you.';
   else if(state.recommendationSearch?.found===false) $("recommendstatus").textContent=state.recommendationSearch.reason
     + ' Try unlocking slots or connect Spool Studio to search the filaments you own. To accept colour replacements instead, choose Solid colours in Advanced. This is a search result, not proof that no palette could work.';
   else if(result) $("recommendstatus").textContent=(result.rough
     ? 'Approximate colours to look for. '
     : 'From your Spool Studio collection. ')
-    + (result.score < result.loadedScore-.1 ? 'Estimated closer than loaded.'
+    + (result.approximate ? 'Approximate blends: review the colour changes before applying.' : result.score < result.loadedScore-.1 ? 'Estimated closer than loaded.'
       : result.score > result.loadedScore+.1 ? 'Your loaded set scores better.'
       : 'Similar estimated match to loaded.');
   document.querySelectorAll('[data-reel-view]').forEach(button=>{
@@ -131,7 +137,7 @@ function renderRecommendation(message) {
   $("userecommended").disabled=!result;
   $("userecommended").hidden=!result;
   $("applypalettehint").hidden=!result;
-  $("userecommended").textContent='Apply palette';
+  $("userecommended").textContent=result?.approximate ? 'Apply approximate palette' : 'Apply palette';
   $("applypalettehint").textContent='Choose a palette to preview it. Apply when you want to use it in your export. Blend shades are estimates, not guaranteed print colours.';
   document.querySelectorAll('[data-preview]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.preview===state.previewMode)));
   $("reelviewnote").textContent=state.strategy==='source' ? "Showing the file's original colours; loaded and recommended reels are not used."
@@ -149,12 +155,13 @@ function requestRecommendation() {
   renderRecommendation('Finding a suggested set of four colours…');
   const worker=new Worker(new URL('./shared/recommendWorker.js',import.meta.url),{type:'module'});
   recommendationWorker=worker;
+  renderRecommendation('Comparing reels and blend recipes…');
   function finish(result,error) {
     if(recommendationWorker!==worker) return;
     worker.terminate(); recommendationWorker=null;
     state.recommendationSearch=result || null;
-    state.recommendation=result?.found ? result : null;
-    state.recommendationOptions=result?.found ? [result,...result.alternatives] : [];
+    state.recommendationOptions=result ? [...(result.found ? [result,...result.alternatives] : []),...(result.approximateOptions || [])] : [];
+    state.recommendation=state.recommendationOptions.length ? {...result,...state.recommendationOptions[0]} : null;
     state.recommendationIndex=0;
     renderRecommendation(error);
   }
@@ -180,6 +187,7 @@ $("morepalettes").addEventListener('click',()=>{
 });
 $("userecommended").addEventListener('click',()=>{
   if(!state.recommendation) return;
+  state.approximate=Boolean(state.recommendation.approximate);
   state.reels=state.recommendation.reels.map(({color,type,name})=>({color,type,name}));
   if(state.strategy==='source') {
     state.strategy='blend';
@@ -323,6 +331,7 @@ async function load(file) {
 /** While a file is being read, the page offers a way out instead of a freeze. */
 function setLoading(active) {
   state.loading = active;
+  $("loadstatus").dataset.busy=String(active);
   const cancel = $("loadcancel");
   if (cancel) cancel.classList.toggle("hidden", !active);
   const exportButton = $("export");
@@ -331,6 +340,7 @@ function setLoading(active) {
 }
 
 function resetForUpload() {
+  state.approximate=false;
   invalidateRecommendation();
   $("loadedmodel").classList.add("hidden");
   $("prepareswaps").disabled = true;
@@ -543,7 +553,7 @@ function useAssessed(assessed) {
   $("palettenote").textContent = extraColours
     ? `${surfaceColours} colours found on the selected model; ${extraColours} other palette entries are not used on its surface. The sliced-file check can confirm which can be left out of the reel load, including support and purge use.`
     : "";
-  state.mix = planBlends(assessed.sourceColors, activeReels());
+  state.mix = planBlends(assessed.sourceColors, activeReels(),activeApproximation());
   state.recipes = state.mix.recipes.filter(recipe=>plausibleBlend(
     activeReels()[recipe.a-1].color,activeReels()[recipe.b-1].color,recipe.color));
   /* Ticking belongs to one recipe set. A new set starts fully ticked; an empty set
@@ -641,7 +651,8 @@ function renderOutcome(payload=resultPlan()) {
   const changed=rows.filter(r=>r.kind!=='preserved');
   host.innerHTML=`<strong>${state.previewMode==='original' ? 'Selected export: ' : ''}${colours} source colours · ${outcome.blendCount ? `${outcome.blendCount} blend recipe${outcome.blendCount===1?'':'s'}` : 'No blends'}</strong>
     <p class="hint">${esc(tally)}</p>
-    <ul>${changed.map(row=>`<li>${swatch(row.original)}<span>${esc(name(row.original))} <small>${esc(row.original)}</small> → ${row.kind==='unresolved' ? '<strong>No suitable enabled blend</strong>' : row.kind==='blended' ? `slot ${row.recipe.a} + ${row.recipe.percent}% of slot ${row.recipe.b}` : `${swatch(row.result)}${esc(name(row.result))}`}</span></li>`).join('')}</ul>
+    <ul>${changed.map(row=>`<li>${swatch(row.original)}<span>${esc(name(row.original))} <small>${esc(row.original)}</small> → ${row.kind==='unresolved' ? '<strong>No suitable enabled blend</strong>' : row.kind==='blended' ? `${swatch(row.result)}${esc(name(row.result))} <small>${esc(row.result)}</small> · ${100-row.recipe.percent}% slot ${row.recipe.a} + ${row.recipe.percent}% slot ${row.recipe.b}${distance(row.original,row.result)>25?' · large change':distance(row.original,row.result)>12?' · noticeable change':''}` : `${swatch(row.result)}${esc(name(row.result))}`}</span></li>`).join('')}</ul>
+    ${activeApproximation() && state.strategy==='blend' ? '<p><strong>Approximate blends selected. Review the changed shades before exporting.</strong></p>' : ''}
     ${counts.unresolved ? '<p class="outcomewarning">Export blocked. Unresolved regions are highlighted pink in Loaded and Suggested views; pink is not an output filament.</p>' : counts.substituted ? '<p class="hint">Solid-colour replacement is selected. The listed source colours will change.</p>' : counts.blended ? '<p class="hint">Blend shades are uncalibrated estimates; they may differ in print.</p>' : ''}`;
 }
 
@@ -898,6 +909,9 @@ function renderExport() {
   const needsReview = state.strategy !== "source" && !blocking;
   reviewBox.parentElement.classList.toggle("hidden", !needsReview);
   reviewBox.checked = state.reviewed;
+  $("reviewtext").textContent=activeApproximation() && state.strategy==='blend'
+    ? 'I accept the approximate colour changes shown above, including any noticeable or large differences from the original.'
+    : 'I have checked the colour mapping and accept the substitutions and predicted blends.';
   $("export").disabled = state.loading || state.exporting || Boolean(blocking)
     || (needsReview && !state.reviewed);
   $("exportnote").textContent = blocking

@@ -225,6 +225,11 @@
   #spoolimport summary { font-size: 13px; }
   #recommendation { margin-top: 12px; padding-top: 20px; }
   #recommendstatus { font-size: 12px; margin-bottom: 16px; }
+  [data-busy="true"]::before { content: ""; display: inline-block; width: 26px; height: 26px; margin-right: 9px; vertical-align: middle; border-radius: 50%;
+    background: radial-gradient(circle at 28% 22%, #ffffffdd, transparent 34%), radial-gradient(circle at 68% 68%, #54c8de, transparent 58%), conic-gradient(#b1f439, #74dbaa, #82cfeb, #b1f439);
+    box-shadow: inset -2px -3px 5px #256b7833, 0 2px 9px #84d99144; animation: orb-drift 2.8s ease-in-out infinite; }
+  @keyframes orb-drift { 0%,100% { transform: rotate(0deg) scale(.92); border-radius: 48% 52% 50% 50%; } 50% { transform: rotate(180deg) scale(1); border-radius: 52% 48% 45% 55%; } }
+  @media (prefers-reduced-motion: reduce) { [data-busy="true"]::before { animation: none; } }
   #palettechoices { display: grid; gap: 10px; margin-bottom: 16px; }
   .palettechoice { text-align: left; width: 100%; padding: 14px; background: var(--panel); border-radius: 16px; }
   .palettechoice[aria-pressed=true] { border-color: var(--focus); background: var(--mint); }
@@ -392,7 +397,7 @@
     <h2>Export your project</h2>
     <p class="hint" id="exportnote" role="status"></p>
     <label class="check"><input type="checkbox" id="review">
-      I have checked the colour mapping and accept the substitutions and predicted blends.</label>
+      <span id="reviewtext">I have checked the colour mapping and accept the substitutions and predicted blends.</span></label>
     <div class="row">
       <button type="button" class="primary" id="export">Download the project</button>
     </div>

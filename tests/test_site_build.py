@@ -68,6 +68,7 @@ PUBLIC_FILES = (
     "shared/thumbnail.js",
     "shared/workerClient.js",
     "shared/vendor/prusa-fdm/color.js",
+    "shared/vendor/prusa-fdm/delta-e.js",
     "shared/vendor/prusa-fdm/yule-nielsen.js",
     "shared/vendor/prusa-fdm/prusa-fdm-mixer.js",
     "zip.js",

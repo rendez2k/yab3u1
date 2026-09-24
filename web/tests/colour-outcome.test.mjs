@@ -16,6 +16,13 @@ assert.equal(solid.counts.substituted,1);
 assert.equal(solid.counts.unresolved,0);
 const best=recommendPalette({sources,loaded:physical});
 assert.equal(best.found,false); // Incomplete sets are not offered as recommendations.
+const approximation=planBlends(sources,physical,true);
+const approxPayload={physical,mapping:mappingFromPlan(approximation),kept:approximation.recipes};
+const approxOutcome=describeColourMapping(sources,approxPayload,true);
+assert.equal(approxOutcome.counts.unresolved,0);
+assert.equal(approxOutcome.outputCount,5);
+assert(approximation.recipes.every(r=>r.approximate));
+assert.equal(describeColourMapping(sources,{...approxPayload,kept:[],mapping:mappingFromPlan(approximation,false)},true).counts.unresolved,1,'unticking an approximate recipe blocks its unmapped source');
 assert(!plausibleBlend('#FFFFFF','#000000','#647DA0'));
 assert(plausibleBlend('#FFFFFF','#000000','#888888'));
 const neutrals=['#FFFFFF','#000000','#888888','#CCCCCC'].map(color=>({color,type:'PLA'}));

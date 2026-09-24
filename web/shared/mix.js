@@ -7,7 +7,7 @@
 
 import { distance, nearest, norm } from "./colour.js";
 import { MIX_COEFFICIENTS, MIX_INTERCEPT, MIX_POWERS } from "./mix_model.js";
-import { mixFdmHex, FDM_MODEL } from './fdmMix.js';
+import { mixFdmHex, FDM_MODEL, approximateDistance } from './fdmMix.js';
 
 export const RATIOS = [25, 50, 75];
 export const MIN_IMPROVEMENT = 2.0;
@@ -74,18 +74,22 @@ export function candidateRecipes(reels, ratios = RATIOS, predictor = mixHex) {
 
 /** Compare every source colour with a single reel and with the best mixture. */
 export function planMixtures(sourceColors, reels, ratios = RATIOS,
-                             maxRecipes = 6, credibleOnly = false, predictor = mixHex) {
+                             maxRecipes = 6, credibleOnly = false, predictor = mixHex, allowApproximate = false) {
   const slotColors = reels.map((r) => norm((r || {}).color));
-  const candidates = candidateRecipes(reels, ratios, predictor).filter(recipe=>!credibleOnly ||
-    plausibleBlend(slotColors[recipe.a-1],slotColors[recipe.b-1],recipe.color));
+  const candidates = candidateRecipes(reels, ratios, predictor).filter(recipe=>(!allowApproximate || slotColors[recipe.a-1]!==slotColors[recipe.b-1]) && (!credibleOnly ||
+    plausibleBlend(slotColors[recipe.a-1],slotColors[recipe.b-1],recipe.color)));
   const rows = [];
   const used = new Map();
+  const approximateColours = new Map(slotColors.map(color=>[color,color]));
   Object.keys(sourceColors).map(Number).sort((a, b) => a - b).forEach((source) => {
     const original = norm(sourceColors[source]);
     const [solidSlot, solidError] = nearest(original, slotColors);
     let best = null;
     for (const recipe of candidates) {
-      const error = distance(original, recipe.color);
+      // Explicit approximations retain distinct source shades instead of merging
+      // two source colours onto one virtual recipe or an existing physical shade.
+      if(allowApproximate && approximateColours.has(recipe.color) && approximateColours.get(recipe.color)!==original) continue;
+      const error = (allowApproximate ? approximateDistance : distance)(original, recipe.color);
       if (!best || error < best.error) best = { recipe, error };
     }
     const solid = {
@@ -107,6 +111,9 @@ export function planMixtures(sourceColors, reels, ratios = RATIOS,
     if (exact) {
       choice = "solid";
       reason = "this colour is already one of the loaded reels";
+    } else if (allowApproximate && mixture) {
+      choice = "mixture";
+      reason = "closest available blend; review the changed colour before accepting";
     } else if (mixture && improvement !== null && improvement >= MIN_IMPROVEMENT
                && mixture.error <= POOR_COVERAGE) {
       choice = "mixture";
@@ -121,6 +128,7 @@ export function planMixtures(sourceColors, reels, ratios = RATIOS,
       reason = "no mixture is meaningfully closer than one reel";
     }
     if (choice === "mixture") {
+      if(allowApproximate) approximateColours.set(mixture.color,original);
       used.set(`${mixture.a},${mixture.b},${mixture.percent}`, {
         a: mixture.a, b: mixture.b, percent: mixture.percent, color: mixture.color,
         materials: material(reels[mixture.a - 1]),
@@ -223,9 +231,9 @@ export function plausibleBlend(first, second, predicted) {
 
 /** Interactive Full Spectrum planning rejects implausible predictions before
  * choosing a recipe, so a rejected nearest prediction cannot hide a valid one. */
-export function planBlends(sourceColors,reels) {
-  const plan=planMixtures(sourceColors,reels,RATIOS,6,true,mixFdmHex);
-  plan.recipes.forEach(recipe=>{recipe.model=FDM_MODEL;});
+export function planBlends(sourceColors,reels,approximate=false) {
+  const plan=planMixtures(sourceColors,reels,RATIOS,6,true,mixFdmHex,approximate);
+  plan.recipes.forEach(recipe=>{recipe.model=FDM_MODEL; if(approximate) recipe.approximate=true;});
   return plan;
 }
 

@@ -1,5 +1,15 @@
 # Full Spectrum research and review rebuild
 
+Update in review 2.6.0-preview.3: complete close reproduction is still the first
+category. The user can now separately preview/apply an approximate blend set,
+including one using loaded reels. Approximate recipes retain exact physical
+matches and choose distinct predicted shades for the remaining source colours.
+They use CIEDE2000 for ranking (the upstream MIT helper is vendored) and may have
+large differences, which are exposed beside the actual output colour. The
+export checkbox explicitly accepts these differences and is cleared on edits.
+Approximation is not silently enabled on loading a new file. The original strict
+thresholds below still define the close-match category, not approximate results.
+
 2026-09-24 · review 2.6.0-preview.2
 
 ## Findings

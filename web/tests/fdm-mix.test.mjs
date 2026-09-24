@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {mixFdmHex,FDM_MODEL} from '../shared/fdmMix.js';
+import {mixFdmHex,FDM_MODEL,approximateDistance} from '../shared/fdmMix.js';
 import {planBlends,mappingFromPlan} from '../shared/mix.js';
 import {palette} from '../shared/targets.js';
 import {readZip} from '../zip.js';
@@ -21,6 +21,8 @@ assert.equal(mixFdmHex('#FF0000','#0080C0',0),'#FF0000');
 assert.equal(mixFdmHex('#FF0000','#0080C0',100),'#0080C0');
 assert.equal(mixFdmHex('#123456','#123456',50),'#123456');
 assert.equal(mixFdmHex('bad','#FFFFFF',50),'');
+// Published Sharma CIEDE2000 reference pair; checks the perceptual ranking helper.
+assert(Math.abs(approximateDistance([50,2.6772,-79.7751],[50,0,-82.7485])-2.0425)<.0001);
 const reels=['#009BC3','#F6B921','#FFFFFF','#000000'].map(color=>({color,type:'PLA'}));
 const sources={1:'#009BC3',2:'#F6B921',3:'#FFFFFF',4:'#000000',5:'#519E5F'};
 const plan=planBlends(sources,reels);

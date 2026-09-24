@@ -7,6 +7,15 @@ const impossible=recommendPalette({sources:alien,loaded});
 assert.equal(impossible.found,false);
 assert.equal(impossible.reels,undefined);
 assert.deepEqual(impossible.alternatives,[]);
+assert(impossible.approximateOptions.length>=2);
+assert(impossible.approximateOptions.some(p=>p.usesLoaded));
+for(const p of impossible.approximateOptions) {
+  assert(p.approximate);
+  assert.equal(p.unresolved,0);
+  assert.equal(p.outcome.outputCount,5,'approximations must not merge source shades');
+  assert.equal(p.outcome.counts.substituted,0,'new shades must use actual blend recipes');
+  assert(p.outcome.blendCount>0);
+}
 assert(impossible.search.evaluated>2000);
 assert.equal(JSON.stringify({alien,loaded}),before);
 // Known Prusa reference: cyan + yellow -> green. Search all reels jointly.
@@ -30,11 +39,13 @@ stock.push({color:'#FFFF00',type:'PETG',name:'Other material'});
 const owned=recommendPalette({sources,loaded,stock});
 assert(owned.found && !owned.rough);
 assert(owned.reels.every(r=>stock.some(s=>s.name===r.name && s.color===r.color)));
+for(const p of owned.approximateOptions.filter(p=>!p.usesLoaded)) assert(p.reels.every(r=>stock.some(s=>s.name===r.name && s.color===r.color)));
 assert.equal(new Set(owned.reels.map(r=>r.type)).size,1);
 const locks=[false,true,false,true];
 const locked=recommendPalette({sources,loaded:owned.reels,stock,locked:locks});
 assert(locked.found);
 for(const p of [locked,...locked.alternatives]) locks.forEach((lock,i)=>{if(lock) assert.deepEqual(p.reels[i],owned.reels[i]);});
+for(const p of locked.approximateOptions) locks.forEach((lock,i)=>{if(lock) assert.equal(p.reels[i].color,owned.reels[i].color);});
 const incompatible=recommendPalette({sources,loaded,stock,locked:[true,true,true,true]});
 assert.equal(incompatible.found,false);
 assert.equal(recommendPalette({sources,loaded,stock:[]}).found,false);
@@ -46,6 +57,7 @@ assert.equal(unchanged.score,0); assert.deepEqual(unchanged.reels.map(r=>r.color
 const solid=recommendPalette({sources:alien,loaded,blends:false});
 assert(solid.found && solid.outcome.counts.substituted>0);
 assert.equal(solid.unresolved,0);
+assert.deepEqual(solid.approximateOptions,[]);
 // Large libraries retain a diverse bounded pool and only offer owned colours.
 const bigStock=Array.from({length:74},(_,i)=>({color:'#'+((i*221123)%0xffffff).toString(16).padStart(6,'0'),type:'PLA',name:'Stock '+i}));
 bigStock.push(...stock);

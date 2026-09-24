@@ -7,6 +7,16 @@ section here together.
 
 ## Unreleased — experimental U1 reel-change export
 
+Review 2.6.0-preview.3 adds explicitly labelled approximate blend palettes when
+close reproduction is unavailable, including a choice using the loaded reels.
+Each card lists original and predicted colour swatches/names and its recipe;
+applying an approximation requires explicit acceptance of the changed colours
+before export. Close matches remain separate. Approximate blends are ranked
+with CIEDE2000 and keep distinct source shades from collapsing onto one blend.
+Model loading and palette searches now show a small animated lime orb, with
+reduced-motion support and text status. The animation is an original CSS effect
+inspired by the Libraries.dev orb reference; it adds no runtime dependency.
+
 Full Spectrum review 2.6.0-preview.2 now uses Prusa FDM Mixer v7 for layer-colour
 predictions, with the upstream MIT licence and fixed revision included. The
 palette search checks four-reel combinations together, keeps only complete
