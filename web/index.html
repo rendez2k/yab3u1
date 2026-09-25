@@ -391,6 +391,14 @@
     .maprow select { min-width: 0; flex: 1 1 132px; }
     #convertpreview { height: 260px; }
   }
+  .extension-help { margin: 12px 0; font-size: 13px; line-height: 1.55; color: var(--fg); }
+  .extension-help summary { cursor: pointer; width: fit-content; }
+  .extension-help summary:hover { text-decoration: underline; }
+  .extension-help p, .extension-help ol { max-width: 72ch; margin: 10px 0; }
+  .extension-help ol { padding-left: 24px; }
+  .extension-help li + li { margin-top: 6px; }
+  .extension-help a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+  .extension-help :is(summary,a):focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
 </style>
 <link rel="stylesheet" href="batch.css">
 </head>
@@ -421,6 +429,23 @@
       <button id="theme" class="theme" type="button" aria-label="Switch theme">Light</button>
     </div>
   </header>
+
+  <details class="extension-help" id="chrome-extension">
+    <summary>From MakerWorld? Get the Chrome extension</summary>
+    <p><a href="downloads/makerworld-yab3d-review-1.5.3.4.zip" download>Download Chrome extension 1.5.3.4 (ZIP)</a>
+      &mdash; review build. Open the original 3MF in Analyse &amp; convert or Full Spectrum.</p>
+    <ol>
+      <li>Extract the ZIP to a folder you will keep.</li>
+      <li>Open <code>chrome://extensions</code>, switch on <strong>Developer mode</strong>,
+        choose <strong>Load unpacked</strong> and select the extracted folder.</li>
+      <li>Refresh MakerWorld, choose a print profile, then click <strong>Open in YAB3D</strong>.
+        Allow its new tab and complete MakerWorld verification if prompted.</li>
+    </ol>
+    <p>Already using our updated extension? Reload it in Chrome and refresh MakerWorld.
+      This package opens the YAB3D review site. Original model data transfers between tabs; it is not uploaded.</p>
+    <p>Based on <a href="https://github.com/Dragon2203/makerworld-to-snapmaker-u1">MakerWorld to Snapmaker U1</a>,
+      with our YAB3D handoff. The ZIP includes source code and licence notices.</p>
+  </details>
 
   <div class="conversion-modes" role="group" aria-label="Conversion mode">
     <button id="mode-single" type="button" aria-pressed="true" aria-controls="singlepanel">Single file</button>

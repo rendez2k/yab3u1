@@ -37,6 +37,9 @@ DEFAULT_OUT = ROOT / "dist"
 ASSET_SUFFIXES = frozenset({".js", ".css", ".wasm", ".svg", ".ico", ".woff",
                             ".woff2", ".png"})
 PAGES = frozenset({"index.html", "recolour.html"})
+# One reviewed extension package, with its upstream licences included. Other ZIPs
+# (including model bundles) must never be swept into a site build.
+DOWNLOADS = frozenset({"downloads/makerworld-yab3d-review-1.5.3.4.zip"})
 # Directories under `web/` that are development scaffolding, and file name
 # prefixes that belong only to the browser self-test.
 SKIP_PARTS = frozenset({"tests", "node_modules", ".netlify"})
@@ -69,7 +72,7 @@ def asset_paths(web: Path | None = None) -> list[Path]:
             continue
         if source.name.startswith(SKIP_PREFIXES):
             continue
-        if source.suffix not in ASSET_SUFFIXES and rel.as_posix() not in PAGES:
+        if source.suffix not in ASSET_SUFFIXES and rel.as_posix() not in PAGES | DOWNLOADS:
             continue
         chosen.append(rel)
     if not chosen:

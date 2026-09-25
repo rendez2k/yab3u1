@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPT = os.path.join(HERE, "tools", "build_site.py")
@@ -42,6 +43,7 @@ PUBLIC_FILES = (
     "shared/printerPanel.js",
     "shared/printerBridge.js",
     "shared/modelHandoff.js",
+    "downloads/makerworld-yab3d-review-1.5.3.4.zip",
     "assets/yab3d-mark-96.png",
     "assets/yab3d-mark.png",
     "shared/assignment.js",
@@ -136,6 +138,19 @@ class SiteBuild(unittest.TestCase):
         done = run_build(self.out)
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertEqual(sorted(built_files(self.out)), sorted(PUBLIC_FILES))
+
+    def test_extension_download_is_installable_and_includes_licences(self):
+        package = pathlib.Path(HERE, "web/downloads/makerworld-yab3d-review-1.5.3.4.zip")
+        with zipfile.ZipFile(package) as archive:
+            names = set(archive.namelist())
+            self.assertTrue({"manifest.json", "LICENSE", "LICENSE-POLYFORM",
+                             "THIRD_PARTY_NOTICES.md", "yab3d-handoff.js"} <= names)
+            self.assertFalse(any(name.lower().endswith((".3mf", ".env")) for name in names))
+            manifest = json.loads(archive.read("manifest.json"))
+            self.assertEqual(manifest["version"], "1.5.3.4")
+            for script in manifest["content_scripts"]:
+                self.assertTrue(set(script["js"]) <= names)
+            self.assertIn(manifest["background"]["service_worker"], names)
 
     def test_copies_are_byte_identical_to_their_sources(self):
         done = run_build(self.out)
