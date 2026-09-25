@@ -1,3 +1,8 @@
+## 2.6.1-preview.8
+
+- Compact the Full Spectrum desktop workspace by roughly 15–20%: smaller controls, spacing, headings, swatches and preview, while retaining mobile touch targets and the persistent action bar.
+- Collapse printer setup once a model loads; keep the file name, printer-settings summary and plate selection directly accessible.
+
 ## 2.6.1-preview.7
 
 - Full Spectrum U1 exports now offer designer, printer-preset and custom regular layer heights, with source-to-output values and nozzle-range validation.

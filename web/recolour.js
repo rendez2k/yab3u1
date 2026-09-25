@@ -23,7 +23,7 @@ import { renderFilamentPicker } from './shared/filamentPicker.js';
 import {createTextureImport} from './shared/textureImport.js';
 import { buildU1Profile, profileDescription, resolveLayerHeight } from './shared/u1Profiles.js';
 
-const VERSION = "2.6.1-preview.7";
+const VERSION = "2.6.1-preview.8";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -410,7 +410,7 @@ function setBusy(text) {
   if (node) node.textContent = text || "";
 }
 
-const textureImporter=createTextureImport({buttonHost:document.getElementById('destinationcard'),onAccept:file=>load(file)});
+const textureImporter=createTextureImport({buttonHost:document.getElementById('printeroptions'),onAccept:file=>load(file)});
 async function load(file) {
   if(/\.(glb|zip)$/i.test(file.name)){textureImporter.open(file);return;}
   const epoch = (state.epoch += 1);
@@ -445,6 +445,7 @@ async function load(file) {
     show();
     $("modelname").textContent = file.name;
     $("loadedmodel").classList.remove("hidden");
+    $("printeroptions").open=false;
     $("drop").classList.add("hidden");
     window.__loadTiming = { ms: result.ms, triangles: result.assessed.counts.triangles };
   } catch (error) {
@@ -476,6 +477,7 @@ function resetForUpload() {
   state.approximate=false;
   invalidateRecommendation();
   $("loadedmodel").classList.add("hidden");
+  $("printeroptions").open=true;
   $("prepareswaps").disabled = true;
   $("preparestatus").textContent = "";
   cancelPlan();
@@ -1087,6 +1089,7 @@ function renderActionBar(blocking,needsReview) {
 // ------------------------------------------------------------------ export ----
 
 function renderExport() {
+  $('printeroptionssummary').textContent=`Printer settings · ${LABELS[state.target] || state.target}`;
   printerPanel?.refresh();
   $("printersetup").hidden=state.target!=="snapmaker";
   $("applyforexport").hidden=state.reelView!=="recommended" || !state.recommendation;
