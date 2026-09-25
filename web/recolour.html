@@ -312,6 +312,30 @@
     #advanced > summary .hint { max-width: none; }
     #advanced > summary .hint { font-size: 12px; }
   }
+  .compact-options { border-top:1px solid var(--line); padding-block:4px; }
+  .compact-options > summary { min-height:44px; padding-block:10px; cursor:pointer; font-size:14px; font-weight:600; }
+  #modelchoices { margin:8px 0; }
+  #paletteslots { margin:0 0 12px; padding:8px 0; border:0; }
+  #slotoptions { margin-bottom:12px; }
+  .palettecoverage { font-size:13px; margin-top:8px; padding-top:8px; }
+  body { padding-bottom:var(--action-height,0px); }
+  html { scroll-padding-bottom:calc(var(--action-height,0px) + 20px); }
+  #mixcard, #reelscard, #exportcard { scroll-margin-top:16px; }
+  #actionbar { position:fixed; inset:auto 0 0; z-index:20; background:var(--panel); border-top:1px solid var(--line); padding:12px 20px calc(12px + env(safe-area-inset-bottom)); }
+  #actionbar[hidden] { display:none; }
+  .action-inner { max-width:1440px; margin:auto; display:flex; align-items:center; gap:20px; }
+  .action-links { display:flex; gap:8px; }
+  .action-links button { min-height:44px; padding:8px 12px; }
+  #actionstatus { flex:1; color:var(--dim); font-size:13px; }
+  #mainaction { min-height:44px; min-width:180px; }
+  @media(max-width:650px) {
+    #actionbar { padding:8px 12px calc(8px + env(safe-area-inset-bottom)); }
+    .action-inner { display:grid; gap:8px; }
+    .action-links { display:grid; grid-template-columns:1fr 1fr 1.4fr; gap:8px; }
+    .action-links button { padding:6px; font-size:13px; }
+    #mainaction { width:100%; }
+    #actionstatus { display:none; }
+  }
 </style>
 </head>
 <body>
@@ -403,13 +427,13 @@
       <button type="button" data-workflow="loaded" aria-pressed="false">Use my loaded filaments</button>
     </div>
     <p class="hint" id="workflowhint"></p>
-    <div id="modelchoices">
+    <details id="modelchoices" class="compact-options"><summary id="modelchoicessummary">Colour preferences · PLA</summary>
       <label class="field">Filament material <select id="modelmaterial"><option>PLA</option><option>PETG</option><option>ABS</option><option>TPU</option><option>ASA</option><option>PA</option></select></label>
       <p class="hint">Keep any essential original colours exact (up to four). We compare the remaining combinations and blend the missing colours.</p>
       <div id="exactcolours" class="row"></div>
       <label class="check"><input type="checkbox" id="useowned"> Choose from my Spool Studio filaments only</label>
       <p class="hint" id="ownedhint"></p>
-    </div>
+    </details>
     <div id="loadedcontrols" hidden>
     <h3 class="paletteheading" id="reelheading">Loaded filaments</h3>
     <div class="row" id="reels"></div>
@@ -439,7 +463,7 @@
     <section id="recommendation" aria-labelledby="recommendheading">
       <h3 id="recommendheading">Palette suggestions</h3>
       <p class="hint" id="recommendstatus" role="status">Load a model to suggest colours.</p>
-      <section id="paletteslots" aria-label="Arrange selected palette" hidden></section>
+      <details id="slotoptions" class="compact-options" hidden><summary>Arrange printer slots</summary><section id="paletteslots" aria-label="Arrange selected palette" hidden></section></details>
       <div id="palettechoices" role="group" aria-label="Suggested palettes"></div>
       <button type="button" id="morepalettes" aria-expanded="false" aria-controls="palettechoices" hidden>More palettes</button>
       <button type="button" class="primary" id="userecommended" disabled>Apply palette</button>
@@ -450,7 +474,7 @@
   <div class="card hidden" id="exportcard">
     <h2>Export your project</h2>
     <details><summary>Filament brand presets (optional)</summary><div id="spectrumfilaments"></div></details>
-    <fieldset id="copycontrols"><legend>Copies on the plate</legend><div class="row"><label class="field">Copies<input id="spectrumcopies" type="number" min="1" max="64" step="1" value="1"></label><label class="field">Gap (mm)<input id="spectrumgap" type="number" min="0" max="100" step="1" value="5"></label></div><p class="hint" id="copynote" role="status">One copy keeps the original plate arrangement.</p></fieldset>
+    <details id="copyoptions" class="compact-options"><summary id="copysummary">Copies &amp; spacing · 1 copy</summary><fieldset id="copycontrols"><legend>Copies on the plate</legend><div class="row"><label class="field">Copies<input id="spectrumcopies" type="number" min="1" max="64" step="1" value="1"></label><label class="field">Gap (mm)<input id="spectrumgap" type="number" min="0" max="100" step="1" value="5"></label></div><p class="hint" id="copynote" role="status">One copy keeps the original plate arrangement.</p></fieldset></details>
     <p class="hint" id="exportnote" role="status"></p>
     <button type="button" id="applyforexport" hidden>Apply this palette</button>
     <label class="check"><input type="checkbox" id="review">
@@ -524,6 +548,13 @@
     <a href="https://github.com/prusa3d/prusa-fdm-mixer">Prusa FDM Mixer</a>
     for alternating filament layers. Suggestions search four reels together with 25/50/75% two-reel recipes.
     <a href="THIRD_PARTY_NOTICES.txt">Credits and third-party notices</a>.</p></footer>
+<nav id="actionbar" aria-label="Project actions" hidden>
+  <div class="action-inner">
+    <div class="action-links"><button type="button" data-jump="mixcard">Preview</button><button type="button" data-jump="reelscard">Palette</button><button type="button" data-jump="exportcard">Export settings</button></div>
+    <span id="actionstatus" role="status"></span>
+    <button type="button" class="primary" id="mainaction">Apply palette</button>
+  </div>
+</nav>
 <script type="module" src="./recolour.js"></script>
 </body>
 </html>

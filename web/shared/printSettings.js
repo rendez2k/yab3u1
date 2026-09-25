@@ -243,6 +243,12 @@ export function transferSettings(source, target, { object = false, baseline = BA
   if (target === 'snapmaker') {
     const speed = conservativeSpeeds(source, baseline);
     Object.assign(values, speed.values); skipped.push(...speed.notes);
+    // Snapmaker Orca 2.4 crashes during brim generation when a model object
+    // overrides support_speed. The project writer retains it at process scope.
+    if (object && values.support_speed !== undefined) {
+      delete values.support_speed;
+      skipped.push('support_speed: shared at project level for Snapmaker Orca compatibility');
+    }
   }
   const support = supportOf(source);
   if (support) {
@@ -263,6 +269,20 @@ export function transferSettings(source, target, { object = false, baseline = BA
     }
   }
   return { values, skipped };
+}
+
+/** Keep the slowest requested support speed at process scope: U1's object
+ * override crashes its brim generator (including models with supports off).
+ * Other per-object settings and the selected machine's speed cap are retained.
+ */
+export function shareU1SupportSpeed(cfg, sources, baseline) {
+  const speeds=sources.map(source=>conservativeSpeeds(source,baseline).values.support_speed)
+    .filter(value=>value!==undefined).map(Number);
+  if(!speeds.length)return [];
+  const current=Number(Array.isArray(cfg.support_speed)?cfg.support_speed[0]:cfg.support_speed);
+  if(Number.isFinite(current)&&current>0)speeds.push(current);
+  cfg.support_speed=String(Math.min(...speeds));
+  return [`Support speed shared at ${cfg.support_speed} mm/s across selected objects for Snapmaker Orca brim compatibility.`];
 }
 
 /** Printable additions around a model. Automatic brim/support contours only

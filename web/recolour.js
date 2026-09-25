@@ -23,7 +23,7 @@ import { renderFilamentPicker } from './shared/filamentPicker.js';
 import {createTextureImport} from './shared/textureImport.js';
 import { buildU1Profile, profileDescription } from './shared/u1Profiles.js';
 
-const VERSION = "2.6.1-preview.5";
+const VERSION = "2.6.1-preview.6";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -63,6 +63,7 @@ function updateCopies() {
       if(plan.capped||plan.blocked)state.layoutError=`Only ${plan.copies} of ${copies} copies fit this bed allowance. Reduce the copies or gap.`;
     }
   }
+  $("copysummary").textContent=`Copies & spacing · ${Number.isInteger(copies)&&copies>0?copies: "Check"} ${copies===1?"copy":"copies"}`;
   $("copynote").textContent=state.layoutError || (copies===1?'One copy keeps the original plate arrangement.':`${copies} copies of the selected group on the U1 bed, with ${spacing} mm gaps and a prime-tower allowance. Check supports and the actual tower after slicing.`);
 }
 ['spectrumcopies','spectrumgap'].forEach(id=>$(id).addEventListener('input',()=>{updateCopies();clearReview();refreshPreview();}));
@@ -136,8 +137,9 @@ function colourChange(row) {
 function renderPaletteSlots() {
   const host=$("paletteslots"), palette=state.recommendation;
   host.hidden=state.workflow!=='model' || !palette;
+  $("slotoptions").hidden=host.hidden;
   if(host.hidden) { host.replaceChildren(); return; }
-  host.innerHTML=`<h3>Arrange selected palette</h3><p class="hint">Match the slots on your printer. Choosing an occupied slot swaps the two colours; blend recipes follow automatically.</p>
+  host.innerHTML=`<p class="hint">Match the slots on your printer. Choosing an occupied slot swaps the two colours; blend recipes follow automatically.</p>
     <div class="slot-arrangement">${palette.reels.map((reel,index)=>`<label class="slot-row"><i class="swatch" style="background:${esc(reel.color)}" aria-hidden="true"></i><span><strong>${esc(reel.name || colourName(reel.color))}</strong><small>${esc(reel.color)}</small></span><select data-palette-slot="${index}" aria-label="Slot for ${esc(reel.name || colourName(reel.color))} (${esc(reel.color)}), currently slot ${index+1}">${palette.reels.map((_,slot)=>`<option value="${slot}"${index===slot?' selected':''}>Slot ${slot+1}</option>`).join('')}</select></label>`).join('')}</div>`;
   host.querySelectorAll('[data-palette-slot]').forEach(select=>select.addEventListener('change',()=>{
     const destination=Number(select.value);
@@ -159,7 +161,7 @@ function paletteCoverage(option) {
     ? `<strong>Cannot reproduce all colours</strong><span>No suitable blend for: ${missing.map(color=>`${esc(colourName(color))} (${esc(color)})`).join(', ')}.</span>`
     : counts.substituted ? `<strong>${counts.substituted} source colour(s) replaced</strong><span>Solid colours selected; no extra shades are created.</span>`
     : option.approximate ? '<strong>Approximation · colours will change</strong>' : `<strong>All source colours closely covered in the estimate</strong>`;
-  return `<span class="palettecoverage">${detail}<span>${counts.preserved} matched to reels · ${blendCount} blend recipe${blendCount===1?'':'s'}</span>${recipes.map(colourChange).join('')}</span>`;
+  return `<span class="palettecoverage">${detail}<span>${counts.preserved} matched to reels · ${blendCount} blend recipe${blendCount===1?'':'s'}</span>${recipes.length ? `<span>${recipes.some(row=>distance(row.original,row.result)>25)?"Includes a large colour change. ":""}Select to compare in the preview.</span>` : ''}</span>`;
 }
 function renderRecommendation(message) {
   renderWorkflow();
@@ -286,6 +288,7 @@ function renderWorkflow() {
   const model=state.workflow==='model';
   document.querySelectorAll('[data-workflow]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.workflow===state.workflow)));
   $("modelchoices").hidden=!model;
+  $("modelchoicessummary").textContent=`Colour preferences · ${state.modelType}${state.keepExact.length ? ` · ${state.keepExact.length} kept exact` : ""}${state.useOwned ? " · owned filaments" : ""}`;
   $("loadedcontrols").hidden=model && !state.modelApplied;
   $("reelheading").textContent=model ? 'Palette selected for export' : 'Loaded filaments';
   $("workflowhint").textContent=model
@@ -455,6 +458,7 @@ async function load(file) {
 /** While a file is being read, the page offers a way out instead of a freeze. */
 function setLoading(active) {
   state.loading = active;
+  $("actionbar").hidden=active || !state.project;
   $("loadstatus").dataset.busy=String(active);
   const cancel = $("loadcancel");
   if (cancel) cancel.classList.toggle("hidden", !active);
@@ -475,6 +479,7 @@ function resetForUpload() {
   assessToken += 1;
   previewToken += 1;
   state.project = null;
+  $("actionbar").hidden=true;
   $("loaderror").textContent = "";
   ["project", "reelscard", "mixcard", "previewcard", "exportcard"]
     .forEach((id) => $(id).classList.add("hidden"));
@@ -1044,6 +1049,36 @@ function paletteOf(payload, mode) {
   return table;
 }
 
+function jumpTo(id, focusId) {
+  const target=$(id);
+  const focus=focusId ? $(focusId) : target;
+  if(!focus.matches('button,input,select,textarea,a[href],summary')) focus.tabIndex=-1;
+  focus.scrollIntoView({block:focusId?'center':'start'});
+  focus.focus({preventScroll:true});
+}
+document.querySelectorAll('[data-jump]').forEach(button=>button.addEventListener('click',()=>jumpTo(button.dataset.jump)));
+new ResizeObserver(()=>document.documentElement.style.setProperty('--action-height',`${$('actionbar').getBoundingClientRect().height}px`)).observe($('actionbar'));
+$('mainaction').addEventListener('click',()=>{
+  if(state.loading || state.exporting || !state.project)return;
+  const action=$('mainaction').dataset.action;
+  if(action==='apply') $('userecommended').click();
+  else if(action==='download') $('export').click();
+  else if(action==='review') jumpTo('exportcard','review');
+  else {
+    if(state.layoutError) $('copyoptions').open=true;
+    jumpTo('exportcard',state.layoutError?'spectrumcopies':'exportnote');
+  }
+});
+function renderActionBar(blocking,needsReview) {
+  $('actionbar').hidden=!state.project || state.loading;
+  const apply=blocking==='apply the selected palette or blend settings' && state.recommendation;
+  const action=apply?'apply':blocking?'settings':needsReview&&!state.reviewed?'review':'download';
+  $('mainaction').dataset.action=action;
+  $('mainaction').textContent=state.exporting?'Preparing download…':({apply:'Apply palette',settings:'Check export settings',review:'Review & download',download:'Download project'})[action];
+  $('mainaction').disabled=Boolean(state.loading || state.exporting);
+  $('actionstatus').textContent=state.exporting?'Writing your project…':apply?'Previewing a suggestion':blocking?'Export needs attention':needsReview&&!state.reviewed?'Review the colour changes before downloading':`${$('spectrumcopies').value} ${Number($('spectrumcopies').value)===1?'copy':'copies'} · Ready to download`;
+}
+
 // ------------------------------------------------------------------ export ----
 
 function renderExport() {
@@ -1075,6 +1110,7 @@ function renderExport() {
     : state.strategy!=='source' && state.workflow==='model' && !state.modelApplied && state.reelView!=='recommended' ? "choose and apply a model palette"
     : payload.blocked || (state.reelView==='recommended' ? 'apply the selected palette or blend settings' : null));
   const needsReview = state.strategy !== "source" && !blocking;
+  renderActionBar(blocking,needsReview);
   reviewBox.parentElement.classList.toggle("hidden", !needsReview);
   reviewBox.checked = state.reviewed;
   $("reviewtext").textContent=activeApproximation() && state.strategy==='blend'
@@ -1117,6 +1153,7 @@ $("export").addEventListener("click", async () => {
   // with the previous archive).
   if (state.exporting) return;
   state.exporting = true;
+  renderExport();
   const button = $("export");
   if (button) button.disabled = true;
   const revision = exportRevision();

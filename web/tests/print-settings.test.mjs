@@ -13,7 +13,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { readZip } from "../zip.js";
 import { BASE_SETTINGS } from "../base_settings.js";
 import * as project from "../shared/project.js";
-import { CARRY_KEYS, appliedSettings, supportOf, planningAllowance, transferSettings, setProcessOverrides } from "../shared/printSettings.js";
+import { CARRY_KEYS, appliedSettings, supportOf, planningAllowance, transferSettings, setProcessOverrides, shareU1SupportSpeed } from "../shared/printSettings.js";
 import { ConvertSession } from "../shared/convertSession.js";
 
 const encoder = new TextEncoder();
@@ -725,6 +725,26 @@ await ok("organic support style uses each slicer's serialized enum at object and
     }
     assert.equal(u1ConfigOf(bambuSource({ settings: source })).cfg.support_style, "organic");
   }
+});
+
+await ok("U1 support speed stays at process scope to avoid the native brim crash", () => {
+  const source=bambuSource({settings:{support_speed:'120',brim_type:'auto_brim',enable_support:'0'}});
+  const model=project.readProject(source);
+  const selected=model.plates[0].objectIds[0];
+  model.meta.get(String(selected)).settings={...(model.meta.get(String(selected)).settings || {}),support_speed:'45'};
+  const built=project.convertProject(model,model.plates[0].id,[selected],{target:'snapmaker'});
+  const cfg=JSON.parse(decoder.decode(built.entries.get('Metadata/project_settings.config')));
+  const xml=decoder.decode(built.entries.get('Metadata/model_settings.config'));
+  assert.equal(cfg.support_speed,'45');
+  assert(!xml.includes('key="support_speed"'));
+  assert(xml.includes('key="brim_type" value="auto_brim"'));
+  assert(cfg.different_settings_to_system[0].split(';').includes('support_speed'));
+  assert(built.settings.notes.some(note=>note.includes('Support speed shared at 45')));
+  const capped={support_speed:'80'};
+  shareU1SupportSpeed(capped,[{support_speed:'250'},{support_material_speed:'35'}],{support_speed:'150'});
+  assert.equal(capped.support_speed,'35');
+  const skipped=project.convertProject(model,model.plates[0].id,[selected],{target:'snapmaker',carrySettings:false});
+  assert(!decoder.decode(skipped.entries.get('Metadata/model_settings.config')).includes('key="support_speed"'));
 });
 
 if (failures.length) {

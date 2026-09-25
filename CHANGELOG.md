@@ -1,3 +1,9 @@
+## 2.6.1-preview.6
+
+- Fix Snapmaker Orca brim-generation access violations from object-level support-speed overrides. Preserve the slowest selected-object support speed at project scope; keep geometry, blends, cutouts and brims.
+
+- Full Spectrum: persistent preview, palette and export actions; compact palette alternatives and collapsible colour, slot and copy settings. Full colour comparisons remain beside the preview.
+
 # Changelog
 
 The version shown on the page comes from `VERSION` in `web/convert-page.js` (and

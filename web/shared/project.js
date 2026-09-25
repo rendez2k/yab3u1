@@ -17,7 +17,7 @@ import { SLOTS, arrange, bijectionProblem, completeRule, isIdentity }
   from "./assignment.js";
 import { COLOUR_NS, colourOf, colourGroupXml, leafTriangles, parseColourGroups } from "./standard.js";
 import { relationshipXml, thumbnailPlan } from "./thumbnail.js";
-import { SOURCE_KEYS, applySupport, carryPrintSettings, normaliseSupportMode, supportOf, transferSettings, planningAllowance, setProcessOverrides }
+import { SOURCE_KEYS, applySupport, carryPrintSettings, normaliseSupportMode, supportOf, transferSettings, planningAllowance, setProcessOverrides, shareU1SupportSpeed }
   from "./printSettings.js";
 import { addBox, addPoint, boxSize, boxValid, emptyBox, layoutOffsets, planLayout,
          transformBox, targetLayout }
@@ -2438,6 +2438,9 @@ export function exportProject(project, plateId, objectIds, options) {
     const speed = carry ? conservativeSpeeds(project.sourceSettings, u1Profile.cfg) : {values:{},notes:[]};
     Object.assign(cfg, speed.values);
     carried.push(...Object.keys(speed.values));
+    const supportSpeedNotes=carry ? shareU1SupportSpeed(cfg,
+      [...chosen].map(id=>({...project.sourceSettings,...(project.meta.get(id)?.settings || {})})),u1Profile.cfg) : [];
+    if(supportSpeedNotes.length)carried.push('support_speed');
     const layerNotes = constrainLayers(cfg, u1Profile.match);
     if(options.layerHeight) {
       const layer=resolveLayerHeight(project.sourceSettings,u1Profile.match,options.layerHeight);
@@ -2450,7 +2453,7 @@ export function exportProject(project, plateId, objectIds, options) {
     for (let i=0; i<reelTypes.length; i++) cfg.different_settings_to_system[i+1] = u1Profile.filamentKeys.join(';');
     cfg.different_settings_to_system[reelTypes.length+1] = 'nozzle_diameter;min_layer_height;max_layer_height';
     settingNotes = { carry, supportMode: mode, carried, support: supportNote,
-                     supportsPainted: painted, overrides: cfg.different_settings_to_system[0].split(";"), profile: u1Profile.match.process.name, nozzle: u1Profile.match.nozzle, materials: cfg.filament_settings_id.slice(), notes: [...u1Profile.match.notes, ...speed.notes, ...layerNotes, ...filamentReport.notes] };
+                     supportsPainted: painted, overrides: cfg.different_settings_to_system[0].split(";"), profile: u1Profile.match.process.name, nozzle: u1Profile.match.nozzle, materials: cfg.filament_settings_id.slice(), notes: [...u1Profile.match.notes, ...speed.notes, ...supportSpeedNotes, ...layerNotes, ...filamentReport.notes] };
     members.set(SRC_BBL_PROJECT, encoder.encode(JSON.stringify(cfg, null, 4)));
   } else if (target === "bambu" || target === "orca") {
     if (standard) {
