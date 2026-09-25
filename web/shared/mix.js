@@ -231,10 +231,41 @@ export function plausibleBlend(first, second, predicted) {
 
 /** Interactive Full Spectrum planning rejects implausible predictions before
  * choosing a recipe, so a rejected nearest prediction cannot hide a valid one. */
-export function planBlends(sourceColors,reels,approximate=false) {
+export function planBlends(sourceColors,reels,approximate=false,slotOrder=null) {
+  // Keep the original search order when arranging a chosen palette. Re-running
+  // tied candidates in physical-slot order can otherwise change its shades.
+  if(slotOrder) {
+    validateSlotOrder(slotOrder,reels.length);
+    const original=slotOrder.map((_,old)=>reels[slotOrder.indexOf(old)]);
+    const plan=planBlends(sourceColors,original,approximate);
+    const slot=id=>id==null ? id : slotOrder.indexOf(id-1)+1;
+    const recipe=r=>r ? {...r,a:slot(r.a),b:slot(r.b)} : r;
+    return {...plan,reels:reels.map((r,i)=>({slot:i+1,color:norm(r.color),type:material(r)})),
+      recipes:plan.recipes.map(recipe),rows:plan.rows.map(row=>({...row,
+        solid:{...row.solid,slot:slot(row.solid.slot)},mixture:recipe(row.mixture)}))};
+  }
   const plan=planMixtures(sourceColors,reels,RATIOS,6,true,mixFdmHex,approximate);
   plan.recipes.forEach(recipe=>{recipe.model=FDM_MODEL; if(approximate) recipe.approximate=true;});
   return plan;
+}
+
+function validateSlotOrder(order,length) {
+  if(order.length!==length || new Set(order).size!==length || order.some(i=>!Number.isInteger(i) || i<0 || i>=length))
+    throw new Error('Slot order must contain each physical slot exactly once.');
+}
+
+/** Swap physical reels without changing virtual colours or their ingredients. */
+export function swapPaletteSlots(palette,from,to) {
+  const length=palette.reels.length;
+  if(![from,to].every(i=>Number.isInteger(i) && i>=0 && i<length)) throw new Error('Invalid physical slot.');
+  const reels=palette.reels.slice(), slotOrder=(palette.slotOrder || reels.map((_,i)=>i)).slice();
+  validateSlotOrder(slotOrder,length);
+  [reels[from],reels[to]]=[reels[to],reels[from]];
+  [slotOrder[from],slotOrder[to]]=[slotOrder[to],slotOrder[from]];
+  const slot=id=>id===from+1 ? to+1 : id===to+1 ? from+1 : id;
+  return {...palette,reels,slotOrder,outcome:{...palette.outcome,
+    rows:palette.outcome.rows.map(row=>({...row,slot:slot(row.slot),
+      recipe:row.recipe ? {...row.recipe,a:slot(row.recipe.a),b:slot(row.recipe.b)} : row.recipe}))}};
 }
 
 /** Describe the effective export mapping, including overrides and unticked recipes.

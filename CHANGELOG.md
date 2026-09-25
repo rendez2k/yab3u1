@@ -5,6 +5,12 @@ The version shown on the page comes from `VERSION` in `web/convert-page.js` (and
 the collapsed "What's new" block in the footer. Bump those constants and add a
 section here together.
 
+## 2.6.1-preview.4 — Colour comparisons and palette slots (review only)
+
+- Larger original and predicted colour swatches in palette suggestions and the preview summary, with readable names, hex values, ratios and change labels.
+- Arrange a selected model palette into physical printer slots. Moving a colour swaps the occupied slot and updates recipe references without changing the predicted shades.
+- Applying the arrangement keeps its physical slots and blend recipes in the exported project; changing the arrangement requires export review again.
+
 ## 2.6.1-preview.3 — Bulk layer-height choices (review only)
 
 - U1 bulk conversion defaults to preserving each designer’s regular layer height,

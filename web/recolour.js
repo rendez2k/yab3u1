@@ -6,7 +6,7 @@
 // The renderer is shared with the local page.
 
 import { comparison, distance, norm, suggestMapping } from "./shared/colour.js";
-import { describeColourMapping, mappingFromPlan, planBlends, plausibleBlend } from "./shared/mix.js";
+import { describeColourMapping, mappingFromPlan, planBlends, plausibleBlend, swapPaletteSlots } from "./shared/mix.js";
 import { Preview } from "./shared/preview.js";
 import { LABELS, RECOLOUR_TARGETS } from "./shared/targets.js";
 import { thumbnailSizes } from "./shared/thumbnail.js";
@@ -20,7 +20,7 @@ import { renderFilamentPicker } from './shared/filamentPicker.js';
 import {createTextureImport} from './shared/textureImport.js';
 import { buildU1Profile, profileDescription } from './shared/u1Profiles.js';
 
-const VERSION = "2.6.1-preview.3";
+const VERSION = "2.6.1-preview.4";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -36,7 +36,7 @@ const state = {
   strategy: "blend", overrides: {}, recipeKey: "", reviewed: false, approximate: false,
   workflow: "model", modelType: "PLA", keepExact: [], useOwned: false, modelApplied: false, modeReels: {},
   stock: null, locked: [false,false,false,false], recommendation: null, recommendationSearch: null, reelView: "loaded",
-  loadedTuning: null, recommendationOptions: [], recommendationIndex: 0, showMorePalettes: false,
+  appliedSlotOrder: null, loadedTuning: null, recommendationOptions: [], recommendationIndex: 0, showMorePalettes: false,
   // Bumped on every upload so a slow read of the previous file cannot land on top
   // of the new one and re-approve colours the user never reviewed.
   epoch: 0,
@@ -65,6 +65,7 @@ function saveReels() {
 const spoolImport = mountSpoolImport({ host: $("spoolimport"), getReels: () => state.reels, apply: (reels) => {
   if(state.workflow!=="loaded") switchWorkflow("loaded");
   state.reels = reels;
+  state.appliedSlotOrder=null;
   saveReels(); clearReview(); renderReels(); refresh();
 }, onStock: rows => { state.stock=rows; if(rows===null) state.useOwned=false; renderWorkflow(); invalidateRecommendation(); refresh(); } });
 
@@ -98,6 +99,33 @@ function paletteTitle(option,index) {
   return option.approximate ? (option.usesLoaded ? 'Approximation with loaded reels' : 'Approximate blend palette')
     : index ? `Close-match alternative ${index}` : 'Closest reproduction';
 }
+// One comparison layout for palette choices and the selected export summary.
+function colourChange(row) {
+  const chip=(hex,label)=>`<span class="change-colour"><span class="change-label">${label}</span><i class="change-swatch" style="background:${esc(hex)}" aria-hidden="true"></i><strong>${esc(colourName(hex))}</strong><small>${esc(hex)}</small></span>`;
+  const unresolved=row.kind==='unresolved';
+  const change=unresolved ? '' : distance(row.original,row.result);
+  return `<span class="colour-change"><span class="change-pair">${chip(row.original,'Original')}<span class="change-arrow" aria-hidden="true">→</span>${unresolved ? '<span class="change-colour"><span class="change-label">Result</span><strong>No suitable enabled blend</strong></span>' : chip(row.result,row.kind==='blended' ? 'Predicted blend' : 'New colour')}</span>
+    ${row.recipe && !unresolved ? `<span class="change-recipe">${100-row.recipe.percent}% slot ${row.recipe.a} + ${row.recipe.percent}% slot ${row.recipe.b}</span>` : ''}
+    ${change>12 ? `<span class="change-difference">${change>25?'Large colour change':'Noticeable colour change'}</span>` : ''}</span>`;
+}
+function renderPaletteSlots() {
+  const host=$("paletteslots"), palette=state.recommendation;
+  host.hidden=state.workflow!=='model' || !palette;
+  if(host.hidden) { host.replaceChildren(); return; }
+  host.innerHTML=`<h3>Arrange selected palette</h3><p class="hint">Match the slots on your printer. Choosing an occupied slot swaps the two colours; blend recipes follow automatically.</p>
+    <div class="slot-arrangement">${palette.reels.map((reel,index)=>`<label class="slot-row"><i class="swatch" style="background:${esc(reel.color)}" aria-hidden="true"></i><span><strong>${esc(reel.name || colourName(reel.color))}</strong><small>${esc(reel.color)}</small></span><select data-palette-slot="${index}" aria-label="Slot for ${esc(reel.name || colourName(reel.color))} (${esc(reel.color)}), currently slot ${index+1}">${palette.reels.map((_,slot)=>`<option value="${slot}"${index===slot?' selected':''}>Slot ${slot+1}</option>`).join('')}</select></label>`).join('')}</div>`;
+  host.querySelectorAll('[data-palette-slot]').forEach(select=>select.addEventListener('change',()=>{
+    const destination=Number(select.value);
+    const option=swapPaletteSlots(state.recommendation,Number(select.dataset.paletteSlot),destination);
+    state.recommendationOptions[state.recommendationIndex]=option;
+    state.recommendation=option;
+    // The selected suggestion is a fresh arrangement to review and apply.
+    setReelView('recommended');
+    state.overrides={}; state.ticked=new Set(); state.recipeKey='';
+    showReelView('recommended');
+    host.querySelector(`[data-palette-slot="${destination}"]`)?.focus({preventScroll:true});
+  }));
+}
 function paletteCoverage(option) {
   const {counts,rows,blendCount}=option.outcome;
   const missing=[...new Set(rows.filter(row=>row.kind==='unresolved').map(row=>row.original))];
@@ -106,10 +134,11 @@ function paletteCoverage(option) {
     ? `<strong>Cannot reproduce all colours</strong><span>No suitable blend for: ${missing.map(color=>`${esc(colourName(color))} (${esc(color)})`).join(', ')}.</span>`
     : counts.substituted ? `<strong>${counts.substituted} source colour(s) replaced</strong><span>Solid colours selected; no extra shades are created.</span>`
     : option.approximate ? '<strong>Approximation · colours will change</strong>' : `<strong>All source colours closely covered in the estimate</strong>`;
-  return `<span class="palettecoverage">${detail}<span>${counts.preserved} matched to reels · ${blendCount} blend recipe${blendCount===1?'':'s'}</span>${recipes.map(row=>`<span>${esc(colourName(row.original))} (${esc(row.original)}) → <i class="swatch" style="background:${esc(row.result)}"></i> ${esc(colourName(row.result))} (${esc(row.result)})${distance(row.original,row.result)>25?' · large change':distance(row.original,row.result)>12?' · noticeable change':''}<br>${100-row.recipe.percent}% slot ${row.recipe.a} + ${row.recipe.percent}% slot ${row.recipe.b}</span>`).join('')}</span>`;
+  return `<span class="palettecoverage">${detail}<span>${counts.preserved} matched to reels · ${blendCount} blend recipe${blendCount===1?'':'s'}</span>${recipes.map(colourChange).join('')}</span>`;
 }
 function renderRecommendation(message) {
   renderWorkflow();
+  renderPaletteSlots();
   $("recommendstatus").dataset.busy=String(Boolean(recommendationWorker));
   const result=state.recommendation;
   const focusedPalette=document.activeElement?.dataset?.palette;
@@ -213,7 +242,8 @@ $("userecommended").addEventListener('click',()=>{
   if(!state.recommendation) return;
   state.modelApplied=state.workflow==='model';
   state.approximate=Boolean(state.recommendation.approximate);
-  state.reels=state.recommendation.reels.map(({color,type,name})=>({color,type,name}));
+  state.reels=state.recommendation.reels.map(reel=>({...reel}));
+  state.appliedSlotOrder=state.recommendation.slotOrder?.slice() || null;
   if(state.strategy==='source') {
     state.strategy='blend';
     document.querySelectorAll('[data-strategy]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.strategy==='blend')));
@@ -257,6 +287,7 @@ function switchWorkflow(mode) {
   if(mode===state.workflow) return;
   state.modeReels[state.workflow]=state.reels.map(r=>({...r}));
   state.workflow=mode;
+  state.appliedSlotOrder=null;
   state.reels=state.modeReels[mode].map(r=>({...r}));
   invalidateRecommendation();
   state.approximate=false; state.overrides={}; state.ticked=new Set(); state.recipeKey='';
@@ -622,7 +653,8 @@ function useAssessed(assessed) {
   $("palettenote").textContent = extraColours
     ? `${surfaceColours} colours found on the selected model; ${extraColours} other palette entries are not used on its surface. The sliced-file check can confirm which can be left out of the reel load, including support and purge use.`
     : "";
-  state.mix = planBlends(assessed.sourceColors, activeReels(),activeApproximation());
+  state.mix = planBlends(assessed.sourceColors, activeReels(),activeApproximation(),
+    state.reelView==='recommended' ? state.recommendation?.slotOrder : state.appliedSlotOrder);
   state.recipes = state.mix.recipes.filter(recipe=>plausibleBlend(
     activeReels()[recipe.a-1].color,activeReels()[recipe.b-1].color,recipe.color));
   /* Ticking belongs to one recipe set. A new set starts fully ticked; an empty set
@@ -726,12 +758,10 @@ function renderOutcome(payload=resultPlan()) {
     ...(counts.substituted ? [`${counts.substituted} substituted`] : []),
     ...(counts.unresolved ? [`${counts.unresolved} unresolved`] : [])].join(' · ');
   const colours=outcome.sourceCount;
-  const name=colourName;
-  const swatch=hex=>`<span class="swatch" style="background:${esc(hex)}" title="${esc(hex)}"></span>`;
   const changed=rows.filter(r=>r.kind!=='preserved');
   host.innerHTML=`<strong>${state.previewMode==='original' ? 'Selected export: ' : ''}${colours} source colours · ${outcome.blendCount ? `${outcome.blendCount} blend recipe${outcome.blendCount===1?'':'s'}` : 'No blends'}</strong>
     <p class="hint">${esc(tally)}</p>
-    <ul>${changed.map(row=>`<li>${swatch(row.original)}<span>${esc(name(row.original))} <small>${esc(row.original)}</small> → ${row.kind==='unresolved' ? '<strong>No suitable enabled blend</strong>' : row.kind==='blended' ? `${swatch(row.result)}${esc(name(row.result))} <small>${esc(row.result)}</small> · ${100-row.recipe.percent}% slot ${row.recipe.a} + ${row.recipe.percent}% slot ${row.recipe.b}${distance(row.original,row.result)>25?' · large change':distance(row.original,row.result)>12?' · noticeable change':''}` : `${swatch(row.result)}${esc(name(row.result))}`}</span></li>`).join('')}</ul>
+    <ul>${changed.map(row=>`<li>${colourChange(row)}</li>`).join('')}</ul>
     ${activeApproximation() && state.strategy==='blend' ? '<p><strong>Approximate blends selected. Review the changed shades before exporting.</strong></p>' : ''}
     ${counts.unresolved ? '<p class="outcomewarning">Export blocked. Unresolved regions are highlighted pink in Loaded and Suggested views; pink is not an output filament.</p>' : counts.substituted ? '<p class="hint">Solid-colour replacement is selected. The listed source colours will change.</p>' : counts.blended ? '<p class="hint">Blend shades are uncalibrated estimates; they may differ in print.</p>' : ''}`;
 }
