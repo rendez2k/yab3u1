@@ -10,10 +10,13 @@ export class RecolourWorker {
     this.worker = new Worker(url, { type: "module" });
     this.nextId = 1;
     this.pending = new Map();
+    this.failure = null;
     this.worker.onmessage = (event) => this.receive(event.data || {});
     this.worker.onerror = (event) => {
       const message = (event && event.message) || "the background worker stopped";
-      this.rejectAll(message);
+      this.failure = Object.assign(new Error(message), {code: 'WORKER_STOPPED'});
+      this.worker.terminate();
+      this.rejectAll(this.failure);
     };
   }
 
@@ -21,7 +24,7 @@ export class RecolourWorker {
   rejectAll(message) {
     const entries = [...this.pending.values()];
     this.pending.clear();
-    for (const entry of entries) entry.reject(new Error(message));
+    for (const entry of entries) entry.reject(message instanceof Error ? message : new Error(message));
   }
 
   receive(message) {
@@ -37,11 +40,13 @@ export class RecolourWorker {
   }
 
   request(type, payload = {}, { transfer = [], onProgress = null } = {}) {
+    if (this.failure) return Promise.reject(this.failure);
     const id = this.nextId;
     this.nextId += 1;
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject, onProgress });
-      this.worker.postMessage({ type, id, ...payload }, transfer);
+      try { this.worker.postMessage({ type, id, ...payload }, transfer); }
+      catch (error) { this.pending.delete(id); reject(error); }
     });
   }
 
@@ -113,7 +118,25 @@ export class RecolourWorker {
   }
 
   dispose(reason = "a new file was chosen, so the old worker was stopped") {
+    this.failure = new Error(reason);
     this.worker.terminate();
-    this.rejectAll(reason);
+    this.rejectAll(this.failure);
+  }
+}
+
+/** One recovery for worker startup/runtime failure; never retry a rejected model.
+ * Re-read the File because the first ArrayBuffer was transferred and detached.
+ * Epoch checks prevent recovery from replacing a newer model's worker. */
+export async function loadModelWithRecovery({file, restart, isCurrent, onProgress, onRetry}) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const bytes = await file.arrayBuffer();
+    if (!isCurrent()) return null;
+    try {
+      return await restart(attempt > 0).load(bytes, {}, onProgress);
+    } catch (error) {
+      if (!isCurrent()) return null;
+      if (attempt || error.code !== 'WORKER_STOPPED') throw error;
+      onRetry?.();
+    }
   }
 }

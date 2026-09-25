@@ -25,7 +25,7 @@ orientation. Continue into conversion/Full Spectrum or download the prepared
 triangles but approximates textures and gradients with one colour per face.
 Supported format subsets and size limits are documented in the changelog.
 
-The **2.6.6 review build** adds a printer-capacity check to single-file conversion.
+The **2.6.7 review build** adds a printer-capacity check to single-file conversion.
 U1 has four physical inputs. Other targets accept 4, 8, 16, a custom count
 (1–64), or an unspecified setup for assignment in the slicer. Counts cover the
 whole retained project, including support/infill references; they are not a
@@ -37,6 +37,9 @@ An explicit keep-all choice permits an unresolved export named
 `*-setup-required.3mf`. It adds no printer inputs or pause plan. Reel-change
 planning still requires a real U1 slice and refuses unsupported layer/tool use.
 The capacity selector does not install a printer or AMS profile in other slicers.
+Full Spectrum navigation keeps working with Netlify's rewritten links. If its
+reader worker stops, the page retries once using a fresh copy of the original
+file; a further failure offers an in-tab retry without another transfer.
 
 Three ways to use the project, with different workflows:
 

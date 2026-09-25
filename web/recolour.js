@@ -11,7 +11,7 @@ import { describeColourMapping, mappingFromPlan, planBlends, plausibleBlend, swa
 import { Preview } from "./shared/preview.js";
 import { LABELS, RECOLOUR_TARGETS } from "./shared/targets.js";
 import { thumbnailSizes } from "./shared/thumbnail.js";
-import { RecolourWorker } from "./shared/workerClient.js";
+import { RecolourWorker, loadModelWithRecovery } from "./shared/workerClient.js";
 import { readZip } from "./zip.js";
 import { mountSpoolImport } from "./shared/spoolImport.js";
 import { mountPrinter } from "./shared/printerPanel.js";
@@ -24,7 +24,7 @@ import { renderFilamentPicker } from './shared/filamentPicker.js';
 import {createTextureImport} from './shared/textureImport.js';
 import { buildU1Profile, profileDescription, resolveLayerHeight } from './shared/u1Profiles.js';
 
-const VERSION = "2.6.6";
+const VERSION = "2.6.7";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -372,6 +372,17 @@ $("loadcancel").addEventListener("click", (event) => {
 });
 
 let worker = null;
+let retainedModel = null;
+$('loadretry').addEventListener('click',async()=>{
+  if (!retainedModel || state.loading) return;
+  const epoch = state.epoch + 1;
+  const note = document.querySelector('[data-model-handoff]');
+  if (note) note.textContent = 'Retrying the original model already received in this tab…';
+  await load(retainedModel.file, retainedModel.context);
+  if (note && epoch === state.epoch) note.textContent = state.project
+    ? 'Original model opened. Review its colours and settings before exporting.'
+    : 'The original model is retained in this tab. See the reader status below.';
+});
 
 function background() {
   if (!worker) worker = new RecolourWorker();
@@ -379,9 +390,11 @@ function background() {
 }
 
 /** A new file gets a brand-new worker, so no old load can land on the new one. */
-function restartWorker() {
+function restartWorker(fresh = false) {
   if (worker) worker.dispose();
-  worker = new RecolourWorker();
+  const url = new URL('./shared/recolour-worker.js', import.meta.url);
+  if (fresh) url.searchParams.set('retry', String(Date.now()));
+  worker = new RecolourWorker(url);
   return worker;
 }
 
@@ -412,8 +425,15 @@ function setBusy(text) {
 }
 
 const textureImporter=createTextureImport({buttonHost:document.getElementById('printeroptions'),onAccept:file=>load(file)});
-async function load(file) {
+async function load(file, context={}) {
   if(/\.(glb|zip)$/i.test(file.name)){textureImporter.open(file);return;}
+  retainedModel = {file, context};
+  $('loadretry').classList.add('hidden');
+  if (context.target) {
+    state.target = context.target;
+    $('target').value = context.target;
+    syncDestination();
+  }
   const epoch = (state.epoch += 1);
   // Any assessment or preview already in flight belongs to the previous file.
   assessToken += 1;
@@ -425,23 +445,23 @@ async function load(file) {
   setBusy(`reading ${file.name}…`);
   setLoading(true);
   try {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    // Checked *before* the worker is touched: a newer file may have been chosen
-    // while this one was still being read from disk.
-    if (epoch !== state.epoch) return;
     state.entries = null;                      // the worker owns the archive now
     const stageText = { zip: "Unpacking the file", parse: "Reading the model",
                         assess: "Measuring the colours",
                         preview: "Preparing the preview" };
-    const result = await restartWorker().load(bytes.buffer, {}, (progress) => {
+    const result = await loadModelWithRecovery({file, restart:restartWorker,
+      isCurrent:()=>epoch===state.epoch,
+      onRetry:()=>setBusy('The model is here. Restarting its reader and trying once more…'),
+      onProgress:(progress) => {
       if (epoch !== state.epoch) return;
       setBusy(`${stageText[progress.stage] || "Working"}… `
               + `${(progress.ms / 1000).toFixed(1)}s`);
       window.__loadProgress = { stage: progress.stage, ms: progress.ms };
-    });
+    }});
     if (epoch !== state.epoch) return;         // a newer file was chosen meanwhile
     applyMeta(result.meta, result.assessed);
-    state.plateId = state.project.plates.length ? state.project.plates[0].id : null;
+    state.plateId = state.project.plates.find(p=>String(p.id)===context.plateId)?.id
+      ?? state.project.plates[0]?.id ?? null;
     state.objects = [];
     show();
     $("modelname").textContent = file.yab3dDisplayName || file.name;
@@ -449,12 +469,21 @@ async function load(file) {
     $("printeroptions").open=false;
     $("drop").classList.add("hidden");
     window.__loadTiming = { ms: result.ms, triangles: result.assessed.counts.triangles };
+    if (context.purpose === 'reel-changes') {
+      $('advanced').open = true; $('plannercard').open = true;
+      $('plannercard').scrollIntoView({block:'start'});
+      $('prepareswaps').focus({preventScroll:true});
+    }
   } catch (error) {
     if (epoch !== state.epoch) return;
     state.project = null;
     state.entries = null;
     $("drop").classList.remove("hidden");
-    $("loaderror").textContent = `That file could not be read: ${error.message}. Choose another file.`;
+    const readerStopped = error.code === 'WORKER_STOPPED';
+    $('loadretry').classList.toggle('hidden', !readerStopped);
+    $("loaderror").textContent = readerStopped
+      ? `Your model (${file.name}) was received and is still in this tab. Its background reader could not run after a retry. Retry opening it below; you do not need to transfer it again.`
+      : `That file could not be read: ${error.message}. Choose another file.`;
     if(/colour group|colours.*at most|per-corner colours/.test(error.message))textureImporter.open(file);
   } finally {
     if (epoch === state.epoch) setLoading(false);
@@ -1400,22 +1429,6 @@ $("target").value = state.target;
 syncDestination();
 
 receiveModel({mount: $("drop").parentElement, canReceive:()=>!state.project&&!state.loading, load:async (file, context={})=>{
-  if (context.target) {
-    state.target = context.target;
-    $('target').value = context.target;
-    syncDestination();
-  }
-  await load(file);
-  if (!state.project) return false;
-  if (context.plateId && state.project.plates.some(p=>String(p.id)===context.plateId)) {
-    $('plate').value = context.plateId;
-    $('plate').dispatchEvent(new Event('change'));
-  }
-  if (context.purpose === 'reel-changes') {
-    $('advanced').open = true;
-    $('plannercard').open = true;
-    $('plannercard').scrollIntoView({block:'start'});
-    $('prepareswaps').focus({preventScroll:true});
-  }
-  return true;
+  await load(file, context);
+  return Boolean(state.project);
 }});

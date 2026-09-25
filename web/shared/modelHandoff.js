@@ -14,6 +14,7 @@ export function receiveModel({host=window, mount, canReceive, load}) {
     plateId: params.get('plate'),
   } : {};
   const note = host.document.createElement('p');
+  note.setAttribute('data-model-handoff', '');
   note.className = 'hint'; note.setAttribute('role', 'status'); mount.prepend(note);
   if (!/^[a-f0-9]{32}$/.test(token) || !(local || SENDERS.includes(origin)) || !host.opener) {
     note.textContent = 'This model connection is unavailable. Open the model again from its source tab, or drop the original 3MF here.';

@@ -19,7 +19,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.6";
+const VERSION = "2.6.7";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -32,6 +32,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "Full Spectrum links carry the loaded model even when the host rewrites page URLs. A stopped model reader retries once, retains the original file and offers another retry without transferring it again.",
   "Printer capacity: U1 stays at four inputs; other printers can use 4, 8, 16, a custom count or an unspecified setup. Resolve extra project filaments with blends, deliberate repainting, U1 reel-change planning or an explicit keep-all export for further setup.",
   "MakerWorld extension: open the original 3MF directly in Analyse & convert or Full Spectrum, with transfer and analysis status. Model data stays in your browser.",
   "Send applied physical filament colours to your existing Spool Studio Bridge for slot review and explicit confirmation.",
@@ -704,7 +705,8 @@ function openColourWorkflow(purpose) {
 }
 $('capacityblend').addEventListener('click', () => openColourWorkflow('blends'));
 $('capacityswaps').addEventListener('click', () => openColourWorkflow('reel-changes'));
-document.querySelectorAll('a[href="recolour.html"]').forEach(link=>link.addEventListener('click', event => {
+// Netlify rewrites .html links to pretty URLs. Bind to intent, not the URL text.
+document.querySelectorAll('a[data-model-workflow]').forEach(link=>link.addEventListener('click', event => {
   if (!session.sourceFile) return;
   event.preventDefault();
   openColourWorkflow('blends');
