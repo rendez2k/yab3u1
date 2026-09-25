@@ -7,7 +7,7 @@ export function renderFilamentPicker(host,{types,source=[],selected=[],target,no
   const note=document.createElement('p');note.className='hint';
   note.textContent='Choose presets for the actual reels you will use. Presets in your 3MF can be from Bambu, eSUN, Sunlu or any other brand. Import a resolved filament JSON to add another. Only reviewed material properties travel; machine commands do not.';
   host.append(note);
-  const label=document.createElement('label');label.textContent='Import filament preset (.json)';
+  const label=document.createElement('label');label.className='filament-preset-control';label.textContent='Import filament preset (.json)';
   const input=document.createElement('input');input.type='file';input.accept='.json';input.setAttribute('aria-label','Import filament preset JSON');
   input.onchange=async()=>{
     try {
@@ -21,7 +21,7 @@ export function renderFilamentPicker(host,{types,source=[],selected=[],target,no
   const diameter=nozzle==='auto'?(detectNozzle(sourceSettings)||'0.4'):nozzle;
   types.forEach((type,index)=>{
     const row=document.createElement('div');row.className='field';
-    const title=document.createElement('label');title.textContent=`Filament ${index+1} · ${type}`;
+    const title=document.createElement('label');title.className='filament-preset-control';title.textContent=`Filament ${index+1} · ${type}`;
     const select=document.createElement('select');select.setAttribute('aria-label',`Filament ${index+1} preset`);
     const candidates=[...source,...imported].filter(p=>p && p.type.toUpperCase()===type.toUpperCase());
     if(target==='snapmaker') for(const cfg of U1_PROFILES.filaments.filter(p=>p.compatible_printers?.includes(`Snapmaker U1 (${diameter} nozzle)`)

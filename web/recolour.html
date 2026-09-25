@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="texture-import.css">
+<link rel="stylesheet" href="shared/filamentPicker.css">
 <link rel="icon" type="image/png" href="assets/yab3d-mark-96.png">
 <title>YAB3D &mdash; Full Spectrum 3MF recolour, preview and reel-change plan</title>
 <meta name="description" content="YAB3D&rsquo;s Full Spectrum page: recolour a painted 3MF onto your own four reels, preview the predicted blends and write a Snapmaker Orca, Bambu Studio or PrusaSlicer project. Runs entirely in your browser.">
@@ -269,11 +270,13 @@
   .printer-status { margin: 14px 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
   .printer-status strong { display: block; }
   .colour-change { display: block; padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--line); font-size: 15px; line-height: 1.5; }
-  .change-pair { display: grid; grid-template-columns: minmax(0, 1fr) 20px minmax(0, 1fr); gap: 12px; align-items: center; }
-  .change-colour { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+  .change-pair { display: grid; grid-template-columns: minmax(0, 1fr) 20px minmax(0, 1fr); gap: 4px 12px; align-items: start; }
+  .change-colour { display: grid; grid-row:1 / span 4; grid-template-rows:subgrid; gap:4px; min-width: 0; overflow-wrap: anywhere; }
+  .change-colour:first-child { grid-column:1; }
+  .change-colour:last-child { grid-column:3; }
   .change-label, .change-colour small { color: var(--dim); font-size: 13px; }
   .change-swatch { display: block; width: 100%; height: 40px; border: 1px solid var(--line); border-radius: 6px; }
-  .change-arrow { text-align: center; font-size: 20px; }
+  .change-arrow { grid-column:2; grid-row:2; align-self:center; text-align:center; font-size:20px; line-height:1; }
   .change-recipe { display: block; margin-top: 10px; font-weight: 600; }
   .change-difference { display: block; color: var(--dim); font-size: 13px; margin-top: 2px; }
   #paletteslots { margin: 16px 0 24px; padding-block: 16px; border-block: 1px solid var(--line); }
@@ -284,7 +287,7 @@
   .slot-row strong { overflow-wrap: anywhere; }
   .slot-row select { width: 100%; }
   @media (max-width: 430px) {
-    .change-pair { gap: 8px; grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr); }
+    .change-pair { gap: 4px 8px; grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr); }
     .slot-row { grid-template-columns: 28px minmax(0, 1fr) 90px; gap: 8px; }
     .slot-row .swatch { width: 28px; height: 36px; }
   }

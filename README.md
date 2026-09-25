@@ -11,13 +11,13 @@ identifiers did not.
 
 Open **[yab3d.uk](https://yab3d.uk)**. The original Netlify address remains available.
 
-The `codex/u1-profile-matching` review branch adds ZIP bundle analysis, official
+Version 2.6.1 adds ZIP bundle analysis, official
 U1 material/nozzle/process matching, conservative speed transfer and optional
 brand filament presets. See the changelog for its limits. Brand presets come
 from the source 3MF or resolved JSON imports; this is not a universal brand
 catalogue. All analysis and conversion remain local and free.
 
-The same review also adds **Import a textured model** on both pages. Drop a GLB
+The release also adds **Import a textured model** on both pages. Drop a GLB
 or an OBJ/MTL/texture ZIP, or use this step for a dense vertex-colour 3MF. Choose
 2–16 colour groups, edit their swatches, compare the preview and confirm size and
 orientation. Continue into conversion/Full Spectrum or download the prepared
@@ -31,7 +31,7 @@ Three ways to use the project, with different workflows:
 | --- | --- | --- |
 | **`U1 Converter` shortcut** | this machine | local web UI (`u1ui.py` + `u1ui.html`), reads your installed Orca profiles and can verify a plate by slicing |
 | **`u1convert.py`** | any machine with Python | the command line tool; `--fill-bed`, `--verify`, `--supports`, `--colors` |
-| **`web/`** | any static host — live at <https://yab3d.uk> | [browser version](#the-browser-version-web) — v2.6.0, the whole conversion in the page, nothing uploaded |
+| **`web/`** | any static host — live at <https://yab3d.uk> | [browser version](#the-browser-version-web) — v2.6.1, the whole conversion in the page, nothing uploaded |
 
 A local replacement for [bl2u1.nbn.cat](https://bl2u1.nbn.cat) /
 [josuanbn/bl2u1](https://github.com/josuanbn/bl2u1) that actually works on

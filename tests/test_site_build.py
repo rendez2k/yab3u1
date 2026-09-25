@@ -53,6 +53,7 @@ PUBLIC_FILES = (
     "shared/textureWorker.js",
     "texture-import.css",
     "shared/filamentPicker.js",
+    "shared/filamentPicker.css",
     "shared/filamentProfiles.js",
     "shared/u1ProfileData.js",
     "shared/u1Profiles.js",

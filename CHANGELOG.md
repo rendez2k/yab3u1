@@ -1,3 +1,9 @@
+## 2.6.1
+
+- Publish the reviewed ZIP/texture imports, U1 profile and filament-preset matching, Full Spectrum cutouts, slot arrangement, copies, layer-height choices and compact workspace.
+- Fix filament label/dropdown spacing and align colour-comparison arrows with the swatches.
+- Include the verified U1 brim slicing fix and the reviewed filament-setup sender. Real-printer metadata writes still need physical verification; the local launcher now loads the production app.
+
 ## 2.6.1-preview.8
 
 - Compact the Full Spectrum desktop workspace by roughly 15–20%: smaller controls, spacing, headings, swatches and preview, while retaining mobile touch targets and the persistent action bar.

@@ -1,0 +1,14 @@
+.filament-preset-control {
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px 12px;
+  margin-block:8px;
+  min-width:0;
+}
+.filament-preset-control select,
+.filament-preset-control input[type=file] {
+  flex:1 1 220px;
+  min-width:0;
+  max-width:100%;
+}
