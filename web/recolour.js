@@ -24,7 +24,7 @@ import { renderFilamentPicker } from './shared/filamentPicker.js';
 import {createTextureImport} from './shared/textureImport.js';
 import { buildU1Profile, profileDescription, resolveLayerHeight } from './shared/u1Profiles.js';
 
-const VERSION = "2.6.4";
+const VERSION = "2.6.5";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
