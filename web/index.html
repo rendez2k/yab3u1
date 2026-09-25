@@ -399,6 +399,34 @@
   .extension-help li + li { margin-top: 6px; }
   .extension-help a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
   .extension-help :is(summary,a):focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+
+  /* Loaded projects use the desktop width; the initial file picker stays focused. */
+  body.has-model .wrap { max-width: 1440px; }
+  body.has-model .sub { display: none; }
+  body.has-model .head { margin-bottom: 12px; padding-bottom: 16px; }
+  body.has-model #convertdrop { display: none; }
+  #convertreplace { margin-left: auto; }
+  .conversion-modes:has(#mode-bulk[aria-pressed="true"]) #convertreplace { display: none; }
+  #convertworkspace { display: grid; gap: 18px; align-items: start; }
+  #convertworkspace > .card { min-width: 0; margin: 0; }
+  #sourcepreview .preview-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+  #sourcepreview h2 { margin: 0; text-transform: none; letter-spacing: 0; font-size: 18px; }
+  #sourcepreview #previewshow { padding: 7px 10px; font-size: 12px; }
+  #sourcepreview #convertpreview { height: clamp(280px, 40vh, 440px); }
+  #sourcepreview .row { gap: 12px; }
+  #convertpick > .row { gap: 12px; }
+  #convertpick > .row .field { min-width: 0; flex-basis: 180px; }
+  #convertpick .maprow { gap: 7px; }
+  #convertpick .mapid { min-width: 0; flex: 1 1 130px; }
+  #convertpick .maprow select { min-width: 0; flex: 1 1 165px; }
+  @media (min-width: 1050px) {
+    body.has-model #convertworkspace { grid-template-columns: minmax(0, 1fr) minmax(500px, 1fr); }
+    body.has-model #sourcepreview { position: sticky; top: 16px; }
+  }
+  @media (max-width: 620px) {
+    #sourcepreview #convertpreview { height: 280px; }
+    #sourcepreview .preview-heading { flex-wrap: wrap; }
+  }
 </style>
 <link rel="stylesheet" href="batch.css">
 </head>
@@ -432,7 +460,7 @@
 
   <details class="extension-help" id="chrome-extension">
     <summary>From MakerWorld? Get the Chrome extension</summary>
-    <p><a href="downloads/makerworld-yab3d-review-1.5.3.4.zip" download>Download Chrome extension 1.5.3.4 (ZIP)</a>
+    <p><a href="downloads/makerworld-yab3d-review-1.5.3.5.zip" download>Download Chrome extension 1.5.3.5 (ZIP)</a>
       &mdash; review build. Open the original 3MF in Analyse &amp; convert or Full Spectrum.</p>
     <ol>
       <li>Extract the ZIP to a folder you will keep.</li>
@@ -450,12 +478,13 @@
   <div class="conversion-modes" role="group" aria-label="Conversion mode">
     <button id="mode-single" type="button" aria-pressed="true" aria-controls="singlepanel">Single file</button>
     <button id="mode-bulk" type="button" aria-pressed="false" aria-controls="batchpanel">Bulk conversion</button>
+    <button id="convertreplace" class="hidden" type="button">Choose another model</button>
   </div>
 
   <div id="singlepanel">
   <div id="convertdrop" role="button" tabindex="0"
        aria-label="Choose a 3MF file to convert">
-    <strong>Drop a .3mf, GLB or ZIP bundle here</strong>
+    <strong id="dropheading">Drop a .3mf, GLB or ZIP bundle here</strong>
     <span>or click to choose a file &mdash; PrusaSlicer, Bambu Studio, OrcaSlicer or
       Snapmaker Orca projects</span>
     <input type="file" id="convertfile" accept=".3mf,.zip,.glb" multiple aria-label="3MF files to convert">
@@ -466,6 +495,35 @@
   <p class="hint" id="convertstatus" role="status" aria-live="polite"
      style="margin-top:12px"></p>
 
+  <div id="convertworkspace">
+    <section class="card hidden" id="sourcepreview" aria-labelledby="previewtitle">
+      <div class="preview-heading"><h2 id="previewtitle">Your model</h2>
+      <button type="button" id="previewshow" aria-expanded="false"
+              aria-controls="previewpanel">Show 3D preview</button></div>
+      <div id="previewpanel" class="hidden">
+      <p class="hint">Compare the original and output colours. This is a simplified
+        model preview; the exported model keeps its full detail.</p>
+      <canvas id="convertpreview" width="760" height="420"
+              aria-label="Preview of the model to convert"></canvas>
+      <div class="row" style="margin-top:10px">
+        <div class="field">
+          <label for="previewmode">View</label>
+          <select id="previewmode">
+            <option value="result" selected>Output colours</option>
+            <option value="original">Original colours</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button type="button" id="previewreset">Reset view</button>
+        </div>
+      </div>
+      <p class="hint" id="previewmodehint">Output colours: the same appearance,
+        printed from the filaments you chose. Original colours: the file as it was
+        read.</p>
+      <p class="hint" id="previewnote" role="status" aria-live="polite"></p>
+      </div>
+    </section>
   <div class="card hidden" id="convertpick">
     <h2>Write a project</h2>
     <div class="row">
@@ -569,34 +627,7 @@
 
     <p class="hint" id="convertplan" role="status" aria-live="polite"></p>
 
-    <fieldset class="preview">
-      <legend>3D preview</legend>
-      <button type="button" id="previewshow" aria-expanded="false"
-              aria-controls="previewpanel">Show 3D preview</button>
-      <div id="previewpanel" class="hidden">
-      <p class="hint">Compare the original and output colours. This is a simplified
-        model preview; the exported model keeps its full detail.</p>
-      <canvas id="convertpreview" width="760" height="420"
-              aria-label="Preview of the model to convert"></canvas>
-      <div class="row" style="margin-top:10px">
-        <div class="field">
-          <label for="previewmode">View</label>
-          <select id="previewmode">
-            <option value="result" selected>Output colours</option>
-            <option value="original">Original colours</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>&nbsp;</label>
-          <button type="button" id="previewreset">Reset view</button>
-        </div>
-      </div>
-      <p class="hint" id="previewmodehint">Output colours: the same appearance,
-        printed from the filaments you chose. Original colours: the file as it was
-        read.</p>
-      <p class="hint" id="previewnote" role="status" aria-live="polite"></p>
-      </div>
-    </fieldset>
+
 
     <div class="actions">
       <button type="button" class="primary" id="convertgo">Convert and download</button>
@@ -604,7 +635,7 @@
     </div>
     <div id="convertout" style="margin-top:12px"></div>
   </div>
-
+  </div><!-- single-file workspace -->
   </div>
 
   <section id="batchpanel" class="card hidden" aria-labelledby="batchtitle">

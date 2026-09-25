@@ -39,13 +39,15 @@ globalThis.YAB3DModelHandoff = (() => {
   function mount({button,busy,capture}) {
     if(!button?.parentElement || document.getElementById('yab3d-model-tools'))return;
     const panel=document.createElement('div'); panel.id='yab3d-model-tools';
-    panel.style.cssText='display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0;font:14px/1.5 system-ui;color:inherit';
+    panel.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px 10px;margin:12px 0;width:100%;min-width:0;box-sizing:border-box;flex:0 0 100%;grid-column:1/-1;clear:both;font:14px/1.5 system-ui;color:inherit';
+    const style=document.createElement('style');
+    style.textContent='#yab3d-model-tools :is(select,button):focus-visible{outline:2px solid currentColor;outline-offset:3px}#yab3d-model-tools button:disabled{opacity:.55;cursor:wait}#yab3d-model-tools button:hover:not(:disabled){background:#9bdf28}';
     const select=document.createElement('select');select.setAttribute('aria-label','YAB3D workspace');
     for(const [value,label] of [['index.html','Analyse & convert'],['recolour.html','Full Spectrum']]){const option=document.createElement('option');option.value=value;option.textContent=label;select.append(option);}
-    select.style.cssText='padding:8px;border:1px solid #888;border-radius:6px;background:Canvas;color:CanvasText;max-width:100%';
+    select.style.cssText='height:42px;width:100%;min-width:0;box-sizing:border-box;padding:0 12px;border:1px solid #888;border-radius:8px;background:Canvas;color:CanvasText;font:inherit';
     const launch=document.createElement('button');launch.type='button';launch.textContent='Open in YAB3D';
-    launch.style.cssText='padding:9px 14px;border:1px solid #598500;border-radius:6px;background:#adf238;color:#132000;font-weight:600;cursor:pointer';
-    const note=document.createElement('span');note.setAttribute('role','status');note.style.cssText='flex-basis:100%;font-size:12px';note.textContent='Review build · original project transferred locally';
+    launch.style.cssText='height:42px;box-sizing:border-box;padding:0 16px;border:1px solid #598500;border-radius:8px;background:#adf238;color:#132000;font:600 14px/1.5 system-ui;white-space:nowrap;cursor:pointer';
+    const note=document.createElement('span');note.setAttribute('role','status');note.style.cssText='grid-column:1/-1;font-size:12px;overflow-wrap:anywhere';note.textContent='YAB3D review · open the original model';
     launch.addEventListener('click',async event=>{
       event.preventDefault();event.stopPropagation();
       if(busy()){note.textContent='Wait for the current MakerWorld download to finish.';return;}
@@ -54,7 +56,16 @@ globalThis.YAB3DModelHandoff = (() => {
       catch(error){if(handoff)handoff.fail(error.message);else note.textContent=error.message;}
       finally{launch.disabled=false;select.disabled=false;}
     });
-    panel.append(select,launch,note);button.parentElement.insertAdjacentElement('afterend',panel);
+    panel.append(style,select,launch,note);
+    // MakerWorld nests the native button inside a horizontal action bar. Insert
+    // after that bar, never between its download button and dropdown arrow.
+    let anchor=button.parentElement;
+    for(let level=0;level<3&&anchor.parentElement;level++){
+      const parent=anchor.parentElement, css=getComputedStyle(parent);
+      if(!['flex','inline-flex'].includes(css.display)||css.flexDirection!=='row'||parent.getBoundingClientRect().height>180)break;
+      anchor=parent;
+    }
+    anchor.insertAdjacentElement('afterend',panel);
   }
   return {open,mount};
 })();

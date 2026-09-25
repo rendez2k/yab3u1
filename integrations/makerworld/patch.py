@@ -52,8 +52,8 @@ replace(anchor, anchor + '''
     });
 ''')
 path.write_text(content, encoding='utf-8')
-manifest['version'] = '1.5.3.4'
-manifest['version_name'] = '1.5.3.4 - YAB3D review handoff'
+manifest['version'] = '1.5.3.5'
+manifest['version_name'] = '1.5.3.5 - YAB3D review handoff'
 scripts = next(s['js'] for s in manifest['content_scripts'] if 'content.js' in s['js'])
 scripts.insert(scripts.index('content.js'), 'yab3d-handoff.js')
 (root / 'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n', encoding='utf-8')

@@ -15,7 +15,7 @@ introduced. Existing U1 conversion and the IDM filename fix are retained.
 1. Copy the installed MakerWorld-to-U1 **1.5.3.3** directory to a staging directory.
 2. Run `python integrations/makerworld/patch.py <staging-directory>`.
 3. Back up the installed extension. Copy the staged `manifest.json`, `content.js`
-   and `yab3d-handoff.js` into it. The resulting version is **1.5.3.4**.
+   and `yab3d-handoff.js` into it. The resulting version is **1.5.3.5**.
 4. Reload the extension in Chrome's extensions page, then refresh MakerWorld.
 5. Choose a print profile, choose the YAB3D workspace, and click **Open in YAB3D**.
    Complete MakerWorld login or verification if requested. Allow its popup.

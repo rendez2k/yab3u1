@@ -19,7 +19,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.2";
+const VERSION = "2.6.3";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -51,7 +51,7 @@ const CHANGES = [
   "Bulk conversion: add several projects, choose one destination and download a ZIP with one 3MF per plate plus a conversion report. Files run one at a time; stopping keeps completed outputs.",
   "Compatible designer quality, strength and support settings now travel to every target by default, with a transfer-details list.",
   "U1 Fill plate reserves a tower corner instead of full side strips. Clone spacing includes explicit brims/rafts and an estimated support allowance; check automatic contours after slicing.",
-  "The 3D preview opens only when requested and can be hidden again, without an empty viewer taking up space.",
+  "The main converter opens a simplified preview automatically, beside settings on wide screens. Loaded projects replace the large drop zone with a compact file control.",
   "Fill plate now uses the U1's destination bed and keeps the assigned colours on every copy.",
   "The homepage converts a painted 3MF between Snapmaker Orca, Bambu Studio, OrcaSlicer and PrusaSlicer, in any direction.",
   "Every source filament definition, the paint and the geometry travel unchanged; there is no four-slot limit and no colour substitution.",
@@ -59,7 +59,7 @@ const CHANGES = [
   "Choose a slot beside each colour; the other colour moves automatically. The separate Exchange controls have been removed.",
   "Every row and option names its colour in plain words beside the hex.",
   "A project carrying native Full Spectrum blends is refused with a sentence rather than quietly written as a solid colour.",
-  "Optional Show preview with Original/Output views, drawn only when you ask for it.",
+  "Compare Original/Output views in the preview, or hide it while adjusting settings.",
   "Every download carries a thumbnail rendered from the output colours, so Windows Explorer and the slicers show the model you actually saved.",
   "A Snapmaker Orca (U1) export carries the source's own compatible print settings and support decision again, with a checkbox for the settings and a From source / On / Off control for supports.",
   "Full Spectrum recolouring (own reels, predicted blends, review) is its own page, one button away.",
@@ -203,8 +203,24 @@ const session = new ConvertSession(() => new RecolourWorker(), {
     $("convertout").innerHTML = "";
     window.__convertLoaded = null;
     resetPreview();
+    document.body.classList.remove('has-model');
+    $("sourcepreview").classList.add('hidden');
+    $("convertreplace").classList.add('hidden');
+    $("dropheading").textContent='Drop a .3mf, GLB or ZIP bundle here';
   },
-  loaded: (state) => renderChoices(state),
+  loaded: (state) => {
+    const firstLoad=!document.body.classList.contains('has-model');
+    renderChoices(state);
+    document.body.classList.add('has-model');
+    $("sourcepreview").classList.remove('hidden');
+    $("convertreplace").classList.remove('hidden');
+    $("dropheading").textContent='Choose another model';
+    if(firstLoad) {
+      previewShown=true;
+      syncPreviewVisibility();
+      requestAnimationFrame(()=>refreshPreview());
+    }
+  },
   mode: () => syncMode(),
   rule: () => {
     syncRule();
@@ -306,8 +322,8 @@ function syncOptions(select, palette, signature, value) {
 function renderChoices(state) {
   clearError();
   const plate = $("convertplate");
-  plate.innerHTML = state.plates.map((entry) =>
-    `<option value="${esc(entry.id)}">${esc(entry.name)}</option>`).join("");
+  plate.innerHTML = state.plates.map((entry,index) =>
+    `<option value="${esc(entry.id)}">${esc(entry.name || `Plate ${index+1}`)}</option>`).join("");
   plate.value = String(state.plateId);
   plate.disabled = state.plates.length < 2;
 
@@ -615,10 +631,10 @@ function syncRule() {
 
 /* ---------- controls ---------- */
 
-/* ---------- preview (only when asked for) ----------
+/* ---------- automatic, simplified preview ----------
  *
- * Nothing is prepared for the 3D view until Show preview is pressed: the file
- * load stays metadata-only.  In a conversion the source palette *is* the
+ * Metadata loads first, then the worker prepares a bounded preview automatically.
+ * Hide preview stops pending visual updates; exports keep the original geometry.  In a conversion the source palette *is* the
  * destination palette -- only the assignment differs -- so one colour table
  * serves both Original and Output.
  */
@@ -730,6 +746,10 @@ function resetPreview() {
 
 const input = $("convertfile");
 const drop = $("convertdrop");
+$("convertreplace").addEventListener('click', () => {
+  $("mode-single").click();
+  input.value=''; input.click();
+});
 const textureImporter=createTextureImport({buttonHost:document.getElementById('singlepanel'),onAccept:file=>session.load(file)});
 const batch = initBatch({onTextureBundle:file=>textureImporter.open(file)});
 function openFiles(files) {
