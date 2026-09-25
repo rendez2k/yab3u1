@@ -1,3 +1,4 @@
+import {receiveModel} from './shared/modelHandoff.js';
 // The online page: open a painted 3MF, recolour it onto four reels (with predicted
 // blends if you want them), preview it, export a project for Snapmaker, Bambu or
 // PrusaSlicer, and plan reel changes from a real slice.
@@ -23,7 +24,7 @@ import { renderFilamentPicker } from './shared/filamentPicker.js';
 import {createTextureImport} from './shared/textureImport.js';
 import { buildU1Profile, profileDescription, resolveLayerHeight } from './shared/u1Profiles.js';
 
-const VERSION = "2.6.1";
+const VERSION = "2.6.2";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -1397,3 +1398,5 @@ $("target").innerHTML = RECOLOUR_TARGETS.map((id) =>
   `<option value="${id}">${esc(LABELS[id])}</option>`).join("");
 $("target").value = state.target;
 syncDestination();
+
+receiveModel({mount: $("drop").parentElement, canReceive:()=>!state.project&&!state.loading, load:async file=>{await load(file);return Boolean(state.project);}});

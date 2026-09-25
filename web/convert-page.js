@@ -1,3 +1,4 @@
+import {receiveModel} from './shared/modelHandoff.js';
 // The homepage converter: any supported dialect in, any out, every colour kept.
 //
 // The page is deliberately thin.  It owns the markup and nothing else:
@@ -18,7 +19,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.1";
+const VERSION = "2.6.2";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -31,6 +32,8 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "MakerWorld extension: open the original 3MF directly in Analyse & convert or Full Spectrum, with transfer and analysis status. Model data stays in your browser.",
+  "Send applied physical filament colours to your existing Spool Studio Bridge for slot review and explicit confirmation.",
   "Fixed a Snapmaker Orca slicing crash caused by object-level support-speed overrides; the speed is retained at project level.",
   "Full Spectrum keeps Apply and Download within reach, with compact palette comparisons and collapsible settings.",
   "Full Spectrum: direct U1 filament setup, copy layout, clearer apply action and equal mode buttons.",
@@ -867,3 +870,5 @@ $("previewmode").addEventListener("change", () => {
 });
 
 paintChrome();
+
+receiveModel({mount: document.getElementById("singlepanel"), canReceive:()=>!session.state&&!session.busy, load:async file=>{await session.load(file);return Boolean(session.state);}});

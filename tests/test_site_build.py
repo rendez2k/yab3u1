@@ -41,6 +41,7 @@ PUBLIC_FILES = (
     "shared/printer.js",
     "shared/printerPanel.js",
     "shared/printerBridge.js",
+    "shared/modelHandoff.js",
     "assets/yab3d-mark-96.png",
     "assets/yab3d-mark.png",
     "shared/assignment.js",
