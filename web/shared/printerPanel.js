@@ -1,21 +1,36 @@
 import {printerOrigin,filamentSetup,inspectPrinter,sendSetup} from './printer.js';
+import {openPrinterBridge} from './printerBridge.js';
 export function mountPrinter(host,getPalette) {
  const $=id=>host.querySelector('[data-printer="'+id+'"]');
  const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  host.innerHTML=`<summary>Send filament setup to U1</summary><p class="hint">Set the four physical slots to match your applied palette. Blended colours stay in the project. Load the actual reels first; this updates colour and material labels only.</p>
+ <button type="button" data-printer="bridge">Use my Spool Studio Bridge</button>
+ <p class="hint">Already running Spool Studio Bridge? Carry this palette and slot order into Spool Studio to review against your library. Your existing connection handles the send.</p>
+ <div class="printer-status" role="status" aria-live="polite"><strong data-printer="bridge-state">Nothing sent</strong><p class="hint" data-printer="bridge-status">Apply a palette, then open your existing bridge.</p></div>
+ <button type="button" data-printer="bridge-cancel" hidden>End palette handoff</button>
+ <button type="button" data-printer="palette" hidden>Go to Apply palette</button>
+ <details data-printer="direct"><summary>Connect directly / local launcher</summary>
  <label class="field">U1 address<input data-printer="address" type="text" placeholder="192.168.1.100" autocomplete="off"></label>
  <label class="field">Moonraker API key (only if required)<input data-printer="key" type="password" autocomplete="off"></label>
  <p class="hint">The address and key stay in this tab.</p>
- <div class="printer-status" role="status" aria-live="polite"><strong data-printer="state">Nothing sent</strong><p class="hint" data-printer="status"></p><button type="button" data-printer="palette" hidden>Go to Apply palette</button></div>
+ <div class="printer-status" role="status" aria-live="polite"><strong data-printer="state">Nothing sent</strong><p class="hint" data-printer="status"></p></div>
  <button type="button" data-printer="check">Check printer & review slots</button>
  <div data-printer="review"></div><button type="button" class="primary" data-printer="send" hidden>Send reviewed slots to U1</button>
- <details><summary>Connection help / local launch</summary><p class="hint">Use the same network as your U1. Direct browser access needs Moonraker to allow this site and your browser to permit local network access. If the browser blocks it, run this same app locally:</p><p><a href="local-printer.js" download="yab3d-local.cjs">Download local launcher</a></p><p class="hint">Requires Node.js 22 or newer. Save the file, then run:</p><pre>node yab3d-local.cjs http://YOUR-PRINTER-IP</pre><p class="hint">Open the localhost address it prints and load your model there. It connects straight to your U1, with no Spool Studio account or public printer port. If Moonraker requires a key, set YAB3D_PRINTER_API_KEY in the launcher’s environment.</p></details>`;
- let review=null,request=null,busy=false;
+ <details><summary>Connection help / local launch</summary><p class="hint">Use the same network as your U1. Direct browser access needs Moonraker to allow this site and your browser to permit local network access. If the browser blocks it, run this same app locally:</p><p><a href="local-printer.js" download="yab3d-local.cjs">Download local launcher</a></p><p class="hint">Requires Node.js 22 or newer. Save the file, then run:</p><pre>node yab3d-local.cjs http://YOUR-PRINTER-IP</pre><p class="hint">Open the localhost address it prints and load your model there. It connects straight to your U1, with no Spool Studio account or public printer port. If Moonraker requires a key, set YAB3D_PRINTER_API_KEY in the launcher’s environment.</p></details></details>`;
+ let review=null,request=null,busy=false,cancelBridge=null,bridgePending=false;
+ const bridgeStatus=(title,message)=>{$('bridge-state').textContent=title;$('bridge-status').textContent=message;};
  const status=(title,message)=>{$('state').textContent=title;$('status').textContent=message;};
  function readiness(){
-  const ready=Boolean(getPalette());$('check').disabled=busy||!ready;$('palette').hidden=ready;
+  const ready=Boolean(getPalette());$('check').disabled=busy||bridgePending||!ready;$('bridge').disabled=busy||bridgePending||!ready;$('palette').hidden=ready;
   return ready;
  }
+ $('bridge').onclick=()=>{
+  if(busy||bridgePending||!getPalette())return;
+  clear();bridgePending=true;readiness();$('bridge-cancel').hidden=false;$('direct').open=false;
+  const cancel=openPrinterBridge({reels:getPalette(),status:bridgeStatus,done:()=>{bridgePending=false;cancelBridge=null;$('bridge-cancel').hidden=true;readiness();}});
+  if(bridgePending)cancelBridge=cancel;
+ };
+ $('bridge-cancel').onclick=()=>cancelBridge?.();
  $('palette').addEventListener('click',()=>{
   const button=document.getElementById('applyforexport');
   const target=button&&!button.hidden?button:document.getElementById('userecommended');
@@ -66,7 +81,7 @@ export function mountPrinter(host,getPalette) {
  return {refresh(){
   if(busy)return;
   const current=signature();
-  if(current!==previousPalette){clear();previousPalette=current;status('Nothing sent for this palette',getPalette()?'Palette ready. Check the printer to review its current slots before sending.':'Apply your chosen palette first, then check the printer.');}
+  if(current!==previousPalette){if(cancelBridge)cancelBridge();else bridgeStatus('Nothing sent for this palette',getPalette()?'Palette ready. Open Spool Studio to review your four slots through the existing bridge.':'Apply your chosen palette first.');clear();previousPalette=current;status('Nothing sent for this palette',getPalette()?'Palette ready. Check the printer to review its current slots before sending.':'Apply your chosen palette first, then check the printer.');}
   readiness();
  }};
 }
