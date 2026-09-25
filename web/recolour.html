@@ -211,7 +211,16 @@
   #colouroutcome small { color: var(--dim); }
   .outcomewarning { color: var(--bad); }
   .previewdetails summary { font-size: 12px; color: var(--dim); cursor: pointer; min-height: 32px; }
-  .workflowmodes { display:flex; flex-wrap:wrap; margin:12px 0; }
+  .workflowmodes { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); margin:12px 0; width:100%; }
+  .workflowmodes button { min-width:0; padding:12px 10px; white-space:normal; text-wrap:balance; }
+  #printersetup { margin-top:20px; border-top:1px solid var(--line); padding-top:14px; }
+  #printersetup summary { cursor:pointer; font-weight:600; padding:8px 0; }
+  #printersetup .field { margin:12px 0; }
+  #printersetup input:not([type=checkbox]) { font:inherit; padding:10px; border:1px solid var(--line); border-radius:10px; background:var(--panel2); color:var(--fg); }
+  .printer-slot { display:grid; gap:8px; padding:14px 0; border-bottom:1px solid var(--line); }
+  #copycontrols { min-width:0; margin:18px 0; padding:16px; border:1px solid var(--line); border-radius:12px; }
+  #copycontrols input { font:inherit; color:var(--fg); background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:8px; max-width:110px; }
+  #applyforexport { width:100%; margin-bottom:12px; }
   #modelchoices { margin:16px 0; }
   #exactcolours { margin:12px 0; gap:12px; }
   #reels { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; }
@@ -441,13 +450,16 @@
   <div class="card hidden" id="exportcard">
     <h2>Export your project</h2>
     <details><summary>Filament brand presets (optional)</summary><div id="spectrumfilaments"></div></details>
+    <fieldset id="copycontrols"><legend>Copies on the plate</legend><div class="row"><label class="field">Copies<input id="spectrumcopies" type="number" min="1" max="64" step="1" value="1"></label><label class="field">Gap (mm)<input id="spectrumgap" type="number" min="0" max="100" step="1" value="5"></label></div><p class="hint" id="copynote" role="status">One copy keeps the original plate arrangement.</p></fieldset>
     <p class="hint" id="exportnote" role="status"></p>
+    <button type="button" id="applyforexport" hidden>Apply this palette</button>
     <label class="check"><input type="checkbox" id="review">
       <span id="reviewtext">I have checked the colour mapping and accept the substitutions and predicted blends.</span></label>
     <div class="row">
       <button type="button" class="primary" id="export">Download the project</button>
     </div>
     <div id="exportlog" class="hint"></div>
+    <details id="printersetup"></details>
   </div>
 
   </div>

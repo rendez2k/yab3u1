@@ -13,6 +13,9 @@ import { thumbnailSizes } from "./shared/thumbnail.js";
 import { RecolourWorker } from "./shared/workerClient.js";
 import { readZip } from "./zip.js";
 import { mountSpoolImport } from "./shared/spoolImport.js";
+import { mountPrinter } from "./shared/printerPanel.js";
+import { targetLayout, planLayout } from "./shared/layout.js";
+import { planningAllowance } from "./shared/printSettings.js";
 import { colourName } from "./shared/assignment.js";
 
 const REEL_KEY = "yab3u1-web-reels";
@@ -20,7 +23,7 @@ import { renderFilamentPicker } from './shared/filamentPicker.js';
 import {createTextureImport} from './shared/textureImport.js';
 import { buildU1Profile, profileDescription } from './shared/u1Profiles.js';
 
-const VERSION = "2.6.1-preview.4";
+const VERSION = "2.6.1-preview.5";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -36,13 +39,35 @@ const state = {
   strategy: "blend", overrides: {}, recipeKey: "", reviewed: false, approximate: false,
   workflow: "model", modelType: "PLA", keepExact: [], useOwned: false, modelApplied: false, modeReels: {},
   stock: null, locked: [false,false,false,false], recommendation: null, recommendationSearch: null, reelView: "loaded",
-  appliedSlotOrder: null, loadedTuning: null, recommendationOptions: [], recommendationIndex: 0, showMorePalettes: false,
+  layout: null, layoutError: "", bounds: null, boundsKey: "", appliedSlotOrder: null, loadedTuning: null, recommendationOptions: [], recommendationIndex: 0, showMorePalettes: false,
   // Bumped on every upload so a slow read of the previous file cannot land on top
   // of the new one and re-approve colours the user never reviewed.
   epoch: 0,
 };
 
 window.__recolour = state;                    // the QA harness and the console
+
+let printerPanel=null;
+function updateCopies() {
+  const copies=Number($("spectrumcopies").value),spacing=Number($("spectrumgap").value);
+  state.layout=null;state.layoutError='';
+  if(!Number.isInteger(copies)||copies<1||copies>64||!$("spectrumgap").value.trim()||!Number.isFinite(spacing)||spacing<0||spacing>100)state.layoutError='Choose 1–64 whole copies and a gap from 0–100 mm.';
+  else if(copies>1) {
+    if(state.target!=='snapmaker')state.layoutError='Multiple copies currently use the U1 bed. Choose Snapmaker output, or arrange copies in your destination slicer.';
+    else if(!state.bounds)state.layoutError='Checking the selected model’s size…';
+    else {
+      const sources=[state.project?.sourceSettings||{},...state.objects.map(id=>state.project.meta.get(String(id))?.settings||{})];
+      const allowance=planningAllowance(sources,'snapmaker',true,'auto',state.supportsPainted);
+      state.layout=targetLayout('snapmaker',{copies,spacing,width:270,depth:270,tower:true,...allowance});
+      const plan=planLayout(state.bounds,state.layout);
+      if(plan.capped||plan.blocked)state.layoutError=`Only ${plan.copies} of ${copies} copies fit this bed allowance. Reduce the copies or gap.`;
+    }
+  }
+  $("copynote").textContent=state.layoutError || (copies===1?'One copy keeps the original plate arrangement.':`${copies} copies of the selected group on the U1 bed, with ${spacing} mm gaps and a prime-tower allowance. Check supports and the actual tower after slicing.`);
+}
+['spectrumcopies','spectrumgap'].forEach(id=>$(id).addEventListener('input',()=>{updateCopies();clearReview();refreshPreview();}));
+$("applyforexport").addEventListener('click',()=>$("userecommended").click());
+printerPanel=mountPrinter($("printersetup"),()=>state.project && state.target==='snapmaker' && state.reelView==='loaded' && (state.workflow==='loaded'||state.modelApplied) && state.strategy!=='source' ? state.reels : null);
 
 function defaultReels() {
   try {
@@ -647,6 +672,14 @@ async function refresh() {
 /** Everything that follows an assessment, with the assessment already in hand. */
 function useAssessed(assessed) {
   state.assessed = assessed;
+  if(state.boundsKey!==state.assessedKey) {
+    const key=state.assessedKey;state.boundsKey=key;state.bounds=null;
+    background().bounds(state.plateId,state.objects).then(result=>{
+      if(state.assessedKey!==key)return;
+      state.bounds=result.bounds;state.supportsPainted=result.supportsPainted;updateCopies();renderExport();refreshPreview();
+    }).catch(()=>{if(state.assessedKey===key){state.layoutError='Could not measure the selected model.';renderExport();}});
+  }
+  updateCopies();
   requestRecommendation();
   const surfaceColours = new Set(assessed.used || []).size;
   const extraColours = Math.max(0, state.project.paletteCount - surfaceColours);
@@ -874,6 +907,8 @@ $('spectrumnozzle').addEventListener('change',()=>{
 });
 $("target").addEventListener("change", () => {
   state.target = $("target").value;
+  updateCopies();
+  refreshPreview();
   cancelPlan();
   syncDestination();
   clearReview();
@@ -929,7 +964,7 @@ async function refreshPreview() {
                                       state.previewMode, table, mapping,
                                       state.geometryId,
                                       (state.assessed && state.assessed.counts
-                                       && state.assessed.counts.triangles) || 0);
+                                       && state.assessed.counts.triangles) || 0,state.layout);
     // A newer request (another palette, another selection, another file) wins.
     if (token !== previewToken) return;
     state.previewFailed = "";
@@ -943,7 +978,7 @@ async function refreshPreview() {
     window.__preview = { mode: state.previewMode, triangles: 0, error: error.message };
     return;
   }
-  const geometry = `${state.plateId}|${state.objects.join(",")}`;
+  const geometry = `${state.plateId}|${state.objects.join(",")}|${JSON.stringify(state.layout)}`;
   const fit = geometry !== state.previewGeometry;
   state.previewGeometry = geometry;
   applyPreview(soup, fit);
@@ -1012,6 +1047,9 @@ function paletteOf(payload, mode) {
 // ------------------------------------------------------------------ export ----
 
 function renderExport() {
+  printerPanel?.refresh();
+  $("printersetup").hidden=state.target!=="snapmaker";
+  $("applyforexport").hidden=state.reelView!=="recommended" || !state.recommendation;
   $('spectrumprofile').classList.toggle('hidden',state.target!=='snapmaker');
   let profileError='';
   try {
@@ -1033,7 +1071,7 @@ function renderExport() {
   const negative = state.project && [...state.project.meta.values()].some(meta => state.objects.map(String).includes(String(meta.id)) && (meta.parts || []).some(part => part.subtype === 'negative_part'));
   $('cutoutnote').classList.toggle('hidden', !negative);
   const reviewBox = $("review");
-  const blocking = profileError || (negative && target === 'prusa' ? 'negative cutouts require Snapmaker Orca or Bambu Studio output' : '') || (!state.objects.length ? "tick at least one object"
+  const blocking = state.layoutError || profileError || (negative && target === 'prusa' ? 'negative cutouts require Snapmaker Orca or Bambu Studio output' : '') || (!state.objects.length ? "tick at least one object"
     : state.strategy!=='source' && state.workflow==='model' && !state.modelApplied && state.reelView!=='recommended' ? "choose and apply a model palette"
     : payload.blocked || (state.reelView==='recommended' ? 'apply the selected palette or blend settings' : null));
   const needsReview = state.strategy !== "source" && !blocking;
@@ -1045,7 +1083,7 @@ function renderExport() {
   $("export").disabled = state.loading || state.exporting || Boolean(blocking)
     || (needsReview && !state.reviewed);
   $("exportnote").textContent = blocking
-    ? `Cannot export yet: ${blocking}.`
+    ? (blocking==='apply the selected palette or blend settings' ? 'This palette is a preview. Apply it below, then review the colour changes to download.' : `Cannot export yet: ${blocking}.`)
     : mixtures
     ? (target === "snapmaker"
       ? `Download a Snapmaker Orca project with four physical reels and ${mixtures} blend recipe(s). Check the settings and slice it before printing.`
@@ -1063,7 +1101,7 @@ function renderExport() {
 function exportRevision() {
   const payload = resultPlan();
   return JSON.stringify({epoch: state.epoch, plate: state.plateId,
-    objects: state.objects, target: state.target, reels: state.reels, u1Nozzle:state.u1Nozzle,
+    objects: state.objects, layout:state.layout, layoutError:state.layoutError, target: state.target, reels: state.reels, u1Nozzle:state.u1Nozzle,
     physical: payload.physical, mapping: payload.mapping, recipes: payload.recipes,
     strategy: state.strategy, reviewed: state.reviewed, reelView:state.reelView});
 }
@@ -1094,7 +1132,7 @@ $("export").addEventListener("click", async () => {
       state.plateId, state.objects, table, previewMapping,
       { size: sizes.main, small: sizes.small,
         estimate: (state.assessed && state.assessed.counts
-                   && state.assessed.counts.triangles) || 0 });
+                   && state.assessed.counts.triangles) || 0,layout:state.layout });
     if (exportRevision() !== revision) return;
     if (!rendered || !rendered.main) {
       throw new Error("the output thumbnail could not be rendered, so this project "
@@ -1105,7 +1143,7 @@ $("export").addEventListener("click", async () => {
     const built = await background().export(state.plateId, state.objects, {
       target: state.target, reels: state.reels, physical: payload.physical,
       mapping: payload.mapping, recipes: payload.recipes,
-      title: state.project.title, u1Nozzle:state.u1Nozzle,
+      title: state.project.title, u1Nozzle:state.u1Nozzle, layout:state.layout,
       thumbnails: { main: rendered.main, small: rendered.small || null },
     });
     if (exportRevision() !== revision) return;

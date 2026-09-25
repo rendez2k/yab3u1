@@ -171,6 +171,7 @@ export function colourName(value) {
   }
   const saturation=(max-min)/(1-Math.abs(2*lightness-1));
   if(hue>=55 && hue<=90 && saturation<=.6 && lightness>.3 && lightness<.75) return "Muted yellow-green";
+  if(hue>=15 && hue<55 && lightness>=.85) return "Light beige";
   if(hue>=20 && hue<55 && saturation<.4 && lightness>.55 && lightness<.85) return "Beige";
   const bucket = HUE_NAMES.find(([ceiling]) => hue < ceiling);
   const name = bucket ? bucket[1] : "Red";

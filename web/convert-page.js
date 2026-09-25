@@ -18,7 +18,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.1-preview.4";
+const VERSION = "2.6.1-preview.5";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -31,6 +31,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "Full Spectrum: direct U1 filament setup, copy layout, clearer apply action and equal mode buttons.",
   "Full Spectrum: larger original-to-result swatches and physical slot ordering for suggested palettes, with blend recipes preserved.",
   "Bulk U1 layer heights: preserve each designer’s settings, use a standard nozzle preset or choose a custom height. Review source-to-output heights before conversion; incompatible custom heights are blocked.",
   "Import textured GLB, OBJ/MTL texture ZIPs and dense vertex-colour 3MFs. Compare a reduced 2–16 colour palette, edit swatches, confirm size and orientation, then convert or use Full Spectrum.",

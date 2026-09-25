@@ -5,6 +5,15 @@ The version shown on the page comes from `VERSION` in `web/convert-page.js` (and
 the collapsed "What's new" block in the footer. Bump those constants and add a
 section here together.
 
+## 2.6.1-preview.5 — U1 setup and Full Spectrum workflow (review only)
+
+- Equal-width mode buttons with wrapping labels; pale warm model colours such as #F7E6DE are labelled Light beige.
+- The export section explains pending palette selection and offers Apply this palette in place.
+- Full Spectrum U1 exports support 1–64 requested copies with adjustable gaps. Preview, thumbnail and export share the bed layout; requests beyond the planning allowance are blocked.
+- Send the applied four-slot palette directly to a compatible U1 through Moonraker: read-only connection check, explicit review, fresh idle/capability checks, read-back verification and no automatic retry after uncertain writes. Linked Spoolman slots are blocked to avoid assigning usage to the wrong reel.
+- A downloadable Node.js local launcher provides the same review app with a loopback-only, restricted metadata connection when browser-to-LAN access is blocked. No Spool Studio account is involved.
+- Hardware validation so far is read-only on a paxx U1; write and failure paths are covered by simulated printer tests. A supervised metadata send remains to be checked by the user.
+
 ## 2.6.1-preview.4 — Colour comparisons and palette slots (review only)
 
 - Larger original and predicted colour swatches in palette suggestions and the preview summary, with readable names, hex values, ratios and change labels.
