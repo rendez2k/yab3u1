@@ -36,7 +36,11 @@ export function receiveModel({host=window, mount, canReceive, load}) {
       if(signature[0]!==80 || signature[1]!==75 || signature[2]!==3 || signature[3]!==4) throw new Error('The captured file is not a 3MF ZIP archive. Download the original project and drop it here.');
       received=true; host.clearInterval(retry); host.clearTimeout(timer);
       post('received'); note.textContent='Original MakerWorld project received. Analysing '+data.name+'…';
-      const ok=await load(new host.File([data.bytes], data.name, {type:'model/3mf'}));
+      const file=new host.File([data.bytes], data.name, {type:'model/3mf'});
+      if(typeof data.displayName==='string' && data.displayName.trim() && data.displayName.length<=240 && !/[\x00-\x1f]/.test(data.displayName)) {
+        file.yab3dDisplayName=data.displayName.trim();
+      }
+      const ok=await load(file);
       if(!active) return;
       if(!ok) throw new Error('YAB3D received the original file but could not open it. See the file analysis below.');
       note.textContent='Original MakerWorld project opened. Review its colours and settings before exporting.';

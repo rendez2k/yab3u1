@@ -3,6 +3,11 @@ globalThis.YAB3DModelHandoff = (() => {
   const origin='https://u1-reel-changes--yab3u1.netlify.app';
   function open(path, status) {
     const controller=new AbortController(), sourcePath=location.pathname;
+    // The public model title is more recognizable than a designer's internal
+    // slicer title. It labels the workspace only; the original file stays intact.
+    let slug='';
+    try { slug=decodeURIComponent((sourcePath||'').match(/\/models\/\d+-([^/]+)/)?.[1]||'').replace(/-/g,' '); } catch {}
+    const displayName=(globalThis.document?.querySelector('h1')?.textContent?.trim() || slug).replace(/[\x00-\x1f]/g,' ').slice(0,240);
     const token=Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join('');
     const url=new URL(path==='recolour.html'?'/recolour.html':'/',origin);
     url.hash=new URLSearchParams({'yab3d-model':token,sender:location.origin});
@@ -33,7 +38,7 @@ globalThis.YAB3DModelHandoff = (() => {
       if(!active)return completion;
       if(bytes.byteLength>96*1024*1024){fail('YAB3D accepts projects up to 96 MB.');return completion;}
       name=String(name||'MakerWorld-model.3mf').replace(/[\\/\x00-\x1f]/g,'_').slice(0,230).replace(/\.3mf$/i,'')+'.3mf';
-      file={bytes:bytes.slice().buffer,name};deliver();return completion;
+      file={bytes:bytes.slice().buffer,name,displayName};deliver();return completion;
     }};
   }
   function mount({button,busy,capture}) {

@@ -24,7 +24,7 @@ import { renderFilamentPicker } from './shared/filamentPicker.js';
 import {createTextureImport} from './shared/textureImport.js';
 import { buildU1Profile, profileDescription, resolveLayerHeight } from './shared/u1Profiles.js';
 
-const VERSION = "2.6.3";
+const VERSION = "2.6.4";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -444,7 +444,7 @@ async function load(file) {
     state.plateId = state.project.plates.length ? state.project.plates[0].id : null;
     state.objects = [];
     show();
-    $("modelname").textContent = file.name;
+    $("modelname").textContent = file.yab3dDisplayName || file.name;
     $("loadedmodel").classList.remove("hidden");
     $("printeroptions").open=false;
     $("drop").classList.add("hidden");

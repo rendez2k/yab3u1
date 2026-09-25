@@ -19,7 +19,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.3";
+const VERSION = "2.6.4";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -368,7 +368,8 @@ function renderChoices(state) {
   window.__convertLoaded = { kind: state.kind, colours: state.colours.length,
                              triangles: summary.triangles || 0,
                              plates: state.plates.length };
-  setStatus(`${state.title || "model"}: ${session.activeColourIds().length} of ${state.colours.length} source filaments selected${unused.length ? ` · ${unused.length-state.includeUnused.length} unused left out` : ''}, `
+  $("convertstatus").title=state.title && state.title!==state.displayName ? `Embedded project name: ${state.title}` : '';
+  setStatus(`${state.displayName || state.title || "model"}: ${session.activeColourIds().length} of ${state.colours.length} source filaments selected${unused.length ? ` · ${unused.length-state.includeUnused.length} unused left out` : ''}, `
     + `${(summary.triangles || 0).toLocaleString()} triangles on `
     + `${state.plates.length} plate(s). Nothing has been uploaded.`);
 }
@@ -750,7 +751,7 @@ $("convertreplace").addEventListener('click', () => {
   $("mode-single").click();
   input.value=''; input.click();
 });
-const textureImporter=createTextureImport({buttonHost:document.getElementById('singlepanel'),onAccept:file=>session.load(file)});
+const textureImporter=createTextureImport({buttonHost:document.getElementById('importtools'),onAccept:file=>session.load(file)});
 const batch = initBatch({onTextureBundle:file=>textureImporter.open(file)});
 function openFiles(files) {
   if(files.length===1 && /\.glb$/i.test(files[0].name))textureImporter.open(files[0]);

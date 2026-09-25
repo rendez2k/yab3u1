@@ -402,10 +402,12 @@
 
   /* Loaded projects use the desktop width; the initial file picker stays focused. */
   body.has-model .wrap { max-width: 1440px; }
+  body.has-model footer { max-width: 1440px; }
   body.has-model .sub { display: none; }
   body.has-model .head { margin-bottom: 12px; padding-bottom: 16px; }
   body.has-model #convertdrop { display: none; }
   #convertreplace { margin-left: auto; }
+  #importtools .texture-launch { margin: 0 0 12px; }
   .conversion-modes:has(#mode-bulk[aria-pressed="true"]) #convertreplace { display: none; }
   #convertworkspace { display: grid; gap: 18px; align-items: start; }
   #convertworkspace > .card { min-width: 0; margin: 0; }
@@ -460,7 +462,7 @@
 
   <details class="extension-help" id="chrome-extension">
     <summary>From MakerWorld? Get the Chrome extension</summary>
-    <p><a href="downloads/makerworld-yab3d-review-1.5.3.5.zip" download>Download Chrome extension 1.5.3.5 (ZIP)</a>
+    <p><a href="downloads/makerworld-yab3d-review-1.5.3.6.zip" download>Download Chrome extension 1.5.3.6 (ZIP)</a>
       &mdash; review build. Open the original 3MF in Analyse &amp; convert or Full Spectrum.</p>
     <ol>
       <li>Extract the ZIP to a folder you will keep.</li>
@@ -482,6 +484,7 @@
   </div>
 
   <div id="singlepanel">
+  <div id="importtools"></div>
   <div id="convertdrop" role="button" tabindex="0"
        aria-label="Choose a 3MF file to convert">
     <strong id="dropheading">Drop a .3mf, GLB or ZIP bundle here</strong>

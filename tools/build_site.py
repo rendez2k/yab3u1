@@ -40,7 +40,8 @@ PAGES = frozenset({"index.html", "recolour.html"})
 # Reviewed extension packages, with upstream licences included. Other ZIPs
 # (including model bundles) must never be swept into a site build.
 DOWNLOADS = frozenset({"downloads/makerworld-yab3d-review-1.5.3.4.zip",
-                       "downloads/makerworld-yab3d-review-1.5.3.5.zip"})
+                       "downloads/makerworld-yab3d-review-1.5.3.5.zip",
+                       "downloads/makerworld-yab3d-review-1.5.3.6.zip"})
 # Directories under `web/` that are development scaffolding, and file name
 # prefixes that belong only to the browser self-test.
 SKIP_PARTS = frozenset({"tests", "node_modules", ".netlify"})

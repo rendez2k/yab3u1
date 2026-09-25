@@ -398,6 +398,9 @@ export class ConvertSession {
         kind: reply.meta.kind,
         title: reply.meta.title && !/^(model|untitled|u1 project)$/i.test(reply.meta.title.trim())
           ? reply.meta.title : String(file.name || "model").replace(/\.3mf$/i, ""),
+        // Internal slicer titles often differ from the name the user downloaded.
+        // Keep that metadata for export, but label the workspace with its source.
+        displayName: file.yab3dDisplayName || String(file.name || reply.meta.title || 'model').replace(/\.3mf$/i, ''),
         colours: reply.meta.colors.slice(),
         filamentUsage: reply.meta.filamentUsage || null,
         includeUnused: [],

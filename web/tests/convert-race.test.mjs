@@ -109,6 +109,20 @@ async function load(session, worker, name) {
   return promise;
 }
 
+await ok("display uses the downloaded name and keeps the internal project title for export", async () => {
+  const worker=new FakeWorker(project('内部模型名'));
+  const session=new ConvertSession(()=>worker,{},urls);
+  await load(session,worker,'Friendly Pumpkin.3mf');
+  assert.equal(session.state.displayName,'Friendly Pumpkin');
+  assert.equal(session.state.title,'内部模型名');
+  const incoming=file('original.3mf');incoming.yab3dDisplayName='MakerWorld Pumpkin';
+  const another=new FakeWorker(project('内部模型名'));
+  const next=new ConvertSession(()=>another,{},urls);
+  const pending=next.load(incoming);await tick();another.releaseAll();await pending;
+  assert.equal(next.state.displayName,'MakerWorld Pumpkin');
+  assert.equal(next.state.filename,'original.3mf');
+});
+
 await ok("a newer file wins: the older load's reply is discarded", async () => {
   const made = [];
   const hooks = recorder();

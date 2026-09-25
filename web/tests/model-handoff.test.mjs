@@ -30,6 +30,10 @@ test('manual file selection cancels before a late incoming transfer',async()=>{
 test('parse failure is reported as failure, not opened',async()=>{
  const f=receiver({load:async()=>false});await f.emit();assert.equal(f.posts.at(-1).type,'yab3d-model:error');assert.match(f.note.textContent,/could not open/);
 });
+test('MakerWorld display name is separate from the original filename and bytes',async()=>{
+ const f=receiver({load:async file=>{assert.equal(file.name,'original.3mf');assert.equal(file.yab3dDisplayName,'Friendly Pumpkin');assert.equal(file.size,6);return true;}});
+ await f.emit({displayName:'Friendly Pumpkin'});assert.equal(f.posts.at(-1).type,'yab3d-model:opened');
+});
 
 function sender(){
  const listeners=new Map(),timers=new Map(),posts=[],statuses=[];let id=0,url;
