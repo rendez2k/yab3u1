@@ -411,12 +411,20 @@
   .conversion-modes:has(#mode-bulk[aria-pressed="true"]) #convertreplace { display: none; }
   #convertworkspace { display: grid; gap: 18px; align-items: start; }
   #convertworkspace > .card { min-width: 0; margin: 0; }
+  #convertpick fieldset { min-width: 0; }
   #sourcepreview .preview-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
   #sourcepreview h2 { margin: 0; text-transform: none; letter-spacing: 0; font-size: 18px; }
   #sourcepreview #previewshow { padding: 7px 10px; font-size: 12px; }
   #sourcepreview #convertpreview { height: clamp(280px, 40vh, 440px); }
   #sourcepreview .row { gap: 12px; }
   #convertpick > .row { gap: 12px; }
+  #printercapacity { margin-top: 18px; border-block: 1px solid var(--line); padding: 14px 0; }
+  #capacitystatus { font-weight: 600; margin: 10px 0 4px; }
+  #printercapacity .hint { margin: 6px 0; }
+  #capacityoptions summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+  #capacityoptions .actions { margin: 4px 0 10px; gap: 8px; }
+  #capacityoptions button { font-size: 13px; padding: 8px 12px; }
+  #custominputfield[hidden], #capacityoptions[hidden] { display: none; }
   #convertpick > .row .field { min-width: 0; flex-basis: 180px; }
   #convertpick .maprow { gap: 7px; }
   #convertpick .mapid { min-width: 0; flex: 1 1 130px; }
@@ -540,13 +548,44 @@
       </div>
     </div>
 
+    <section id="printercapacity" aria-label="Printer colour capacity">
+      <div class="row">
+        <div class="field grow">
+          <label for="printerinputs">Physical printer inputs</label>
+          <select id="printerinputs">
+            <option value="unknown">Not specified — assign in slicer</option>
+            <option value="4">4 inputs</option><option value="8">8 inputs</option>
+            <option value="16">16 inputs</option><option value="custom">Custom</option>
+          </select>
+        </div>
+        <div class="field" id="custominputfield" hidden>
+          <label for="custominputs">Input count</label>
+          <input id="custominputs" type="number" min="1" max="64" step="1" value="4">
+        </div>
+      </div>
+      <p id="capacitystatus" role="status"></p>
+      <p id="capacitynote" class="hint"></p>
+      <details id="capacityoptions" hidden>
+        <summary>Resolve extra colours</summary>
+        <div class="actions">
+          <button type="button" id="capacityblend">Try Full Spectrum blends</button>
+          <button type="button" id="capacityrepaint">Repaint / merge colours</button>
+          <button type="button" id="capacityswaps">Plan U1 reel changes</button>
+        </div>
+        <p class="hint" id="capacityroutes"></p>
+        <label class="check"><input id="capacitykeep" type="checkbox">Keep all project filaments for further slicer setup</label>
+        <p class="hint">This allows an unresolved project download. It does not add printer inputs or prepare a printable reel-change plan.</p>
+      </details>
+      <p class="hint" id="transferstatus" role="status"></p>
+    </section>
+
     <fieldset class="repaint">
       <legend>Filament assignment</legend>
       <div class="modes" role="radiogroup" aria-labelledby="modeslabel">
         <span class="sr-only" id="modeslabel">How the assignment is read</span>
         <label class="mode">
           <input type="radio" name="assignmentmode" value="slots" checked>
-          <span class="modebox"><b>Arrange slots</b>
+          <span class="modebox"><b id="arrangelabel">Arrange filaments</b>
             <span class="role">keep every colour</span></span>
         </label>
         <label class="mode">

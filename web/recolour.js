@@ -24,7 +24,7 @@ import { renderFilamentPicker } from './shared/filamentPicker.js';
 import {createTextureImport} from './shared/textureImport.js';
 import { buildU1Profile, profileDescription, resolveLayerHeight } from './shared/u1Profiles.js';
 
-const VERSION = "2.6.5";
+const VERSION = "2.6.6";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -1399,4 +1399,23 @@ $("target").innerHTML = RECOLOUR_TARGETS.map((id) =>
 $("target").value = state.target;
 syncDestination();
 
-receiveModel({mount: $("drop").parentElement, canReceive:()=>!state.project&&!state.loading, load:async file=>{await load(file);return Boolean(state.project);}});
+receiveModel({mount: $("drop").parentElement, canReceive:()=>!state.project&&!state.loading, load:async (file, context={})=>{
+  if (context.target) {
+    state.target = context.target;
+    $('target').value = context.target;
+    syncDestination();
+  }
+  await load(file);
+  if (!state.project) return false;
+  if (context.plateId && state.project.plates.some(p=>String(p.id)===context.plateId)) {
+    $('plate').value = context.plateId;
+    $('plate').dispatchEvent(new Event('change'));
+  }
+  if (context.purpose === 'reel-changes') {
+    $('advanced').open = true;
+    $('plannercard').open = true;
+    $('plannercard').scrollIntoView({block:'start'});
+    $('prepareswaps').focus({preventScroll:true});
+  }
+  return true;
+}});

@@ -1,4 +1,4 @@
-import {receiveModel} from './shared/modelHandoff.js';
+import {receiveModel, sendModel} from './shared/modelHandoff.js';
 // The homepage converter: any supported dialect in, any out, every colour kept.
 //
 // The page is deliberately thin.  It owns the markup and nothing else:
@@ -19,7 +19,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.5";
+const VERSION = "2.6.6";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -32,6 +32,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "Printer capacity: U1 stays at four inputs; other printers can use 4, 8, 16, a custom count or an unspecified setup. Resolve extra project filaments with blends, deliberate repainting, U1 reel-change planning or an explicit keep-all export for further setup.",
   "MakerWorld extension: open the original 3MF directly in Analyse & convert or Full Spectrum, with transfer and analysis status. Model data stays in your browser.",
   "Send applied physical filament colours to your existing Spool Studio Bridge for slot review and explicit confirmation.",
   "Fixed a Snapmaker Orca slicing crash caused by object-level support-speed overrides; the speed is retained at project level.",
@@ -146,6 +147,14 @@ function renderOutput(entry) {
   link.className = "save";
   link.textContent = `Save ${entry.name} (${(entry.bytes / 1048576).toFixed(2)} MB)`;
   out.appendChild(link);
+  const capacityNote = document.createElement('p');
+  capacityNote.className = 'hint';
+  capacityNote.textContent = entry.capacity?.unresolved
+    ? 'Further slicer setup required: this project exceeds the selected printer inputs or uses unassigned U1 filaments. It is not a prepared reel-change print.'
+    : entry.capacity?.capacity == null
+      ? 'Printer capacity was not specified. Assign these project filaments to your printer in the slicer.'
+      : 'Filament count fits the selected capacity. Check the printer, material assignments and sliced result before printing.';
+  out.appendChild(capacityNote);
   // Start the download as well: the link stays for a second attempt, but the
   // user asked for a file, not for one more click.
   const auto = link.cloneNode(true);
@@ -195,9 +204,12 @@ function renderOutput(entry) {
 
 /* ---------- session ---------- */
 
+let cancelModelTransfer = () => {};
 const session = new ConvertSession(() => new RecolourWorker(), {
   status: (text) => setStatus(text),
   cleared: () => {
+    cancelModelTransfer();
+    $('transferstatus').textContent = '';
     clearError();
     $("convertpick")?.classList.add("hidden");
     $("convertout").innerHTML = "";
@@ -291,9 +303,10 @@ function optionsFor(palette) {
   const active = session.activeColourIds();
   const occupied = new Set(active.map(id=>session.rule[id]));
   return session.destinationIds().map(id => {
-    if (session.physicalSlots() && !occupied.has(id)) return `<option value="${id}">${id} · Unused slot</option>`;
+    const label = session.physicalSlots() ? (id <= 4 ? `Slot ${id}` : `Project filament ${id} · needs setup`) : `Filament ${active.indexOf(id)+1}`;
+    if (session.physicalSlots() && !occupied.has(id)) return `<option value="${id}">${label} · Unused</option>`;
     const colour = palette[id-1];
-    return `<option value="${id}">${session.physicalSlots() ? id : active.indexOf(id)+1} · ${esc(colourName(colour))} · ${esc(hex(colour))}</option>`;
+    return `<option value="${id}">${label} · ${esc(colourName(colour))} · ${esc(hex(colour))}</option>`;
   }).join("");
 }
 
@@ -544,7 +557,10 @@ function syncLayout() {
     + note.join(" · ");
   // An invalid or impossible layout blocks the export outright.
   const go = $("convertgo");
-  if (go) go.disabled = Boolean(problem) || Boolean(session.profileError) || session.busy || !session.state;
+  if (go) {
+    go.disabled = Boolean(problem) || Boolean(session.profileError) || session.busy || !session.state || session.capacityStatus().blocked;
+    go.textContent = session.capacityStatus().acknowledged ? 'Download project for further setup' : 'Download the project';
+  }
   if ($("layoutfill")) $("layoutfill").disabled = Boolean(problem) || !session.state;
 }
 
@@ -556,8 +572,7 @@ function syncLayout() {
  */
 
 const MODE_HINT = {
-  slots: "Choose the slot where each colour is loaded. The other colour moves "
-    + "automatically. Your model keeps the same colours.",
+  slots: "Arrange the project's filament order. Moving onto an occupied filament swaps its colour. Your model keeps the same colours. Assign these project filaments to your printer in the slicer.",
   repaint: "Choose a replacement colour for each original colour. This changes "
     + "the model's colours; several original colours can use the same replacement.",
 };
@@ -571,8 +586,9 @@ function syncMode() {
   });
   const hint = $("convertmaphint");
   if (hint) hint.textContent = session.physicalSlots()
-    ? "Choose the physical U1 slot where each colour is loaded. All four slots are available, including unused ones. Moving onto an occupied slot swaps its colour. Unused slots have no model regions assigned."
+    ? "Slots 1–4 are the U1's physical inputs. Higher numbers are project filaments awaiting a solution, not extra printer slots. Moving onto an occupied entry swaps its colour."
     : MODE_HINT[mode];
+  $('arrangelabel').textContent = session.target === 'snapmaker' ? 'Arrange slots / filaments' : 'Arrange filaments';
   const note = $("previewmodehint");
   if (note) {
     note.textContent = mode === SLOTS
@@ -628,9 +644,71 @@ function syncRule() {
         + "appearance, so the file is converted without changing any colour."
       : "Chosen for export: no colour is repainted, so the file is converted "
         + "without changing any colour.");
+  syncCapacity();
+  syncLayout();
+}
+
+function syncCapacity() {
+  const check = session.capacityStatus(), select = $('printerinputs');
+  const u1 = session.target === 'snapmaker';
+  const changedTarget = select.dataset.target !== session.target;
+  select.dataset.target = session.target;
+  select.disabled = u1;
+  if (changedTarget || select.value !== 'custom') {
+    select.value = check.capacity == null ? 'unknown' : [4,8,16].includes(check.capacity) ? String(check.capacity) : 'custom';
+    if (select.value === 'custom') $('custominputs').value = check.capacity;
+  }
+  $('custominputfield').hidden = select.value !== 'custom';
+  $('custominputs').setAttribute('aria-invalid', String(Boolean(session.capacityError)));
+  $('capacitystatus').textContent = session.capacityError || `${check.needed} project filaments · `
+    + (check.capacity == null ? 'printer capacity not specified' : `${check.capacity} physical inputs`)
+    + (check.excess ? ` · ${check.excess} extra need a solution` : check.outsideSlots ? ' · move colours into slots 1–4' : '');
+  $('capacitystatus').classList.toggle('err', Boolean(session.capacityError));
+  $('capacitynote').textContent = 'Checked across the whole project, including retained support and infill references. '
+    + (check.capacity == null ? 'All selected colours are preserved; configure your printer and its input count in the slicer.'
+      : check.unresolved ? 'Choose a colour solution below, or explicitly keep the project for further setup.'
+      : 'The filament count fits. This checks input capacity; it does not validate a sliced print.')
+    + (check.reserved ? ` ${check.reserved} numbered entries are retained for source settings.` : '');
+  $('capacityoptions').hidden = !check.unresolved;
+  if (check.unresolved && !session._capacityWasUnresolved) $('capacityoptions').open = true;
+  session._capacityWasUnresolved = check.unresolved;
+  $('capacitykeep').checked = check.acknowledged;
+  const blendsSupported = session.target !== 'orca' && !(session.target === 'prusa' && session.state?.negativeVolumes);
+  $('capacityblend').disabled = !blendsSupported;
+  $('capacityswaps').disabled = !u1;
+  $('capacityroutes').textContent = (blendsSupported
+    ? 'Full Spectrum explores four reels and approximate blends; it opens your original model in a new tab. '
+    : 'Full Spectrum blends are not supported for this output and model combination. ')
+    + (u1 ? 'Reel changes also open the original model and require a U1 slice; more than four colours on one layer may be impossible.'
+      : 'Automatic reel-change planning is currently available for U1 only.');
 }
 
 /* ---------- controls ---------- */
+
+$('printerinputs').addEventListener('change', () => {
+  const value = $('printerinputs').value;
+  session.setInputCapacity(value === 'unknown' ? null : value === 'custom' ? $('custominputs').value : value);
+});
+$('custominputs').addEventListener('input', () => session.setInputCapacity($('custominputs').value || NaN));
+$('capacitykeep').addEventListener('change', () => session.setKeepAll($('capacitykeep').checked));
+$('capacityrepaint').addEventListener('click', () => {
+  session.setAssignmentMode(REPAINT);
+  $('convertmap').scrollIntoView({block:'center'});
+  document.querySelector('#convertmap select')?.focus();
+});
+function openColourWorkflow(purpose) {
+  cancelModelTransfer();
+  cancelModelTransfer = sendModel({file:session.sourceFile, displayName:session.state?.displayName,
+    target:session.target, plateId:session.state?.plateId, purpose,
+    status:message=>$('transferstatus').textContent=message});
+}
+$('capacityblend').addEventListener('click', () => openColourWorkflow('blends'));
+$('capacityswaps').addEventListener('click', () => openColourWorkflow('reel-changes'));
+document.querySelectorAll('a[href="recolour.html"]').forEach(link=>link.addEventListener('click', event => {
+  if (!session.sourceFile) return;
+  event.preventDefault();
+  openColourWorkflow('blends');
+}));
 
 /* ---------- automatic, simplified preview ----------
  *

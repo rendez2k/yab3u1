@@ -25,6 +25,19 @@ orientation. Continue into conversion/Full Spectrum or download the prepared
 triangles but approximates textures and gradients with one colour per face.
 Supported format subsets and size limits are documented in the changelog.
 
+The **2.6.6 review build** adds a printer-capacity check to single-file conversion.
+U1 has four physical inputs. Other targets accept 4, 8, 16, a custom count
+(1–64), or an unspecified setup for assignment in the slicer. Counts cover the
+whole retained project, including support/infill references; they are not a
+per-layer printability check. Extra filaments offer deliberate repainting,
+four-reel Full Spectrum blends where supported, or the experimental U1
+reel-change planner. Both latter routes transfer the original file and selected
+plate to a new tab locally; converter edits are not baked into that transfer.
+An explicit keep-all choice permits an unresolved export named
+`*-setup-required.3mf`. It adds no printer inputs or pause plan. Reel-change
+planning still requires a real U1 slice and refuses unsupported layer/tool use.
+The capacity selector does not install a printer or AMS profile in other slicers.
+
 Three ways to use the project, with different workflows:
 
 | | where | what it is |

@@ -49,6 +49,10 @@ export class ConvertSession {
     this.epoch = 0;
     this.revision = 0;
     this.target = "snapmaker";
+    this.inputCapacities = { bambu: null, orca: null, prusa: null };
+    this.capacityError = "";
+    this.keepAllSignature = null;
+    this.sourceFile = null;
     this.state = null;      // {title, colours, types, plates, plateId, summary}
     // One map per mode, so switching modes keeps both.  The page reads the
     // active one through the `rule` getter.
@@ -91,6 +95,46 @@ export class ConvertSession {
   }
 
   physicalSlots() { return this.target === "snapmaker" && this.assignmentMode === SLOTS; }
+
+  inputCapacity() { return this.target === "snapmaker" ? 4 : this.inputCapacities[this.target]; }
+
+  capacitySignature() {
+    return JSON.stringify([this.epoch, this.target, this.inputCapacity(), this.assignmentMode,
+      this.rule, this.state?.includeUnused, this.state?.plateId]);
+  }
+
+  capacityStatus() {
+    // Match the writer's conservative whole-project cleanup, including numbered
+    // support/infill references. A repaint cannot remove those reserved entries.
+    const reserved = this.state?.filamentUsage?.reservedThrough || 0;
+    const destinations = new Set([...this.activeColourIds().map(id => this.rule[id] || id),
+      ...Array.from({length: reserved}, (_, i) => i + 1)]);
+    const needed = destinations.size, capacity = this.inputCapacity();
+    const excess = capacity == null ? 0 : Math.max(0, needed - capacity);
+    const outsideSlots = this.physicalSlots() && Math.max(0, ...destinations) > 4;
+    const unresolved = excess > 0 || outsideSlots;
+    const acknowledged = unresolved && this.keepAllSignature === this.capacitySignature();
+    return { needed, capacity, excess, outsideSlots, unresolved, acknowledged, reserved,
+      blocked: Boolean(this.capacityError) || (unresolved && !acknowledged) };
+  }
+
+  setInputCapacity(value) {
+    if (this.target === "snapmaker") return false;
+    const next = value === null ? null : Number(value);
+    this.capacityError = next !== null && (!Number.isInteger(next) || next < 1 || next > 64)
+      ? "Enter a whole number of printer inputs from 1 to 64." : "";
+    if (!this.capacityError) this.inputCapacities[this.target] = next;
+    this.keepAllSignature = null;
+    this.invalidate();
+    this.hooks.rule?.(this.rule);
+    return !this.capacityError;
+  }
+
+  setKeepAll(value) {
+    this.invalidate();
+    this.keepAllSignature = value ? this.capacitySignature() : null;
+    this.hooks.rule?.(this.rule);
+  }
 
   destinationIds() {
     return this.physicalSlots()
@@ -179,6 +223,7 @@ export class ConvertSession {
   }
 
   invalidate() {
+    this.keepAllSignature = null;
     this.revision += 1;
     this.dropOutput();
   }
@@ -190,6 +235,8 @@ export class ConvertSession {
       this.genericArea = { width: this.layout.width, depth: this.layout.depth };
     }
     this.target = target;
+    this.capacityError = "";
+    this.keepAllSignature = null;
     if (target !== "snapmaker" && this.state && Object.values(this.rules[SLOTS]).some(id => !this.activeColourIds().includes(id))) {
       this.rules[SLOTS] = identityRule(this.state.colours.length);
     }
@@ -363,6 +410,8 @@ export class ConvertSession {
     this.disposeWorker("a new file was chosen, so the old worker was stopped");
     this.dropOutput();
     this.state = null;
+    this.sourceFile = null;
+    this.keepAllSignature = null;
     this.boundsPending = false;
     this.boundsSeq = (this.boundsSeq || 0) + 1;
     // A new file starts in the homepage's own mode, with both maps cleared: an
@@ -394,6 +443,7 @@ export class ConvertSession {
         if (this.hooks.progress) this.hooks.progress(progress);
       });
       if (token !== this.epoch) return null;      // replaced while parsing
+      this.sourceFile = file;
       this.state = {
         kind: reply.meta.kind,
         title: reply.meta.title && !/^(model|untitled|u1 project)$/i.test(reply.meta.title.trim())
@@ -535,6 +585,7 @@ export class ConvertSession {
   async convert(target, plateId) {
     if (!this.state || this.busy || this.closed || this.layoutProblem || this.boundsPending) return null;
     this.setTarget(String(target));
+    if (this.capacityStatus().blocked) return null;
     if (this.state.bounds && planLayout(this.state.bounds, this.planningLayout()).blocked) return null;
     const snapshot = {
       revision: this.revision,
@@ -557,6 +608,7 @@ export class ConvertSession {
       filamentProfiles: structuredClone(this.filamentProfiles),
       title: this.state.title,
       colours: this.state.colours.slice(),
+      capacity: this.capacityStatus(),
     };
     if (!snapshot.worker) return null;
     const seq = (this.convertSeq += 1);
@@ -604,7 +656,7 @@ export class ConvertSession {
       const blob = new Blob([bytes], { type: TYPED_3MF });
       const entry = {
         url: this.urls.create(blob),
-        name: `${safeName(snapshot.title)}-${snapshot.target}.3mf`,
+        name: `${safeName(snapshot.title)}-${snapshot.target}${snapshot.capacity.unresolved ? '-setup-required' : ''}.3mf`,
         target: snapshot.target,
         plateId: snapshot.plateId,
         mapping: snapshot.mapping,
@@ -615,6 +667,7 @@ export class ConvertSession {
         // What the export really did with the source's print intent: the page
         // reports it instead of claiming "your settings came across".
         settings: built.settings || null,
+        capacity: snapshot.capacity,
       };
       this.dropOutput();
       this.output = entry;
@@ -642,5 +695,6 @@ export class ConvertSession {
     this.disposeWorker("the page is going away");
     this.dropOutput();
     this.state = null;
+    this.sourceFile = null;
   }
 }

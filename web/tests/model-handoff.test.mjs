@@ -4,12 +4,12 @@ import vm from 'node:vm';
 import fs from 'node:fs';
 import {receiveModel,MAX_MODEL_BYTES} from '../shared/modelHandoff.js';
 
-function receiver({allowed=true,load=async()=>true}={}){
+function receiver({allowed=true,load=async()=>true,origin='https://makerworld.com',context={}}={}){
  const listeners=new Map(),domListeners=new Map(),timers=new Map(),posts=[];let id=0,imports=0,note;
  const token='a'.repeat(32),source={postMessage:data=>posts.push(data)};
- const host={File,opener:source,location:{hash:'#'+new URLSearchParams({'yab3d-model':token,sender:'https://makerworld.com'}),pathname:'/',search:''},history:{replaceState(){}},document:{createElement:()=>({setAttribute(){}}),addEventListener:(k,v)=>domListeners.set(k,v),removeEventListener:k=>domListeners.delete(k)},addEventListener:(k,v)=>listeners.set(k,v),removeEventListener:k=>listeners.delete(k),setInterval:fn=>(timers.set(++id,fn),id),setTimeout:fn=>(timers.set(++id,fn),id),clearInterval:i=>timers.delete(i),clearTimeout:i=>timers.delete(i)};
- receiveModel({host,mount:{prepend:n=>note=n},canReceive:()=>allowed,load:async file=>{imports++;return load(file);}});
- const emit=(data={},event={})=>listeners.get('message')?.({source,origin:'https://makerworld.com',data:{type:'yab3d-model:file',version:1,token,name:'original.3mf',bytes:new Uint8Array([80,75,3,4,7,8]).buffer,...data},...event});
+ const host={File,opener:source,location:{origin:'https://yab3d.example',hash:'#'+new URLSearchParams({'yab3d-model':token,sender:origin,...context}),pathname:'/',search:''},history:{replaceState(){}},document:{createElement:()=>({setAttribute(){}}),addEventListener:(k,v)=>domListeners.set(k,v),removeEventListener:k=>domListeners.delete(k)},addEventListener:(k,v)=>listeners.set(k,v),removeEventListener:k=>listeners.delete(k),setInterval:fn=>(timers.set(++id,fn),id),setTimeout:fn=>(timers.set(++id,fn),id),clearInterval:i=>timers.delete(i),clearTimeout:i=>timers.delete(i)};
+ receiveModel({host,mount:{prepend:n=>note=n},canReceive:()=>allowed,load:async (file,ctx)=>{imports++;return load(file,ctx);}});
+ const emit=(data={},event={})=>listeners.get('message')?.({source,origin,data:{type:'yab3d-model:file',version:1,token,name:'original.3mf',bytes:new Uint8Array([80,75,3,4,7,8]).buffer,...data},...event});
  return {emit,posts,timers,listeners,domListeners,get imports(){return imports;},get note(){return note;}};
 }
 test('original bytes and filename survive transfer; success waits for parsing',async()=>{
@@ -33,6 +33,24 @@ test('parse failure is reported as failure, not opened',async()=>{
 test('MakerWorld display name is separate from the original filename and bytes',async()=>{
  const f=receiver({load:async file=>{assert.equal(file.name,'original.3mf');assert.equal(file.yab3dDisplayName,'Friendly Pumpkin');assert.equal(file.size,6);return true;}});
  await f.emit({displayName:'Friendly Pumpkin'});assert.equal(f.posts.at(-1).type,'yab3d-model:opened');
+});
+
+test('same-origin handoff preserves model, plate, target and reel-change intent',async()=>{
+ const f=receiver({origin:'https://yab3d.example',context:{purpose:'reel-changes',target:'snapmaker',plate:'3'},load:async(file,context)=>{
+  assert.deepEqual(context,{purpose:'reel-changes',target:'snapmaker',plateId:'3'});
+  assert.deepEqual([...new Uint8Array(await file.arrayBuffer())],[80,75,3,4,7,8]);return true;
+ }});
+ await f.emit({}, {origin:'https://evil.example'});assert.equal(f.imports,0);
+ await f.emit({}, {source:{}});assert.equal(f.imports,0);
+ await f.emit();assert.equal(f.imports,1);assert.match(f.note.textContent,/Original YAB3D project opened/);
+});
+test('untrusted origins cannot request a local workflow',async()=>{
+ const f=receiver({origin:'https://evil.example',context:{purpose:'reel-changes'}});
+ await f.emit();assert.equal(f.imports,0);assert.equal(f.timers.size,0);
+});
+test('MakerWorld cannot override the workflow through local handoff parameters',async()=>{
+ const f=receiver({context:{purpose:'reel-changes',target:'prusa'},load:async(file,context)=>{assert.deepEqual(context,{});return true;}});
+ await f.emit();assert.equal(f.imports,1);
 });
 
 function sender(){
