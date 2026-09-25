@@ -21,9 +21,9 @@ import { colourName } from "./shared/assignment.js";
 const REEL_KEY = "yab3u1-web-reels";
 import { renderFilamentPicker } from './shared/filamentPicker.js';
 import {createTextureImport} from './shared/textureImport.js';
-import { buildU1Profile, profileDescription } from './shared/u1Profiles.js';
+import { buildU1Profile, profileDescription, resolveLayerHeight } from './shared/u1Profiles.js';
 
-const VERSION = "2.6.1-preview.6";
+const VERSION = "2.6.1-preview.7";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -48,6 +48,10 @@ const state = {
 window.__recolour = state;                    // the QA harness and the console
 
 let printerPanel=null;
+function layerChoice() {
+  return state.target==='snapmaker' ? {mode:$('spectrumlayermode').value,value:$('spectrumlayerheight').value} : null;
+}
+['spectrumlayermode','spectrumlayerheight'].forEach(id=>$(id).addEventListener('input',()=>{clearReview();renderExport();}));
 function updateCopies() {
   const copies=Number($("spectrumcopies").value),spacing=Number($("spectrumgap").value);
   state.layout=null;state.layoutError='';
@@ -156,12 +160,13 @@ function renderPaletteSlots() {
 function paletteCoverage(option) {
   const {counts,rows,blendCount}=option.outcome;
   const missing=[...new Set(rows.filter(row=>row.kind==='unresolved').map(row=>row.original))];
-  const recipes=rows.filter(row=>row.kind==='blended');
+  const changed=rows.filter(row=>row.kind!=='preserved');
+  const chip=hex=>`<span class="palette-change-colour"><i style="background:${esc(hex)}" aria-hidden="true"></i><span>${esc(colourName(hex))}</span></span>`;
   const detail=missing.length
     ? `<strong>Cannot reproduce all colours</strong><span>No suitable blend for: ${missing.map(color=>`${esc(colourName(color))} (${esc(color)})`).join(', ')}.</span>`
     : counts.substituted ? `<strong>${counts.substituted} source colour(s) replaced</strong><span>Solid colours selected; no extra shades are created.</span>`
     : option.approximate ? '<strong>Approximation · colours will change</strong>' : `<strong>All source colours closely covered in the estimate</strong>`;
-  return `<span class="palettecoverage">${detail}<span>${counts.preserved} matched to reels · ${blendCount} blend recipe${blendCount===1?'':'s'}</span>${recipes.length ? `<span>${recipes.some(row=>distance(row.original,row.result)>25)?"Includes a large colour change. ":""}Select to compare in the preview.</span>` : ''}</span>`;
+  return `<span class="palettecoverage">${detail}<span>${counts.preserved} unchanged · ${blendCount} blend recipe${blendCount===1?'':'s'}</span>${changed.length ? `<span class="palette-change-head"><span>Original</span><span aria-hidden="true"></span><span>Suggested result</span></span>${changed.map(row=>`<span class="palette-change" title="${esc(row.original)}${row.kind==='unresolved'?'':` → ${esc(row.result)}`}">${chip(row.original)}<span aria-hidden="true">→</span>${row.kind==='unresolved'?'<span>No blend found</span>':chip(row.result)}</span>`).join('')}<span class="hint">Select for blend ratios and larger swatches below the preview.</span>` : ''}</span>`;
 }
 function renderRecommendation(message) {
   renderWorkflow();
@@ -797,7 +802,7 @@ function renderOutcome(payload=resultPlan()) {
     ...(counts.unresolved ? [`${counts.unresolved} unresolved`] : [])].join(' · ');
   const colours=outcome.sourceCount;
   const changed=rows.filter(r=>r.kind!=='preserved');
-  host.innerHTML=`<strong>${state.previewMode==='original' ? 'Selected export: ' : ''}${colours} source colours · ${outcome.blendCount ? `${outcome.blendCount} blend recipe${outcome.blendCount===1?'':'s'}` : 'No blends'}</strong>
+  host.innerHTML=`<h3>Original → ${state.reelView==='recommended'?'suggested':'applied'} colours</h3><strong>${colours} source colours · ${outcome.blendCount ? `${outcome.blendCount} blend recipe${outcome.blendCount===1?'':'s'}` : 'No blends'}</strong>
     <p class="hint">${esc(tally)}</p>
     <ul>${changed.map(row=>`<li>${colourChange(row)}</li>`).join('')}</ul>
     ${activeApproximation() && state.strategy==='blend' ? '<p><strong>Approximate blends selected. Review the changed shades before exporting.</strong></p>' : ''}
@@ -1086,15 +1091,24 @@ function renderExport() {
   $("printersetup").hidden=state.target!=="snapmaker";
   $("applyforexport").hidden=state.reelView!=="recommended" || !state.recommendation;
   $('spectrumprofile').classList.toggle('hidden',state.target!=='snapmaker');
+  $('layeroptions').hidden=state.target!=='snapmaker';
+  $('spectrumcustomlayer').hidden=$('spectrumlayermode').value!=='custom';
+  $('layersummary').textContent='Layer height · '+({preserve:'preserve designer settings',preset:'printer preset',custom:`${$('spectrumlayerheight').value || '—'} mm custom`})[$('spectrumlayermode').value];
   let profileError='';
   try {
     const payload=resultPlan();
     if(state.project && state.target==='snapmaker') {
       const types=(payload.physical || state.reels).map(r=>r.type || 'PLA');
-      const profile=buildU1Profile(state.project.sourceSettings,types,state.u1Nozzle,{blends:payload.recipes.length>0});
+      const profile=buildU1Profile(state.project.sourceSettings,types,state.u1Nozzle,{blends:payload.recipes.length>0,layerHeight:layerChoice()});
       $('spectrumprofilenote').textContent=profileDescription(profile);
+      const sources=state.objects.map(id=>state.project.meta.get(String(id))||{});
+      $('spectrumlayernote').innerHTML=(sources.length?sources:[{}]).map(meta=>{
+        const layer=resolveLayerHeight({...state.project.sourceSettings,...meta.settings},profile.match,layerChoice());
+        return `<p>${meta.name?`${esc(meta.name)}: `:''}${esc(layer.text)}</p>`;
+      }).join('');
+      $('spectrumlayerheight').min=profile.match.minLayer;$('spectrumlayerheight').max=profile.match.maxLayer;
     }
-  } catch(error) { profileError=error.message; $('spectrumprofilenote').textContent=profileError; }
+  } catch(error) { profileError=error.message; $('spectrumprofilenote').textContent=profileError; $('spectrumlayernote').textContent=profileError; $('layeroptions').open=true; }
   const payload = resultPlan();
   renderOutcome(payload);
   $('spectrumfilaments').parentElement.classList.toggle('hidden',state.strategy==='source');
@@ -1139,7 +1153,7 @@ function exportRevision() {
   return JSON.stringify({epoch: state.epoch, plate: state.plateId,
     objects: state.objects, layout:state.layout, layoutError:state.layoutError, target: state.target, reels: state.reels, u1Nozzle:state.u1Nozzle,
     physical: payload.physical, mapping: payload.mapping, recipes: payload.recipes,
-    strategy: state.strategy, reviewed: state.reviewed, reelView:state.reelView});
+    strategy: state.strategy, reviewed: state.reviewed, reelView:state.reelView,layerHeight:layerChoice()});
 }
 
 $("export").addEventListener("click", async () => {
@@ -1181,6 +1195,7 @@ $("export").addEventListener("click", async () => {
       target: state.target, reels: state.reels, physical: payload.physical,
       mapping: payload.mapping, recipes: payload.recipes,
       title: state.project.title, u1Nozzle:state.u1Nozzle, layout:state.layout,
+      layerHeight:layerChoice(),
       thumbnails: { main: rendered.main, small: rendered.small || null },
     });
     if (exportRevision() !== revision) return;

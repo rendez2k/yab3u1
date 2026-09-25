@@ -125,7 +125,7 @@ export function resolveLayerHeight(source, match, choice = {mode:'preserve'}) {
   const fallback=number(match.process.layer_height);
   let height=mode==='custom' ? number(choice.value) : mode==='preset'
     ? number(matchU1Profile({},match.nozzle,{carry:false}).process.layer_height) : original;
-  let reason=mode==='custom' ? 'custom batch height' : mode==='preset' ? 'standard nozzle preset' : 'designer height preserved';
+  let reason=mode==='custom' ? 'custom height' : mode==='preset' ? 'standard nozzle preset' : 'designer height preserved';
   if (!(height>=match.minLayer && height<=match.maxLayer)) {
     if(mode==='custom') throw new Error(`Custom layer height must be ${match.minLayer}–${match.maxLayer} mm for the ${match.nozzle} mm nozzle.`);
     height=fallback;

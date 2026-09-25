@@ -18,7 +18,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.1-preview.6";
+const VERSION = "2.6.1-preview.7";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,

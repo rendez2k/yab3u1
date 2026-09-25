@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {matchU1Profile,resolveLayerHeight} from '../shared/u1Profiles.js';
-import {readProject,convertProject,SRC_BBL_PROJECT} from '../shared/project.js';
+import {readProject,convertProject,exportProject,SRC_BBL_PROJECT} from '../shared/project.js';
 const enc=new TextEncoder(),dec=new TextDecoder();
 function fixture(){return readProject(new Map([
  ['3D/3dmodel.model',enc.encode('<model unit="millimeter"><resources><object id="1" type="model"><mesh><vertices><vertex x="0" y="0" z="0"/><vertex x="10" y="0" z="0"/><vertex x="0" y="10" z="5"/></vertices><triangles><triangle v1="0" v2="1" v3="2"/></triangles></mesh></object></resources><build><item objectid="1"/></build></model>')],
@@ -30,4 +30,18 @@ assert.equal(resolveLayerHeight({layer_height:'0.1'},match).height,.1);
 assert.match(resolveLayerHeight({layer_height:'0.2'},match).reason,/outside/);
 assert.match(resolveLayerHeight({},match).reason,/unspecified/);
 assert.throws(()=>resolveLayerHeight({},match,{mode:'unknown'}),/mode/);
+// Full Spectrum uses the recolour exporter and must retain native blends while
+// applying the same regular-layer choice to project and object settings.
+for(const mode of ['preserve','preset','custom']) {
+ const src=fixture(),choice={mode,value:'0.12'},match=matchU1Profile(src.sourceSettings,'0.4',{blends:true,layerHeight:choice});
+ const result=exportProject(src,1,null,{target:'snapmaker',u1Nozzle:'0.4',
+  reels:['#000000','#FFFFFF','#FF0000','#0000FF'].map(color=>({color,type:'PLA'})),
+  mapping:{1:5},recipes:[{a:1,b:2,percent:50,model:'PLA'}],layerHeight:choice});
+ assert.deepEqual(result.problems,[]);
+ const config=JSON.parse(dec.decode(result.entries.get(SRC_BBL_PROJECT)));
+ assert.equal(Number(config.layer_height),resolveLayerHeight(src.sourceSettings,match,choice).height);
+ const metadata=dec.decode(result.entries.get('Metadata/model_settings.config'));
+ const height=resolveLayerHeight({...src.sourceSettings,...src.meta.get('1').settings},match,choice).height;
+ assert(metadata.includes(`key="layer_height" value="${height}"`),'Full Spectrum object override follows the chosen height');
+}
 console.log('PASS 24 nozzle/mode/carry combinations: preview/export agreement, object overrides, first-layer limits and invalid custom heights');

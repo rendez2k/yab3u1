@@ -254,6 +254,13 @@
   .palettechip i { display: block; height: 36px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; }
   .palettecoverage { display: block; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 14px; line-height: 1.5; }
   .palettecoverage > span { display: block; margin-top: 4px; }
+  .palettecoverage .palette-change-head, .palettecoverage .palette-change { display: grid; grid-template-columns: minmax(0,1fr) 18px minmax(0,1fr); gap: 8px; align-items: center; }
+  .palettecoverage .palette-change-head { margin-top: 12px; font-size: 12px; color: var(--dim); }
+  .palette-change-colour { display: flex; align-items: center; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
+  .palette-change-colour i { display: block; flex: 0 0 26px; height: 26px; border: 1px solid var(--line); border-radius: 5px; }
+  #colouroutcome h3 { margin: 0 0 10px; font-size: 18px; }
+  .printer-status { margin: 14px 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
+  .printer-status strong { display: block; }
   .colour-change { display: block; padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--line); font-size: 15px; line-height: 1.5; }
   .change-pair { display: grid; grid-template-columns: minmax(0, 1fr) 20px minmax(0, 1fr); gap: 12px; align-items: center; }
   .change-colour { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
@@ -473,6 +480,12 @@
 
   <div class="card hidden" id="exportcard">
     <h2>Export your project</h2>
+    <details id="layeroptions" class="compact-options"><summary id="layersummary">Layer height · preserve designer settings</summary>
+      <label class="field">Regular layer height<select id="spectrumlayermode"><option value="preserve">Preserve designer settings</option><option value="preset">Use printer preset</option><option value="custom">Custom layer height</option></select></label>
+      <label class="field" id="spectrumcustomlayer" hidden>Layer height (mm)<input id="spectrumlayerheight" type="number" min="0.01" max="0.56" step="0.01" value="0.20"></label>
+      <p class="hint">Applies to regular layers on the selected objects. First-layer height is checked separately against the nozzle profile.</p>
+      <div id="spectrumlayernote" class="hint" role="status"></div>
+    </details>
     <details><summary>Filament brand presets (optional)</summary><div id="spectrumfilaments"></div></details>
     <details id="copyoptions" class="compact-options"><summary id="copysummary">Copies &amp; spacing · 1 copy</summary><fieldset id="copycontrols"><legend>Copies on the plate</legend><div class="row"><label class="field">Copies<input id="spectrumcopies" type="number" min="1" max="64" step="1" value="1"></label><label class="field">Gap (mm)<input id="spectrumgap" type="number" min="0" max="100" step="1" value="5"></label></div><p class="hint" id="copynote" role="status">One copy keeps the original plate arrangement.</p></fieldset></details>
     <p class="hint" id="exportnote" role="status"></p>

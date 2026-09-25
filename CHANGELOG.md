@@ -1,3 +1,9 @@
+## 2.6.1-preview.7
+
+- Full Spectrum U1 exports now offer designer, printer-preset and custom regular layer heights, with source-to-output values and nozzle-range validation.
+- Palette suggestions show original and suggested swatches side by side; the selected comparison has a clearer heading.
+- U1 filament sending shows explicit prerequisite, connection, progress and verified-result states. Checking is disabled until a palette is applied, with a shortcut to Apply palette.
+
 ## 2.6.1-preview.6
 
 - Fix Snapmaker Orca brim-generation access violations from object-level support-speed overrides. Preserve the slowest selected-object support speed at project scope; keep geometry, blends, cutouts and brims.
