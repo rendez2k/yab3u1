@@ -12,6 +12,17 @@ introduced. Existing U1 conversion and the IDM filename fix are retained.
 
 ## Build / install
 
+### Install the complete review download
+
+Anyone can install `web/downloads/makerworld-yab3d-review-1.5.3.6.zip`;
+it is a complete extension and does not require an existing installation.
+Extract it to a permanent folder, open `chrome://extensions`, enable Developer
+mode, click **Load unpacked**, and choose the extracted folder containing
+`manifest.json`. Refresh MakerWorld afterwards. This is a manual review install,
+not a Chrome Web Store listing, and it opens the YAB3D review site.
+
+### Rebuild the patched package from an existing installation
+
 1. Copy the installed MakerWorld-to-U1 **1.5.3.3** directory to a staging directory.
 2. Run `python integrations/makerworld/patch.py <staging-directory>`.
 3. Back up the installed extension. Copy the staged `manifest.json`, `content.js`

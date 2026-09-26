@@ -163,7 +163,7 @@ export function palette(physicalColors, physicalTypes, recipes) {
   const physical = physicalColors.map((c) => norm(c) || "#FFFFFF");
   const virtual = recipes.map((recipe, index) => ({
     id: virtualId(physical.length, index),
-    color: (recipe.model===FDM_MODEL ? mixFdmHex : mixHex)(physical[recipe.a - 1], physical[recipe.b - 1], recipe.percent),
+    color: (recipe.model===FDM_MODEL && norm(recipe.measuredColor)) || (recipe.model===FDM_MODEL ? mixFdmHex : mixHex)(physical[recipe.a - 1], physical[recipe.b - 1], recipe.percent),
     a: recipe.a, b: recipe.b, percent: recipe.percent,
     type: physicalTypes[recipe.a - 1] || "PLA",
   }));

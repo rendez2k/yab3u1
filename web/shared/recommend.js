@@ -10,8 +10,8 @@ const BASICS=['#FFFFFF','#000000','#808080','#FF0000','#0080C0','#0000FF',
 const objective=errors=>errors.reduce((a,b)=>a+b,0)/errors.length+.35*Math.max(...errors);
 const tenth=value=>Math.round(value*10)/10;
 const material=reel=>String(reel.type || 'PLA').trim().toUpperCase();
-function outcomeFor(sources,reels,blends,approximate=false) {
-  const plan=planBlends(sources,reels,approximate);
+function outcomeFor(sources,reels,blends,approximate=false,calibration=null) {
+  const plan=planBlends(sources,reels,approximate,null,calibration);
   const outcome=describeColourMapping(sources,{
     mapping:mappingFromPlan(plan,blends),physical:reels,kept:blends ? plan.recipes : [],
   },blends);
@@ -159,7 +159,7 @@ export function recommendPalette({sources,loaded,stock=null,locked=[],blends=tru
 }
 
 /** Two explicit workflows. Model-first does not use the saved printer palette. */
-export function recommendWorkflow({mode='model', sources, loaded, stock=null, type='PLA', keepExact=[], weights={}, blends=true}) {
+export function recommendWorkflow({mode='model', sources, loaded, stock=null, type='PLA', keepExact=[], weights={}, blends=true, calibration=null}) {
   const colours=[...new Set(Object.values(sources || {}).map(norm).filter(Boolean))];
   if(!colours.length) throw Error('Select a model with readable colours.');
   const options=[], approximateOptions=[];
@@ -167,16 +167,17 @@ export function recommendWorkflow({mode='model', sources, loaded, stock=null, ty
   function consider(reels) {
     search.evaluated++;
     if(keepExact.some(color=>!reels.some(r=>norm(r.color)===norm(color)))) return;
-    let result=outcomeFor(sources,reels,blends);
-    if(result.unresolved && blends) result=outcomeFor(sources,reels,true,true);
+    let result=outcomeFor(sources,reels,blends,false,calibration);
+    if(result.unresolved && blends) result=outcomeFor(sources,reels,true,true,calibration);
     if(result.unresolved) return;
     const rows=result.outcome.rows;
     let total=0,error=0;
     for(const row of rows) {
-      const weight=Math.max(1,Number(weights[norm(row.original)]) || 1);
+      const supplied=Number(weights[norm(row.original)]);
+      const weight=Number.isFinite(supplied) && supplied>0 ? supplied : 1;
       total+=weight; error+=weight*distance(row.original,row.result);
     }
-    // Facet counts are an approximate prominence signal, not measured surface area.
+    // Surface-area mean plus a worst-colour penalty protects small accents.
     result.score=error/total + .15*Math.max(...rows.map(r=>distance(r.original,r.result)));
     const option={reels:reels.map(r=>({...r})),type:reels[0].type,...result,usesLoaded:mode==='loaded'};
     (result.approximate ? approximateOptions : options).push(option);

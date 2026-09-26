@@ -23,8 +23,10 @@ const REEL_KEY = "yab3u1-web-reels";
 import { renderFilamentPicker } from './shared/filamentPicker.js';
 import {createTextureImport} from './shared/textureImport.js';
 import { buildU1Profile, profileDescription, resolveLayerHeight } from './shared/u1Profiles.js';
+import { colourWeights } from './shared/surfaceWeights.js';
+import { mountCalibration } from './shared/calibrationPanel.js';
 
-const VERSION = "2.6.8";
+const VERSION = "2.6.9";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -48,11 +50,11 @@ const state = {
 
 window.__recolour = state;                    // the QA harness and the console
 
-let printerPanel=null;
+let printerPanel=null, calibrationPanel=null;
 function layerChoice() {
   return state.target==='snapmaker' ? {mode:$('spectrumlayermode').value,value:$('spectrumlayerheight').value} : null;
 }
-['spectrumlayermode','spectrumlayerheight'].forEach(id=>$(id).addEventListener('input',()=>{clearReview();renderExport();}));
+['spectrumlayermode','spectrumlayerheight'].forEach(id=>$(id).addEventListener('input',()=>{clearReview();refresh();}));
 function updateCopies() {
   const copies=Number($("spectrumcopies").value),spacing=Number($("spectrumgap").value);
   state.layout=null;state.layoutError='';
@@ -135,7 +137,7 @@ function colourChange(row) {
   const chip=(hex,label)=>`<span class="change-colour"><span class="change-label">${label}</span><i class="change-swatch" style="background:${esc(hex)}" aria-hidden="true"></i><strong>${esc(colourName(hex))}</strong><small>${esc(hex)}</small></span>`;
   const unresolved=row.kind==='unresolved';
   const change=unresolved ? '' : distance(row.original,row.result);
-  return `<span class="colour-change"><span class="change-pair">${chip(row.original,'Original')}<span class="change-arrow" aria-hidden="true">→</span>${unresolved ? '<span class="change-colour"><span class="change-label">Result</span><strong>No suitable enabled blend</strong></span>' : chip(row.result,row.kind==='blended' ? 'Predicted blend' : 'New colour')}</span>
+  return `<span class="colour-change"><span class="change-pair">${chip(row.original,'Original')}<span class="change-arrow" aria-hidden="true">→</span>${unresolved ? '<span class="change-colour"><span class="change-label">Result</span><strong>No suitable enabled blend</strong></span>' : chip(row.result,row.kind==='blended' ? (row.recipe?.measuredColor ? 'Recorded print sample' : 'Predicted blend') : 'New colour')}</span>
     ${row.recipe && !unresolved ? `<span class="change-recipe">${100-row.recipe.percent}% slot ${row.recipe.a} + ${row.recipe.percent}% slot ${row.recipe.b}</span>` : ''}
     ${change>12 ? `<span class="change-difference">${change>25?'Large colour change':'Noticeable colour change'}</span>` : ''}</span>`;
 }
@@ -199,7 +201,7 @@ function renderRecommendation(message) {
   else if(state.recommendationSearch?.found===false) $("recommendstatus").textContent=state.recommendationSearch.reason
     + ' This is a search result, not proof that no palette could work.';
   else if(result) $("recommendstatus").textContent=state.workflow==='model'
-    ? `${result.rough ? 'Original model colours to load.' : 'Closest options from your Spool Studio collection.'} Keep as many originals as possible and blend the rest. Ranking uses colour error and approximate prominence from painted-facet counts.`
+    ? `${result.rough ? 'Original model colours to load.' : 'Closest options from your Spool Studio collection.'} Keep as many originals as possible and blend the rest. Ranking uses original surface area and colour error, with a penalty for the worst colour change. Keep exact protects essential accents.`
     : 'Using only your four loaded filaments. Matching colours stay exact; remaining regions use the blend recipes below.';
   document.querySelectorAll('[data-reel-view]').forEach(button=>{
     button.setAttribute('aria-pressed',String(button.dataset.reelView===state.reelView && state.previewMode==='result'));
@@ -222,17 +224,14 @@ function renderRecommendation(message) {
 }
 function requestRecommendation() {
   if(!state.assessed) return;
-  const weights={};
-  for(const object of state.assessed.objects || []) if(object.selected) for(const colour of object.colours || []) {
-    const key=norm(colour.color); weights[key]=(weights[key] || 0)+colour.painted_triangles*Math.max(1,object.instances || 1);
-  }
+  const weights=colourWeights(state.assessed.sourceColors,state.assessed.surfaceAreas);
   const sourceColours=Object.values(state.assessed.sourceColors).map(norm);
   state.keepExact=state.keepExact.filter(c=>sourceColours.includes(c));
   const input={mode:state.workflow,sources:state.assessed.sourceColors,
     loaded:state.workflow==='loaded' ? state.reels : [],
     stock:state.workflow==='model' && state.useOwned ? state.stock : null,
     type:state.modelType,keepExact:state.workflow==='model' ? state.keepExact : [],
-    weights,blends:state.strategy!=='solid'};
+    weights,blends:state.strategy!=='solid',calibration:calibrationPanel?.active() || null};
   const key=JSON.stringify({...input,loaded:input.loaded.map(({color,type})=>({color,type}))});
   if(key===recommendationKey) { renderRecommendation(); return; }
   invalidateRecommendation(); recommendationKey=key;
@@ -307,10 +306,12 @@ function renderWorkflow() {
   $("useowned").checked=state.useOwned;
   $("ownedhint").textContent=state.stock===null ? 'Connect Spool Studio below to limit suggestions to filaments you own.' : `${state.stock.length} available filaments in your connected collection.`;
   const colours=[...new Set(Object.values(state.assessed?.sourceColors || {}).map(norm))];
-  const signature=JSON.stringify([colours,state.keepExact]);
+  const areas=colourWeights(state.assessed?.sourceColors || {},state.assessed?.surfaceAreas);
+  const totalArea=Object.values(areas).reduce((a,b)=>a+b,0);
+  const signature=JSON.stringify([colours,state.keepExact,areas]);
   if($("exactcolours").dataset.signature!==signature) {
     $("exactcolours").dataset.signature=signature;
-    $("exactcolours").innerHTML=colours.map(c=>`<label class="check"><input type="checkbox" data-exact="${c}" ${state.keepExact.includes(c)?'checked':''}><i class="swatch" style="background:${c}"></i>Keep ${esc(colourName(c))} exact (${c})</label>`).join('');
+    $("exactcolours").innerHTML=colours.map(c=>`<label class="check"><input type="checkbox" data-exact="${c}" ${state.keepExact.includes(c)?'checked':''}><i class="swatch" style="background:${c}"></i>Keep ${esc(colourName(c))} exact (${c})${totalArea ? ` · ${(100*(areas[c]||0)/totalArea).toFixed(1)}% surface` : ''}</label>`).join('');
     $("exactcolours").querySelectorAll('[data-exact]').forEach(box=>box.addEventListener('change',()=>{
       state.keepExact=[...$("exactcolours").querySelectorAll('[data-exact]:checked')].map(b=>b.dataset.exact);
       invalidateRecommendation(); refresh();
@@ -729,12 +730,12 @@ function useAssessed(assessed) {
     ? `${surfaceColours} colours found on the selected model; ${extraColours} other palette entries are not used on its surface. The sliced-file check can confirm which can be left out of the reel load, including support and purge use.`
     : "";
   state.mix = planBlends(assessed.sourceColors, activeReels(),activeApproximation(),
-    state.reelView==='recommended' ? state.recommendation?.slotOrder : state.appliedSlotOrder);
+    state.reelView==='recommended' ? state.recommendation?.slotOrder : state.appliedSlotOrder,calibrationPanel?.active() || null);
   state.recipes = state.mix.recipes.filter(recipe=>plausibleBlend(
     activeReels()[recipe.a-1].color,activeReels()[recipe.b-1].color,recipe.color));
   /* Ticking belongs to one recipe set. A new set starts fully ticked; an empty set
      means the user turned every blend off, and that must stay off. */
-  const key = JSON.stringify(state.recipes.map((r) => [r.id, r.a, r.b, r.percent]));
+  const key = JSON.stringify(state.recipes.map((r) => [r.id, r.a, r.b, r.percent, r.color, r.measuredColor]));
   if (key !== state.recipeKey) {
     state.recipeKey = key;
     state.ticked = new Set(state.recipes.map((recipe) => recipe.id));
@@ -744,6 +745,7 @@ function useAssessed(assessed) {
     if (!state.recipes.some((recipe) => recipe.id === id)) state.ticked.delete(id);
   }
   renderMix(assessed);
+  calibrationPanel?.render();
   refreshPreview();
   renderExport();
 }
@@ -812,7 +814,7 @@ function resultPlan() {
     if (Number(slot) > 0) mapping[source] = Number(slot);
   }
   const payload = { recipes: kept.map((recipe) => ({ a: recipe.a, b: recipe.b,
-                                            percent: recipe.percent, model: recipe.model })),
+                                            percent: recipe.percent, model: recipe.model, ...(recipe.measuredColor ? {measuredColor:recipe.measuredColor} : {}) })),
            mapping, kept, physical: reels };
   payload.outcome=describeColourMapping(assessed.sourceColors,payload,true);
   if(payload.outcome.counts.unresolved) payload.blocked=`${payload.outcome.counts.unresolved} source colour(s) have no suitable enabled blend. Change reels or explicitly choose Solid colours in Advanced`;
@@ -838,7 +840,7 @@ function renderOutcome(payload=resultPlan()) {
     <p class="hint">${esc(tally)}</p>
     <ul>${changed.map(row=>`<li>${colourChange(row)}</li>`).join('')}</ul>
     ${activeApproximation() && state.strategy==='blend' ? '<p><strong>Approximate blends selected. Review the changed shades before exporting.</strong></p>' : ''}
-    ${counts.unresolved ? '<p class="outcomewarning">Export blocked. Unresolved regions are highlighted pink in Loaded and Suggested views; pink is not an output filament.</p>' : counts.substituted ? '<p class="hint">Solid-colour replacement is selected. The listed source colours will change.</p>' : counts.blended ? '<p class="hint">Blend shades are uncalibrated estimates; they may differ in print.</p>' : ''}`;
+    ${counts.unresolved ? '<p class="outcomewarning">Export blocked. Unresolved regions are highlighted pink in Loaded and Suggested views; pink is not an output filament.</p>' : counts.substituted ? '<p class="hint">Solid-colour replacement is selected. The listed source colours will change.</p>' : counts.blended ? '<p class="hint">Recorded print samples are labelled; other blends are estimates. Printed results and slicer previews may differ.</p>' : ''}`;
 }
 
 function renderMix(assessed) {
@@ -850,7 +852,7 @@ function renderMix(assessed) {
   $("strategyhint").textContent = state.strategy === "source"
     ? "Keep the model's original filament colours. This choice does not use your loaded reel colours; this page can keep up to four original colours."
     : blendMode
-      ? "Approximate the model's colours using the selected set and suggested blends. Matching reel colours stay unchanged; extra colours need an enabled blend. Unresolved colours block export. Shades are uncalibrated estimates."
+      ? "Approximate the model's colours using the selected set and suggested blends. Matching reel colours stay unchanged; extra colours need an enabled blend. Unresolved colours block export. Recorded samples are labelled; other shades are estimates."
       : "Use only the selected reel colours, with no blends. Each source colour goes to its closest reel unless you change its mapping below.";
   $("maptable").innerHTML = "<table><thead><tr><th>Source</th><th>In the file</th>"
     + "<th>Export result</th><th>Closest blend</th><th>Difference</th>"
@@ -919,8 +921,8 @@ function renderMix(assessed) {
         + `${assessed.used.length}; no substitution and no mixture.`
       : blendMode
         ? ` ${state.ticked.size} of ${state.recipes.length} recipe(s) ticked; the `
-          + "export writes them after your four reels. Predicted shades are "
-          + "uncalibrated."
+          + "export writes them after your four reels. Unrecorded blends are "
+          + "estimates."
         : " Substituting every source colour onto one of your four reels; use the "
           + "dropdowns to change any of them.");
 }
@@ -945,7 +947,7 @@ $("review").addEventListener("change", () => {
   renderExport();
 });
 $('spectrumnozzle').addEventListener('change',()=>{
-  state.u1Nozzle=$('spectrumnozzle').value; clearReview(); renderExport();
+  state.u1Nozzle=$('spectrumnozzle').value; clearReview(); refresh();
 });
 $("target").addEventListener("change", () => {
   state.target = $("target").value;
@@ -954,6 +956,7 @@ $("target").addEventListener("change", () => {
   cancelPlan();
   syncDestination();
   clearReview();
+  refresh();
 });
 
 // ----------------------------------------------------------------- preview ----
@@ -1423,6 +1426,27 @@ function syncDestination() {
   $("plannercard").classList.toggle("hidden", !u1);
   $("prepareswaps").disabled = !u1 || !state.project;
 }
+function calibrationSetup() {
+  if(!state.project) throw Error('Load a model and select a palette to prepare U1 blend tests.');
+  if(state.target!=='snapmaker') throw Error('Printed blend calibration currently supports Snapmaker U1 output. Other outputs use the standard estimates.');
+  const reels=activeReels();
+  const sourceSettings=state.project.sourceSettings || {};
+  const profile=buildU1Profile(sourceSettings,reels.map(r=>r.type),state.u1Nozzle,{blends:true,layerHeight:layerChoice()});
+  const height=resolveLayerHeight(sourceSettings,profile.match,layerChoice()).height;
+  for(const id of state.objects) {
+    const settings=state.project.meta.get(String(id))?.settings || {};
+    if(resolveLayerHeight({...sourceSettings,...settings},profile.match,layerChoice()).height!==height)
+      throw Error('This selection has different object layer heights. Choose a common custom layer height before calibrating.');
+  }
+  const nozzle=profile.match.nozzle;
+  const context=JSON.stringify({target:state.target,nozzle,height,
+    sourceSettings:Object.fromEntries(Object.entries(sourceSettings).sort(([a],[b])=>a.localeCompare(b))),
+    filamentProfiles:reels.map(r=>JSON.stringify(r.profile || null)).sort()});
+  return {reels,sourceSettings,nozzle,height,context};
+}
+calibrationPanel=mountCalibration($('blendcalibration'),{getSetup:calibrationSetup,onChange:()=>{
+  clearReview();invalidateRecommendation();refresh();
+}});
 $("target").innerHTML = RECOLOUR_TARGETS.map((id) =>
   `<option value="${id}">${esc(LABELS[id])}</option>`).join("");
 $("target").value = state.target;

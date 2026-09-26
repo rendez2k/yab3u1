@@ -24,6 +24,15 @@
 })();
 </script>
 <style>
+  #blendcalibration .field { min-width: 0; margin-block: 10px; }
+  #blendcalibration input:not([type="checkbox"]), #blendcalibration select { width: 100%; min-width: 0; box-sizing: border-box; }
+  #blendcalibration input:not([type="checkbox"]) { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel2); color: var(--fg); }
+  #blendcalibration input::placeholder { color: var(--dim); opacity: 1; }
+  #blendcalibration [data-reels] { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+  .calibration-samples { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,150px),1fr)); gap: 10px; }
+  #blendcalibration [data-reels] span { display: flex; align-items: center; gap: 6px; }
+  #blendcalibration .row { gap: 10px; align-items: center; flex-wrap: wrap; }
+  #blendcalibration [data-status] { overflow-wrap: anywhere; }
   :root {
     /* The same Lime Frost tokens as the converter, so the two pages read as one
        tool: light is the reference set, dark keeps the hues and moves lightness. */
@@ -445,9 +454,9 @@
   <details class="extension-help" id="chrome-extension">
     <summary>From MakerWorld? Get the Chrome extension</summary>
     <p><a href="downloads/makerworld-yab3d-review-1.5.3.6.zip" download>Download Chrome extension 1.5.3.6 (ZIP)</a>
-      &mdash; review build. Open the original 3MF in Analyse &amp; convert or Full Spectrum.</p>
+      &mdash; complete review extension, available for anyone to install manually. No existing extension is needed. Opens the original 3MF in Analyse &amp; convert or Full Spectrum.</p>
     <ol>
-      <li>Extract the ZIP to a folder you will keep.</li>
+      <li>Download and extract the ZIP to a folder you will keep. This is a manual install, not a Chrome Web Store listing.</li>
       <li>Open <code>chrome://extensions</code>, switch on <strong>Developer mode</strong>,
         choose <strong>Load unpacked</strong> and select the extracted folder.</li>
       <li>Refresh MakerWorld, choose a print profile, then click <strong>Open in YAB3D</strong>.
@@ -537,7 +546,7 @@
     <p class="hint" id="workflowhint"></p>
     <details id="modelchoices" class="compact-options"><summary id="modelchoicessummary">Colour preferences · PLA</summary>
       <label class="field">Filament material <select id="modelmaterial"><option>PLA</option><option>PETG</option><option>ABS</option><option>TPU</option><option>ASA</option><option>PA</option></select></label>
-      <p class="hint">Keep any essential original colours exact (up to four). We compare the remaining combinations and blend the missing colours.</p>
+      <p class="hint">Keep essential colours exact (up to four), especially small eyes, lettering, skin tones or logos. Surface percentages measure the original mesh before preview simplification; they do not account for visibility or cutouts.</p>
       <div id="exactcolours" class="row"></div>
       <label class="check"><input type="checkbox" id="useowned"> Choose from my Spool Studio filaments only</label>
       <p class="hint" id="ownedhint"></p>
@@ -568,6 +577,7 @@
         <label class="field">Spool Studio data file <input type="file" accept=".json,application/json" data-stock-file></label>
       </details>
     </details>
+    <details id="blendcalibration" class="compact-options"></details>
     <section id="recommendation" aria-labelledby="recommendheading">
       <h3 id="recommendheading">Palette suggestions</h3>
       <p class="hint" id="recommendstatus" role="status">Load a model to suggest colours.</p>

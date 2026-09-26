@@ -15,6 +15,7 @@ import { cluster, clusterWithinBudget } from "./simplify.js";
 import { encodePng } from "./png.js";
 import { downscale, renderIso } from "./raster.js";
 import { layoutOffsets, planLayout } from "./layout.js";
+import { surfaceAreas } from './surfaceWeights.js';
 
 // Preview detail level, in triangles: a small fixture is drawn verbatim, a big
 // model is clustered down to this so the picture stays a recognisable surface
@@ -169,6 +170,7 @@ function buildGeometry(key, plateId, objectIds, estimate) {
   const simple = cluster(soup.positions, soup.colors, soup.states, PREVIEW_TARGET);
   return {
     id: (geometrySeq += 1),
+    surfaceAreas: surfaceAreas(soup.positions, soup.states),
     key,
     positions: floatsOf(simple.positions),
     // The buffer is detached the moment it is transferred, so the count has to
@@ -323,6 +325,7 @@ self.onmessage = async (event) => {
       const initial = parsed.plates.length
         ? (parsed.plates[0].objectIds || []).map(String) : [];
       const preview = preparePreview(plateId, initial, "result", {}, null, null, 0);
+      assessed.surfaceAreas = ensureGeometry(plateId, initial, 0).surfaceAreas;
       post({ type: "loaded", id, meta, assessed, preview, ms: Date.now() - started },
            transferOf(preview));
       return;
@@ -353,6 +356,7 @@ self.onmessage = async (event) => {
     }
     if (type === "assess") {
       const assessed = project.analyse(parsed, message.plateId, message.objects);
+      assessed.surfaceAreas = ensureGeometry(message.plateId, message.objects, assessed.counts.triangles).surfaceAreas;
       post({ type: "assessed", id, assessed });
       return;
     }

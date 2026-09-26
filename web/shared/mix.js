@@ -8,6 +8,7 @@
 import { distance, nearest, norm } from "./colour.js";
 import { MIX_COEFFICIENTS, MIX_INTERCEPT, MIX_POWERS } from "./mix_model.js";
 import { mixFdmHex, FDM_MODEL, approximateDistance } from './fdmMix.js';
+import { calibratedPredictor } from './blendCalibration.js';
 
 export const RATIOS = [25, 50, 75];
 export const MIN_IMPROVEMENT = 2.0;
@@ -64,7 +65,7 @@ export function candidateRecipes(reels, ratios = RATIOS, predictor = mixHex) {
       if (material(reels[a]) !== material(reels[b])) continue;
       for (const percent of ratios) {
         out.push({ a: a + 1, b: b + 1, percent,
-                   color: predictor(colors[a], colors[b], percent),
+                   color: predictor(colors[a], colors[b], percent, a+1, b+1),
                    materials: material(reels[a]) });
       }
     }
@@ -231,21 +232,27 @@ export function plausibleBlend(first, second, predicted) {
 
 /** Interactive Full Spectrum planning rejects implausible predictions before
  * choosing a recipe, so a rejected nearest prediction cannot hide a valid one. */
-export function planBlends(sourceColors,reels,approximate=false,slotOrder=null) {
+export function planBlends(sourceColors,reels,approximate=false,slotOrder=null,calibration=null) {
   // Keep the original search order when arranging a chosen palette. Re-running
   // tied candidates in physical-slot order can otherwise change its shades.
   if(slotOrder) {
     validateSlotOrder(slotOrder,reels.length);
     const original=slotOrder.map((_,old)=>reels[slotOrder.indexOf(old)]);
-    const plan=planBlends(sourceColors,original,approximate);
+    const plan=planBlends(sourceColors,original,approximate,null,calibration);
     const slot=id=>id==null ? id : slotOrder.indexOf(id-1)+1;
     const recipe=r=>r ? {...r,a:slot(r.a),b:slot(r.b)} : r;
     return {...plan,reels:reels.map((r,i)=>({slot:i+1,color:norm(r.color),type:material(r)})),
       recipes:plan.recipes.map(recipe),rows:plan.rows.map(row=>({...row,
         solid:{...row.solid,slot:slot(row.solid.slot)},mixture:recipe(row.mixture)}))};
   }
-  const plan=planMixtures(sourceColors,reels,RATIOS,6,true,mixFdmHex,approximate);
-  plan.recipes.forEach(recipe=>{recipe.model=FDM_MODEL; if(approximate) recipe.approximate=true;});
+  const predictor=calibratedPredictor(reels,calibration);
+  const plan=planMixtures(sourceColors,reels,RATIOS,6,true,predictor.predict,approximate);
+  plan.recipes.forEach(recipe=>{
+    recipe.model=FDM_MODEL;
+    const measured=predictor.measured(recipe.a,recipe.b,recipe.percent);
+    if(measured) recipe.measuredColor=measured;
+    if(approximate) recipe.approximate=true;
+  });
   return plan;
 }
 
