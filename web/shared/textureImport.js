@@ -42,7 +42,7 @@ export function createTextureImport({onAccept,buttonHost}){
       for(let k=0;k<9;k++)colors[f*9+k]=rgb[k%3]/255;
     }
     if(!preview)preview=new Preview($('.texture-canvas'));
-    if(preview.ok)preview.setSoup(positions,colors,{fit});else status(preview.error);
+    if(preview.ok){preview.resize();preview.setSoup(positions,colors,{fit});}else status(preview.error);
     const b=result.meta.bounds.size,scale=height/b[up==='y'?1:2],dimensions=(up==='y'?[b[0],b[2],b[1]]:b).map(v=>(v*scale).toFixed(1));
     $('.texture-dimensions').textContent=`Prepared size: ${dimensions.join(' × ')} mm · ${palette.length} colour groups. Orbit by dragging; scroll to zoom.`;
   }

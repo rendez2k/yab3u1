@@ -121,6 +121,11 @@ export class Preview {
     };
     gl.enable(gl.DEPTH_TEST);
     this.bindEvents();
+    // Dialogs and grid panels can change size without a window resize. Keep the
+    // drawing buffer at the displayed size instead of stretching a 300×150 image.
+    this.resizeObserver = new ResizeObserver(() => this.resize());
+    this.resizeObserver.observe(canvas);
+    this.resize();
   }
 
   bindEvents() {
@@ -243,9 +248,8 @@ export class Preview {
     this.pitch = 0.5;
     this.pan = [0, 0];
     if (this.bounds) {
-      const span = Math.max(this.bounds.size[0], this.bounds.size[1],
-                            this.bounds.size[2], 1);
-      this.distance = span * 2.2;
+      this.distance = fitDistance(this.bounds.size,
+        this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight), this.yaw, this.pitch);
     } else {
       this.distance = 120;
     }
@@ -267,6 +271,7 @@ export class Preview {
     // A 3x phone display would otherwise rasterise three times the pixels for no
     // visible gain on a 3D view.
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    if (!this.canvas.clientWidth || !this.canvas.clientHeight) return;
     const width = Math.max(1, Math.round(this.canvas.clientWidth * ratio));
     const height = Math.max(1, Math.round(this.canvas.clientHeight * ratio));
     if (this.canvas.width !== width || this.canvas.height !== height) {
@@ -307,6 +312,22 @@ export class Preview {
     gl.uniform1f(this.uniforms.ambient, 0.35);
     gl.drawArrays(gl.TRIANGLES, 0, this.count);
   }
+}
+
+/** Fit every corner of the bounds in the current camera, with a little margin.
+ * Accounting for aspect ratio avoids both a tiny model on desktop and clipped
+ * sides on a narrow phone. Geometry and colours are never altered by framing. */
+export function fitDistance(size, aspect, yaw=-0.6, pitch=0.5) {
+  const cp=Math.cos(pitch), sp=Math.sin(pitch), sy=Math.sin(yaw), cy=Math.cos(yaw);
+  const right=[cy,sy,0], up=[-sp*sy,sp*cy,cp], toward=[cp*sy,-cp*cy,sp];
+  const vertical=Math.tan(Math.PI/8), horizontal=vertical*Math.max(0.1,aspect);
+  let distance=0;
+  for (const x of [-1,1]) for (const y of [-1,1]) for (const z of [-1,1]) {
+    const corner=[x*size[0]/2,y*size[1]/2,z*size[2]/2];
+    distance=Math.max(distance,dot(corner,toward)+1.15*Math.max(
+      Math.abs(dot(corner,right))/horizontal,Math.abs(dot(corner,up))/vertical));
+  }
+  return Math.max(distance,1);
 }
 
 function bounds(positions) {

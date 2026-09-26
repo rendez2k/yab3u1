@@ -19,7 +19,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.7";
+const VERSION = "2.6.8";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -32,6 +32,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "Sharper model previews: the drawing resolution now follows the panel size and display density, including textured imports. Reset view fits the whole model with less empty space on desktop and mobile.",
   "Full Spectrum links carry the loaded model even when the host rewrites page URLs. A stopped model reader retries once, retains the original file and offers another retry without transferring it again.",
   "Printer capacity: U1 stays at four inputs; other printers can use 4, 8, 16, a custom count or an unspecified setup. Resolve extra project filaments with blends, deliberate repainting, U1 reel-change planning or an explicit keep-all export for further setup.",
   "MakerWorld extension: open the original 3MF directly in Analyse & convert or Full Spectrum, with transfer and analysis status. Model data stays in your browser.",
