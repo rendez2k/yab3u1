@@ -186,6 +186,27 @@ for (const target of ["snapmaker", "bambu", "orca", "prusa"]) {
   });
 }
 
+await ok("standard Bambu colour members cannot opt into the native-paint importer", () => {
+  const parsed = project.readProject(source(FIVE));
+  const built = project.convertProject(parsed, 1, null, { target: "bambu" });
+  const meshMembers = [...built.entries].filter(([name, data]) =>
+    name.startsWith("3D/Objects/") && decoder.decode(data).includes("<triangles>"));
+  assert.ok(meshMembers.length, "exercise the separate ObjectImporter, not only the root XML");
+  for (const [name, data] of meshMembers) {
+    const xml = decoder.decode(data);
+    // Bambu's ObjectImporter treats either version marker as native, then
+    // skips pid/p1 colours. Its root importer instead uses Application.
+    assert.doesNotMatch(xml, /name="(?:BambuStudio:3mfVersion|bamboo_slicer:Version3mf)"/,
+      `${name}: standard colours must reach Bambu's colour-mapping dialogue`);
+    assert.ok(xml.includes('<m:colorgroup'));
+    assert.deepEqual(standardStatesOf(new Map([[name, data]])), [1, 4, 5, 2]);
+  }
+  const native = project.convertProject(parsed, 1, null, { target: "snapmaker" });
+  assert.match(allModelText(native.entries), /name="BambuStudio:3mfVersion"/,
+    "native project dialects still carry their version marker");
+  assert.deepEqual(statesOf(native.entries), [1, 4, 5]);
+});
+
 await ok("a multi-plate project writes only the chosen plate", () => {
   const parsed = project.readProject(twoPlates());
   assert.equal(parsed.plates.length, 2, "both plates are read");

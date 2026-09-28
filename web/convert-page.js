@@ -20,7 +20,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.11";
+const VERSION = "2.6.12";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -33,6 +33,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "Bambu colour import: removed a conflicting native-project marker that made Bambu skip painted colours and its colour-mapping dialogue.",
   "Fill plate now compares whole sets and separate objects automatically, reports the result and offers Undo. U1 sending now stays in YAB3D: enter the printer address, review the slots and send. Spool Studio is an optional alternative.",
   "Main converter: review and send the exported U1 filament assignments, including partial slot setups through the direct connection. Pack separate objects with individual quantities while preserving their parts and orientation.",
   "Full Spectrum ranks palettes using original surface area and protects Keep exact choices. Optional local calibration records measured U1 blend colours, generates five-tile test projects and supports JSON backup/import; unrecorded blends remain estimates.",

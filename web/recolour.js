@@ -26,7 +26,7 @@ import { buildU1Profile, profileDescription, resolveLayerHeight } from './shared
 import { colourWeights } from './shared/surfaceWeights.js';
 import { mountCalibration } from './shared/calibrationPanel.js';
 
-const VERSION = "2.6.11";
+const VERSION = "2.6.12";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({

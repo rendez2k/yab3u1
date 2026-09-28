@@ -2337,7 +2337,10 @@ export function exportProject(project, plateId, objectIds, options) {
       + 'xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" '
       + (standard ? `xmlns:m="${COLOUR_NS}" ` : "")
       + `requiredextensions="${standard ? "p m" : "p"}"`;
-  const header = target === "prusa" ? "" : ' <metadata '
+  // Bambu's separate ObjectImporter treats this marker as native paint and
+  // consequently ignores standard pid/p1 colours. Do not mix the two dialects:
+  // standard colour documents must reach its colour-mapping import path.
+  const header = target === "prusa" || standard ? "" : ' <metadata '
     + 'name="BambuStudio:3mfVersion">1</metadata>\n';
   // The standard palette every colour reference in this file resolves against:
   // the source's own list, in order, including any slot no facet uses.
