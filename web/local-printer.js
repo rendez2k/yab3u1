@@ -34,8 +34,9 @@ const server=http.createServer(async(req,res)=>{
   }
   if(req.method!=='GET')return reply(405,{error:'Read only'});
   const url=new URL(req.url,origin);
-  if(!/^\/[a-zA-Z0-9_./-]*$/.test(url.pathname)||url.pathname.includes('..')||!(/\.(html|js|css|png|ico|txt)$/.test(url.pathname)||url.pathname==='/'))return reply(404,{error:'Unknown asset'});
-  const file=await fetch(site+(url.pathname==='/'?'/index.html':url.pathname),{signal:AbortSignal.timeout(15000)});
+  const pathname=url.pathname==='/recolour'?'/recolour.html':url.pathname;
+  if(!/^\/[a-zA-Z0-9_./-]*$/.test(pathname)||pathname.includes('..')||!(/\.(html|js|css|png|ico|txt)$/.test(pathname)||pathname==='/'))return reply(404,{error:'Unknown asset'});
+  const file=await fetch(site+(pathname==='/'?'/index.html':pathname),{signal:AbortSignal.timeout(15000)});
   res.writeHead(file.status,{'Content-Type':file.headers.get('content-type')||'application/octet-stream','Cache-Control':'no-store'});res.end(Buffer.from(await file.arrayBuffer()));
  }catch{reply(502,{error:'Request failed. Check the printer and connection; a write may be uncertain.'});}
 });
