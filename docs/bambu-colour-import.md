@@ -23,3 +23,14 @@ afterwards; all 47 conversion checks pass. A repaired copy of the reported
 archive was compared member by member: only the two version metadata elements
 changed. Bambu GUI acceptance of that corrected copy remains to be checked;
 archive validation is not a substitute for checking the displayed/sliced result.
+
+User confirmation after 2.6.12: painting imports, and the selected object's
+support settings are enabled (manual organic tree, 30 degrees). The Global
+checkbox shows the process defaults, not these overrides. Bambu's colour dialog
+can append colours to an existing filament list; this is independent of how many
+filaments the archive declares. Reset removes proposed appended colours, then
+Color match matches to existing entries. Users must review each assignment.
+
+Version 2.6.13 shows these steps beside the completed download, with colour
+swatches and a per-object support/layer-height report derived from the metadata
+actually written. It does not claim to control Bambu's existing filament list.

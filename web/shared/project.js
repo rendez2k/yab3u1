@@ -2282,6 +2282,7 @@ export function exportProject(project, plateId, objectIds, options) {
     : null;
 
   const paintedByObject = new Map();
+  const exportedObjectSettings = [];
   for (const root of rootObjects) {
     resources.push(target === "prusa"
       ? `  <object id="${root.id}" type="model">\n${root.mesh}\n  </object>`
@@ -2300,6 +2301,8 @@ export function exportProject(project, plateId, objectIds, options) {
     }
     const preserved = preserve
       ? sourceSettingMetadata(project, sourceId, target, options, paintedByObject.get(sourceId)) : "";
+    if (standard) exportedObjectSettings.push({ name: root.name, values: Object.fromEntries(
+      [...preserved.matchAll(/<metadata\b([^>]*)\/>/g)].map(m => [attr(m[1], 'key'), attr(m[1], 'value')])) });
     settings.push(`<object id="${root.id}"><metadata key="name" value="${esc(root.name)}"`
       + `/>${extruderOf(root.parts[0] ? root.parts[0].extruder : 1)}${preserved}`
       + root.parts.map((part) => `<part id="${esc(part.id)}" `
@@ -2439,6 +2442,8 @@ export function exportProject(project, plateId, objectIds, options) {
       // dialog.  Writing an anonymous preset bundle instead is what produced the
       // "Customized Preset" warning and the frozen off-bed placement.
       spec = null;
+      settingNotes = { scope: 'object', format: 'standard-colour',
+        carry: Boolean(options.preserveSourceSettings), objects: exportedObjectSettings };
     } else {
       // OrcaSlicer reads Bambu Studio's project schema; only the application name
       // and the label differ.

@@ -1,4 +1,5 @@
 import {mountPrinter} from './shared/printerPanel.js';
+import {bambuImportGuide} from './shared/bambuImportGuide.js';
 import {receiveModel, sendModel} from './shared/modelHandoff.js';
 // The homepage converter: any supported dialect in, any out, every colour kept.
 //
@@ -20,7 +21,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.12";
+const VERSION = "2.6.13";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -33,6 +34,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "Bambu import now shows how to reuse existing filaments without duplicates, plus the layer height and supports actually exported for each object.",
   "Bambu colour import: removed a conflicting native-project marker that made Bambu skip painted colours and its colour-mapping dialogue.",
   "Fill plate now compares whole sets and separate objects automatically, reports the result and offers Undo. U1 sending now stays in YAB3D: enter the printer address, review the slots and send. Spool Studio is an optional alternative.",
   "Main converter: review and send the exported U1 filament assignments, including partial slot setups through the direct connection. Pack separate objects with individual quantities while preserving their parts and orientation.",
@@ -162,6 +164,8 @@ function renderOutput(entry) {
       ? 'Printer capacity was not specified. Assign these project filaments to your printer in the slicer.'
       : 'Filament count fits the selected capacity. Check the printer, material assignments and sliced result before printing.';
   out.appendChild(capacityNote);
+  const guide = bambuImportGuide(entry);
+  if (guide) out.insertAdjacentHTML('beforeend', guide);
   // Start the download as well: the link stays for a second attempt, but the
   // user asked for a file, not for one more click.
   const auto = link.cloneNode(true);
@@ -175,7 +179,7 @@ function renderOutput(entry) {
   // What the export really did with the source's print intent, from the converter
   // itself rather than from what the page hoped: a U1 project carries compatible
   // print settings and a support decision, and the sentence names them.
-  const applied = entry.settings
+  const applied = entry.target === 'snapmaker' && entry.settings
     ? (entry.settings.carry
       ? ` Carried ${entry.settings.carried.length} compatible print setting(s) from `
         + "the source."
@@ -199,11 +203,8 @@ function renderOutput(entry) {
       : ". Open it as a project in the destination slicer and choose your own "
         + "printer and filament profile there; no machine settings are copied across.")
     + applied
-    + (entry.target === "bambu" && !session.state?.negativeVolumes
-      ? " Bambu Studio may ask you to map the file's colours to your own "
-        + "filaments: its colour dialog reads the file's filament list and may "
-        + "rebind it to your AMS, and the file itself carries no printer or "
-        + "process preset."
+    + (guide
+      ? " Follow the Bambu import steps beside the download to reuse existing filaments and check object settings."
       : "")
     + " Where a painted facet was split, the export writes its exact leaf "
     + "triangles, so the mesh may hold more triangles than the source.");
@@ -491,7 +492,7 @@ function syncSettings() {
   $("sourcesettings").textContent = enabled
     ? `Carrying ${applied.length} compatible print settings, including quality, strength and support settings.`
       + (objects.length > 1 ? " Details below describe the first object; each object's overrides are exported separately." : "")
-      + (isU1 ? ` ${supportSentence(source, state)}` : " These are model settings; select your printer and filament profiles in the slicer.")
+      + (isU1 ? ` ${supportSentence(source, state)}` : " These are object overrides. In the slicer, choose Objects, select a model, then Support or Quality. Global still shows the destination preset’s defaults.")
     : "The destination's print settings will be used.";
   $("settinglist").innerHTML = (applied.length ? "<ul>" + applied.map(({key,value}) =>
     `<li>${esc(labelFor(key))}: ${esc(valueWithUnit(key,value))}</li>`).join("") + "</ul>" : "")

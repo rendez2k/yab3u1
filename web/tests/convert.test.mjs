@@ -207,6 +207,24 @@ await ok("standard Bambu colour members cannot opt into the native-paint importe
   assert.deepEqual(statesOf(native.entries), [1, 4, 5]);
 });
 
+await ok("Bambu's completed export reports the object overrides actually written", () => {
+  const entries = source(FIVE);
+  const cfg = JSON.parse(memberText(entries, 'Metadata/project_settings.config'));
+  Object.assign(cfg, {layer_height:'0.2',enable_support:'1',support_type:'tree(manual)',support_style:'tree_organic',support_threshold_angle:'30'});
+  entries.set('Metadata/project_settings.config', encoder.encode(JSON.stringify(cfg)));
+  const parsed = project.readProject(entries);
+  for (const carry of [true, false]) {
+    const built = project.convertProject(parsed, 1, null, { target:'bambu', preserveSourceSettings:carry });
+    assert.equal(built.settings.format, 'standard-colour');
+    const values = built.settings.objects[0].values;
+    assert.equal(values.enable_support, carry ? '1' : undefined);
+    assert.equal(values.layer_height, carry ? '0.2' : undefined);
+    const xml = memberText(built.entries,'Metadata/model_settings.config');
+    for (const [key,value] of Object.entries(values)) assert.ok(xml.includes(`key="${key}" value="${value}"`));
+    assert.equal(xml.includes('key="enable_support"'),carry);
+  }
+});
+
 await ok("a multi-plate project writes only the chosen plate", () => {
   const parsed = project.readProject(twoPlates());
   assert.equal(parsed.plates.length, 2, "both plates are read");
