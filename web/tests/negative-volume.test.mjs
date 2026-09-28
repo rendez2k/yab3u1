@@ -31,6 +31,15 @@ for(const target of ['snapmaker','bambu','orca']) {
  console.log('PASS negative role, transform, clone and bounds:',target);
 }
 assert.throws(()=>p.convertProject(source,1,null,{target:'prusa'}),/Prusa multi-volume/);
+for (const target of ['snapmaker','bambu','orca']) {
+ const output=p.convertProject(source,1,null,{target,layout:{arrangement:'objects',quantities:{9:3},copies:1,spacing:5,width:270,depth:270,tower:true}});
+ const again=p.readProject(output.entries,{allowNegative:true});
+ assert.equal(p.selectionInstances(again,again.plates[0].id,null).length,3);
+ for(const meta of again.meta.values()) assert.equal(meta.parts.filter(part=>part.subtype==='negative_part').length,1);
+ for(const obj of again.objects.values()) if(obj.components.length) assert.equal(obj.components[1].transform,'1 0 0 0 1 0 0 0 1 2 3 -50');
+ assert.equal(p.selectionBounds(again,again.plates[0].id,null).min[2],0);
+ console.log('PASS separate object packing preserves all cutouts and component transforms:',target);
+}
 const path='C:/Users/rende/Desktop/CATS3D.173 - Ghost with heart Final Cats3D STudio.3mf';
 if(existsSync(path)) {
  const ghost=p.readProject(await readZip(readFileSync(path)),{allowNegative:true});

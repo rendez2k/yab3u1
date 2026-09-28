@@ -150,6 +150,7 @@ function cornerCells(size, width, depth, columns, rows, spacing, box) {
  * single centred copy.
  */
 export function planLayout(bounds, options = {}) {
+  if (options.arrangement === 'objects') return planObjects(bounds, options);
   const modelSize = boxSize(bounds);
   const padding = Math.max(0, Number(options.padding) || 0);
   const size = [modelSize[0] + padding * 2, modelSize[1] + padding * 2,
@@ -239,5 +240,87 @@ export function layoutOffsets(bounds, plan, centre = [0, 0]) {
 /** The identity signature of a layout: part of every cache key and revision. */
 export function layoutSignature(plan) {
   return `${plan.copies}x${plan.spacing}@${plan.width}x${plan.depth}`
-    + (plan.tower ? "+tower" : "") + `+edge${plan.edgeMargin || 0}`;
+    + (plan.tower ? "+tower" : "") + `+edge${plan.edgeMargin || 0}`
+    + JSON.stringify(plan.placements || []);
+}
+
+// Translation-only rectangle packing. Root objects remain intact; we never
+// separate their components, rotate designer placements or modify mesh data.
+function packRectangles(items, options) {
+  const width = Number(options.width), depth = Number(options.depth);
+  const edge = Math.max(0, Number(options.edgeMargin) || 0);
+  const gap = Math.max(0, Number(options.spacing) || 0);
+  const strip = options.tower && !options.towerBox ? Number(options.towerReserve) || TOWER_RESERVE_PER_SIDE : 0;
+  let free = [{x: edge + strip, y: edge, w: width - 2 * (edge + strip) + gap, h: depth - 2 * edge + gap}];
+  const overlaps = (a,b) => a.x < b.x+b.w-1e-7 && a.x+a.w > b.x+1e-7 && a.y < b.y+b.h-1e-7 && a.y+a.h > b.y+1e-7;
+  function occupy(used) {
+    const split = [];
+    for (const r of free) {
+      if (!overlaps(r,used)) { split.push(r); continue; }
+      if (used.x > r.x) split.push({...r,w:used.x-r.x});
+      if (used.x+used.w < r.x+r.w) split.push({...r,x:used.x+used.w,w:r.x+r.w-used.x-used.w});
+      if (used.y > r.y) split.push({...r,h:used.y-r.y});
+      if (used.y+used.h < r.y+r.h) split.push({...r,y:used.y+used.h,h:r.y+r.h-used.y-used.h});
+    }
+    free = split.filter((r,i) => r.w > 1e-7 && r.h > 1e-7 && !split.some((s,j) => j !== i
+      && s.x <= r.x && s.y <= r.y && s.x+s.w >= r.x+r.w && s.y+s.h >= r.y+r.h
+      && (j < i || s.x !== r.x || s.y !== r.y || s.w !== r.w || s.h !== r.h)));
+  }
+  if (options.tower && options.towerBox) {
+    const b = options.towerBox;
+    occupy({x:b.min[0]-gap,y:b.min[1]-gap,w:b.max[0]-b.min[0]+gap*2,h:b.max[1]-b.min[1]+gap*2});
+  }
+  const placed = [];
+  for (const item of items) {
+    const w = item.w+gap, h = item.h+gap;
+    const candidates = free.filter(r=>w <= r.w+1e-7 && h <= r.h+1e-7)
+      .sort((a,b)=>Math.min(a.w-w,a.h-h)-Math.min(b.w-w,b.h-h) || a.y-b.y || a.x-b.x);
+    if (!candidates.length) return null;
+    const r = candidates[0];
+    placed.push({...item,x:r.x,y:r.y});
+    occupy({x:r.x,y:r.y,w,h});
+  }
+  return placed;
+}
+
+function planObjects(bounds, options) {
+  const padding = Math.max(0, Number(options.padding)||0);
+  const footprints = options.footprints || [];
+  let invalid = false;
+  const items = footprints.flatMap(f => {
+    const count = options.quantities?.[f.objectId] ?? 1;
+    if (!Number.isInteger(count) || count < 0 || count > 64 || (count > 0 && !boxValid(f.bounds))) { invalid = true; return []; }
+    if (count === 0) return [];
+    const size = boxSize(f.bounds);
+    return Array.from({length:count},()=>({...f,w:size[0]+padding*2,h:size[1]+padding*2,z:size[2]+(Number(options.extraHeight)||0)}));
+  });
+  const asked = Math.max(1, Math.floor(Number(options.copies)||1));
+  let capacity = 0, chosen = [];
+  // Bounded search of complete requested sets. Try several deterministic orders;
+  // rectangle packing is conservative, so this is a fit found, not a maximum.
+  if (!invalid && items.length && !items.some(i=>i.z > (options.maxHeight ?? Infinity))) {
+    for (let count=1; count<=64 && count*items.length<=512; count++) {
+      const all = Array.from({length:count},(_,copy)=>items.map(i=>({...i,copy}))).flat();
+      let packed = null;
+      for (const score of [i=>i.w*i.h,i=>Math.max(i.w,i.h),i=>i.h,i=>i.w]) {
+        packed = packRectangles(all.slice().sort((a,b)=>score(b)-score(a)), options);
+        if (packed) break;
+      }
+      if (!packed) break;
+      capacity = count;
+      if (count<=asked) chosen = packed;
+    }
+  }
+  const centre = options.centre || [0,0];
+  const placements = chosen.map(i=>({objectId:String(i.objectId),copy:i.copy,
+    offset:[centre[0]-options.width/2+i.x+padding-i.bounds.min[0],
+            centre[1]-options.depth/2+i.y+padding-i.bounds.min[1], -i.bounds.min[2]]}));
+  return {arrangement:'objects',placements,copies:Math.min(asked,capacity),asked,capacity,
+    problem:invalid ? 'Some object quantities or dimensions are invalid.' : !items.length ? 'Choose at least one object.'
+      : items.length > 512 ? 'Choose at most 512 object groups per set.' : '',
+    blocked:capacity===0,capped:asked>capacity,size:boxSize(bounds),padding,
+    width:options.width,depth:options.depth,spacing:options.spacing,edgeMargin:options.edgeMargin||0,
+    tower:Boolean(options.tower),towerBox:options.tower && options.towerBox || null,
+    reserve:options.tower && !options.towerBox ? 2*(options.towerReserve||TOWER_RESERVE_PER_SIDE):0,
+    footprintNotes:options.footprintNotes || []};
 }

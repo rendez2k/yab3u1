@@ -186,3 +186,56 @@ export function colourLabel(value) {
   if (!text) return "Colour";
   return `${colourName(text)} ${text}`;
 }
+
+/** Shared final palette: export and printer review must agree after cleanup. */
+export function conversionPalette(project, options = {}) {
+  const size = Math.max(project.paletteCount || 0, project.colors.length);
+  const palette = [];
+  for (let index = 1; index <= size; index += 1) {
+    palette.push({ color: project.colors[index - 1] || "#FFFFFF",
+                   type: project.types[index - 1] || "PLA", profile:options.filamentProfiles?.[index-1] || null });
+  }
+  const mapping = {};
+  for (let index = 1; index <= size; index += 1) mapping[index] = index;
+  for (const [source, id] of Object.entries(options.mapping || {})) {
+    mapping[Number(source)] = Number(id);
+  }
+  // Arranging slots writes the colours in the order they were sent to.  The
+  // refusal comes *before* anything is built, so a collision or an out-of-range
+  // destination is a sentence rather than a file that has quietly lost a colour.
+  const slots = options.assignmentMode === SLOTS;
+  let physical = palette;
+  let occupiedSlots = palette.map((_,i)=>i+1);
+  if (slots) {
+    const rule = completeRule(mapping, size);
+    const problem = size ? bijectionProblem(rule, size, options.target === "snapmaker" ? Math.max(4, size) : size) : null;
+    if (problem) {
+      throw new Error(`this slot arrangement cannot be written: ${problem}`);
+    }
+    physical = arrange(palette, rule, Math.max(size, ...Object.values(rule)))
+      .map(reel => reel || {color: "#FFFFFF", type: "PLA"});
+    occupiedSlots = [...new Set(Object.values(rule))];
+  }
+  if (options.removeUnused === true) {
+    const usage = project.filamentUsage;
+    const kept = [...new Set([...usage.kept, ...(options.includeUnused || []).filter(id=>usage.unused.includes(id))])];
+    const destinations = [...new Set([...kept.map(id=>mapping[id]), ...Array.from({length:usage.reservedThrough},(_,i)=>i+1)])].sort((a,b)=>a-b);
+    occupiedSlots = destinations.slice();
+    // Physical U1 slot numbers must survive unused-colour cleanup. A neutral
+    // unused entry holds any gap; no model region is assigned to that entry.
+    if (slots && options.target === "snapmaker") {
+      const occupied = new Set(destinations);
+      const last = Math.max(...destinations);
+      destinations.splice(0, destinations.length, ...Array.from({length:last}, (_,i)=>i+1));
+      physical = physical.map((reel,i) => occupied.has(i+1) ? reel : {color:"#FFFFFF",type:"PLA"});
+    }
+    const compact = new Map(destinations.map((id,index)=>[id,index+1]));
+    physical = destinations.map(id=>physical[id-1]);
+    occupiedSlots = occupiedSlots.map(id=>compact.get(id));
+    for (const source of Object.keys(mapping)) {
+      if (kept.includes(Number(source))) mapping[source] = compact.get(mapping[source]);
+      else delete mapping[source];
+    }
+  }
+  return {physical,mapping,slots,occupiedSlots};
+}

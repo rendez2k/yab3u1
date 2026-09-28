@@ -437,6 +437,12 @@
     #sourcepreview #convertpreview { height: 280px; }
     #sourcepreview .preview-heading { flex-wrap: wrap; }
   }
+#printersetup {padding:14px 0; margin:14px 0; border-top:1px solid var(--line)}
+#printersetup input:not([type=checkbox]) {font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);color:var(--fg);width:100%;box-sizing:border-box}
+#printersetup .field {display:grid;gap:6px;margin:12px 0}
+#printersetup .printer-slot {display:grid;gap:8px;padding:14px 0;border-bottom:1px solid var(--line)}
+#quantityfields label {display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0}
+#quantityfields input {width:80px;flex:none}
 </style>
 <link rel="stylesheet" href="batch.css">
 </head>
@@ -607,6 +613,9 @@
 
     <fieldset class="layout">
       <legend>Plate layout</legend>
+      <label for="layoutarrangement">Arrange</label>
+      <select id="layoutarrangement"><option value="group">Keep the original set together</option><option value="objects">Pack separate objects</option></select>
+      <details id="objectquantities" hidden><summary>Quantities per object</summary><p class="hint">Each object keeps its parts and orientation. Set zero to omit an object. Copies repeats this entire list; check that you have the matching parts for each model.</p><div id="quantityfields"></div></details>
       <p class="hint" id="layouthint">Choose how many copies to arrange and their spacing.</p>
       <div class="row" style="margin-top:10px">
         <div class="field">
@@ -667,6 +676,7 @@
         <div class="hint" id="settinglist"></div></details>
     </fieldset>
 
+    <details id="printersetup" class="settings"></details>
     <p class="hint" id="convertplan" role="status" aria-live="polite"></p>
 
 

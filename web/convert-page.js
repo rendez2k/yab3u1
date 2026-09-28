@@ -1,3 +1,4 @@
+import {mountPrinter} from './shared/printerPanel.js';
 import {receiveModel, sendModel} from './shared/modelHandoff.js';
 // The homepage converter: any supported dialect in, any out, every colour kept.
 //
@@ -19,7 +20,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.9";
+const VERSION = "2.6.10";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -32,6 +33,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "Main converter: review and send the exported U1 filament assignments, including partial slot setups through the direct connection. Pack separate objects with individual quantities while preserving their parts and orientation.",
   "Full Spectrum ranks palettes using original surface area and protects Keep exact choices. Optional local calibration records measured U1 blend colours, generates five-tile test projects and supports JSON backup/import; unrecorded blends remain estimates.",
   "Sharper model previews: the drawing resolution now follows the panel size and display density, including textured imports. Reset view fits the whole model with less empty space on desktop and mobile.",
   "Full Spectrum links carry the loaded model even when the host rewrites page URLs. A stopped model reader retries once, retains the original file and offers another retry without transferring it again.",
@@ -207,6 +209,7 @@ function renderOutput(entry) {
 
 /* ---------- session ---------- */
 
+let printerPanel = null;
 let cancelModelTransfer = () => {};
 const session = new ConvertSession(() => new RecolourWorker(), {
   status: (text) => setStatus(text),
@@ -263,6 +266,8 @@ const session = new ConvertSession(() => new RecolourWorker(), {
     window.__convertProgress = { stage: progress.stage, ms: progress.ms };
   },
 });
+
+printerPanel = mountPrinter($('printersetup'),()=>session.printerPalette(),{converter:true});
 
 /* ---------- the saved thumbnail ----------
  *
@@ -507,10 +512,24 @@ function layoutPlanNow() {
   return planLayout(box, session.planningLayout());
 }
 
+let quantityKey = '';
 function syncLayout() {
+  $('printersetup').hidden = session.target !== 'snapmaker';
+  printerPanel?.refresh();
+  const objectMode = session.layout.arrangement === 'objects';
+  $('layoutarrangement').value = objectMode ? 'objects' : 'group';
+  $('objectquantities').hidden = !objectMode;
+  const footprints = session.state?.footprints || [];
+  const key = JSON.stringify([session.epoch,footprints.map(f=>[f.objectId,f.name,f.instances])]);
+  if (key !== quantityKey) {
+    quantityKey = key;
+    $('quantityfields').innerHTML = footprints.map(f=>`<label>${esc(f.name)}${f.instances>1?' · '+f.instances+' linked instances':''}<input aria-label="Quantity for ${esc(f.name)}" data-object="${esc(f.objectId)}" type="number" min="0" max="64" step="1" value="${session.layout.quantities?.[f.objectId]??1}"></label>`).join('');
+  }
+  $('quantityfields').querySelectorAll('input').forEach(input=>{if(document.activeElement!==input)input.value=session.layout.quantities?.[input.dataset.object]??1;});
+
   const layout = session.layout;
   $("layouthint").textContent = session.target === "snapmaker"
-    ? "Choose how many copies to arrange and their spacing. The area is fixed to the Snapmaker U1 bed."
+    ? "Copies repeats the entire selected set. Pack separate objects to use gaps between parts, or change quantities individually. The U1 area is fixed."
     : "Choose how many copies to arrange, their spacing and the available area. Select your printer in the slicer after importing.";
   const set = (id, value) => {
     const node = $(id);
@@ -535,16 +554,16 @@ function syncLayout() {
   if (!plan) {
     note.push("the selection's size is still being measured");
   } else if (plan.blocked) {
-    note.push(`this model does not fit the ${layout.width} × ${layout.depth} mm box`);
+    note.push(plan.problem || `this model does not fit the ${layout.width} × ${layout.depth} mm box`);
   } else {
-    note.push(`${plan.copies} of ${plan.capacity} possible copy(ies) in a `
+    note.push(`${plan.copies} of ${plan.capacity} ${objectMode?'set(s) found to fit (conservative object boxes)':'whole set(s) fitting as rectangles'} in a `
       + `${layout.width} × ${layout.depth} mm box at ${layout.spacing} mm spacing`);
     if (plan.tower) {
       note.push(plan.towerBox
         ? "60 × 70 mm corner reserved for the prime tower; check its final size after slicing"
         : `prime-tower space of ${plan.reserve / 2} mm reserved on each X side`);
     }
-    if (plan.capped) note.push(`only ${plan.capacity} fit, so that is what is written`);
+    if (plan.capped) note.push(`This plan writes ${plan.capacity} complete sets. Precise nesting in your slicer may fit more.`);
     if (plan.padding) note.push(`${plan.padding.toFixed(1)} mm extra clearance per side for print additions`);
     if (plan.edgeMargin) note.push(`${plan.edgeMargin} mm kept clear at every bed edge for spiral lifting`);
     note.push(...plan.footprintNotes);
@@ -783,8 +802,7 @@ async function refreshPreview() {
     return;
   }
   if (token !== previewToken) return;              // a newer request wins
-  const key = `${state.plateId}|${session.layout.copies}|${session.layout.spacing}`
-    + `|${session.layout.width}|${session.layout.depth}|${session.layout.tower}`;
+  const key = `${state.plateId}|${JSON.stringify(session.planningLayout())}`;
   if (soup.positions) {
     previewPositions = soup.positions;
     previewGeometryId = soup.geometryId;
@@ -896,6 +914,15 @@ $("convertplate").addEventListener("change", async () => {
   await session.refreshBounds();
   syncLayout();
   refreshPreview();
+});
+$('layoutarrangement').addEventListener('change',()=>session.setLayout({arrangement:$('layoutarrangement').value,copies:1}));
+$('quantityfields').addEventListener('input',event=>{
+  if (!event.target.dataset.object) return;
+  const quantities = {...session.layout.quantities};
+  $('quantityfields').querySelectorAll('input').forEach(input=>{
+    quantities[input.dataset.object] = input.value.trim() === '' ? NaN : Number(input.value);
+  });
+  session.setLayout({quantities,copies:1});
 });
 ["layoutcopies", "layoutspacing", "layoutwidth", "layoutdepth"].forEach((id) => {
   $(id).addEventListener("input", () => {

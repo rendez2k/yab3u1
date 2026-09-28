@@ -13,7 +13,7 @@
 
 import { norm } from "./colour.js";
 import * as paint from "./paint.js";
-import { SLOTS, arrange, bijectionProblem, completeRule, isIdentity }
+import { SLOTS, arrange, bijectionProblem, completeRule, isIdentity, conversionPalette }
   from "./assignment.js";
 import { COLOUR_NS, colourOf, colourGroupXml, leafTriangles, parseColourGroups } from "./standard.js";
 import { relationshipXml, thumbnailPlan } from "./thumbnail.js";
@@ -876,6 +876,21 @@ export function selectionBounds(project, plateId, objectIds) {
  * meshes.  `plan` is the grid the copies came from, so the page can say what
  * happened (and why a copy count may have been capped).
  */
+const footprintCache = new WeakMap();
+export function selectionFootprints(project, plateId, objectIds) {
+  if (!footprintCache.has(project)) footprintCache.set(project,new Map());
+  const cache = footprintCache.get(project), key = JSON.stringify([plateId,objectIds]);
+  if (cache.has(key)) return cache.get(key);
+  const instances = selectionInstances(project, plateId, objectIds);
+  const footprints = [...new Set(instances.map(([id])=>String(id)))].map(objectId=>({
+    objectId, name:project.meta.get(objectId)?.name || `Object ${objectId}`,
+    instances:instances.filter(([id])=>String(id)===objectId).length,
+    bounds:selectionBounds(project,plateId,[objectId]),
+  }));
+  cache.set(key,footprints);
+  return footprints;
+}
+
 export function layoutInstances(project, plateId, objectIds, layout) {
   const base = selectionInstances(project, plateId, objectIds);
   if (!layout) return { instances: base, plan: null, bounds: null };
@@ -884,16 +899,17 @@ export function layoutInstances(project, plateId, objectIds, layout) {
     throw new ProjectError("this selection has no measurable geometry, so it "
       + "cannot be laid out on a plate");
   }
-  const plan = planLayout(bounds, layout);
+  const plan = planLayout(bounds, layout.arrangement === 'objects'
+    ? {...layout,footprints:selectionFootprints(project,plateId,objectIds)} : layout);
   if (plan.blocked) {
     throw new ProjectError(`a ${plan.size[0].toFixed(1)} × ${plan.size[1].toFixed(1)} mm `
       + `model does not fit the ${plan.width} × ${plan.depth} mm layout box, so there `
       + "is nothing to write; widen the box or reduce the spacing");
   }
-  const offsets = layoutOffsets(bounds, plan, layout.centre || [0, 0]);
+  const offsets = plan.placements ? null : layoutOffsets(bounds, plan, layout.centre || [0, 0]);
   const instances = [];
   for (const [objectId, itemTransform] of base) {
-    for (const offset of offsets) {
+    for (const offset of offsets || plan.placements.filter(p=>p.objectId===String(objectId)).map(p=>p.offset)) {
       // Row-vector maths: the source transform is applied first and the world
       // offset after it, so a rotated or scaled placement is moved, not scaled.
       const matrix = matmul(matrixFromText(itemTransform), translationMatrix(offset));
@@ -1923,50 +1939,7 @@ export function conversionUsage(project) {
 export function convertProject(project, plateId, objectIds, options = {}) {
   // A virtual blend is not one more solid reel: refuse before anything is built.
   refuseMixtures(project, "convert");
-  const size = Math.max(project.paletteCount || 0, project.colors.length);
-  const palette = [];
-  for (let index = 1; index <= size; index += 1) {
-    palette.push({ color: project.colors[index - 1] || "#FFFFFF",
-                   type: project.types[index - 1] || "PLA", profile:options.filamentProfiles?.[index-1] || null });
-  }
-  const mapping = {};
-  for (let index = 1; index <= size; index += 1) mapping[index] = index;
-  for (const [source, id] of Object.entries(options.mapping || {})) {
-    mapping[Number(source)] = Number(id);
-  }
-  // Arranging slots writes the colours in the order they were sent to.  The
-  // refusal comes *before* anything is built, so a collision or an out-of-range
-  // destination is a sentence rather than a file that has quietly lost a colour.
-  const slots = options.assignmentMode === SLOTS;
-  let physical = palette;
-  if (slots) {
-    const rule = completeRule(mapping, size);
-    const problem = size ? bijectionProblem(rule, size, options.target === "snapmaker" ? Math.max(4, size) : size) : null;
-    if (problem) {
-      throw new ProjectError(`this slot arrangement cannot be written: ${problem}`);
-    }
-    physical = arrange(palette, rule, Math.max(size, ...Object.values(rule)))
-      .map(reel => reel || {color: "#FFFFFF", type: "PLA"});
-  }
-  if (options.removeUnused === true) {
-    const usage = conversionUsage(project);
-    const kept = [...new Set([...usage.kept, ...(options.includeUnused || []).filter(id=>usage.unused.includes(id))])];
-    const destinations = [...new Set([...kept.map(id=>mapping[id]), ...Array.from({length:usage.reservedThrough},(_,i)=>i+1)])].sort((a,b)=>a-b);
-    // Physical U1 slot numbers must survive unused-colour cleanup. A neutral
-    // unused entry holds any gap; no model region is assigned to that entry.
-    if (slots && options.target === "snapmaker") {
-      const occupied = new Set(destinations);
-      const last = Math.max(...destinations);
-      destinations.splice(0, destinations.length, ...Array.from({length:last}, (_,i)=>i+1));
-      physical = physical.map((reel,i) => occupied.has(i+1) ? reel : {color:"#FFFFFF",type:"PLA"});
-    }
-    const compact = new Map(destinations.map((id,index)=>[id,index+1]));
-    physical = destinations.map(id=>physical[id-1]);
-    for (const source of Object.keys(mapping)) {
-      if (kept.includes(Number(source))) mapping[source] = compact.get(mapping[source]);
-      else delete mapping[source];
-    }
-  }
+  const {physical,mapping,slots} = conversionPalette({...project,filamentUsage:options.removeUnused ? conversionUsage(project) : null},options);
   return exportProject(project, plateId, objectIds, {
     target: options.target,
     physical,

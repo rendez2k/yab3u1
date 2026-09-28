@@ -19,7 +19,7 @@
 // the races with a deliberately slow fake worker, without a browser.
 
 import { planLayout, targetLayout } from "./layout.js";
-import { REPAINT, SLOTS, identityRule, normaliseMode } from "./assignment.js";
+import { REPAINT, SLOTS, identityRule, normaliseMode, conversionPalette } from "./assignment.js";
 import { planningAllowance } from "./printSettings.js";
 export const TYPED_3MF = "application/vnd.ms-package.3dmanufacturing-3dmodel+xml";
 
@@ -94,6 +94,17 @@ export class ConvertSession {
     return this.state.colours.map((_,i)=>i+1).filter(id=>!usage || usage.kept.includes(id) || this.state.includeUnused.includes(id));
   }
 
+  printerPalette() {
+    if (!this.state || this.target !== 'snapmaker' || this.state.mixtures?.length || this.capacityStatus().unresolved) return null;
+    try {
+      const plan = conversionPalette({colors:this.state.colours,types:this.state.types,
+        filamentUsage:this.state.filamentUsage}, {target:this.target,mapping:this.rule,
+        assignmentMode:this.assignmentMode,removeUnused:Boolean(this.state.filamentUsage),includeUnused:this.state.includeUnused});
+      if (!plan.occupiedSlots.length || plan.physical.length > 4) return null;
+      return Array.from({length:4},(_,i)=>plan.occupiedSlots.includes(i+1) ? plan.physical[i] : null);
+    } catch { return null; }
+  }
+
   physicalSlots() { return this.target === "snapmaker" && this.assignmentMode === SLOTS; }
 
   inputCapacity() { return this.target === "snapmaker" ? 4 : this.inputCapacities[this.target]; }
@@ -161,7 +172,7 @@ export class ConvertSession {
     const objects = (this.state?.objectSettings || []).filter(o => !ids || ids.map(String).includes(String(o.id)));
     const sources = (objects.length ? objects : [{}]).map(o =>
       ({ ...(this.state?.sourceSettings || {}), ...(o.settings || {}) }));
-    return { ...targetLayout(this.target, this.layout), ...planningAllowance(sources,
+    return { ...targetLayout(this.target, this.layout), footprints:this.state?.footprints || [], ...planningAllowance(sources,
       this.target, this.target === "snapmaker" ? this.carrySettings : this.preserveSourceSettings,
       this.supportMode, Boolean(this.state?.supportsPainted)) };
   }
@@ -258,6 +269,14 @@ export class ConvertSession {
   setLayout(patch = {}) {
     const hadProblem = Boolean(this.layoutProblem);
     const next = { ...this.layout };
+    if (patch.arrangement !== undefined) next.arrangement = patch.arrangement === 'objects' ? 'objects' : 'group';
+    if (patch.quantities !== undefined) {
+      if (Object.values(patch.quantities).some(n=>!Number.isInteger(n)||n<0||n>64)) {
+        this.layoutProblem = 'object quantities must be whole numbers from 0 to 64';
+        this.invalidate(); this.hooks.layout?.(this.layout); return false;
+      }
+      next.quantities = {...patch.quantities};
+    }
     if (patch.copies !== undefined) {
       const copies = Number(patch.copies);
       if (!Number.isInteger(copies) || copies < 1) {
@@ -339,6 +358,7 @@ export class ConvertSession {
       if (token !== this.epoch || seq !== this.boundsSeq
           || plate !== this.state.plateId) return null;
       this.state.bounds = bounds || null;
+      this.state.footprints = reply?.footprints || [];
       // Supports follow the selection, so the plate that is in force now decides
       // what the support control says; a stale flag would describe the old plate.
       if (painted !== null) this.state.supportsPainted = painted;
@@ -459,10 +479,11 @@ export class ConvertSession {
         negativeVolumes: Boolean(reply.meta.negativeVolumes),
         customLayerActions: Boolean(reply.meta.customLayerActions),
         mixtures: (reply.summary && reply.summary.mixtures) || [],
-        plates: reply.meta.plates.map((entry) => ({ id: entry.id, name: entry.name })),
+        plates: reply.meta.plates.map((entry) => ({ id: entry.id, name: entry.name, objectIds:entry.objectIds })),
         plateId: reply.meta.plates.length ? reply.meta.plates[0].id : null,
         coloursUsed: reply.summary ? (reply.summary.triangles || 0) : 0,
         bounds: (reply.summary && reply.summary.bounds) || null,
+        footprints: reply.summary?.footprints || [],
         plateSize: (reply.summary && reply.summary.plateSize) || null,
         // Whether the geometry carries painted support enforcers: the support
         // control's note needs it, and it is a property of the selection.
@@ -477,7 +498,7 @@ export class ConvertSession {
       this.rules = { [SLOTS]: identityRule(count), [REPAINT]: identityRule(count) };
       // A fresh file starts from a single copy. Keep the user's generic planning
       // area separately so it can never replace the U1 destination bed.
-      this.layout = { ...this.layout, copies: 1, tower: true };
+      this.layout = { ...this.layout, copies: 1, tower: true, arrangement:'group', quantities:{} };
       // A source plate size is used only when the file really states one and the
       // user has not set their own box; otherwise the editable planning area stays.
       const plate = reply.summary && reply.summary.plateSize;
@@ -516,6 +537,10 @@ export class ConvertSession {
     if (!found) return false;
     if (Number(this.state.plateId) === Number(found.id)) return false;
     this.state.plateId = found.id;
+    this.state.bounds = null;
+    this.state.footprints = [];
+    this.boundsPending = true;
+    this.layout = {...this.layout,quantities:{},copies:1};
     this.invalidate();
     if (this.hooks.rule) this.hooks.rule(this.rule);
     return true;

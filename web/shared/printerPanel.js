@@ -1,12 +1,14 @@
 import {printerOrigin,filamentSetup,inspectPrinter,sendSetup} from './printer.js';
 import {openPrinterBridge} from './printerBridge.js';
-export function mountPrinter(host,getPalette) {
+export function mountPrinter(host,getPalette,options={}) {
+ const converter=options.converter===true;
+ const notReady=()=>converter?'Load a project and assign its colours within the four U1 slots first.':'Apply your chosen palette first, then check the printer.';
  const $=id=>host.querySelector('[data-printer="'+id+'"]');
  const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- host.innerHTML=`<summary>Send filament setup to U1</summary><p class="hint">Set the four physical slots to match your applied palette. Blended colours stay in the project. Load the actual reels first; this updates colour and material labels only.</p>
+ host.innerHTML=`<summary>Send filament setup to U1</summary><p class="hint">${converter?'Set the physical slots to match your export assignments. Unused slots are left alone.':'Set the four physical slots to match your applied palette.'} Blended colours stay in the project. Load the actual reels first; this updates colour and material labels only.</p>
  <button type="button" data-printer="bridge">Use my Spool Studio Bridge</button>
  <p class="hint">Already running Spool Studio Bridge? Carry this palette and slot order into Spool Studio to review against your library. Your existing connection handles the send.</p>
- <div class="printer-status" role="status" aria-live="polite"><strong data-printer="bridge-state">Nothing sent</strong><p class="hint" data-printer="bridge-status">Apply a palette, then open your existing bridge.</p></div>
+ <div class="printer-status" role="status" aria-live="polite"><strong data-printer="bridge-state">Nothing sent</strong><p class="hint" data-printer="bridge-status">${converter?'Assign four occupied slots to use the bridge, or use the direct connection below for fewer slots.':'Apply a palette, then open your existing bridge.'}</p></div>
  <button type="button" data-printer="bridge-cancel" hidden>End palette handoff</button>
  <button type="button" data-printer="palette" hidden>Go to Apply palette</button>
  <details data-printer="direct"><summary>Connect directly / local launcher</summary>
@@ -21,7 +23,7 @@ export function mountPrinter(host,getPalette) {
  const bridgeStatus=(title,message)=>{$('bridge-state').textContent=title;$('bridge-status').textContent=message;};
  const status=(title,message)=>{$('state').textContent=title;$('status').textContent=message;};
  function readiness(){
-  const ready=Boolean(getPalette());$('check').disabled=busy||bridgePending||!ready;$('bridge').disabled=busy||bridgePending||!ready;$('palette').hidden=ready;
+  const ready=Boolean(getPalette());$('check').disabled=busy||bridgePending||!ready;$('bridge').disabled=busy||bridgePending||!ready||!getPalette()?.every(Boolean);$('palette').hidden=ready||converter;
   return ready;
  }
  $('bridge').onclick=()=>{
@@ -36,17 +38,17 @@ export function mountPrinter(host,getPalette) {
   const target=button&&!button.hidden?button:document.getElementById('userecommended');
   target?.scrollIntoView({behavior:'smooth',block:'center'});target?.focus({preventScroll:true});
  });
- status('Nothing sent',readiness()?'Check the printer to read its current slots. This does not change any settings.':'Apply your chosen palette first, then check the printer. No connection has been checked.');
+ status('Nothing sent',readiness()?'Check the printer to read its current slots. This does not change any settings.':notReady()+' No connection has been checked.');
  const signature=()=>JSON.stringify(getPalette());
  const clear=()=>{review=null;$('send').hidden=true;$('review').replaceChildren();};
- for(const id of ['address','key']) $(id).addEventListener('input',()=>{clear();status('Connection not checked',getPalette()?'Address or key changed. Check the printer again. No settings have been sent to this connection.':'Apply your chosen palette first, then check the printer.');});
+ for(const id of ['address','key']) $(id).addEventListener('input',()=>{clear();status('Connection not checked',getPalette()?'Address or key changed. Check the printer again. No settings have been sent to this connection.':notReady());});
  function lock(value){busy=value;host.querySelectorAll('input,button,select').forEach(el=>el.disabled=value);readiness();}
  $('check').addEventListener('click',async()=>{
   if(busy)return;clear();lock(true);status('Checking connection…','Reading the U1’s current slots. Nothing is being sent.');
   const sourceSignature=signature();
   try {
-   const reels=getPalette();if(!reels)throw Error('Apply a palette before sending its physical filament setup.');
-   const profiles=filamentSetup(reels);
+   const reels=getPalette();if(!reels)throw Error(notReady());
+   const profiles=filamentSetup(reels.map(r=>r||{color:'#FFFFFF',type:'PLA'})).map((p,i)=>reels[i]?p:null);
    let origin,token='';
    if(['127.0.0.1','localhost'].includes(location.hostname)) {
     const response=await fetch('/__printer/session');
@@ -64,7 +66,7 @@ export function mountPrinter(host,getPalette) {
    if(!before.supported)throw Error('This firmware does not expose the supported U1 metadata command.');
    if(!before.idle)throw Error('Printer is '+before.state+'. Wait until it is ready.');
    review={before,profiles,channels:[],created:Date.now(),signature:sourceSignature};
-   $('review').innerHTML='<p class="hint">Review each physical slot. Generic labels do not change temperatures or calibrated slicer profiles. Choose the actual finish of each reel.</p>'+profiles.map((p,i)=>`<div class="printer-slot"><label class="check"><input type="checkbox" data-slot="${i}" ${before.slots[i].present&&before.slots[i].spoolId===0?'checked':'disabled'}>Slot ${i+1}</label><span><i class="swatch" style="background:#${esc(before.slots[i].rgba.slice(0,6))}"></i>${esc(before.slots[i].material)} → <i class="swatch" style="background:#${p.rgba.slice(0,6)}"></i>Generic ${p.material} · #${p.rgba.slice(0,6)}</span><label>Finish <select data-finish="${i}"><option>Basic</option><option>Matte</option><option>Silk</option></select></label>${before.slots[i].spoolId?'<span class="hint">Linked Spoolman reel: update its assignment in the printer first.</span>':!before.slots[i].present?'<span class="hint">Load a reel in this slot first.</span>':''}</div>`).join('');
+   $('review').innerHTML='<p class="hint">Review each physical slot. Generic labels do not change temperatures or calibrated slicer profiles. Choose the actual finish of each reel.</p>'+profiles.map((p,i)=>!p?`<p class="hint">Slot ${i+1}: unused by this project · left unchanged</p>`:`<div class="printer-slot"><label class="check"><input type="checkbox" data-slot="${i}" ${before.slots[i].present&&before.slots[i].spoolId===0?'checked':'disabled'}>Slot ${i+1}</label><span><i class="swatch" style="background:#${esc(before.slots[i].rgba.slice(0,6))}"></i>${esc(before.slots[i].material)} → <i class="swatch" style="background:#${p.rgba.slice(0,6)}"></i>Generic ${p.material} · #${p.rgba.slice(0,6)}</span><label>Finish <select data-finish="${i}"><option>Basic</option><option>Matte</option><option>Silk</option></select></label>${before.slots[i].spoolId?'<span class="hint">Linked Spoolman reel: update its assignment in the printer first.</span>':!before.slots[i].present?'<span class="hint">Load a reel in this slot first.</span>':''}</div>`).join('');
    $('send').hidden=false;status('Connected · nothing sent','Current slots are shown below. Review them, then choose Send reviewed slots to U1. This review expires after one minute.');
   }catch(error){clear();status('Check failed · nothing sent',error instanceof TypeError?'Browser could not reach the U1. Check its address and local-network permission, or use the local launcher below.':error.message);}
   finally{lock(false);if(review)host.querySelectorAll('[data-slot]').forEach(el=>el.disabled=!review.before.slots[Number(el.dataset.slot)].present||review.before.slots[Number(el.dataset.slot)].spoolId!==0);}
@@ -81,7 +83,7 @@ export function mountPrinter(host,getPalette) {
  return {refresh(){
   if(busy)return;
   const current=signature();
-  if(current!==previousPalette){if(cancelBridge)cancelBridge();else bridgeStatus('Nothing sent for this palette',getPalette()?'Palette ready. Open Spool Studio to review your four slots through the existing bridge.':'Apply your chosen palette first.');clear();previousPalette=current;status('Nothing sent for this palette',getPalette()?'Palette ready. Check the printer to review its current slots before sending.':'Apply your chosen palette first, then check the printer.');}
+  if(current!==previousPalette){if(cancelBridge)cancelBridge();else bridgeStatus('Nothing sent for this palette',getPalette()?.every(Boolean)?'Palette ready. Open Spool Studio to review your four slots through the existing bridge.':getPalette()?'Some slots are unused. Use the direct connection to review occupied slots; the bridge needs four assigned reels.':notReady());clear();previousPalette=current;status('Nothing sent for this palette',getPalette()?'Palette ready. Check the printer to review its current slots before sending.':notReady());}
   readiness();
  }};
 }

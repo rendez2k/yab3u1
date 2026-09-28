@@ -204,6 +204,38 @@ let geometryBuilds = 0;
 let boundsCache = null;
 let viewCache = null;
 let detailCache = null;
+let objectGeometry = new Map();
+
+function objectView(plateId, objectIds, layout) {
+  const key = `${plateId}|${(objectIds||[]).join(',')}|${JSON.stringify(layout)}`;
+  if (viewCache?.key === key) return {...viewCache.view,reused:true};
+  const {plan} = project.layoutInstances(loaded.project,plateId,objectIds,layout);
+  const parts = plan.placements.map(p=>{
+    const id = `${plateId}|${p.objectId}`;
+    if (!objectGeometry.has(id)) objectGeometry.set(id,buildGeometry(id,plateId,[p.objectId]));
+    const base = objectGeometry.get(id);
+    return {base,offset:p.offset};
+  });
+  const total = parts.reduce((n,p)=>n+p.base.triangleCount,0), meshes = new Map();
+  for (const p of parts) {
+    const budget = Math.max(1,Math.floor(120000*p.base.triangleCount/Math.max(1,total)));
+    const id = `${p.base.id}|${budget}`;
+    if (!meshes.has(id)) meshes.set(id,clusterWithinBudget(p.base.positions,p.base.states,budget));
+    p.mesh = meshes.get(id);
+  }
+  const length = parts.reduce((n,p)=>n+p.mesh.positions.length,0);
+  const positions = new Float32Array(length), states = new Int32Array(length/9);
+  let at = 0;
+  for (const {mesh,offset} of parts) {
+    for(let i=0;i<mesh.positions.length;i++) positions[at+i] = mesh.positions[i]+offset[i%3];
+    states.set(mesh.states,at/9); at+=mesh.positions.length;
+  }
+  const view = {id:++geometrySeq,positions,states,triangles:length/9,simplified:true,
+    subdivided:parts.reduce((n,p)=>n+p.base.subdivided,0),unknown:parts.reduce((n,p)=>n+p.base.unknown,0),
+    total:parts.reduce((n,p)=>n+p.base.total,0),soupTriangles:length/9,ms:0,reused:false,
+    copies:plan.copies,capacity:plan.capacity,planCopies:plan.copies};
+  viewCache = {key,view}; return view;
+}
 
 /** The selection's exact bounds, cached per selection. */
 function ensureBounds(plateId, objectIds) {
@@ -221,6 +253,7 @@ function ensureBounds(plateId, objectIds) {
  * a facet budget selects a rebuilt surface for each copy.
  */
 function instanceView(plateId, objectIds, layout) {
+  if (layout?.arrangement === 'objects') return objectView(plateId,objectIds,layout);
   const base = ensureGeometry(plateId, objectIds, layout && layout.estimate);
   if (!layout) {
     return { id: base.id, positions: base.positions, states: base.states,
@@ -307,6 +340,7 @@ self.onmessage = async (event) => {
       loaded = { entries, project: parsed };
       geometry = null;                    // a new file has new geometry
       boundsCache = viewCache = detailCache = null;
+      objectGeometry.clear();
       geometryBuilds = self.__geometryBuilds = 0;
       const meta = metaOf(parsed);
       const plateId = parsed.plates.length ? parsed.plates[0].id : null;
@@ -315,6 +349,7 @@ self.onmessage = async (event) => {
       if (message.light === true) {
         meta.filamentUsage = project.conversionUsage(parsed);
         const summary = project.summary(parsed, plateId);
+        summary.footprints = project.selectionFootprints(parsed,plateId,null);
         post({ type: "loaded", id, meta, light: true, summary,
                ms: Date.now() - started });
         return;
@@ -347,6 +382,7 @@ self.onmessage = async (event) => {
       // switch has to refresh what the page says about them.
       const bounds = project.selectionBounds(parsed, message.plateId, message.objects);
       post({ type: "bounds", id,
+             footprints: project.selectionFootprints(parsed,message.plateId,message.objects),
              supportsPainted:
                project.supportPaintPresent(parsed, message.plateId, message.objects),
              bounds: Number.isFinite(bounds.min[0])
