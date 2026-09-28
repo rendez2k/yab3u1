@@ -443,6 +443,17 @@
 #printersetup .printer-slot {display:grid;gap:8px;padding:14px 0;border-bottom:1px solid var(--line)}
 #quantityfields label {display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0}
 #quantityfields input {width:80px;flex:none}
+
+  .printer-palette {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0}
+  .printer-palette-slot {display:grid;align-content:start;gap:6px;min-width:0}
+  .printer-palette-slot span {display:flex;align-items:center;gap:6px}
+  .printer-palette-slot small {overflow-wrap:anywhere;color:var(--dim)}
+  .printer-palette-slot .swatch {display:inline-block;width:22px;height:22px;flex:none;border:1px solid var(--line);border-radius:4px}
+  #printersetup ol {padding-left:22px;line-height:1.6}
+  #printersetup li {margin:8px 0}
+  #fillfeedback {padding:12px 0}
+  #fillresult {font-weight:600}
+  @media(max-width:600px){.printer-palette{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 <link rel="stylesheet" href="batch.css">
 </head>
@@ -614,7 +625,7 @@
     <fieldset class="layout">
       <legend>Plate layout</legend>
       <label for="layoutarrangement">Arrange</label>
-      <select id="layoutarrangement"><option value="group">Keep the original set together</option><option value="objects">Pack separate objects</option></select>
+      <select id="layoutarrangement"><option value="auto">Automatic · Fill plate finds the better fit</option><option value="group">Keep the original set together</option><option value="objects">Pack separate objects</option></select>
       <details id="objectquantities" hidden><summary>Quantities per object</summary><p class="hint">Each object keeps its parts and orientation. Set zero to omit an object. Copies repeats this entire list; check that you have the matching parts for each model.</p><div id="quantityfields"></div></details>
       <p class="hint" id="layouthint">Choose how many copies to arrange and their spacing.</p>
       <div class="row" style="margin-top:10px">
@@ -644,7 +655,8 @@
             Leave room for the prime tower</label>
         </div>
       </div>
-      <p class="hint" id="layoutnote" role="status" aria-live="polite"></p>
+      <div id="fillfeedback" hidden><p id="fillresult" role="status" aria-live="polite"></p><button type="button" id="fillalternative" hidden>Pack separate objects</button> <button type="button" id="fillundo" hidden>Undo Fill plate</button></div>
+      <details id="layoutdetails"><summary>Fit and clearance details</summary><p class="hint" id="layoutnote" role="status" aria-live="polite"></p></details>
     </fieldset>
 
     <fieldset class="settings" id="settingsbox">

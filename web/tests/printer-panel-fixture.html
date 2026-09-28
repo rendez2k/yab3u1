@@ -1,0 +1,22 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Simulated U1 · no real printer requests</title><style>body{font:16px system-ui;max-width:700px;margin:24px auto}button,input{padding:8px;margin:6px}label{display:block}.printer-palette{display:flex;gap:20px}.printer-palette-slot{display:grid}.swatch{display:inline-block;width:20px;height:20px}small{display:block}</style></head><body>
+<h1>Simulated U1 · no real printer requests</h1><button id="paused">Simulate paused printer</button><button id="idle">Simulate idle printer</button><button id="partial">Use slots 1 and 4 only</button><button id="linked">Link slot 4 to Spoolman</button><p id="posts" role="status">Commands sent: 0</p><details id="panel" open></details>
+<script type="module">
+import {mountPrinter} from '../shared/printerPanel.js';
+let reels=['#FF8800','#FFFFFF','#000000','#008000'].map(color=>({color,type:'PLA'})),printState='complete',posts=[];
+const slots=Array.from({length:4},()=>({vendor:'Generic',material:'PLA',subtype:'Basic',rgba:'FFFFFFFF',spoolId:0,present:true}));
+window.fetch=async(url,options={})=>{
+ if(url==='/__printer/session')return{ok:false};
+ let result;
+ if(url.endsWith('/server/info'))result={klippy_state:'ready',components:['spoollink']};
+ else if(url.includes('/printer/objects/query'))result={status:{gcode:{commands:{SET_PRINT_FILAMENT_CONFIG:{}}},print_stats:{state:printState},idle_timeout:{state:'Ready'},print_task_config:Object.fromEntries(Object.entries({filament_vendor:'vendor',filament_type:'material',filament_sub_type:'subtype',filament_color_rgba:'rgba',filament_spool_id:'spoolId',filament_exist:'present'}).map(([k,v])=>[k,slots.map(s=>s[v])]))}};
+ else if(url.endsWith('/printer/gcode/script')){
+  const script=JSON.parse(options.body).script;posts.push(script);const i=Number(script.match(/CONFIG_EXTRUDER=(\d)/)[1]);slots[i].rgba=script.match(/FILAMENT_COLOR_RGBA=([A-F0-9]+)/)[1];result='ok';document.querySelector('#posts').textContent='Commands sent: '+posts.length+' · slots '+posts.map(s=>Number(s.match(/CONFIG_EXTRUDER=(\d)/)[1])+1).join(', ');
+ }else throw Error('Unexpected request');
+ return {ok:true,json:async()=>({result})};
+};
+const panel=mountPrinter(document.querySelector('#panel'),()=>reels,{converter:true});
+document.querySelector('#paused').onclick=()=>{printState='paused'};
+document.querySelector('#idle').onclick=()=>{printState='complete'};
+document.querySelector('#partial').onclick=()=>{reels=[reels[0],null,null,reels[3]];panel.refresh();};
+document.querySelector('#linked').onclick=()=>{slots[3].spoolId=7};
+</script></body></html>

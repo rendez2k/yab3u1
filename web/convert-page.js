@@ -13,14 +13,14 @@ import { ConvertSession } from "./shared/convertSession.js";
 import { REPAINT, SLOTS, assignmentPlan, colourName } from "./shared/assignment.js";
 import { Preview } from "./shared/preview.js";
 import { thumbnailSizes } from "./shared/thumbnail.js";
-import { planLayout } from "./shared/layout.js";
+import { planLayout, fillLayout } from "./shared/layout.js";
 import { supportOf, transferSettings } from "./shared/printSettings.js";
 import { renderFilamentPicker } from './shared/filamentPicker.js';
 import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1Profiles.js';
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.10";
+const VERSION = "2.6.11";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -33,6 +33,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "Fill plate now compares whole sets and separate objects automatically, reports the result and offers Undo. U1 sending now stays in YAB3D: enter the printer address, review the slots and send. Spool Studio is an optional alternative.",
   "Main converter: review and send the exported U1 filament assignments, including partial slot setups through the direct connection. Pack separate objects with individual quantities while preserving their parts and orientation.",
   "Full Spectrum ranks palettes using original surface area and protects Keep exact choices. Optional local calibration records measured U1 blend colours, generates five-tile test projects and supports JSON backup/import; unrecorded blends remain estimates.",
   "Sharper model previews: the drawing resolution now follows the panel size and display density, including textured imports. Reset view fits the whole model with less empty space on desktop and mobile.",
@@ -512,12 +513,12 @@ function layoutPlanNow() {
   return planLayout(box, session.planningLayout());
 }
 
-let quantityKey = '';
+let quantityKey = '', fillFeedback = null;
 function syncLayout() {
   $('printersetup').hidden = session.target !== 'snapmaker';
   printerPanel?.refresh();
   const objectMode = session.layout.arrangement === 'objects';
-  $('layoutarrangement').value = objectMode ? 'objects' : 'group';
+  $('layoutarrangement').value = session.layout.arrangement || 'auto';
   $('objectquantities').hidden = !objectMode;
   const footprints = session.state?.footprints || [];
   const key = JSON.stringify([session.epoch,footprints.map(f=>[f.objectId,f.name,f.instances])]);
@@ -529,7 +530,7 @@ function syncLayout() {
 
   const layout = session.layout;
   $("layouthint").textContent = session.target === "snapmaker"
-    ? "Copies repeats the entire selected set. Pack separate objects to use gaps between parts, or change quantities individually. The U1 area is fixed."
+    ? "Fill plate tries whole sets and separate objects in Automatic mode. Parts and orientation stay together. Copies repeats the entire set; the U1 bed stays at 270 × 270 mm."
     : "Choose how many copies to arrange, their spacing and the available area. Select your printer in the slicer after importing.";
   const set = (id, value) => {
     const node = $(id);
@@ -577,13 +578,22 @@ function syncLayout() {
     || (!plan && session.state ? "the selection's size is unknown" : "");
   $("layoutnote").textContent = (problem ? `cannot write: ${problem} · ` : "")
     + note.join(" · ");
+  if (problem) $('layoutdetails').open = true;
   // An invalid or impossible layout blocks the export outright.
   const go = $("convertgo");
   if (go) {
     go.disabled = Boolean(problem) || Boolean(session.profileError) || session.busy || !session.state || session.capacityStatus().blocked;
     go.textContent = session.capacityStatus().acknowledged ? 'Download project for further setup' : 'Download the project';
   }
-  if ($("layoutfill")) $("layoutfill").disabled = Boolean(problem) || !session.state;
+  if ($("layoutfill")) $("layoutfill").disabled = Boolean(session.layoutProblem) || session.boundsPending || session.busy || !session.state?.bounds;
+  const currentFill = fillFeedback?.epoch === session.epoch && fillFeedback?.revision === session.revision;
+  $('fillfeedback').hidden = !currentFill;
+  if (currentFill) {
+    $('fillresult').textContent = fillFeedback.message;
+    $('fillalternative').hidden = !fillFeedback.alternative;
+    $('fillalternative').textContent = `Pack separate objects · ${fillFeedback.alternative} sets`;
+    $('fillundo').hidden = !fillFeedback.previous;
+  }
 }
 
 /* ---------- the two assignment modes ----------
@@ -915,7 +925,7 @@ $("convertplate").addEventListener("change", async () => {
   syncLayout();
   refreshPreview();
 });
-$('layoutarrangement').addEventListener('change',()=>session.setLayout({arrangement:$('layoutarrangement').value,copies:1}));
+$('layoutarrangement').addEventListener('change',()=>session.setLayout({arrangement:$('layoutarrangement').value,copies:1,...($('layoutarrangement').value==='objects'?{}:{quantities:{}})}));
 $('quantityfields').addEventListener('input',event=>{
   if (!event.target.dataset.object) return;
   const quantities = {...session.layout.quantities};
@@ -954,16 +964,29 @@ $("carrysettings").addEventListener("change", () => {
 $("supportmode").addEventListener("change", () => {
   session.setSupportMode($("supportmode").value);
 });
-$("layoutfill").addEventListener("click", () => {
-  // Fill uses the *same* plan the export uses: one capacity, one truth.
-  const plan = layoutPlanNow();
-  if (!plan || plan.blocked) {
-    session.setLayout({ copies: 1 });          // surfaces the block in the note
-    return;
+function fillPlate(arrangement) {
+  if (!session.state?.bounds || session.boundsPending || session.layoutProblem || session.busy) return;
+  const previous = structuredClone(session.layout);
+  const result = fillLayout(session.state.bounds,{...session.planningLayout(),...(arrangement?{arrangement}:{})});
+  let message, undo = null;
+  if (!result.copies) message = result.plan?.problem || 'No complete set fits with these clearances. Reduce quantities or spacing, or arrange the parts in your slicer.';
+  else {
+    const changed = session.setLayout({arrangement:result.arrangement,copies:result.copies});
+    undo = changed ? previous : null;
+    const perSet = (session.state.footprints||[]).reduce((n,f)=>n+(f.instances||1)*(result.arrangement==='objects'?(session.layout.quantities?.[f.objectId]??1):1),0);
+    message = `${changed?'Filled':'Already filled'}: ${result.copies} complete set${result.copies===1?'':'s'}${perSet?' · '+perSet*result.copies+' objects':''}. `
+      + (result.arrangement==='objects'?'Separate objects packed; parts and orientation preserved.':'The original arrangement is kept together.')
+      + (result.alternative?` Packing separate objects fits ${result.alternative} sets.`:!changed?' No additional complete set fits this plan.':'');
   }
-  session.setLayout({ copies: plan.capacity });
-  // The Fill button is a layout change like any other: the picture follows it.
-  refreshPreview();
+  fillFeedback = {epoch:session.epoch,revision:session.revision,message,previous:undo,alternative:result.alternative};
+  syncLayout();
+}
+$("layoutfill").addEventListener('click',()=>fillPlate());
+$('fillalternative').addEventListener('click',()=>fillPlate('objects'));
+$('fillundo').addEventListener('click',()=>{
+  if (!fillFeedback?.previous || fillFeedback.epoch!==session.epoch || fillFeedback.revision!==session.revision) return;
+  session.setLayout(fillFeedback.previous);
+  fillFeedback={epoch:session.epoch,revision:session.revision,message:'Restored the arrangement from before Fill plate.'};syncLayout();
 });
 $("converttarget").addEventListener("change", () => {
   // A different target writes different bytes (and a different layout origin);

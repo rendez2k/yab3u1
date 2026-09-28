@@ -194,6 +194,20 @@ export function planLayout(bounds, options = {}) {
   };
 }
 
+/** Fill is an explicit request to add copies. Automatic mode compares both
+ * strategies then records the chosen one, so preview and export stay identical. */
+export function fillLayout(bounds, options = {}) {
+  const group = planLayout(bounds,{...options,arrangement:'group',copies:1});
+  const objects = options.footprints?.length
+    ? planLayout(bounds,{...options,arrangement:'objects',copies:1}) : null;
+  const mode = options.arrangement || 'auto';
+  const arrangement = mode === 'objects' ? 'objects' : mode === 'group' ? 'group'
+    : objects && objects.capacity > group.capacity ? 'objects' : 'group';
+  const plan = arrangement === 'objects' ? objects : group;
+  return {plan,arrangement,copies:plan?.capacity || 0,
+    alternative:arrangement === 'group' && objects?.capacity > group.capacity ? objects.capacity : 0};
+}
+
 /**
  * The offset each copy needs, in the group's own coordinates.
  *

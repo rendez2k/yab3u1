@@ -433,6 +433,17 @@
   .extension-help li + li { margin-top: 6px; }
   .extension-help a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
   .extension-help :is(summary,a):focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+
+  .printer-palette {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0}
+  .printer-palette-slot {display:grid;align-content:start;gap:6px;min-width:0}
+  .printer-palette-slot span {display:flex;align-items:center;gap:6px}
+  .printer-palette-slot small {overflow-wrap:anywhere;color:var(--dim)}
+  .printer-palette-slot .swatch {display:inline-block;width:22px;height:22px;flex:none;border:1px solid var(--line);border-radius:4px}
+  #printersetup ol {padding-left:22px;line-height:1.6}
+  #printersetup li {margin:8px 0}
+  #fillfeedback {padding:12px 0}
+  #fillresult {font-weight:600}
+  @media(max-width:600px){.printer-palette{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>

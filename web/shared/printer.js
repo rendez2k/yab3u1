@@ -1,6 +1,6 @@
 // U1 metadata only. Protocol reference: rendez2k/spool-studio/docs/send-to-printer.md.
 export function printerOrigin(value) {
- const u=new URL(/^https?:\/\//.test(value)?value:'http://'+value);
+ let u;try{u=new URL(/^https?:\/\//.test(value)?value:'http://'+value);}catch{throw Error('Enter your U1’s local IPv4 address, for example 192.168.1.100.');}
  const ip=u.hostname.split('.').map(Number);
  const privateIp=ip.length===4 && ip.every(n=>Number.isInteger(n)&&n>=0&&n<=255) && (ip[0]===10 || ip[0]===192&&ip[1]===168 || ip[0]===172&&ip[1]>=16&&ip[1]<=31);
  if(!privateIp || !['http:','https:'].includes(u.protocol) || u.username || u.password || u.pathname!=='/' || u.search || u.hash) throw Error('Enter the printer’s private IPv4 address, with its port if needed.');

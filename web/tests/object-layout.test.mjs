@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {planLayout,targetLayout} from '../shared/layout.js';
+import {planLayout,targetLayout,fillLayout} from '../shared/layout.js';
 import {conversionPalette,SLOTS,REPAINT} from '../shared/assignment.js';
 import {ConvertSession} from '../shared/convertSession.js';
 const bounds={min:[0,0,0],max:[180,150,45]};
@@ -33,4 +33,14 @@ session.assignmentMode=SLOTS;session.rules[SLOTS]={1:4,2:2,3:3,4:1,5:5};session.
 assert.deepEqual(session.printerPalette().map(r=>r?.color??null),[null,null,null,'#FF8800']);
 session.target='bambu';assert.equal(session.printerPalette(),null);
 assert.equal(session.setLayout({quantities:{body:1.5}}),false);
+const automatic = fillLayout(bounds,{...options,arrangement:'auto',quantities:{}});
+assert.equal(automatic.arrangement,'objects');
+assert(automatic.copies > 1);
+assert.equal(planLayout(bounds,{...options,arrangement:automatic.arrangement,quantities:{},copies:automatic.copies}).copies,automatic.copies);
+const keep = fillLayout(bounds,{...options,arrangement:'group',quantities:{}});
+assert.equal(keep.arrangement,'group');
+assert.equal(keep.copies,1);
+assert.equal(keep.alternative,automatic.copies);
+assert.equal(fillLayout(bounds,{...options,quantities:{body:0,cap:0}}).copies,0);
+assert.equal(fillLayout(bounds,{...options,arrangement:'auto',footprints:[]}).arrangement,'group');
 console.log('PASS separate object quantities, tower/edge/spacing, grounding, overflow, deterministic packing and printer/export palette agreement');

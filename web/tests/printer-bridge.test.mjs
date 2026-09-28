@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import {openPrinterBridge} from '../shared/printerBridge.js';
 const reels=['#FFFFFF','#000000','#FF0000','#0080C0'].map(color=>({color,type:'PLA'}));
 function fixture(){
- const listeners=new Map(),timers=new Map(),posts=[],messages=[];let counter=0,done=0,url;
- const popup={closed:false,postMessage:(data,origin)=>posts.push({data,origin})};
+ const listeners=new Map(),timers=new Map(),posts=[],messages=[],progress=[];let counter=0,done=0,focused=0,url;
+ const popup={closed:false,focus:()=>focused++,postMessage:(data,origin)=>posts.push({data,origin})};
  const host={location:{origin:'https://yab3d.uk'},crypto:globalThis.crypto,open:value=>{url=value;return popup;},addEventListener:(k,v)=>listeners.set(k,v),removeEventListener:k=>listeners.delete(k),setTimeout:fn=>{timers.set(++counter,fn);return counter;},clearTimeout:id=>timers.delete(id),setInterval:fn=>{timers.set(++counter,fn);return counter;},clearInterval:id=>timers.delete(id)};
- const cancel=openPrinterBridge({host,reels,status:(...value)=>messages.push(value),done:()=>done++});
+ const cancel=openPrinterBridge({host,reels,status:(...value)=>messages.push(value),progress:row=>progress.push(row),done:()=>done++});
  const token=new URLSearchParams(new URL(url).hash.slice(1)).get('yab3d-printer');
  const emit=(type,extra={},event={})=>listeners.get('message')?.({source:popup,origin:'https://spool-studio.uk',data:{type:'yab3d-printer:'+type,version:1,token,...extra},...event});
- return {emit,cancel,posts,messages,host,popup,listeners,timers,get done(){return done;}};
+ return {emit,cancel,posts,messages,progress,host,popup,listeners,timers,get focused(){return focused;},get done(){return done;}};
 }
 test('handoff sends only four palette colours to the authenticated popup, ignores spoofed origins and tokens',()=>{
  const f=fixture();f.emit('ready',{}, {origin:'https://evil.example'});f.emit('ready',{token:'wrong'});f.emit('ready',{}, {source:{}});assert.equal(f.posts.length,0);
@@ -25,4 +25,12 @@ test('only readback verification for all four exact slots gets a complete succes
 });
 test('blocked popup has a visible recovery and completes synchronously',()=>{
  let done=false,result;openPrinterBridge({host:{location:{origin:'https://yab3d.uk'},crypto:globalThis.crypto,open:()=>null},reels,status:(...x)=>result=x,done:()=>done=true});assert(done);assert.equal(result[0],'Allow pop-ups');
+});
+
+test('continue focuses the existing review and slot progress accepts only authenticated received handoffs',()=>{
+ const f=fixture();f.cancel.focus();assert.equal(f.focused,1);
+ f.emit('progress',{slot:1,state:'verified',exact:true});assert.equal(f.progress.length,0);
+ f.emit('received');f.emit('progress',{slot:1,state:'verified',exact:true},{origin:'https://bad.example'});assert.equal(f.progress.length,0);
+ f.emit('progress',{slot:1,state:'verified',exact:true});assert.deepEqual(f.progress,[{slot:1,state:'verified',exact:true}]);
+ f.cancel();f.cancel.focus();assert.equal(f.focused,1);
 });

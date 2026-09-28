@@ -62,7 +62,7 @@ export class ConvertSession {
     // U1 projects use the destination bed. Other targets retain an editable
     // planning area, initially measured from the source file.
     this.layout = targetLayout(this.target,
-      { copies: 1, spacing: 5, width: 270, depth: 270, tower: true });
+      { copies: 1, spacing: 5, width: 270, depth: 270, tower: true, arrangement:'auto' });
     this.genericArea = { width: 270, depth: 270 };
     this.layoutEdited = false;
     // Carry compatible designer settings by default; destination hardware and
@@ -269,7 +269,7 @@ export class ConvertSession {
   setLayout(patch = {}) {
     const hadProblem = Boolean(this.layoutProblem);
     const next = { ...this.layout };
-    if (patch.arrangement !== undefined) next.arrangement = patch.arrangement === 'objects' ? 'objects' : 'group';
+    if (patch.arrangement !== undefined) next.arrangement = ['objects','group'].includes(patch.arrangement) ? patch.arrangement : 'auto';
     if (patch.quantities !== undefined) {
       if (Object.values(patch.quantities).some(n=>!Number.isInteger(n)||n<0||n>64)) {
         this.layoutProblem = 'object quantities must be whole numbers from 0 to 64';
@@ -498,7 +498,7 @@ export class ConvertSession {
       this.rules = { [SLOTS]: identityRule(count), [REPAINT]: identityRule(count) };
       // A fresh file starts from a single copy. Keep the user's generic planning
       // area separately so it can never replace the U1 destination bed.
-      this.layout = { ...this.layout, copies: 1, tower: true, arrangement:'group', quantities:{} };
+      this.layout = { ...this.layout, copies: 1, tower: true, arrangement:'auto', quantities:{} };
       // A source plate size is used only when the file really states one and the
       // user has not set their own box; otherwise the editable planning area stays.
       const plate = reply.summary && reply.summary.plateSize;

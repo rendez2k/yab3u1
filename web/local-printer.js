@@ -5,7 +5,8 @@ const printer=new URL(process.argv[2]||'http://invalid');
 const ip=printer.hostname.split('.').map(Number);
 if(!['http:','https:'].includes(printer.protocol)||printer.username||printer.password||printer.pathname!=='/'||printer.search||printer.hash||ip.length!==4||!ip.every(n=>Number.isInteger(n)&&n>=0&&n<=255)||!(ip[0]===10||ip[0]===192&&ip[1]===168||ip[0]===172&&ip[1]>=16&&ip[1]<=31))throw Error('Supply the U1 private IPv4 address, for example http://192.168.1.100');
 const token=crypto.randomBytes(32).toString('hex'),port=Number(process.env.YAB3D_LOCAL_PORT||8786),origin='http://127.0.0.1:'+port;
-const site='https://yab3d.uk';
+const site=process.argv.includes('--review')?'https://u1-reel-changes--yab3u1.netlify.app':'https://yab3d.uk';
+const startPage=process.argv.includes('--recolour')?'/recolour.html':'/';
 const statusRoute='/printer/objects/query?gcode=commands&print_stats=state&idle_timeout=state&print_task_config=filament_vendor,filament_type,filament_sub_type,filament_color_rgba,filament_spool_id,filament_exist';
 const headers=process.env.YAB3D_PRINTER_API_KEY?{'X-Api-Key':process.env.YAB3D_PRINTER_API_KEY}:{};
 let writing=false;
@@ -34,8 +35,8 @@ const server=http.createServer(async(req,res)=>{
   if(req.method!=='GET')return reply(405,{error:'Read only'});
   const url=new URL(req.url,origin);
   if(!/^\/[a-zA-Z0-9_./-]*$/.test(url.pathname)||url.pathname.includes('..')||!(/\.(html|js|css|png|ico|txt)$/.test(url.pathname)||url.pathname==='/'))return reply(404,{error:'Unknown asset'});
-  const file=await fetch(site+(url.pathname==='/'?'/recolour.html':url.pathname),{signal:AbortSignal.timeout(15000)});
+  const file=await fetch(site+(url.pathname==='/'?'/index.html':url.pathname),{signal:AbortSignal.timeout(15000)});
   res.writeHead(file.status,{'Content-Type':file.headers.get('content-type')||'application/octet-stream','Cache-Control':'no-store'});res.end(Buffer.from(await file.arrayBuffer()));
  }catch{reply(502,{error:'Request failed. Check the printer and connection; a write may be uncertain.'});}
 });
-server.listen(port,'127.0.0.1',()=>console.log('Open '+origin+'/recolour.html — keep this terminal running. Ctrl+C stops it.'));
+server.listen(port,'127.0.0.1',()=>console.log('Open '+origin+startPage+' — keep this terminal running. Ctrl+C stops it.'));

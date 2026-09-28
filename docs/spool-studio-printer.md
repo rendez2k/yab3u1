@@ -1,10 +1,10 @@
 # Spool Studio Bridge handoff
 
-In Full Spectrum, apply a four-slot palette, open **Send filament setup to U1**, then choose **Use my Spool Studio Bridge**. The signed-in Spool Studio printer page receives the four physical colours and materials in slot order. Blended colours remain in the project.
+Direct U1 sending is now the main flow within YAB3D. Spool Studio remains an optional alternative: in Full Spectrum, apply a four-slot palette, open **Send filament setup to U1**, expand **Use Spool Studio Bridge instead**, then choose **Open Spool Studio to review & send**. The converter uses its current export assignments without an Apply step. The signed-in Spool Studio printer page receives the four physical colours and materials in slot order. Blended colours remain in the project.
 
 Spool Studio selects a library entry only when one available supported entry matches the requested material and colour. Multiple matches require a choice; absent matches leave the picker empty. The review explicitly identifies a different chosen colour or material. Finish and optional physical-reel tracking remain part of Spool Studio's review.
 
-Each slot is reviewed and sent separately through the existing account-bound bridge. No new local launcher, API key or desktop update is required. Printing and stale or unsupported printer states keep sending disabled. This updates filament metadata, not the print file, temperatures or a running job.
+Each slot is reviewed and sent separately through the existing account-bound bridge. The instructions now name **Your YAB3D slots**, **Review change** and **Send to printer**. **Continue in Spool Studio** returns to the existing popup; verified per-slot results also appear alongside YAB3D's requested colours. No new local launcher, API key or desktop update is required for this bridge route. Printing and stale or unsupported printer states keep sending disabled. This updates filament metadata, not the print file, temperatures or a running job.
 
 The nonce-bound `yab3d-printer` v1 popup protocol checks both origin and window identity. YAB3D sends four `{color, material}` records, never a model or credentials. Spool Studio returns minimal outcomes for request IDs associated internally with this handoff; account IDs, library IDs and printer keys stay there. Only server-reported readback verification produces a verified message. Changing the applied palette cancels the handoff and clears its review; already-confirmed requests may still finish. Reloading/closing either tab requires reopening the handoff.
 
