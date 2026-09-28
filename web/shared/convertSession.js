@@ -75,6 +75,9 @@ export class ConvertSession {
     this.carrySettings = true;
     this.supportMode = "auto";
     this.u1Nozzle = "auto";
+    this.bambuSetup = null;
+    this.bambuRequired = false;
+    this.bambuError = "";
     this.filamentProfiles = [];
     this.output = null;     // {url, name, target, bytes, mapping}
     this.busy = false;
@@ -167,12 +170,24 @@ export class ConvertSession {
     return true;
   }
 
+  setBambuSetup(setup, required = true, error = '') {
+    this.bambuSetup = setup ? structuredClone(setup) : null;
+    this.bambuRequired = required;
+    this.bambuError = error;
+    if (setup && this.target === 'bambu') {
+      this.layout = {...this.layout, ...setup.bed};
+      this.layoutProblem = '';
+    }
+    this.invalidate();
+    this.hooks.layout?.(this.layout);
+  }
+
   planningLayout() {
     const ids = this.state?.plates.find(p => String(p.id) === String(this.state.plateId))?.objectIds;
     const objects = (this.state?.objectSettings || []).filter(o => !ids || ids.map(String).includes(String(o.id)));
     const sources = (objects.length ? objects : [{}]).map(o =>
       ({ ...(this.state?.sourceSettings || {}), ...(o.settings || {}) }));
-    return { ...targetLayout(this.target, this.layout), footprints:this.state?.footprints || [], ...planningAllowance(sources,
+    return { ...targetLayout(this.target, this.layout), ...(this.target === 'bambu' && this.bambuSetup ? {...this.bambuSetup.bed, centre:[this.bambuSetup.bed.width/2,this.bambuSetup.bed.depth/2]} : {}), footprints:this.state?.footprints || [], ...planningAllowance(sources,
       this.target, this.target === "snapmaker" ? this.carrySettings : this.preserveSourceSettings,
       this.supportMode, Boolean(this.state?.supportsPainted)) };
   }
@@ -252,6 +267,7 @@ export class ConvertSession {
       this.rules[SLOTS] = identityRule(this.state.colours.length);
     }
     this.layout = targetLayout(target, { ...this.layout, ...this.genericArea });
+    if(target === "bambu" && this.bambuSetup) Object.assign(this.layout, this.bambuSetup.bed);
     if (target === "snapmaker" && /^(width|depth) /.test(this.layoutProblem || "")) {
       this.layoutProblem = "";
     }
@@ -611,6 +627,7 @@ export class ConvertSession {
     if (!this.state || this.busy || this.closed || this.layoutProblem || this.boundsPending) return null;
     this.setTarget(String(target));
     if (this.capacityStatus().blocked) return null;
+    if (this.target === "bambu" && (this.bambuError || (this.bambuRequired && !this.bambuSetup))) return null;
     if (this.state.bounds && planLayout(this.state.bounds, this.planningLayout()).blocked) return null;
     const snapshot = {
       revision: this.revision,
@@ -630,6 +647,7 @@ export class ConvertSession {
       carrySettings: this.carrySettings,
       supportMode: this.supportMode,
       u1Nozzle: this.u1Nozzle,
+      bambuSetup: structuredClone(this.bambuSetup),
       filamentProfiles: structuredClone(this.filamentProfiles),
       title: this.state.title,
       colours: this.state.colours.slice(),
@@ -668,6 +686,7 @@ export class ConvertSession {
                                                     preserveSourceSettings:
                                                       snapshot.preserveSourceSettings,
                                                     u1Nozzle: snapshot.u1Nozzle,
+                                                    bambuSetup: snapshot.target === "bambu" ? snapshot.bambuSetup : null,
                                                     filamentProfiles: snapshot.filamentProfiles,
                                                     carrySettings:
                                                       snapshot.carrySettings,
@@ -676,6 +695,9 @@ export class ConvertSession {
                                                     assignmentMode:
                                                       snapshot.assignmentMode });
       if (snapshot.token !== this.epoch || snapshot.revision !== this.revision) return null;
+      if (snapshot.target === 'bambu' && snapshot.bambuSetup && built.settings?.format !== 'native-project') {
+        throw new Error('The export worker is out of date and did not include your Bambu printer. Refresh this page and convert again.');
+      }
       const bytes = built.bytes instanceof Uint8Array ? built.bytes
         : new Uint8Array(built.bytes);
       const blob = new Blob([bytes], { type: TYPED_3MF });

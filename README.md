@@ -90,6 +90,15 @@ There are two routes, both static:
   An optional **Show preview** draws Original and Output views of the model
   (prepared only when you ask), and every download carries a thumbnail rendered
   from the output colours, so Explorer and the slicers show what you saved.
+  For **Bambu Studio**, select the destination printer and nozzle to write a native
+  project with its official printer, process and compatible Generic material profiles.
+  Open it **as a project** to replace the project filament list instead of appending
+  imported colours. Compatible source process and object settings are retained;
+  incompatible layer heights are blocked. Physical AMS capacity is chosen separately.
+  Profiles download directly from Bambu's public repository at a pinned revision;
+  model data never leaves the browser. Loading failure blocks native export and offers
+  retry or the explicit **Colour model only** fallback. The selector currently applies
+  to single-file conversion; bulk and Full Spectrum retain their existing export paths.
   Slot numbers are the file's own filament list: Bambu Studio's import dialog
   reads that list and may rebind it to your AMS, so the file cannot promise a
   particular physical slot.

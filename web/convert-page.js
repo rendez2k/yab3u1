@@ -1,3 +1,4 @@
+import {mountBambuPrinterPicker} from './shared/bambuPrinterPicker.js';
 import {mountPrinter} from './shared/printerPanel.js';
 import {bambuImportGuide} from './shared/bambuImportGuide.js';
 import {receiveModel, sendModel} from './shared/modelHandoff.js';
@@ -21,7 +22,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.13";
+const VERSION = "2.6.14";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -34,6 +35,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "Choose a Bambu printer and nozzle for a native project with its official profiles, exact filament list, painting and compatible designer settings. Colour-model import remains available as an explicit alternative.",
   "Bambu import now shows how to reuse existing filaments without duplicates, plus the layer height and supports actually exported for each object.",
   "Bambu colour import: removed a conflicting native-project marker that made Bambu skip painted colours and its colour-mapping dialogue.",
   "Fill plate now compares whole sets and separate objects automatically, reports the result and offers Undo. U1 sending now stays in YAB3D: enter the printer address, review the slots and send. Spool Studio is an optional alternative.",
@@ -197,17 +199,18 @@ function renderOutput(entry) {
           + "their appearance unchanged"
         : ` and ${changed.length} reassigned, which changes those colours`)
       : " and no colour change")
-    + (entry.target === "snapmaker"
+    + (entry.settings?.format === "native-project"
+      ? `. Open as a complete project in Bambu Studio. It carries ${entry.settings.printer}, its official material profiles and compatible designer settings.`
+      : entry.target === "snapmaker"
       ? ". The project carries the U1 printer profile and its own speeds, "
         + "temperatures and machine g-code."
       : ". Open it as a project in the destination slicer and choose your own "
         + "printer and filament profile there; no machine settings are copied across.")
     + applied
-    + (guide
+    + (entry.settings?.format === "standard-colour" && guide
       ? " Follow the Bambu import steps beside the download to reuse existing filaments and check object settings."
       : "")
-    + " Where a painted facet was split, the export writes its exact leaf "
-    + "triangles, so the mesh may hold more triangles than the source.");
+    + (entry.settings?.format === "standard-colour" ? " Where a painted facet was split, the export writes its exact leaf triangles, so the mesh may hold more triangles than the source." : ""));
 }
 
 /* ---------- session ---------- */
@@ -463,7 +466,9 @@ function supportSentence(source, state) {
 
 /** Report the destination's reviewed settings and known omissions. The U1 uses
  *  a bundled profile; portable projects carry designer intent on each object. */
+let bambuPicker = null;
 function syncSettings() {
+  bambuPicker?.refresh();
   const isU1 = session.target === "snapmaker";
   const state = session.state;
   const ids = state?.plates.find(p => String(p.id) === String(state.plateId))?.objectIds;
@@ -492,7 +497,7 @@ function syncSettings() {
   $("sourcesettings").textContent = enabled
     ? `Carrying ${applied.length} compatible print settings, including quality, strength and support settings.`
       + (objects.length > 1 ? " Details below describe the first object; each object's overrides are exported separately." : "")
-      + (isU1 ? ` ${supportSentence(source, state)}` : " These are object overrides. In the slicer, choose Objects, select a model, then Support or Quality. Global still shows the destination preset’s defaults.")
+      + (isU1 ? ` ${supportSentence(source, state)}` : " Object overrides are retained. In the slicer, choose Objects, select a model, then Support or Quality.")
     : "The destination's print settings will be used.";
   $("settinglist").innerHTML = (applied.length ? "<ul>" + applied.map(({key,value}) =>
     `<li>${esc(labelFor(key))}: ${esc(valueWithUnit(key,value))}</li>`).join("") + "</ul>" : "")
@@ -533,7 +538,7 @@ function syncLayout() {
   const layout = session.layout;
   $("layouthint").textContent = session.target === "snapmaker"
     ? "Fill plate tries whole sets and separate objects in Automatic mode. Parts and orientation stay together. Copies repeats the entire set; the U1 bed stays at 270 × 270 mm."
-    : "Choose how many copies to arrange, their spacing and the available area. Select your printer in the slicer after importing.";
+    : session.target === "bambu" && session.bambuSetup ? "Copies are fitted to your selected Bambu printer. Hardware exclusion areas are reserved; review the sliced placement." : "Choose how many copies to arrange, their spacing and the available area. Select your printer in the slicer after importing.";
   const set = (id, value) => {
     const node = $(id);
     if (node && !session.layoutProblem && document.activeElement !== node
@@ -544,7 +549,7 @@ function syncLayout() {
   set("layoutwidth", layout.width);
   set("layoutdepth", layout.depth);
   for (const id of ["layoutwidth", "layoutdepth"]) {
-    $(id).disabled = session.target === "snapmaker";
+    $(id).disabled = session.target === "snapmaker" || (session.target === "bambu" && Boolean(session.bambuSetup));
   }
   if ($("layouttower")) $("layouttower").checked = Boolean(layout.tower);
   const bounds = session.state && session.state.bounds;
@@ -568,12 +573,12 @@ function syncLayout() {
     }
     if (plan.capped) note.push(`This plan writes ${plan.capacity} complete sets. Precise nesting in your slicer may fit more.`);
     if (plan.padding) note.push(`${plan.padding.toFixed(1)} mm extra clearance per side for print additions`);
-    if (plan.edgeMargin) note.push(`${plan.edgeMargin} mm kept clear at every bed edge for spiral lifting`);
+    if (plan.edgeMargin) note.push(`${plan.edgeMargin} mm kept clear at every bed edge for ${session.target === "snapmaker" ? "spiral lifting" : "printer hardware exclusions"}`);
     note.push(...plan.footprintNotes);
   }
   note.push(session.target === "snapmaker"
     ? "Snapmaker U1: copies are fitted to its 270 × 270 mm bed"
-    : "your printer and process stay yours: pick them in the slicer");
+    : session.target === "bambu" && session.bambuSetup ? session.bambuSetup.machine.name : "your printer and process stay yours: pick them in the slicer");
   const problem = session.layoutProblem
     || (session.boundsPending ? "the selection's size is still being measured" : "")
     || (plan && plan.blocked ? "no copy fits this layout box" : "")
@@ -584,7 +589,7 @@ function syncLayout() {
   // An invalid or impossible layout blocks the export outright.
   const go = $("convertgo");
   if (go) {
-    go.disabled = Boolean(problem) || Boolean(session.profileError) || session.busy || !session.state || session.capacityStatus().blocked;
+    go.disabled = Boolean(problem) || Boolean(session.profileError) || (session.target === "bambu" && (session.bambuError || (session.bambuRequired && !session.bambuSetup))) || session.busy || !session.state || session.capacityStatus().blocked;
     go.textContent = session.capacityStatus().acknowledged ? 'Download project for further setup' : 'Download the project';
   }
   if ($("layoutfill")) $("layoutfill").disabled = Boolean(session.layoutProblem) || session.boundsPending || session.busy || !session.state?.bounds;
@@ -990,6 +995,8 @@ $('fillundo').addEventListener('click',()=>{
   session.setLayout(fillFeedback.previous);
   fillFeedback={epoch:session.epoch,revision:session.revision,message:'Restored the arrangement from before Fill plate.'};syncLayout();
 });
+bambuPicker = mountBambuPrinterPicker($('bambuprinter'), session, () => syncSettings());
+
 $("converttarget").addEventListener("change", () => {
   // A different target writes different bytes (and a different layout origin);
   // the old download does not apply, and the preview/note must follow.

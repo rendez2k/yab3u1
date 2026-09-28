@@ -777,3 +777,9 @@ specific requirements.
 if any, to sign a "copyright disclaimer" for the program, if necessary.
 For more information on this, and how to apply and follow the GNU AGPL, see
 <http://www.gnu.org/licenses/>.
+
+Bambu Studio destination profiles
+https://github.com/bambulab/BambuStudio/tree/da8b44ee34dd349f2ae0df3f1cbae366df482354/resources/profiles
+The optional native Bambu single-file export downloads selected official profiles
+directly from this pinned upstream revision. No profile bundle is redistributed
+with the website. Upstream notices and terms apply to the downloaded profiles.

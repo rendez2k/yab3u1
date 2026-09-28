@@ -10,6 +10,7 @@ const supportLabel = value => ({'tree(manual)':'Tree (manual)', 'tree(auto)':'Tr
 
 // The report comes from the completed export, not the currently selected file.
 export function bambuImportGuide(entry) {
+  if (entry.target === 'bambu' && entry.settings?.format === 'native-project') return `<section class="bambu-import-guide"><h3>Open as a project in Bambu Studio</h3><p>${esc(entry.settings.printer)} · ${entry.colours.length} project filaments.</p><p>Use File → Open Project, and load the complete project. Painting and compatible designer settings are included. Review individual models under Objects → Support or Quality, then slice before printing.</p></section>`;
   if (entry.target !== 'bambu' || entry.settings?.format !== 'standard-colour') return '';
   const colours = entry.colours.map(c => norm(c) || '#FFFFFF');
   const objects = entry.settings.objects || [];

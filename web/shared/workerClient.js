@@ -100,6 +100,7 @@ export class RecolourWorker {
   convert(plateId, objects, target, mapping, title, options = {}) {
     return this.request("convert", { plateId, objects, target, mapping, title,
                                      layout: options.layout || null,
+                                     bambuSetup: options.bambuSetup || null,
                                      preserveSourceSettings:
                                        options.preserveSourceSettings === true,
                                      carrySettings: options.carrySettings !== false,

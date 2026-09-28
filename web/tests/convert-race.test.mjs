@@ -461,6 +461,40 @@ await ok('three source colours can use physical U1 slot four and swap occupied s
   assert.deepEqual(session.rule,identityRule(3));
 });
 
+await ok('printer changes discard an in-flight native Bambu export and block incomplete setup', async () => {
+  const worker=new FakeWorker(project('printer choice'));
+  const session=new ConvertSession(()=>worker,{},urls);
+  await load(session,worker,'printer.3mf');
+  session.setTarget('bambu');
+  session.setBambuSetup(null,true);
+  assert.equal(await session.convert('bambu'),null);
+  const setup={machine:{name:'P1S'},bed:{width:256,depth:256,maxHeight:250}};
+  session.setBambuSetup(setup,true);
+  const pending=session.convert('bambu');
+  await tick();
+  assert.equal(worker.calls.at(-1).options.bambuSetup.machine.name,'P1S');
+  setup.machine.name='mutated caller';
+  assert.equal(worker.calls.at(-1).options.bambuSetup.machine.name,'P1S');
+  session.setBambuSetup(null,true,'Loading another printer');
+  worker.releaseAll();
+  assert.equal(await pending,null);
+  assert.equal(session.output,null);
+});
+
+await ok('a stale worker cannot publish a colour-model file for a selected Bambu printer', async () => {
+  const worker=new FakeWorker(project('stale worker'));
+  const log=recorder();
+  const session=new ConvertSession(()=>worker,log.hooks,urls);
+  await load(session,worker,'stale.3mf');
+  session.setTarget('bambu');
+  session.setBambuSetup({machine:{name:'P1S'},bed:{width:256,depth:256}},true);
+  const pending=session.convert('bambu');
+  await tick();worker.releaseAll();
+  assert.equal(await pending,null);
+  assert.match(log.seen.error.at(-1),/worker is out of date/);
+  assert.equal(session.output,null);
+});
+
 if (failures.length) {
   console.error(`\n${failures.length} race check(s) failed`);
   process.exitCode = 1;

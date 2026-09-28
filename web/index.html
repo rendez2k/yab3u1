@@ -418,6 +418,7 @@
   #sourcepreview #convertpreview { height: clamp(280px, 40vh, 440px); }
   #sourcepreview .row { gap: 12px; }
   #convertpick > .row { gap: 12px; }
+  #bambuprinter { margin-top: 14px; }
   #printercapacity { margin-top: 18px; border-block: 1px solid var(--line); padding: 14px 0; }
   #capacitystatus { font-weight: 600; margin: 10px 0 4px; }
   .bambu-import-guide { border-top:1px solid var(--line); margin-top:16px; padding-top:12px; }
@@ -576,6 +577,15 @@
         <select id="converttarget"></select>
       </div>
     </div>
+
+    <section id="bambuprinter" hidden aria-label="Bambu printer setup">
+      <div class="row">
+        <div class="field grow"><label for="bambumodel">Bambu printer</label><select id="bambumodel" data-model><option value="">Choose your Bambu printer…</option><option value="portable">Colour model only · set up in Bambu</option></select></div>
+        <div class="field"><label for="bambunozzle">Nozzle</label><select id="bambunozzle" data-nozzle disabled><option value="">Choose printer first</option></select></div>
+      </div>
+      <p class="muted" role="status" aria-live="polite"></p>
+      <button type="button" hidden>Retry loading profiles</button>
+    </section>
 
     <section id="printercapacity" aria-label="Printer colour capacity">
       <div class="row">

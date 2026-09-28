@@ -11,6 +11,7 @@
 // remapped, exactly as the Python exporter streams them, so the triangles in the
 // output are the source's own.
 
+import {nativeBambuConfig, validateBambuLayers, applyNativeBambuFilaments} from './bambuProfiles.js';
 import { norm } from "./colour.js";
 import * as paint from "./paint.js";
 import { SLOTS, arrange, bijectionProblem, completeRule, isIdentity, conversionPalette }
@@ -1785,6 +1786,7 @@ function sourceSettingMetadata(project, objectId, target = "bambu", options = {}
     return `<metadata key="layer_height" value="${resolveLayerHeight(source,options.u1Profile.match,options.layerHeight).height}"/>`;
   }
   const report = transferSettings(source, target, { object: true, baseline: options.u1Profile?.cfg });
+  if (target === 'bambu' && options.bambuSetup) validateBambuLayers(report.values, options.bambuSetup);
   if (target === 'snapmaker' && options.u1Profile) constrainLayers(report.values, options.u1Profile.match);
   if (target==='snapmaker' && options.layerHeight) report.values.layer_height=String(resolveLayerHeight(source,options.u1Profile.match,options.layerHeight).height);
   if (target === "snapmaker" && painted && options.supportMode !== "off"
@@ -1942,6 +1944,7 @@ export function convertProject(project, plateId, objectIds, options = {}) {
   const {physical,mapping,slots} = conversionPalette({...project,filamentUsage:options.removeUnused ? conversionUsage(project) : null},options);
   return exportProject(project, plateId, objectIds, {
     target: options.target,
+    bambuSetup: options.bambuSetup || null,
     physical,
     mapping,
     recipes: [],
@@ -1970,6 +1973,8 @@ export function convertProject(project, plateId, objectIds, options = {}) {
  */
 export function exportProject(project, plateId, objectIds, options) {
   const target = normaliseTarget(options.target);
+  if (target === 'bambu' && options.bambuSetup) options = {...options,
+    layout:{copies:1,spacing:5,...options.layout,...options.bambuSetup.bed}};
   // `physical` overrides the four reels for a source-preserving export: the file's
   // own colours become slots 1..4 instead of the loaded ones.
   // A *conversion* keeps every logical filament the source has; the recolour
@@ -1980,7 +1985,7 @@ export function exportProject(project, plateId, objectIds, options) {
   // centres the model on their real bed (the non-project import path).
   // Negative volumes need native project metadata, not the colour-model import.
   const negative = hasNegativeVolumes(project, objectIds || eligibleObjects(project, plateId));
-  const standard = convert && target === "bambu" && !negative && !(options.physical || []).some(r=>r.profile);
+  const standard = convert && target === "bambu" && !options.bambuSetup && !negative && !(options.physical || []).some(r=>r.profile);
   if (negative && target === 'prusa') throw new ProjectError('This selection contains negative cutout volumes. Prusa multi-volume export is not supported yet; choose Snapmaker Orca, Bambu Studio or OrcaSlicer to preserve them.');
   const reels = options.physical || options.reels || [];
   if (convert) {
@@ -2301,7 +2306,7 @@ export function exportProject(project, plateId, objectIds, options) {
     }
     const preserved = preserve
       ? sourceSettingMetadata(project, sourceId, target, options, paintedByObject.get(sourceId)) : "";
-    if (standard) exportedObjectSettings.push({ name: root.name, values: Object.fromEntries(
+    if (standard || options.bambuSetup) exportedObjectSettings.push({ name: root.name, values: Object.fromEntries(
       [...preserved.matchAll(/<metadata\b([^>]*)\/>/g)].map(m => [attr(m[1], 'key'), attr(m[1], 'value')])) });
     settings.push(`<object id="${root.id}"><metadata key="name" value="${esc(root.name)}"`
       + `/>${extruderOf(root.parts[0] ? root.parts[0].extruder : 1)}${preserved}`
@@ -2447,11 +2452,21 @@ export function exportProject(project, plateId, objectIds, options) {
     } else {
       // OrcaSlicer reads Bambu Studio's project schema; only the application name
       // and the label differ.
-      const cfg = bambuConfig(table.physical, reelTypes, recipes);
-      const filamentReport=applyFilamentProfiles(cfg,reels);
+      const cfg = target === 'bambu' && options.bambuSetup
+        ? nativeBambuConfig(options.bambuSetup, table.physical, reelTypes, project.sourceSettings, options.preserveSourceSettings)
+        : bambuConfig(table.physical, reelTypes, recipes);
+      const filamentReport=target === 'bambu' && options.bambuSetup
+        ? applyNativeBambuFilaments(cfg,reels) : applyFilamentProfiles(cfg,reels);
       for(const key of filamentReport.keys) if(recipes.length && cfg[key].length===reels.length)
         cfg[key]=cfg[key].concat(recipes.map(r=>cfg[key][r.a-1]));
       settingNotes={materials:cfg.filament_settings_id.slice(),notes:filamentReport.notes};
+      if(target === 'bambu' && options.bambuSetup) {
+        settingNotes = {...settingNotes, format:'native-project', printer:cfg.printer_settings_id,
+          profile:cfg.print_settings_id, objects:exportedObjectSettings};
+        filamentReport.keys.forEach(key => {
+          for(let i=0;i<reels.length;i++) cfg.different_settings_to_system[i+1] += ';'+key;
+        });
+      }
       members.set(SRC_BBL_PROJECT, encoder.encode(JSON.stringify(cfg, null, 4)));
       spec = { cfg };
     }
@@ -2528,7 +2543,7 @@ export function exportProject(project, plateId, objectIds, options) {
       problemsOut.push("the colour group the facets reference is missing");
     }
   }
-  if (target !== "snapmaker" && spec) {
+  if (target !== "snapmaker" && spec && !(target === "bambu" && options.bambuSetup)) {
     const cfg = spec.cfg;
     MACHINE_KEYS.forEach((key) => {
       if (key in cfg) problemsOut.push(`${key} would leak a U1 setting into a foreign `

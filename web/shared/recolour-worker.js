@@ -458,6 +458,7 @@ self.onmessage = async (event) => {
                                                || null,
                                              title: message.title,
                                              layout: message.layout || null,
+                                             bambuSetup: message.bambuSetup || null,
                                              preserveSourceSettings:
                                                message.preserveSourceSettings === true,
                                              carrySettings:

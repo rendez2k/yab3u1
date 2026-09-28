@@ -281,6 +281,23 @@ await ok("U1 margin includes print additions, partial grids and no tower", () =>
   assert.equal(planLayout(oversized,{width:270,depth:270}).blocked,false);
 });
 
+await ok('Bambu hardware cutouts and tower strips stay empty for group and object packing', () => {
+  const cutout={min:[0,0],max:[18,28]};
+  const bounds={min:[0,0,0],max:[55,40,12]};
+  for(const tower of [true,false]) for(const arrangement of ['group','objects']) {
+    const options={width:256,depth:256,copies:64,spacing:5,tower,arrangement,
+      keepoutBoxes:[cutout],centre:[128,128],footprints:[{objectId:'1',bounds}]};
+    const plan=planLayout(bounds,options);
+    assert.equal(plan.blocked,false);
+    const points=arrangement==='group' ? layoutOffsets(bounds,plan,options.centre) : plan.placements.map(p=>p.offset);
+    for(const [x,y] of points) {
+      assert.ok(!(x<18 && x+55>0 && y<28 && y+40>0));
+      assert.ok(x>= (tower?25:0)-1e-6 && x+55 <=256-(tower?25:0)+1e-6);
+    }
+  }
+  assert.equal(planLayout({min:[0,0,0],max:[172,138,43]}, {width:256,depth:256,tower:true,keepoutBoxes:[cutout]}).blocked,false);
+});
+
 if (failures.length) {
   console.error(`\n${failures.length} layout check(s) failed`);
   process.exitCode = 1;

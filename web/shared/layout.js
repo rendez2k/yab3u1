@@ -12,6 +12,8 @@ export const TOWER_RESERVE_PER_SIDE = 25;
 
 /** U1 exports include a machine profile; other targets use an editable area. */
 export function targetLayout(target, options = {}) {
+  const {keepoutBoxes, ...portableOptions} = options;
+  options = portableOptions;
   if (target === "snapmaker") return { ...options, width: 270, depth: 270,
     edgeMargin: 4, maxHeight: 270.05, centre: [135.5, 136],
     // Local bed coordinates. Allows for the U1 baseline tower at (13, 211),
@@ -71,8 +73,9 @@ export function layoutCapacity(size, options = {}) {
   const spacing = Math.max(0, Number(options.spacing) || 0);
   const width = Math.max(1, Number(options.width) || 1);
   const depth = Math.max(1, Number(options.depth) || 1);
-  const corner = options.tower && options.towerBox;
-  const reserve = options.tower && !corner
+  const obstacles = [...(options.keepoutBoxes || []), ...(options.tower && options.towerBox ? [options.towerBox] : [])];
+  const corner = obstacles.length ? obstacles : null;
+  const reserve = options.tower && !options.towerBox
     ? 2 * (Number(options.towerReserve) || TOWER_RESERVE_PER_SIDE) : 0;
   const edgeMargin = Math.max(0, Number(options.edgeMargin) || 0);
   const usableWidth = width - reserve - 2 * edgeMargin;
@@ -83,8 +86,9 @@ export function layoutCapacity(size, options = {}) {
   // file.  Zero columns/rows mean exactly that.
   const safeColumns = Math.max(0, Math.min(columns, 64));
   const safeRows = Math.max(0, Math.min(rows, 64));
-  const cells = corner ? insetCornerCells(size, width, depth, safeColumns, safeRows,
-                                    spacing, corner, edgeMargin) : null;
+  const cells = corner ? insetCornerCells(size, width - reserve, depth, safeColumns, safeRows,
+    spacing, corner.map(b=>({min:[b.min[0]-reserve/2,b.min[1]],max:[b.max[0]-reserve/2,b.max[1]]})), edgeMargin)
+    .map(([x,y])=>[x+reserve/2,y]) : null;
   return {
     columns: safeColumns,
     rows: safeRows,
@@ -100,7 +104,7 @@ export function layoutCapacity(size, options = {}) {
 
 // Keep the tower in bed coordinates while packing inside the edge clearance.
 function insetCornerCells(size, width, depth, columns, rows, spacing, box, margin) {
-  const shifted = { min: box.min.map(v => v - margin), max: box.max.map(v => v - margin) };
+  const shifted = (Array.isArray(box) ? box : [box]).map(b=>({ min: b.min.map(v => v - margin), max: b.max.map(v => v - margin) }));
   return cornerCells(size, width - 2 * margin, depth - 2 * margin,
     columns, rows, spacing, shifted).map(([x, y]) => [x + margin, y + margin]);
 }
@@ -113,7 +117,7 @@ function cornerCells(size, width, depth, columns, rows, spacing, box) {
                  rows * size[1] + (rows - 1) * spacing];
   const candidates = (limit, span, axis) => [...new Set([
     (limit - span) / 2, 0, limit - span,
-    box.min[axis] - spacing - span, box.max[axis] + spacing,
+    ...box.flatMap(b=>[b.min[axis] - spacing - span, b.max[axis] + spacing]),
   ].filter((v) => v >= -1e-7 && v + span <= limit + 1e-7))];
   let best = [], bestDistance = Infinity;
   for (const x of candidates(width, block[0], 0)) {
@@ -123,10 +127,10 @@ function cornerCells(size, width, depth, columns, rows, spacing, box) {
         for (let col = 0; col < columns; col += 1) {
           const left = x + col * (size[0] + spacing);
           const bottom = y + row * (size[1] + spacing);
-          if (left + size[0] > box.min[0] - spacing + 1e-7
-              && left < box.max[0] + spacing - 1e-7
-              && bottom + size[1] > box.min[1] - spacing + 1e-7
-              && bottom < box.max[1] + spacing - 1e-7) continue;
+          if (box.some(b=>left + size[0] > b.min[0] - spacing + 1e-7
+              && left < b.max[0] + spacing - 1e-7
+              && bottom + size[1] > b.min[1] - spacing + 1e-7
+              && bottom < b.max[1] + spacing - 1e-7)) continue;
           cells.push([left + size[0] / 2, bottom + size[1] / 2]);
         }
       }
@@ -165,9 +169,11 @@ export function planLayout(bounds, options = {}) {
   if (cells && copies > 0 && copies < grid.capacity) {
     // Try a compact block for a partial plate, keeping a single copy centred.
     const columns = Math.min(grid.columns, copies);
-    const compact = insetCornerCells(size, Number(options.width), Number(options.depth),
+    const compact = insetCornerCells(size, Number(options.width)-grid.reserve, Number(options.depth),
       columns, Math.ceil(copies / columns), Math.max(0, Number(options.spacing) || 0),
-      options.towerBox, grid.edgeMargin);
+      [...(options.keepoutBoxes || []), ...(options.tower && options.towerBox ? [options.towerBox] : [])]
+        .map(b=>({min:[b.min[0]-grid.reserve/2,b.min[1]],max:[b.max[0]-grid.reserve/2,b.max[1]]})), grid.edgeMargin)
+      .map(([x,y])=>[x+grid.reserve/2,y]);
     if (compact.length >= copies) cells = compact;
   }
   return {
@@ -280,8 +286,7 @@ function packRectangles(items, options) {
       && s.x <= r.x && s.y <= r.y && s.x+s.w >= r.x+r.w && s.y+s.h >= r.y+r.h
       && (j < i || s.x !== r.x || s.y !== r.y || s.w !== r.w || s.h !== r.h)));
   }
-  if (options.tower && options.towerBox) {
-    const b = options.towerBox;
+  for (const b of [...(options.keepoutBoxes || []), ...(options.tower && options.towerBox ? [options.towerBox] : [])]) {
     occupy({x:b.min[0]-gap,y:b.min[1]-gap,w:b.max[0]-b.min[0]+gap*2,h:b.max[1]-b.min[1]+gap*2});
   }
   const placed = [];

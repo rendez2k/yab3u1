@@ -50,6 +50,8 @@ PUBLIC_FILES = (
     "assets/yab3d-mark.png",
     "shared/assignment.js",
     "shared/bambuImportGuide.js",
+    "shared/bambuProfiles.js",
+    "shared/bambuPrinterPicker.js",
     "shared/batchSession.js",
     "shared/batchZipWorker.js",
     "shared/bundle.js",
