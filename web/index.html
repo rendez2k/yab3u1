@@ -179,48 +179,11 @@
     color: var(--log-fg);
   }
   .err { color: var(--bad); }
-  /* Loading / working indicator.
-     Ported from the React + styled-components original (components/ui/loader-4):
-     styled-components only hosted the stylesheet, so the 3x3 ripple needs no
-     dependency and no build step here. Cell size is turned down from 52px so it
-     sits inline with the log rather than dominating the card. */
-  .busy { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
-  .ripple-loader {
-    --cell-size: 9px;
-    --cell-spacing: 1px;
-    --cells: 3;
-    --total-size: calc(var(--cells) * (var(--cell-size) + 2 * var(--cell-spacing)));
-    display: flex; flex-wrap: wrap;
-    width: var(--total-size); height: var(--total-size);
-    flex: 0 0 auto;
-  }
-  .ripple-loader .cell {
-    flex: 0 0 var(--cell-size);
-    margin: var(--cell-spacing);
-    background-color: transparent;
-    box-sizing: border-box;
-    border-radius: 2px;
-    animation: ripple 1.5s ease infinite;
-  }
-  .ripple-loader .cell.d-1 { animation-delay: 100ms; }
-  .ripple-loader .cell.d-2 { animation-delay: 200ms; }
-  .ripple-loader .cell.d-3 { animation-delay: 300ms; }
-  .ripple-loader .cell.d-4 { animation-delay: 400ms; }
-  .ripple-loader .cell:nth-child(1) { --cell-color: #00FF87; }
-  .ripple-loader .cell:nth-child(2) { --cell-color: #0CFD95; }
-  .ripple-loader .cell:nth-child(3) { --cell-color: #17FBA2; }
-  .ripple-loader .cell:nth-child(4) { --cell-color: #23F9B2; }
-  .ripple-loader .cell:nth-child(5) { --cell-color: #30F7C3; }
-  .ripple-loader .cell:nth-child(6) { --cell-color: #3DF5D4; }
-  .ripple-loader .cell:nth-child(7) { --cell-color: #45F4DE; }
-  .ripple-loader .cell:nth-child(8) { --cell-color: #53F1F0; }
-  .ripple-loader .cell:nth-child(9) { --cell-color: #60EFFF; }
-  @keyframes ripple {
-    0% { background-color: transparent; }
-    30% { background-color: var(--cell-color); }
-    60% { background-color: transparent; }
-    100% { background-color: transparent; }
-  }
+  [data-busy="true"]::before { content: ""; display: inline-block; width: 26px; height: 26px; margin-right: 9px; vertical-align: middle; border-radius: 50%;
+    background: radial-gradient(circle at 28% 22%, #ffffffdd, transparent 34%), radial-gradient(circle at 68% 68%, #54c8de, transparent 58%), conic-gradient(#b1f439, #74dbaa, #82cfeb, #b1f439);
+    box-shadow: inset -2px -3px 5px #256b7833, 0 2px 9px #84d99144; animation: orb-drift 2.8s ease-in-out infinite; }
+  @keyframes orb-drift { 0%,100% { transform: rotate(0deg) scale(.92); border-radius: 48% 52% 50% 50%; } 50% { transform: rotate(180deg) scale(1); border-radius: 52% 48% 45% 55%; } }
+  @media (prefers-reduced-motion: reduce) { [data-busy="true"]::before { animation: none; } }
   a.save {
     display: inline-flex; align-items: center; gap: 9px; margin-top: 14px;
     padding: 13px 22px; border-radius: 14px; font-size: 15px; font-weight: 600;

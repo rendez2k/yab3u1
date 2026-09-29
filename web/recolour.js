@@ -28,7 +28,7 @@ import { mountCalibration } from './shared/calibrationPanel.js';
 import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } from './shared/supportInterface.js';
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 
-const VERSION = "2.6.18-review";
+const VERSION = "2.6.19-review";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -589,6 +589,7 @@ function resetForUpload() {
   state.geometryId = null;
   state.loading = false;
   state.exporting = false;
+  for (const id of ['exportlog','actionstatus','previewnote','preparestatus']) $(id).dataset.busy='false';
   state.assessedKey = "";          // a new file needs a new assessment
   const review = $("review");
   if (review) review.checked = false;
@@ -1037,6 +1038,7 @@ let previewToken = 0;
 
 async function refreshPreview() {
   const token = (previewToken += 1);
+  $('previewnote').dataset.busy='false';
   const canvas = $("preview");
   if (!state.preview) {
     state.preview = new Preview(canvas);
@@ -1066,6 +1068,8 @@ async function refreshPreview() {
     const id=100000+row.source; mapping[row.source]=id; table[id]='#FF00FF';
   }
   let soup;
+  $('previewnote').dataset.busy='true';
+  $('previewnote').textContent='Updating the preview…';
   try {
     soup = await background().preview(state.plateId, state.objects,
                                       state.previewMode, table, mapping,
@@ -1084,6 +1088,8 @@ async function refreshPreview() {
     $("previewnote").innerHTML = ` the preview could not be drawn: ${esc(error.message)}`;
     window.__preview = { mode: state.previewMode, triangles: 0, error: error.message };
     return;
+  } finally {
+    if (token === previewToken) $('previewnote').dataset.busy='false';
   }
   const geometry = `${state.plateId}|${state.objects.join(",")}|${JSON.stringify(state.layout)}`;
   const fit = geometry !== state.previewGeometry;
@@ -1179,6 +1185,8 @@ function renderActionBar(blocking,needsReview) {
   $('mainaction').textContent=state.exporting?'Preparing download…':({apply:'Apply palette',settings:'Check export settings',review:'Review & download',download:'Download project'})[action];
   $('mainaction').disabled=Boolean(state.loading || state.exporting);
   $('actionstatus').textContent=state.exporting?'Writing your project…':apply?'Previewing a suggestion':blocking?'Export needs attention':needsReview&&!state.reviewed?'Review the colour changes before downloading':`${$('spectrumcopies').value} ${Number($('spectrumcopies').value)===1?'copy':'copies'} · Ready to download`;
+  $('actionstatus').dataset.busy=String(Boolean(state.exporting));
+  $('exportlog').dataset.busy=String(Boolean(state.exporting));
 }
 
 // ------------------------------------------------------------------ export ----
@@ -1359,6 +1367,7 @@ function cancelPlan() {
   planEpoch++;
   if (planWorker) planWorker.terminate();
   planWorker = null;
+  $('gcodemember').dataset.busy='false';
   $("planbutton").disabled = false;
   $("swapexport").disabled = false;
   $("plancancel").classList.add("hidden");
@@ -1378,6 +1387,7 @@ async function planChanges(action = planAction) {
   if (!file) { $("gcodemember").textContent = "Choose a sliced file first."; return; }
   const member = $("gcodememberlist").value || "";
   $("gcodemember").textContent = action === "export" ? "Checking the U1 slice, remapping tools and verifying pauses…" : "Reading the sliced toolpaths…";
+  $('gcodemember').dataset.busy='true';
   $("planbutton").disabled = $("swapexport").disabled = true;
   $("plancancel").classList.remove("hidden");
   const worker = planWorker = new Worker(new URL("./shared/swapWorker.js", import.meta.url), {type:"module"});
@@ -1385,6 +1395,7 @@ async function planChanges(action = planAction) {
     worker.terminate();
     if (epoch !== planEpoch) return false;
     planWorker = null;
+    $('gcodemember').dataset.busy='false';
     $("planbutton").disabled = $("swapexport").disabled = false;
     $("plancancel").classList.add("hidden");
     return true;
@@ -1439,6 +1450,7 @@ $("prepareswaps").addEventListener("click", async () => {
   const button = $("prepareswaps"), status = $("preparestatus");
   button.disabled = true;
   status.textContent = "Preparing the original colours for slicing…";
+  status.dataset.busy='true';
   try {
     const chosenObjects = state.objects.slice();
     const rendered = await background().thumbnail(plate, chosenObjects, paletteOf(null, "original"), null,
@@ -1451,7 +1463,7 @@ $("prepareswaps").addEventListener("click", async () => {
     download(new Blob([built.bytes], {type:"application/octet-stream"}),
       (state.project.title || "model").replace(/[^\w.-]+/g,"-") + "-U1-SLICE-ONLY.3mf", status);
   } catch (error) { if (epoch === state.epoch) status.textContent = error.message; }
-  finally { if (epoch === state.epoch) button.disabled = state.target !== "snapmaker"; }
+  finally { if (epoch === state.epoch) { status.dataset.busy='false'; button.disabled = state.target !== "snapmaker"; } }
 });
 
 function linkFor(blob, filename, label) {

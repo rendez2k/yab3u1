@@ -22,7 +22,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.18-review";
+const VERSION = "2.6.19-review";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -221,6 +221,7 @@ let cancelModelTransfer = () => {};
 const session = new ConvertSession(() => new RecolourWorker(), {
   status: (text) => setStatus(text),
   cleared: () => {
+    $('convertstatus').dataset.busy='true';
     cancelModelTransfer();
     $('transferstatus').textContent = '';
     clearError();
@@ -267,8 +268,10 @@ const session = new ConvertSession(() => new RecolourWorker(), {
     if(file && /colour group|colours.*at most|per-corner colours/.test(message))textureImporter.open(file);
   },
   busy: (busy) => {
+    $('convertstatus').dataset.busy=String(busy);
     syncLayout();
   },
+  settled: () => { $('convertstatus').dataset.busy='false'; },
   progress: (progress) => {
     window.__convertProgress = { stage: progress.stage, ms: progress.ms };
   },
