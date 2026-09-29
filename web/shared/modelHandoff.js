@@ -12,6 +12,9 @@ export function receiveModel({host=window, mount, canReceive, load}) {
     purpose: params.get('purpose') === 'reel-changes' ? 'reel-changes' : 'blends',
     target: ['snapmaker','bambu','prusa'].includes(params.get('target')) ? params.get('target') : 'snapmaker',
     plateId: params.get('plate'),
+    supportInterface:params.get('interface')==='petg' && params.get('target')==='snapmaker',
+    interfaceSlot: /^[1-4]$/.test(params.get('interfaceSlot')||'') ? Number(params.get('interfaceSlot')) : 4,
+    interfaceColor: /^#[0-9a-f]{6}$/i.test(params.get('interfaceColor')||'') ? params.get('interfaceColor') : '#FFFFFF',
   } : {};
   const note = host.document.createElement('p');
   note.setAttribute('data-model-handoff', '');
@@ -68,11 +71,15 @@ export function receiveModel({host=window, mount, canReceive, load}) {
 }
 
 /** Same-origin tab transfer. Bytes stay in memory; the original is never mutated. */
-export function sendModel({file, displayName, target='snapmaker', plateId, purpose='blends', host=window, status=()=>{}}) {
+export function sendModel({file, displayName, target='snapmaker', plateId, purpose='blends', supportInterface=false, interfaceSlot=4, interfaceColor='#FFFFFF', host=window, status=()=>{}}) {
   if (!file || file.size > MAX_MODEL_BYTES) { status('Choose a 3MF project up to 96 MB first.'); return () => {}; }
   const token = Array.from(host.crypto.getRandomValues(new Uint8Array(16)), n=>n.toString(16).padStart(2,'0')).join('');
   const url = new URL('recolour.html', host.location.href);
   url.hash = new URLSearchParams({'yab3d-model':token, sender:host.location.origin, target, purpose, plate:String(plateId ?? '')}).toString();
+  if(supportInterface && target==='snapmaker') {
+    const hash=new URLSearchParams(url.hash.slice(1));
+    hash.set('interface','petg'); hash.set('interfaceSlot',String(interfaceSlot)); hash.set('interfaceColor',interfaceColor); url.hash=hash.toString();
+  }
   // Must happen synchronously during the user's click, before reading the file.
   const popup = host.open(url.href, '_blank');
   if (!popup) { status('Allow this site to open a new tab, then try again.'); return () => {}; }

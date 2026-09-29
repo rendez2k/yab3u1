@@ -3,6 +3,23 @@
 export const interfaceSlot = reels => reels.findIndex(r=>r.role==='support-interface')+1;
 export const modelSlots = reels => reels.flatMap((r,i)=>r.role==='support-interface' ? [] : [i+1]);
 
+/** Compact the deliberately merged model palette, then reserve a physical input. */
+export function interfaceConversion(plan, slot=4, color='#FFFFFF') {
+  if(!Number.isInteger(slot) || slot<1 || slot>4) throw Error('Choose PETG slot 1–4.');
+  const used=[...new Set(plan.occupiedSlots)].sort((a,b)=>a-b);
+  if(used.length>3) throw Error(`Merge ${used.length-3} more model colour${used.length-3===1?'':'s'}, or use Full Spectrum, to leave one input for PETG.`);
+  if(!used.length || used.some(id=>String(plan.physical[id-1]?.type).toUpperCase()!=='PLA'))
+    throw Error('PETG support interfaces require PLA model filaments.');
+  if(!/^#[0-9a-f]{6}$/i.test(color)) throw Error('Choose a valid PETG reel colour.');
+  const destinations=[1,2,3,4].filter(id=>id!==slot);
+  const remap=new Map(used.map((id,i)=>[id,destinations[i]]));
+  const physical=Array.from({length:4},()=>({...plan.physical[used[0]-1],role:undefined}));
+  used.forEach(id=>physical[remap.get(id)-1]={...plan.physical[id-1],role:undefined});
+  physical[slot-1]={color:color.toUpperCase(),type:'PETG',name:'PETG interface',role:'support-interface'};
+  const mapping=Object.fromEntries(Object.entries(plan.mapping).filter(([,id])=>remap.has(id)).map(([source,id])=>[source,remap.get(id)]));
+  return {...plan,physical,mapping,occupiedSlots:[...remap.values(),slot].sort((a,b)=>a-b)};
+}
+
 export function interfacePalette(reels, enabled) {
   if (!enabled) return reels;
   const reserved=interfaceSlot(reels) || reels.findIndex(r=>String(r.type).toUpperCase()==='PETG')+1 || 4;

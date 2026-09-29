@@ -22,7 +22,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.14";
+const VERSION = "2.6.17-review";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -35,6 +35,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "Optional PETG support: deliberately merge model colours to free a U1 input, or carry the original into Full Spectrum for three PLA colours and PETG interfaces. Experimental; review a small sliced test.",
   "Choose a Bambu printer and nozzle for a native project with its official profiles, exact filament list, painting and compatible designer settings. Colour-model import remains available as an explicit alternative.",
   "Bambu import now shows how to reuse existing filaments without duplicates, plus the layer height and supports actually exported for each object.",
   "Bambu colour import: removed a conflicting native-project marker that made Bambu skip painted colours and its colour-mapping dialogue.",
@@ -441,6 +442,7 @@ const labelFor = (key) => SETTING_LABELS[key] || key.replace(/_/g, " ");
 
 /** The sentence for the support control, describing what the export will really do. */
 function supportSentence(source, state) {
+  if (session.supportInterface) return `Supports on, with PETG interfaces in slot ${session.interfaceSlot}: three contact layers and zero Z gap. Review these experimental settings after slicing.`;
   const painted = Boolean(state && state.supportsPainted);
   const support = supportOf(source);
   if (session.supportMode === "off") {
@@ -482,23 +484,26 @@ function syncSettings() {
   session.profileError='';
   $('u1nozzle').value=session.u1Nozzle;
   try {
-    if (isU1 && state) profile=buildU1Profile(state.sourceSettings, session.activeColourIds().map(id=>state.types[id-1] || 'PLA'), session.u1Nozzle, {carry:enabled});
+    if (isU1 && state) profile=buildU1Profile(state.sourceSettings, session.supportInterface ? ['PLA','PLA','PLA','PETG'] : session.activeColourIds().map(id=>state.types[id-1] || 'PLA'), session.u1Nozzle, {carry:enabled});
     $('u1profilenote').textContent=profile ? profileDescription(profile) : '';
   } catch(error) { session.profileError=error.message; $('u1profilenote').textContent=error.message; }
   const report = transferSettings(source, session.target, { object: !isU1, baseline:profile?.cfg });
   if(profile) report.skipped.push(...constrainLayers(report.values,profile.match));
+  if(session.supportInterface) Object.assign(report.values,{enable_support:'1',support_interface_filament:String(session.interfaceSlot),support_interface_top_layers:'3',support_interface_bottom_layers:'3',support_top_z_distance:'0',support_bottom_z_distance:'0'});
   const applied = enabled ? Object.entries(report.values).map(([key, value]) => ({ key, value })) : [];
+  $("layouttower").disabled=session.supportInterface;
   $("carrysettings").checked = session.carrySettings;
   $("preservesettings").checked = session.preserveSourceSettings;
   $("preservesettings").disabled = false;
   $("supportmode").value = session.supportMode;
+  $("supportmode").disabled = session.supportInterface;
   $("u1settings").classList.toggle("hidden", !isU1);
   $("bambukeep").classList.toggle("hidden", isU1);
   $("sourcesettings").textContent = enabled
     ? `Carrying ${applied.length} compatible print settings, including quality, strength and support settings.`
       + (objects.length > 1 ? " Details below describe the first object; each object's overrides are exported separately." : "")
       + (isU1 ? ` ${supportSentence(source, state)}` : " Object overrides are retained. In the slicer, choose Objects, select a model, then Support or Quality.")
-    : "The destination's print settings will be used.";
+    : "The destination's print settings will be used." + (session.supportInterface ? ` ${supportSentence(source, state)}` : "");
   $("settinglist").innerHTML = (applied.length ? "<ul>" + applied.map(({key,value}) =>
     `<li>${esc(labelFor(key))}: ${esc(valueWithUnit(key,value))}</li>`).join("") + "</ul>" : "")
     + (enabled && report.skipped.length ? `<p>Not transferred to this target: ${report.skipped.map(k => esc(labelFor(k))).join(", ")}.</p>` : "")
@@ -622,6 +627,7 @@ function syncMode() {
   const mode = session.assignmentMode === REPAINT ? REPAINT : SLOTS;
   document.querySelectorAll('input[name="assignmentmode"]').forEach((node) => {
     node.checked = node.value === mode;
+    node.disabled=session.supportInterface && node.value==='slots';
   });
   const hint = $("convertmaphint");
   if (hint) hint.textContent = session.physicalSlots()
@@ -688,6 +694,7 @@ function syncRule() {
 }
 
 function syncCapacity() {
+  syncInterface();
   const check = session.capacityStatus(), select = $('printerinputs');
   const u1 = session.target === 'snapmaker';
   const changedTarget = select.dataset.target !== session.target;
@@ -699,7 +706,7 @@ function syncCapacity() {
   }
   $('custominputfield').hidden = select.value !== 'custom';
   $('custominputs').setAttribute('aria-invalid', String(Boolean(session.capacityError)));
-  $('capacitystatus').textContent = session.capacityError || `${check.needed} project filaments · `
+  $('capacitystatus').textContent = check.problem || session.capacityError || `${check.needed} project filaments · `
     + (check.capacity == null ? 'printer capacity not specified' : `${check.capacity} physical inputs`)
     + (check.excess ? ` · ${check.excess} extra need a solution` : check.outsideSlots ? ' · move colours into slots 1–4' : '');
   $('capacitystatus').classList.toggle('err', Boolean(session.capacityError));
@@ -708,7 +715,7 @@ function syncCapacity() {
       : check.unresolved ? 'Choose a colour solution below, or explicitly keep the project for further setup.'
       : 'The filament count fits. This checks input capacity; it does not validate a sliced print.')
     + (check.reserved ? ` ${check.reserved} numbered entries are retained for source settings.` : '');
-  $('capacityoptions').hidden = !check.unresolved;
+  $('capacityoptions').hidden = !check.unresolved || session.supportInterface;
   if (check.unresolved && !session._capacityWasUnresolved) $('capacityoptions').open = true;
   session._capacityWasUnresolved = check.unresolved;
   $('capacitykeep').checked = check.acknowledged;
@@ -735,10 +742,44 @@ $('capacityrepaint').addEventListener('click', () => {
   $('convertmap').scrollIntoView({block:'center'});
   document.querySelector('#convertmap select')?.focus();
 });
+function syncMergePreview() {
+  const from=Number($('mergefrom').value),to=Number($('mergeto').value),colours=session.state?.colours||[];
+  $('mergeapply').disabled=!from||!to||from===to;
+  const chip=id=>`<i class="swatch" style="background:${esc(colours[id-1])}"></i>${esc(swatchLabel(colours[id-1]))}`;
+  $('mergepreview').innerHTML=from&&to ? `${chip(from)} → ${chip(to)}. Both regions will print in the replacement colour.` : '';
+}
+function syncInterface() {
+  $('petgsupport').hidden=session.target!=='snapmaker';
+  $('convertpetg').checked=session.supportInterface;
+  $('petgchoices').hidden=!session.supportInterface;
+  if(!session.supportInterface||!session.state)return;
+  $('petgslot').value=String(session.interfaceSlot); $('petgcolor').value=session.interfaceColor;
+  const ids=[...new Set(session.activeColourIds().map(id=>session.rule[id]||id))].sort((a,b)=>a-b);
+  for(const id of ['mergefrom','mergeto']) {
+    const select=$(id),old=select.value;
+    select.innerHTML=ids.map(n=>`<option value="${n}">${n} · ${esc(swatchLabel(session.state.colours[n-1]))}</option>`).join('');
+    if(ids.includes(Number(old)))select.value=old;
+  }
+  if($('mergefrom').value===$('mergeto').value && ids.length>1)$('mergeto').value=String(ids[1]);
+  $('petgmerge').hidden=ids.length<=3; syncMergePreview();
+  try {
+    const plan=session.conversionPlan();
+    $('petgstatus').textContent=`${ids.length} PLA model colours + PETG in slot ${session.interfaceSlot}. ${ids.length<3?'No merge needed. ':''}The preview shows the colours chosen for export.`;
+    $('petgslots').innerHTML=plan.physical.map((r,i)=>`<span><i class="swatch" style="background:${esc(r.color)}"></i>Slot ${i+1} · ${r.role==='support-interface'?'PETG interface':plan.occupiedSlots.includes(i+1)?esc(colourName(r.color))+' · PLA':'Unused PLA entry'}</span>`).join('');
+  } catch(error) {$('petgstatus').textContent=error.message;$('petgslots').replaceChildren();}
+}
+$('convertpetg').addEventListener('change',()=>session.setInterface($('convertpetg').checked));
+$('petgslot').addEventListener('change',()=>session.setInterface(true,Number($('petgslot').value)));
+$('petgcolor').addEventListener('input',()=>session.setInterface(true,session.interfaceSlot,$('petgcolor').value));
+['mergefrom','mergeto'].forEach(id=>$(id).addEventListener('change',syncMergePreview));
+$('mergeapply').addEventListener('click',()=>session.mergeColours(Number($('mergefrom').value),Number($('mergeto').value)));
+$('petgfullspectrum').addEventListener('click',()=>openColourWorkflow('blends'));
+
 function openColourWorkflow(purpose) {
   cancelModelTransfer();
   cancelModelTransfer = sendModel({file:session.sourceFile, displayName:session.state?.displayName,
     target:session.target, plateId:session.state?.plateId, purpose,
+    supportInterface:session.supportInterface, interfaceSlot:session.interfaceSlot, interfaceColor:session.interfaceColor,
     status:message=>$('transferstatus').textContent=message});
 }
 $('capacityblend').addEventListener('click', () => openColourWorkflow('blends'));

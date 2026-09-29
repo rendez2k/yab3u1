@@ -74,6 +74,7 @@ export class ConvertSession {
     // support decision follows the source until the user overrides it.
     this.carrySettings = true;
     this.supportMode = "auto";
+    this.supportInterface = false; this.interfaceSlot = 4; this.interfaceColor = "#FFFFFF";
     this.u1Nozzle = "auto";
     this.bambuSetup = null;
     this.bambuRequired = false;
@@ -97,12 +98,39 @@ export class ConvertSession {
     return this.state.colours.map((_,i)=>i+1).filter(id=>!usage || usage.kept.includes(id) || this.state.includeUnused.includes(id));
   }
 
+  interfaceOptions() {
+    return {supportInterface:this.supportInterface,interfaceSlot:this.interfaceSlot,interfaceColor:this.interfaceColor};
+  }
+
+  conversionPlan() {
+    return conversionPalette({colors:this.state.colours,types:this.state.types,filamentUsage:this.state.filamentUsage},
+      {target:this.target,mapping:this.rule,assignmentMode:this.assignmentMode,filamentProfiles:this.filamentProfiles,
+       removeUnused:Boolean(this.state.filamentUsage),includeUnused:this.state.includeUnused,...this.interfaceOptions()});
+  }
+
+  setInterface(enabled, slot=this.interfaceSlot, color=this.interfaceColor) {
+    this.supportInterface=Boolean(enabled) && this.target==='snapmaker';
+    this.interfaceSlot=Number(slot); this.interfaceColor=color;
+    if(this.supportInterface) {
+      this.assignmentMode=REPAINT;
+      if(this.supportMode==='off') this.supportMode='auto';
+      this.layout.tower=true;
+    }
+    this.invalidate(); this.hooks.mode?.(this.assignmentMode); this.hooks.rule?.(this.rule); this.hooks.settings?.();
+  }
+
+  mergeColours(from,to) {
+    if(!this.supportInterface || this.assignmentMode!==REPAINT || from===to) return false;
+    const destinations=new Set(this.activeColourIds().map(id=>this.rule[id]));
+    if(!destinations.has(from)||!destinations.has(to)) return false;
+    for(const id of Object.keys(this.rule)) if(this.rule[id]===from) this.rule[id]=to;
+    this.invalidate(); this.hooks.rule?.(this.rule); this.hooks.settings?.(); return true;
+  }
+
   printerPalette() {
     if (!this.state || this.target !== 'snapmaker' || this.state.mixtures?.length || this.capacityStatus().unresolved) return null;
     try {
-      const plan = conversionPalette({colors:this.state.colours,types:this.state.types,
-        filamentUsage:this.state.filamentUsage}, {target:this.target,mapping:this.rule,
-        assignmentMode:this.assignmentMode,removeUnused:Boolean(this.state.filamentUsage),includeUnused:this.state.includeUnused});
+      const plan = this.conversionPlan();
       if (!plan.occupiedSlots.length || plan.physical.length > 4) return null;
       return Array.from({length:4},(_,i)=>plan.occupiedSlots.includes(i+1) ? plan.physical[i] : null);
     } catch { return null; }
@@ -118,6 +146,12 @@ export class ConvertSession {
   }
 
   capacityStatus() {
+    if(this.supportInterface && this.state) {
+      const needed=new Set(this.activeColourIds().map(id=>this.rule[id]||id)).size;
+      let problem=''; try { this.conversionPlan(); } catch(error) { problem=error.message; }
+      return {needed:needed+1,capacity:4,excess:Math.max(0,needed-3),outsideSlots:false,
+        unresolved:Boolean(problem),blocked:Boolean(problem),acknowledged:false,reserved:0,problem};
+    }
     // Match the writer's conservative whole-project cleanup, including numbered
     // support/infill references. A repaint cannot remove those reserved entries.
     const reserved = this.state?.filamentUsage?.reservedThrough || 0;
@@ -186,9 +220,9 @@ export class ConvertSession {
     const ids = this.state?.plates.find(p => String(p.id) === String(this.state.plateId))?.objectIds;
     const objects = (this.state?.objectSettings || []).filter(o => !ids || ids.map(String).includes(String(o.id)));
     const sources = (objects.length ? objects : [{}]).map(o =>
-      ({ ...(this.state?.sourceSettings || {}), ...(o.settings || {}) }));
+      ({ ...(this.state?.sourceSettings || {}), ...(o.settings || {}), ...(this.supportInterface?{enable_support:"1"}:{}) }));
     return { ...targetLayout(this.target, this.layout), ...(this.target === 'bambu' && this.bambuSetup ? {...this.bambuSetup.bed, centre:[this.bambuSetup.bed.width/2,this.bambuSetup.bed.depth/2]} : {}), footprints:this.state?.footprints || [], ...planningAllowance(sources,
-      this.target, this.target === "snapmaker" ? this.carrySettings : this.preserveSourceSettings,
+      this.target, this.target === "snapmaker" ? this.carrySettings || this.supportInterface : this.preserveSourceSettings,
       this.supportMode, Boolean(this.state?.supportsPainted)) };
   }
 
@@ -201,7 +235,7 @@ export class ConvertSession {
    * revision bump -- an export still writing is discarded when it answers.
    */
   setAssignmentMode(mode) {
-    const next = normaliseMode(mode);
+    const next = this.supportInterface ? REPAINT : normaliseMode(mode);
     if (next === this.assignmentMode) return false;
     this.assignmentMode = next;
     this.invalidate();
@@ -261,6 +295,7 @@ export class ConvertSession {
       this.genericArea = { width: this.layout.width, depth: this.layout.depth };
     }
     this.target = target;
+    if(target!=='snapmaker') this.supportInterface=false;
     this.capacityError = "";
     this.keepAllSignature = null;
     if (target !== "snapmaker" && this.state && Object.values(this.rules[SLOTS]).some(id => !this.activeColourIds().includes(id))) {
@@ -531,6 +566,7 @@ export class ConvertSession {
       // page shows those values rather than an inherited override.
       this.carrySettings = true;
       this.supportMode = "auto";
+    this.supportInterface = false; this.interfaceSlot = 4; this.interfaceColor = "#FFFFFF";
     this.u1Nozzle = "auto";
     this.filamentProfiles = [];
       this.layoutProblem = "";
@@ -646,6 +682,7 @@ export class ConvertSession {
       preserveSourceSettings: this.preserveSourceSettings,
       carrySettings: this.carrySettings,
       supportMode: this.supportMode,
+      ...this.interfaceOptions(),
       u1Nozzle: this.u1Nozzle,
       bambuSetup: structuredClone(this.bambuSetup),
       filamentProfiles: structuredClone(this.filamentProfiles),
@@ -681,6 +718,9 @@ export class ConvertSession {
                                                   snapshot.title,
                                                   { thumbnails,
                                                     removeUnused: true,
+                                                    supportInterface:snapshot.supportInterface,
+                                                    interfaceSlot:snapshot.interfaceSlot,
+                                                    interfaceColor:snapshot.interfaceColor,
                                                     includeUnused: snapshot.includeUnused,
                                                     layout: snapshot.layout,
                                                     preserveSourceSettings:
@@ -698,12 +738,13 @@ export class ConvertSession {
       if (snapshot.target === 'bambu' && snapshot.bambuSetup && built.settings?.format !== 'native-project') {
         throw new Error('The export worker is out of date and did not include your Bambu printer. Refresh this page and convert again.');
       }
+      if(snapshot.supportInterface && !built.settings?.supportInterface) throw new Error('Refresh this page: the export worker did not include PETG interface settings.');
       const bytes = built.bytes instanceof Uint8Array ? built.bytes
         : new Uint8Array(built.bytes);
       const blob = new Blob([bytes], { type: TYPED_3MF });
       const entry = {
         url: this.urls.create(blob),
-        name: `${safeName(snapshot.title)}-${snapshot.target}${snapshot.capacity.unresolved ? '-setup-required' : ''}.3mf`,
+        name: `${safeName(snapshot.title)}-${snapshot.target}${snapshot.supportInterface?'-petg-interface':''}${snapshot.capacity.unresolved ? '-setup-required' : ''}.3mf`,
         target: snapshot.target,
         plateId: snapshot.plateId,
         mapping: snapshot.mapping,

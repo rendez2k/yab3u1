@@ -464,6 +464,9 @@ self.onmessage = async (event) => {
                                              carrySettings:
                                                message.carrySettings !== false,
                                              supportMode: message.supportMode || "auto",
+                                     supportInterface:Boolean(message.supportInterface),
+                                     interfaceSlot:message.interfaceSlot ?? 4,
+                                     interfaceColor:message.interfaceColor ?? "#FFFFFF",
                                              u1Nozzle: message.u1Nozzle || "auto",
                                              layerHeight: message.layerHeight || null,
                                              filamentProfiles: message.filamentProfiles || [],

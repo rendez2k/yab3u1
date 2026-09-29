@@ -1,10 +1,12 @@
+import {ConvertSession} from '../shared/convertSession.js';
+import {conversionPalette} from '../shared/assignment.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {interfaceDemoFile} from '../shared/supportInterfaceDemo.js';
 import {interfacePalette,INTERFACE_SETTINGS,interfaceSlot,validateInterfaceExport} from '../shared/supportInterface.js';
 import {recommendWorkflow} from '../shared/recommend.js';
 import {planBlends,mappingFromPlan,swapPaletteSlots,describeColourMapping} from '../shared/mix.js';
-import {readProject,analyse,exportProject} from '../shared/project.js';
+import {readProject,analyse,exportProject,convertProject} from '../shared/project.js';
 import {readZip} from '../zip.js';
 
 const project=readProject(await readZip(await interfaceDemoFile()));
@@ -122,4 +124,50 @@ for(let index=0;index<4;index++) test(`PETG in slot ${index+1}: blends, suggesti
   assert.throws(()=>validateInterfaceExport({target:'snapmaker',reels:palette.reels,recipes:[{a:index+1,b:index===0?2:1}]}),/reserved/);
   const white=planBlends({1:palette.reels[index].color},palette.reels,true);
   assert.notEqual(white.rows[0].solid.slot,index+1);
+});
+
+test('main converter requires an explicit merge; writes three PLA colours and PETG in slot two',()=>{
+  assert.throws(()=>convertProject(project,plate,null,{target:'snapmaker',assignmentMode:'repaint',removeUnused:true,supportInterface:true}),/Merge/);
+  const out=convertProject(project,plate,null,{target:'snapmaker',assignmentMode:'repaint',removeUnused:true,
+    mapping:{1:1,2:2,3:3,4:2},supportInterface:true,interfaceSlot:2,interfaceColor:'#ABCDEF'});
+  assert.deepEqual(out.problems,[]);
+  const cfg=JSON.parse(decode(out.entries.get('Metadata/project_settings.config')));
+  assert.equal(cfg.support_interface_filament,'2');
+  assert.deepEqual(cfg.filament_type,['PLA','PETG','PLA','PLA']);
+  assert.equal(cfg.filament_colour[1],'#ABCDEFFF');
+  assert.equal(out.mapping[4],out.mapping[2]);
+  assert(!Object.values(out.mapping).includes(2));
+  assert.equal(out.settings.supportInterface,true);
+});
+test('one or two model colours need no merge and never use PETG for model geometry',()=>{
+  for(const count of [1,2,3]) {
+    const plan=conversionPalette({colors:Array(count).fill('#123456'),types:Array(count).fill('PLA')},
+      {target:'snapmaker',supportInterface:true,interfaceSlot:1,assignmentMode:'repaint'});
+    assert.equal(plan.physical.length,4);assert.equal(plan.physical[0].type,'PETG');
+    assert(!Object.values(plan.mapping).includes(1));
+    assert.equal(plan.occupiedSlots.length,count+1);
+  }
+});
+test('choosing 0.16 mm overrides the 0.10 mm mixing profile globally and on objects',()=>{
+  const out=exportProject(project,plate,null,{...exportOptions,layerHeight:{mode:'custom',value:'0.16'}});
+  const cfg=JSON.parse(decode(out.entries.get('Metadata/project_settings.config')));
+  assert.match(cfg.print_settings_id,/0.10mm Color Mixing/);
+  assert.equal(cfg.layer_height,'0.16');
+  assert(decode(out.entries.get('Metadata/model_settings.config')).includes('key="layer_height" value="0.16"'));
+  assert(cfg.different_settings_to_system[0].split(';').includes('layer_height'));
+});
+test('session blocks unresolved PETG exports, snapshots the role and clears it on new files',async()=>{
+  const calls=[],errors=[];
+  const worker={dispose(){},load:async()=>({meta:{kind:'bambu',title:'Four',colors:['#FFFFFF','#000000','#FF0000','#00FF00'],types:Array(4).fill('PLA'),plates:[{id:1}]},summary:{}}),
+    convert:async(...args)=>{calls.push(args);return {bytes:new Uint8Array([1]),settings:{supportInterface:true}};}};
+  const s=new ConvertSession(()=>worker,{error:m=>errors.push(m)},{create:()=> 'blob:test',revoke(){}});
+  const file={name:'test.3mf',arrayBuffer:async()=>new ArrayBuffer(8)};await s.load(file);
+  s.setInterface(true,2);s.setKeepAll(true);assert(s.capacityStatus().blocked);
+  assert.equal(await s.convert('snapmaker',1),null);
+  assert(s.mergeColours(4,2));assert(!s.capacityStatus().blocked);
+  assert.equal(s.printerPalette()[1].type,'PETG');
+  assert(await s.convert('snapmaker',1));assert.equal(calls[0][5].interfaceSlot,2);assert.equal(calls[0][5].supportInterface,true);
+  s.setInterface(true,3);assert.equal(s.output,null);
+  s.setTarget('bambu');assert(!s.supportInterface);
+  s.setTarget('snapmaker');s.setInterface(true);await s.load(file);assert(!s.supportInterface);assert.deepEqual(errors,[]);
 });

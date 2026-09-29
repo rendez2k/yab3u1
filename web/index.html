@@ -419,6 +419,11 @@
   #sourcepreview .row { gap: 12px; }
   #convertpick > .row { gap: 12px; }
   #bambuprinter { margin-top: 14px; }
+  [hidden] { display: none !important; }
+  #petgsupport { margin-block: 16px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; }
+  #petgmerge { padding-block: 10px; }
+  #petgslots { display:flex; gap:14px; flex-wrap:wrap; }
+  #mergepreview .swatch, #petgslots .swatch { display:inline-block; vertical-align:middle; width:22px; height:22px; margin-right:6px; border:1px solid var(--line); border-radius:4px; }
   #printercapacity { margin-top: 18px; border-block: 1px solid var(--line); padding: 14px 0; }
   #capacitystatus { font-weight: 600; margin: 10px 0 4px; }
   .bambu-import-guide { border-top:1px solid var(--line); margin-top:16px; padding-top:12px; }
@@ -616,6 +621,29 @@
         <p class="hint">This allows an unresolved project download. It does not add printer inputs or prepare a printable reel-change plan.</p>
       </details>
       <p class="hint" id="transferstatus" role="status"></p>
+    </section>
+
+    <section id="petgsupport" aria-label="PETG support">
+      <label class="check"><input type="checkbox" id="convertpetg">PETG support <span class="hint">· experimental</span></label>
+      <div id="petgchoices" hidden>
+        <p class="hint">Use one U1 input for PETG contact layers and up to three for PLA model colours. Merge colours here, or explore blends in Full Spectrum.</p>
+        <div class="row">
+          <label class="field">PETG slot<select id="petgslot"><option value="1">Slot 1</option><option value="2">Slot 2</option><option value="3">Slot 3</option><option value="4" selected>Slot 4</option></select></label>
+          <label class="field">PETG reel colour<input id="petgcolor" type="color" value="#ffffff"></label>
+        </div>
+        <p id="petgstatus" class="hint" role="status"></p>
+        <div id="petgmerge">
+          <div class="row">
+            <label class="field grow">Change this colour<select id="mergefrom"></select></label>
+            <label class="field grow">To this colour<select id="mergeto"></select></label>
+          </div>
+          <p id="mergepreview" class="hint"></p>
+          <button type="button" id="mergeapply">Merge these colours</button>
+        </div>
+        <div class="actions"><button type="button" id="petgfullspectrum">Use Full Spectrum · three PLA colours + PETG</button></div>
+        <div id="petgslots" class="hint" aria-label="Final printer slots"></div>
+        <p class="hint">PETG is used only at the support contact layers. PLA forms the support structure. Three dense interface layers, 0 mm Z gap; check the sliced result and test a small print.</p>
+      </div>
     </section>
 
     <fieldset class="repaint">

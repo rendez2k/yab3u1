@@ -1951,6 +1951,7 @@ export function convertProject(project, plateId, objectIds, options = {}) {
     mapping,
     recipes: [],
     convert: true,
+    supportInterface: Boolean(options.supportInterface),
     assignmentMode: slots ? SLOTS : (options.assignmentMode || null),
     title: options.title,
     layout: options.layout || null,
@@ -2443,7 +2444,7 @@ export function exportProject(project, plateId, objectIds, options) {
     cfg.different_settings_to_system[0] = [...new Set([...overrides, ...u1Profile.processKeys, ...interfaceKeys])].sort().join(';');
     for (let i=0; i<reelTypes.length; i++) cfg.different_settings_to_system[i+1] = u1Profile.filamentKeys.join(';');
     cfg.different_settings_to_system[reelTypes.length+1] = 'nozzle_diameter;min_layer_height;max_layer_height';
-    settingNotes = { carry, supportMode: mode, carried, support: supportNote, supportInterface:Boolean(options.supportInterface),
+    settingNotes = { carry, supportMode: mode, carried, support: options.supportInterface ? `supports enabled; PETG interface in slot ${interfaceSlot(reels)}` : supportNote, supportInterface:Boolean(options.supportInterface),
                      supportsPainted: painted, overrides: cfg.different_settings_to_system[0].split(";"), profile: u1Profile.match.process.name, nozzle: u1Profile.match.nozzle, materials: cfg.filament_settings_id.slice(), notes: [...u1Profile.match.notes, ...speed.notes, ...supportSpeedNotes, ...layerNotes, ...filamentReport.notes] };
     members.set(SRC_BBL_PROJECT, encoder.encode(JSON.stringify(cfg, null, 4)));
   } else if (target === "bambu" || target === "orca") {

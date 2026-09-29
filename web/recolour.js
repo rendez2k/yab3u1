@@ -28,7 +28,7 @@ import { mountCalibration } from './shared/calibrationPanel.js';
 import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } from './shared/supportInterface.js';
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 
-const VERSION = "2.6.16-demo";
+const VERSION = "2.6.17-review";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -55,8 +55,10 @@ window.__recolour = state;                    // the QA harness and the console
 
 let printerPanel=null, calibrationPanel=null;
 function layerChoice() {
-  return state.target==='snapmaker' ? {mode:$('spectrumlayermode').value,value:$('spectrumlayerheight').value} : null;
+  const mode=$('spectrumlayermode').value;
+  return state.target==='snapmaker' ? (mode.startsWith('height:') ? {mode:'custom',value:mode.slice(7)} : {mode,value:$('spectrumlayerheight').value}) : null;
 }
+$('useblendlayer').addEventListener('click',()=>{$('spectrumlayermode').value='height:0.10';clearReview();refresh();});
 ['spectrumlayermode','spectrumlayerheight'].forEach(id=>$(id).addEventListener('input',()=>{clearReview();refresh();}));
 function updateCopies() {
   const copies=Number($("spectrumcopies").value),spacing=Number($("spectrumgap").value);
@@ -478,6 +480,13 @@ async function load(file, context={}) {
     state.target = context.target;
     $('target').value = context.target;
     syncDestination();
+  }
+  if(context.supportInterface && state.target==='snapmaker') {
+    if(!state.supportInterface)setInterface(true);
+    const wanted=context.interfaceSlot-1, current=interfaceSlot(state.reels)-1;
+    [state.reels[current],state.reels[wanted]]=[state.reels[wanted],state.reels[current]];
+    state.reels[wanted]={...state.reels[wanted],color:context.interfaceColor};
+    state.interfacePosition=wanted;
   }
   const epoch = (state.epoch += 1);
   // Any assessment or preview already in flight belongs to the previous file.
@@ -1181,8 +1190,9 @@ function renderExport() {
   $("applyforexport").hidden=state.reelView!=="recommended" || !state.recommendation;
   $('spectrumprofile').classList.toggle('hidden',state.target!=='snapmaker');
   $('layeroptions').hidden=state.target!=='snapmaker';
+  $('blendlayerhint').hidden=true;
   $('spectrumcustomlayer').hidden=$('spectrumlayermode').value!=='custom';
-  $('layersummary').textContent='Layer height · '+({preserve:'preserve designer settings',preset:'printer preset',custom:`${$('spectrumlayerheight').value || '—'} mm custom`})[$('spectrumlayermode').value];
+  $('layersummary').textContent='Layer height · '+($('spectrumlayermode').value.startsWith('height:') ? $('spectrumlayermode').selectedOptions[0].textContent : ({preserve:'preserve designer settings',preset:'printer preset',custom:`${$('spectrumlayerheight').value || '—'} mm custom`})[$('spectrumlayermode').value]);
   let profileError='';
   try {
     const payload=resultPlan();
@@ -1195,6 +1205,11 @@ function renderExport() {
         const layer=resolveLayerHeight({...state.project.sourceSettings,...meta.settings},profile.match,layerChoice());
         return `<p>${meta.name?`${esc(meta.name)}: `:''}${esc(layer.text)}</p>`;
       }).join('');
+      $('blendlayerhint').hidden=payload.recipes.length===0 || profile.match.nozzle!=='0.4';
+      $('useblendlayer').hidden=layerChoice()?.mode==='custom' && Number(layerChoice().value)===0.1;
+      $('spectrumlayermode').querySelectorAll('option[value^="height:"]').forEach(option=>{
+        const height=Number(option.value.slice(7));option.disabled=height<profile.match.minLayer || height>profile.match.maxLayer;
+      });
       $('spectrumlayerheight').min=profile.match.minLayer;$('spectrumlayerheight').max=profile.match.maxLayer;
     }
   } catch(error) { profileError=error.message; $('spectrumprofilenote').textContent=profileError; $('spectrumlayernote').textContent=profileError; $('layeroptions').open=true; }

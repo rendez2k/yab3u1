@@ -1,3 +1,4 @@
+import {interfaceConversion} from './supportInterface.js';
 // Filament assignment: "arrange slots" (keep every colour) and "repaint"
 // (change colours), shared by the homepage page, the worker and the writer.
 //
@@ -216,8 +217,8 @@ export function conversionPalette(project, options = {}) {
       .map(reel => reel || {color: "#FFFFFF", type: "PLA"});
     occupiedSlots = [...new Set(Object.values(rule))];
   }
-  if (options.removeUnused === true) {
-    const usage = project.filamentUsage;
+  if (options.removeUnused === true || options.supportInterface) {
+    const usage = project.filamentUsage || {kept:palette.map((_,i)=>i+1),unused:[],reservedThrough:0};
     const kept = [...new Set([...usage.kept, ...(options.includeUnused || []).filter(id=>usage.unused.includes(id))])];
     const destinations = [...new Set([...kept.map(id=>mapping[id]), ...Array.from({length:usage.reservedThrough},(_,i)=>i+1)])].sort((a,b)=>a-b);
     occupiedSlots = destinations.slice();
@@ -237,5 +238,7 @@ export function conversionPalette(project, options = {}) {
       else delete mapping[source];
     }
   }
-  return {physical,mapping,slots,occupiedSlots};
+  const plan={physical,mapping,slots,occupiedSlots};
+  if(options.supportInterface && options.target!=='snapmaker') throw Error('PETG support interfaces require Snapmaker U1 output.');
+  return options.supportInterface ? interfaceConversion(plan,options.interfaceSlot ?? 4,options.interfaceColor ?? '#FFFFFF') : plan;
 }

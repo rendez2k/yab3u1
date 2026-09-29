@@ -24,6 +24,7 @@
 })();
 </script>
 <style>
+  [hidden] { display:none !important; }
   #blendcalibration .field { min-width: 0; margin-block: 10px; }
   #blendcalibration input:not([type="checkbox"]), #blendcalibration select { width: 100%; min-width: 0; box-sizing: border-box; }
   #blendcalibration input:not([type="checkbox"]) { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel2); color: var(--fg); }
@@ -609,7 +610,8 @@
   <div class="card hidden" id="exportcard">
     <h2>Export your project</h2>
     <details id="layeroptions" class="compact-options"><summary id="layersummary">Layer height · preserve designer settings</summary>
-      <label class="field">Regular layer height<select id="spectrumlayermode"><option value="preserve">Preserve designer settings</option><option value="preset">Use printer preset</option><option value="custom">Custom layer height</option></select></label>
+      <label class="field">Regular layer height<select id="spectrumlayermode"><option value="preserve">Preserve designer settings</option><option value="preset">Use printer preset</option><option value="height:0.08">0.08 mm · extra fine</option><option value="height:0.10">0.10 mm · colour mixing</option><option value="height:0.12">0.12 mm · fine</option><option value="height:0.16">0.16 mm · balanced</option><option value="height:0.20">0.20 mm · standard</option><option value="height:0.24">0.24 mm · draft</option><option value="height:0.28">0.28 mm · coarse</option><option value="custom">Custom layer height</option></select></label>
+      <p id="blendlayerhint" class="hint" hidden>Full Spectrum blends: Snapmaker recommends 0.10 mm with a 0.4 mm nozzle. Finer layers take longer; filament translucency also affects the result. <button type="button" id="useblendlayer">Use 0.10 mm for blends</button> <a href="https://wiki.snapmaker.com/en/snapmaker_orca/color_mixing_match_guide" target="_blank" rel="noopener">Why 0.10 mm?</a></p>
       <label class="field" id="spectrumcustomlayer" hidden>Layer height (mm)<input id="spectrumlayerheight" type="number" min="0.01" max="0.56" step="0.01" value="0.20"></label>
       <p class="hint">Applies to regular layers on the selected objects. First-layer height is checked separately against the nozzle profile.</p>
       <div id="spectrumlayernote" class="hint" role="status"></div>

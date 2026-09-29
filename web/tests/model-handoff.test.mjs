@@ -37,7 +37,7 @@ test('MakerWorld display name is separate from the original filename and bytes',
 
 test('same-origin handoff preserves model, plate, target and reel-change intent',async()=>{
  const f=receiver({origin:'https://yab3d.example',context:{purpose:'reel-changes',target:'snapmaker',plate:'3'},load:async(file,context)=>{
-  assert.deepEqual(context,{purpose:'reel-changes',target:'snapmaker',plateId:'3'});
+  assert.deepEqual(context,{purpose:'reel-changes',target:'snapmaker',plateId:'3',supportInterface:false,interfaceSlot:4,interfaceColor:'#FFFFFF'});
   assert.deepEqual([...new Uint8Array(await file.arrayBuffer())],[80,75,3,4,7,8]);return true;
  }});
  await f.emit({}, {origin:'https://evil.example'});assert.equal(f.imports,0);
@@ -73,4 +73,12 @@ test('sender waits for authenticated ready, keeps original buffer and distinguis
 });
 test('closed receiving tab fails visibly and does not leave sender waiting',async()=>{
  const f=sender();const pending=f.transfer.send(new Uint8Array([80,75,3,4]),'test.3mf');f.popup.closed=true;[...f.timers.values()][1]();await assert.rejects(pending,/tab closed/);assert.equal(f.timers.size,0);
+});
+
+test('PETG handoff preserves reserved slot and reel colour, including validated defaults',async()=>{
+  for(const [slot,color,wantSlot,wantColor] of [['2','#AABBCC',2,'#AABBCC'],['20','bad',4,'#FFFFFF']]) {
+    const f=receiver({origin:'https://yab3d.example',context:{target:'snapmaker',interface:'petg',interfaceSlot:slot,interfaceColor:color},
+      load:async(file,context)=>{assert.equal(context.supportInterface,true);assert.equal(context.interfaceSlot,wantSlot);assert.equal(context.interfaceColor,wantColor);return true;}});
+    await f.emit();assert.equal(f.posts.at(-1).type,'yab3d-model:opened');
+  }
 });
