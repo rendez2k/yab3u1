@@ -28,7 +28,7 @@ import { mountCalibration } from './shared/calibrationPanel.js';
 import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } from './shared/supportInterface.js';
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 
-const VERSION = "2.6.20-review";
+const VERSION = "2.6.21-review";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -562,7 +562,7 @@ function setLoading(active) {
 }
 
 function resetForUpload() {
-  $('subdividemix').checked=false;
+  $('subdividemix').checked=true;
   state.approximate=false;
   invalidateRecommendation();
   $("loadedmodel").classList.add("hidden");
