@@ -76,6 +76,8 @@ PUBLIC_FILES = (
     "shared/supportInterface.js",
     "shared/supportInterfaceDemo.js",
     "shared/layout.js",
+    "shared/objectQuantities.js",
+    "shared/workspace.css",
     "shared/mix.js",
     "shared/mix_model.js",
     "shared/paint.js",

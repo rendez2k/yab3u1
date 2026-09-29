@@ -446,6 +446,7 @@
   #fillresult {font-weight:600}
   @media(max-width:600px){.printer-palette{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
+<link rel="stylesheet" href="shared/workspace.css">
 </head>
 <body>
 <header>
@@ -514,7 +515,7 @@
   </div>
 
   <details class="hidden" id="project">
-    <summary>Plate &amp; objects</summary>
+    <summary>Source plate &amp; model details</summary>
     <div class="facts hint" id="pfacts"></div>
     <p class="hint" id="palettenote"></p>
     <div class="row" style="margin-top:12px">
@@ -523,7 +524,7 @@
         <select id="plate"></select>
       </div>
     </div>
-    <div style="margin-top:14px">
+    <div hidden>
       <label class="hint" for="objects">Objects on this plate</label>
       <div id="objects" style="margin-top:6px"></div>
     </div>
@@ -608,7 +609,15 @@
   </div>
 
   <div class="card hidden" id="exportcard">
-    <h2>Export your project</h2>
+    <details id="copyoptions" class="compact-options" open><summary id="copysummary">Plate layout · 1 set</summary>
+      <label class="field">Arrange<select id="spectrumarrangement"><option value="auto">Automatic · Fill plate finds the better fit</option><option value="group">Keep the original set together</option><option value="objects">Pack separate objects</option></select></label>
+      <details id="spectrumobjectoptions"><summary>Objects &amp; quantities · remove or duplicate</summary><p class="hint">Set zero to omit an object. Copies repeats this entire list. Attached parts and orientation stay together; linked instances repeat together.</p><div id="spectrumquantities"></div></details>
+      <div class="row"><label class="field">Copies of this set<input id="spectrumcopies" type="number" min="1" max="4096" step="1" value="1"></label><label class="field">Spacing (mm)<input id="spectrumgap" type="number" min="0" step="0.5" value="5"></label></div>
+      <details><summary>Bed size &amp; prime tower</summary><div class="row"><label class="field">Layout width (mm)<input id="spectrumwidth" type="number" min="1" value="270"></label><label class="field">Layout depth (mm)<input id="spectrumdepth" type="number" min="1" value="270"></label></div><label class="check"><input type="checkbox" id="spectrumtower" checked>Leave room for the prime tower</label><p class="hint">The U1 uses its 270 × 270 mm bed. For other outputs, match this planning area to your destination printer.</p></details>
+      <div class="row"><button type="button" id="spectrumfill">Fill plate</button><button type="button" id="spectrumfillundo" hidden>Undo Fill plate</button></div>
+      <button type="button" id="spectrumfillalternative" hidden>Pack separate objects</button><p class="hint" id="spectrumfillresult" role="status" aria-live="polite"></p><p class="hint" id="copynote" role="status"></p>
+    </details>
+    <h2 id="exportsettingsheading">Export settings</h2>
     <div id="subdivideoptions" hidden>
       <label class="check"><input type="checkbox" id="subdividemix" checked>Subdivide Mix Layer <span class="hint">· experimental</span></label>
       <p class="hint">Split layers in blended areas into thinner colour sublayers. May reduce visible bands; your blend ratios stay the same. Re-slice and compare a small test.</p>
@@ -622,7 +631,7 @@
       <div id="spectrumlayernote" class="hint" role="status"></div>
     </details>
     <details><summary>Filament brand presets (optional)</summary><div id="spectrumfilaments"></div></details>
-    <details id="copyoptions" class="compact-options"><summary id="copysummary">Copies &amp; spacing · 1 copy</summary><fieldset id="copycontrols"><legend>Copies on the plate</legend><div class="row"><label class="field">Copies<input id="spectrumcopies" type="number" min="1" max="64" step="1" value="1"></label><label class="field">Gap (mm)<input id="spectrumgap" type="number" min="0" max="100" step="1" value="5"></label></div><p class="hint" id="copynote" role="status">One copy keeps the original plate arrangement.</p></fieldset></details>
+
     <p class="hint" id="exportnote" role="status"></p>
     <button type="button" id="applyforexport" hidden>Apply this palette</button>
     <label class="check"><input type="checkbox" id="review">
@@ -698,7 +707,7 @@
     <a href="THIRD_PARTY_NOTICES.txt">Credits and third-party notices</a>.</p></footer>
 <nav id="actionbar" aria-label="Project actions" hidden>
   <div class="action-inner">
-    <div class="action-links"><button type="button" data-jump="mixcard">Preview</button><button type="button" data-jump="reelscard">Palette</button><button type="button" data-jump="exportcard">Export settings</button></div>
+    <div class="action-links"><button type="button" data-jump="mixcard">Preview</button><button type="button" data-jump="reelscard">Palette</button><button type="button" data-jump="copyoptions">Plate layout</button><button type="button" data-jump="exportsettingsheading">Export settings</button></div>
     <span id="actionstatus" role="status"></span>
     <button type="button" class="primary" id="mainaction">Apply palette</button>
   </div>

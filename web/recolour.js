@@ -15,9 +15,11 @@ import { RecolourWorker, loadModelWithRecovery } from "./shared/workerClient.js"
 import { readZip } from "./zip.js";
 import { mountSpoolImport } from "./shared/spoolImport.js";
 import { mountPrinter } from "./shared/printerPanel.js";
-import { targetLayout, planLayout } from "./shared/layout.js";
+import { targetLayout, planLayout, fillLayout } from "./shared/layout.js";
 import { planningAllowance } from "./shared/printSettings.js";
 import { colourName } from "./shared/assignment.js";
+
+import {quantityRows, bindQuantityButtons} from './shared/objectQuantities.js';
 
 const REEL_KEY = "yab3u1-web-reels";
 import { renderFilamentPicker } from './shared/filamentPicker.js';
@@ -28,7 +30,7 @@ import { mountCalibration } from './shared/calibrationPanel.js';
 import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } from './shared/supportInterface.js';
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 
-const VERSION = "2.6.21-review";
+const VERSION = "2.6.22-review";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -64,25 +66,92 @@ function subdivideChoice() {
   return state.target==='snapmaker' && $('subdividemix').checked && Boolean(resultPlan().recipes.length);
 }
 ['spectrumlayermode','spectrumlayerheight'].forEach(id=>$(id).addEventListener('input',()=>{clearReview();refresh();}));
-function updateCopies() {
-  const copies=Number($("spectrumcopies").value),spacing=Number($("spectrumgap").value);
-  state.layout=null;state.layoutError='';
-  if(!Number.isInteger(copies)||copies<1||copies>64||!$("spectrumgap").value.trim()||!Number.isFinite(spacing)||spacing<0||spacing>100)state.layoutError='Choose 1–64 whole copies and a gap from 0–100 mm.';
-  else if(copies>1) {
-    if(state.target!=='snapmaker')state.layoutError='Multiple copies currently use the U1 bed. Choose Snapmaker output, or arrange copies in your destination slicer.';
-    else if(!state.bounds)state.layoutError='Checking the selected model’s size…';
-    else {
-      const sources=[state.project?.sourceSettings||{},...state.objects.map(id=>state.project.meta.get(String(id))?.settings||{})];
-      const allowance=planningAllowance(sources,'snapmaker',true,'auto',state.supportsPainted);
-      state.layout=targetLayout('snapmaker',{copies,spacing,width:270,depth:270,tower:true,...allowance});
-      const plan=planLayout(state.bounds,state.layout);
-      if(plan.capped||plan.blocked)state.layoutError=`Only ${plan.copies} of ${copies} copies fit this bed allowance. Reduce the copies or gap.`;
-    }
-  }
-  $("copysummary").textContent=`Copies & spacing · ${Number.isInteger(copies)&&copies>0?copies: "Check"} ${copies===1?"copy":"copies"}`;
-  $("copynote").textContent=state.layoutError || (copies===1?'One copy keeps the original plate arrangement.':`${copies} copies of the selected group on the U1 bed, with ${spacing} mm gaps and a prime-tower allowance. Check supports and the actual tower after slicing.`);
+let fillPrevious = null;
+state.quantities = {};
+state.footprints = [];
+function layoutSettings() {
+  const copies=Number($('spectrumcopies').value), spacing=Number($('spectrumgap').value);
+  const width=Number($('spectrumwidth').value), depth=Number($('spectrumdepth').value);
+  if(!Number.isInteger(copies)||copies<1||copies>4096||!$('spectrumgap').value.trim()||!Number.isFinite(spacing)||spacing<0)
+    throw new Error('Choose 1–4096 whole copies and spacing of zero or more millimetres.');
+  if(!Number.isFinite(width)||!Number.isFinite(depth)||width<1||depth<1) throw new Error('Choose a positive layout width and depth.');
+  if(Object.values(state.quantities).some(n=>!Number.isInteger(n)||n<0||n>64)) throw new Error('Choose whole object quantities from 0–64.');
+  const sources=state.objects.map(id=>({...state.project?.sourceSettings,...state.project.meta.get(String(id))?.settings,...(state.supportInterface?{enable_support:'1'}:{})}));
+  return targetLayout(state.target,{copies,spacing,width,depth,tower:$('spectrumtower').checked,
+    arrangement:$('spectrumarrangement').value,quantities:{...state.quantities},footprints:state.footprints,
+    ...planningAllowance(sources,state.target,state.target==='snapmaker','auto',state.supportsPainted)});
 }
-['spectrumcopies','spectrumgap'].forEach(id=>$(id).addEventListener('input',()=>{updateCopies();clearReview();refreshPreview();}));
+function updateCopies() {
+  state.layout=null;state.layoutError='';
+  let note='One copy keeps the original plate arrangement.';
+  const u1=state.target==='snapmaker';
+  for(const id of ['spectrumwidth','spectrumdepth']) { $(id).disabled=u1; if(u1) $(id).value=270; }
+  const key=`${state.epoch}|${state.plateId}|${state.objects.join(',')}`;
+  const measured=state.bounds && state.boundsKey===key && state.measuredKey===key;
+  try {
+    const options=layoutSettings();
+    if(!state.objects.length) throw new Error('Restore at least one object.');
+    if(!measured) throw new Error('Checking the selected model’s size…');
+    if(options.copies>1 || options.arrangement==='objects') {
+      state.layout=options;
+      const plan=planLayout(state.bounds,options);
+      if(plan.blocked||plan.capped) throw new Error(plan.problem || `Only ${plan.copies} of ${options.copies} complete sets fit. Reduce quantities or spacing, then Fill plate again.`);
+      note=`${plan.copies} complete set${plan.copies===1?'':'s'} · ${options.arrangement==='objects'?'separate objects packed':'original set kept together'}. Parts and orientation are preserved.`;
+    }
+  } catch(error) { state.layoutError=error.message; }
+  $('spectrumfill').disabled=!measured||state.loading||state.exporting||!state.objects.length;
+  $('copysummary').textContent='Plate layout · '+$('spectrumcopies').value+' set'+($('spectrumcopies').value==='1'?'':'s');
+  $('copynote').textContent=state.layoutError || note;
+}
+function clearFill() { fillPrevious=null; $('spectrumfillalternative').hidden=true; $('spectrumfillundo').hidden=true; $('spectrumfillresult').textContent=''; }
+function layoutChanged() { clearFill(); updateCopies(); clearReview(); renderExport(); refreshPreview(); }
+['spectrumcopies','spectrumgap','spectrumwidth','spectrumdepth','spectrumtower'].forEach(id=>$(id).addEventListener('input',layoutChanged));
+$('spectrumarrangement').addEventListener('change',()=>{
+  $('spectrumcopies').value=1;
+  if($('spectrumarrangement').value!=='objects') {
+    for(const id of state.objects) state.quantities[id]=1;
+    renderQuantityFields();
+  }
+  layoutChanged();
+});
+function renderQuantityFields() {
+  $('spectrumquantities').innerHTML=quantityRows(eligibleForPlate().map(id=>({objectId:id,
+    name:state.project.meta.get(id)?.name || `Object ${id}`,
+    instances:state.footprints.find(f=>f.objectId===id)?.instances || 1})),state.quantities);
+}
+bindQuantityButtons($('spectrumquantities'));
+$('spectrumquantities').addEventListener('input',event=>{
+  const id=event.target.dataset.object;if(!id)return;
+  state.quantities[id]=event.target.value.trim()===''?NaN:Number(event.target.value);
+  const box=[...$('objects').querySelectorAll('[data-object]')].find(b=>b.dataset.object===id);
+  box.checked=state.quantities[id]!==0;
+  const before=state.objects.join(',');state.objects=selectedObjects();
+  $('spectrumarrangement').value='objects';$('spectrumcopies').value=1;
+  layoutChanged();
+  if(before!==state.objects.join(','))refresh();
+});
+function fillSpectrum(arrangement) {
+  try {
+    const options=layoutSettings();
+    const result=fillLayout(state.bounds,{...options,...(arrangement?{arrangement}:{})});
+    if(!result.copies) { $('spectrumfillresult').textContent=result.plan?.problem || 'No complete set fits. Reduce quantities or spacing, or arrange in the slicer.';return; }
+    fillPrevious={copies:$('spectrumcopies').value,arrangement:$('spectrumarrangement').value};
+    $('spectrumcopies').value=result.copies;$('spectrumarrangement').value=result.arrangement;
+    updateCopies();clearReview();renderExport();refreshPreview();
+    $('spectrumfillundo').hidden=false;
+    $('spectrumfillalternative').hidden=!result.alternative;
+    $('spectrumfillalternative').textContent=`Pack separate objects · ${result.alternative} sets`;
+    const perSet=state.footprints.reduce((n,f)=>n+(f.instances||1)*(result.arrangement==='objects'?(state.quantities[f.objectId]??1):1),0);
+    $('spectrumfillresult').textContent=`Filled: ${result.copies} complete set${result.copies===1?'':'s'} · ${perSet*result.copies} objects. ${result.arrangement==='objects'?'Separate objects packed.':'Original arrangement kept together.'} Check support reach and tower size after slicing.`;
+  } catch(error) { $('spectrumfillresult').textContent=error.message; }
+}
+$('spectrumfill').addEventListener('click',()=>fillSpectrum());
+$('spectrumfillalternative').addEventListener('click',()=>fillSpectrum('objects'));
+$('spectrumfillundo').addEventListener('click',()=>{
+  if(!fillPrevious)return;
+  $('spectrumcopies').value=fillPrevious.copies;$('spectrumarrangement').value=fillPrevious.arrangement;
+  layoutChanged();$('spectrumfillresult').textContent='Restored the arrangement from before Fill plate.';
+});
 $("applyforexport").addEventListener('click',()=>$("userecommended").click());
 printerPanel=mountPrinter($("printersetup"),()=>state.project && state.target==='snapmaker' && state.reelView==='loaded' && (state.workflow==='loaded'||state.modelApplied) && state.strategy!=='source' ? state.reels : null);
 
@@ -562,6 +631,8 @@ function setLoading(active) {
 }
 
 function resetForUpload() {
+  state.quantities={};state.footprints=[];state.bounds=null;state.boundsKey='';state.measuredKey='';
+  $('spectrumcopies').value=1;$('spectrumarrangement').value='auto';clearFill();
   $('subdividemix').checked=true;
   state.approximate=false;
   invalidateRecommendation();
@@ -633,6 +704,7 @@ function show() {
 
 $("plate").addEventListener("change", () => {
   state.plateId = Number($("plate").value);
+  state.quantities={};state.footprints=[];state.measuredKey='';$("spectrumcopies").value=1;clearFill();
   state.objects = [];
   $("exportlog").innerHTML = "";
   clearReview();
@@ -651,7 +723,9 @@ function renderObjects() {
   }).join("");
   $("objects").querySelectorAll("input[data-object]").forEach((box) => {
     box.addEventListener("change", () => {
+      state.quantities[box.dataset.object]=box.checked?1:0;
       state.objects = selectedObjects();
+      $("spectrumcopies").value=1;clearFill();renderQuantityFields();
       // A different selection is a different mapping: the tick above it no longer
       // approves what would be written.
       clearReview();
@@ -659,8 +733,9 @@ function renderObjects() {
     });
   });
   state.objects = selectedObjects();
+  renderQuantityFields();
   $("selhint").textContent = `${eligible.length} object(s) on this plate; the `
-    + "assessment, preview and export follow the ticked ones.";
+    + "assessment, preview and export follow the objects chosen under Plate layout.";
 }
 
 function eligibleForPlate() {
@@ -725,6 +800,7 @@ let assessToken = 0;
 async function refresh() {
   if (!state.project) return;
   if (!state.objects.length) {
+    updateCopies();
     invalidateRecommendation();
     renderRecommendation('Select at least one object to suggest colours.');
     // The tokens move first: a reply already on its way must not repopulate a
@@ -780,7 +856,7 @@ function useAssessed(assessed) {
     const key=state.assessedKey;state.boundsKey=key;state.bounds=null;
     background().bounds(state.plateId,state.objects).then(result=>{
       if(state.assessedKey!==key)return;
-      state.bounds=result.bounds;state.supportsPainted=result.supportsPainted;updateCopies();renderExport();refreshPreview();
+      state.measuredKey=key;state.footprints=result.footprints;state.bounds=result.bounds;state.supportsPainted=result.supportsPainted;renderQuantityFields();updateCopies();renderExport();refreshPreview();
     }).catch(()=>{if(state.assessedKey===key){state.layoutError='Could not measure the selected model.';renderExport();}});
   }
   updateCopies();
@@ -1018,6 +1094,7 @@ $('spectrumnozzle').addEventListener('change',()=>{
 });
 $("target").addEventListener("change", () => {
   state.target = $("target").value;
+  clearFill();
   if(state.target!=='snapmaker' && state.supportInterface) setInterface(false);
   updateCopies();
   refreshPreview();
@@ -1164,6 +1241,7 @@ function paletteOf(payload, mode) {
 
 function jumpTo(id, focusId) {
   const target=$(id);
+  if(target.tagName==='DETAILS')target.open=true;
   const focus=focusId ? $(focusId) : target;
   if(!focus.matches('button,input,select,textarea,a[href],summary')) focus.tabIndex=-1;
   focus.scrollIntoView({block:focusId?'center':'start'});

@@ -437,6 +437,7 @@
   @media(max-width:600px){.printer-palette{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 <link rel="stylesheet" href="batch.css">
+<link rel="stylesheet" href="shared/workspace.css">
 </head>
 <body>
 <noscript><div class="noscript">This converter runs entirely in your browser, so it needs JavaScript
@@ -512,21 +513,19 @@
       <div id="previewpanel" class="hidden">
       <p class="hint">Compare the original and output colours. This is a simplified
         model preview; the exported model keeps its full detail.</p>
-      <canvas id="convertpreview" width="760" height="420"
-              aria-label="Preview of the model to convert"></canvas>
-      <div class="row" style="margin-top:10px">
+      <div class="row" id="convertpreviewtoolbar" style="margin-top:10px">
         <div class="field">
-          <label for="previewmode">View</label>
-          <select id="previewmode">
+          <select id="previewmode" aria-label="Preview colours">
             <option value="result" selected>Output colours</option>
             <option value="original">Original colours</option>
           </select>
         </div>
         <div class="field">
-          <label>&nbsp;</label>
           <button type="button" id="previewreset">Reset view</button>
         </div>
       </div>
+      <canvas id="convertpreview" width="760" height="420"
+              aria-label="Preview of the model to convert"></canvas>
       <p class="hint" id="previewmodehint">Output colours: the same appearance,
         printed from the filaments you chose. Original colours: the file as it was
         read.</p>
@@ -614,7 +613,7 @@
     </section>
 
     <fieldset class="repaint">
-      <legend>Filament assignment</legend>
+      <legend id="filamentassignment">Filament assignment</legend>
       <div class="modes" role="radiogroup" aria-labelledby="modeslabel">
         <span class="sr-only" id="modeslabel">How the assignment is read</span>
         <label class="mode">
@@ -639,45 +638,30 @@
       </div>
     </fieldset>
 
-    <fieldset class="layout">
+    <fieldset class="layout" id="platelayout">
       <legend>Plate layout</legend>
       <label for="layoutarrangement">Arrange</label>
       <select id="layoutarrangement"><option value="auto">Automatic · Fill plate finds the better fit</option><option value="group">Keep the original set together</option><option value="objects">Pack separate objects</option></select>
-      <details id="objectquantities" hidden><summary>Quantities per object</summary><p class="hint">Each object keeps its parts and orientation. Set zero to omit an object. Copies repeats this entire list; check that you have the matching parts for each model.</p><div id="quantityfields"></div></details>
+      <details id="objectquantities" hidden><summary>Objects &amp; quantities · remove or duplicate</summary><p class="hint">Each object keeps its parts and orientation. Set zero to omit an object. Copies repeats this entire list; check that you have the matching parts for each model.</p><div id="quantityfields"></div></details>
       <p class="hint" id="layouthint">Choose how many copies to arrange and their spacing.</p>
       <div class="row" style="margin-top:10px">
         <div class="field">
-          <label for="layoutcopies">Copies</label>
+          <label for="layoutcopies">Copies of this set</label>
           <input type="number" id="layoutcopies" min="1" step="1" value="1">
         </div>
         <div class="field">
           <label for="layoutspacing">Spacing (mm)</label>
           <input type="number" id="layoutspacing" min="0" step="0.5" value="5">
         </div>
-        <div class="field">
-          <label for="layoutwidth">Layout width (mm)</label>
-          <input type="number" id="layoutwidth" min="1" step="1" value="270">
-        </div>
-        <div class="field">
-          <label for="layoutdepth">Layout depth (mm)</label>
-          <input type="number" id="layoutdepth" min="1" step="1" value="270">
-        </div>
-        <div class="field">
-          <label>&nbsp;</label>
-          <button type="button" id="layoutfill">Fill plate</button>
-        </div>
-        <div class="field">
-          <label>&nbsp;</label>
-          <label class="check"><input type="checkbox" id="layouttower" checked>
-            Leave room for the prime tower</label>
-        </div>
       </div>
-      <div id="fillfeedback" hidden><p id="fillresult" role="status" aria-live="polite"></p><button type="button" id="fillalternative" hidden>Pack separate objects</button> <button type="button" id="fillundo" hidden>Undo Fill plate</button></div>
+      <details><summary>Bed size &amp; prime tower</summary><div class="row"><label class="field">Layout width (mm)<input type="number" id="layoutwidth" min="1" step="1" value="270"></label><label class="field">Layout depth (mm)<input type="number" id="layoutdepth" min="1" step="1" value="270"></label></div><label class="check"><input type="checkbox" id="layouttower" checked>Leave room for the prime tower</label></details>
+      <div class="row"><button type="button" id="layoutfill">Fill plate</button><button type="button" id="fillundo" hidden>Undo Fill plate</button></div>
+      <div id="fillfeedback" hidden><p id="fillresult" role="status" aria-live="polite"></p><button type="button" id="fillalternative" hidden>Pack separate objects</button></div>
       <details id="layoutdetails"><summary>Fit and clearance details</summary><p class="hint" id="layoutnote" role="status" aria-live="polite"></p></details>
     </fieldset>
 
     <fieldset class="settings" id="settingsbox">
-      <legend>Print settings</legend>
+      <legend>Export settings</legend>
       <div id="u1settings">
         <label for="u1nozzle">Nozzle fitted to your U1</label>
         <select id="u1nozzle"><option value="auto">Match source nozzle</option><option value="0.2">0.2 mm nozzle</option><option value="0.4">0.4 mm nozzle</option><option value="0.6">0.6 mm nozzle</option><option value="0.8">0.8 mm nozzle</option></select>
@@ -807,6 +791,7 @@
   <details class="whatsnew" id="whatsnew"></details>
 </footer>
 
+<nav id="converteractions" class="workspace-actions" aria-label="Project actions"><div class="action-inner"><div class="action-links"><button type="button" data-convert-jump="sourcepreview">Preview</button><button type="button" data-convert-jump="filamentassignment">Palette</button><button type="button" data-convert-jump="platelayout">Plate layout</button><button type="button" data-convert-jump="settingsbox">Export settings</button></div><button type="button" id="converterprimary" class="primary workspace-primary">Download project</button></div></nav>
 <script type="module" src="convert-page.js"></script>
 </body>
 </html>

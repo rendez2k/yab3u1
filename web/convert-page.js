@@ -1,3 +1,4 @@
+import {quantityRows, bindQuantityButtons, syncQuantityButtons} from './shared/objectQuantities.js';
 import {mountBambuPrinterPicker} from './shared/bambuPrinterPicker.js';
 import {mountPrinter} from './shared/printerPanel.js';
 import {bambuImportGuide} from './shared/bambuImportGuide.js';
@@ -22,7 +23,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.21-review";
+const VERSION = "2.6.22-review";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -35,6 +36,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "Plate layout controls now match Full Spectrum: remove, restore and add object copies, Fill plate and Undo. Both pages have persistent Preview, Palette, Plate layout and Export settings shortcuts.",
   "Optional PETG support: deliberately merge model colours to free a U1 input, or carry the original into Full Spectrum for three PLA colours and PETG interfaces. Experimental; review a small sliced test.",
   "Choose a Bambu printer and nozzle for a native project with its official profiles, exact filament list, painting and compatible designer settings. Colour-model import remains available as an explicit alternative.",
   "Bambu import now shows how to reuse existing filaments without duplicates, plus the layer height and supports actually exported for each object.",
@@ -534,15 +536,16 @@ function syncLayout() {
   printerPanel?.refresh();
   const objectMode = session.layout.arrangement === 'objects';
   $('layoutarrangement').value = session.layout.arrangement || 'auto';
-  $('objectquantities').hidden = !objectMode;
+  $('objectquantities').hidden = false;
   const footprints = session.state?.footprints || [];
   const key = JSON.stringify([session.epoch,footprints.map(f=>[f.objectId,f.name,f.instances])]);
   if (key !== quantityKey) {
     quantityKey = key;
-    $('quantityfields').innerHTML = footprints.map(f=>`<label>${esc(f.name)}${f.instances>1?' · '+f.instances+' linked instances':''}<input aria-label="Quantity for ${esc(f.name)}" data-object="${esc(f.objectId)}" type="number" min="0" max="64" step="1" value="${session.layout.quantities?.[f.objectId]??1}"></label>`).join('');
+    $('quantityfields').innerHTML = quantityRows(footprints,session.layout.quantities);
   }
   $('quantityfields').querySelectorAll('input').forEach(input=>{if(document.activeElement!==input)input.value=session.layout.quantities?.[input.dataset.object]??1;});
 
+  syncQuantityButtons($('quantityfields'));
   const layout = session.layout;
   $("layouthint").textContent = session.target === "snapmaker"
     ? "Fill plate tries whole sets and separate objects in Automatic mode. Parts and orientation stay together. Copies repeats the entire set; the U1 bed stays at 270 × 270 mm."
@@ -603,6 +606,7 @@ function syncLayout() {
   if ($("layoutfill")) $("layoutfill").disabled = Boolean(session.layoutProblem) || session.boundsPending || session.busy || !session.state?.bounds;
   const currentFill = fillFeedback?.epoch === session.epoch && fillFeedback?.revision === session.revision;
   $('fillfeedback').hidden = !currentFill;
+  $('fillundo').hidden = !currentFill || !fillFeedback.previous;
   if (currentFill) {
     $('fillresult').textContent = fillFeedback.message;
     $('fillalternative').hidden = !fillFeedback.alternative;
@@ -982,13 +986,14 @@ $("convertplate").addEventListener("change", async () => {
   refreshPreview();
 });
 $('layoutarrangement').addEventListener('change',()=>session.setLayout({arrangement:$('layoutarrangement').value,copies:1,...($('layoutarrangement').value==='objects'?{}:{quantities:{}})}));
+bindQuantityButtons($('quantityfields'));
 $('quantityfields').addEventListener('input',event=>{
   if (!event.target.dataset.object) return;
   const quantities = {...session.layout.quantities};
   $('quantityfields').querySelectorAll('input').forEach(input=>{
     quantities[input.dataset.object] = input.value.trim() === '' ? NaN : Number(input.value);
   });
-  session.setLayout({quantities,copies:1});
+  session.setLayout({quantities,copies:1,arrangement:'objects'});
 });
 ["layoutcopies", "layoutspacing", "layoutwidth", "layoutdepth"].forEach((id) => {
   $(id).addEventListener("input", () => {
@@ -1083,3 +1088,18 @@ $("previewmode").addEventListener("change", () => {
 paintChrome();
 
 receiveModel({mount: document.getElementById("singlepanel"), canReceive:()=>!session.state&&!session.busy, load:async file=>{await session.load(file);return Boolean(session.state);}});
+
+// The same persistent destinations as Full Spectrum; the primary action remains on the right.
+document.querySelectorAll('[data-convert-jump]').forEach(button=>button.addEventListener('click',()=>{
+  const target=$(button.dataset.convertJump);
+  if(target.id==='sourcepreview'&&!previewShown){previewShown=true;syncPreviewVisibility();refreshPreview();}
+  target.tabIndex=-1;target.scrollIntoView({block:'start'});target.focus({preventScroll:true});
+}));
+$('converterprimary').addEventListener('click',()=>{
+  if($('convertgo').disabled){const target=$('convertplan');target.tabIndex=-1;target.scrollIntoView({block:'center'});target.focus({preventScroll:true});}
+  else $('convertgo').click();
+});
+const syncPrimary=()=>{ $('converterprimary').textContent=session.busy?'Preparing project…':$('convertgo').disabled?'Check export settings':'Download project';$('converterprimary').disabled=session.busy; };
+new MutationObserver(syncPrimary).observe($('convertgo'),{attributes:true,childList:true});
+new ResizeObserver(()=>document.documentElement.style.setProperty('--workspace-action-height',`${$('converteractions').getBoundingClientRect().height}px`)).observe($('converteractions'));
+syncPrimary();

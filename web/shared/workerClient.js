@@ -66,7 +66,7 @@ export class RecolourWorker {
    *  carries painted support enforcers: both belong to the plate the user picked. */
   bounds(plateId, objects) {
     return this.request("bounds", { plateId, objects })
-      .then((reply) => ({ bounds: reply.bounds || null,
+      .then((reply) => ({ bounds: reply.bounds || null, footprints: reply.footprints || [],
                           supportsPainted: reply.supportsPainted === true }));
   }
 
