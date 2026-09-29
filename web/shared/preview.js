@@ -28,7 +28,9 @@ in vec3 vNormal;
 out vec4 outColor;
 uniform vec3 uLight;
 uniform float uAmbient;
+uniform bool uUnlit;
 void main() {
+  if (uUnlit) { outColor = vec4(vColor, 1.0); return; }
   vec3 normal = normalize(vNormal);
   float diffuse = max(dot(normal, normalize(uLight)), 0.0);
   float wrap = 0.35 * max(dot(normal, normalize(vec3(-uLight.x, -uLight.y, uLight.z))), 0.0);
@@ -84,6 +86,8 @@ export class Preview {
       + "preview is unavailable";
     this.count = 0;
     this.bounds = null;
+    this.plate = null;
+    this.view = 'plate';
     this.lastPositions = null;      // the geometry whose buffers are uploaded
     this.frame = 0;                 // pending animation-frame id, if any
     this.yaw = -0.6;
@@ -113,6 +117,7 @@ export class Preview {
       model: gl.getUniformLocation(this.program, "uModel"),
       light: gl.getUniformLocation(this.program, "uLight"),
       ambient: gl.getUniformLocation(this.program, "uAmbient"),
+      unlit: gl.getUniformLocation(this.program, "uUnlit"),
     };
     this.attributes = {
       position: gl.getAttribLocation(this.program, "aPosition"),
@@ -243,12 +248,49 @@ export class Preview {
     gl.vertexAttribPointer(location, size, gl.FLOAT, false, 0, 0);
   }
 
+  /** Decorative bed geometry stays separate from the model and export buffers. */
+  setPlate(options) {
+    if (!this.ok) return;
+    const plate = plateGeometry(options);
+    const key = JSON.stringify(plate?.description);
+    if (key === this.plateKey) return;
+    this.plateKey = key;
+    if (this.plate) for (const buffer of Object.values(this.plate.buffers)) this.gl.deleteBuffer(buffer);
+    this.plate = plate;
+    if (plate) {
+      plate.buffers = {};
+      for (const name of ['position', 'color', 'normal']) {
+        plate.buffers[name] = this.gl.createBuffer();
+        this.upload(plate.buffers[name], this.attributes[name], plate[name], 3);
+      }
+    }
+    this.updateControls?.();
+    if (this.view === 'plate') this.reset();
+    else this.requestDraw();
+  }
+
+  frameBounds() {
+    if (!this.bounds || this.view !== 'plate' || !this.plate) return this.bounds;
+    return bounds(new Float32Array([...this.bounds.lo, ...this.bounds.hi,
+      ...this.plate.bounds.lo, ...this.plate.bounds.hi]));
+  }
+
+  bindBuffers(buffers) {
+    const gl = this.gl;
+    for (const name of ['position', 'color', 'normal']) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffers[name]);
+      gl.enableVertexAttribArray(this.attributes[name]);
+      gl.vertexAttribPointer(this.attributes[name], 3, gl.FLOAT, false, 0, 0);
+    }
+  }
+
   reset() {
     this.yaw = -0.6;
-    this.pitch = 0.5;
+    this.pitch = this.view === 'plate' && this.plate ? 0.78 : 0.5;
     this.pan = [0, 0];
-    if (this.bounds) {
-      this.distance = fitDistance(this.bounds.size,
+    const frame = this.frameBounds();
+    if (frame) {
+      this.distance = fitDistance(frame.size,
         this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight), this.yaw, this.pitch);
     } else {
       this.distance = 120;
@@ -260,8 +302,9 @@ export class Preview {
   /** Zoom limits scale with the model: millimetre models are hundreds of units
    *  across, so a fixed 0.2..6 range would put the camera inside the part. */
   clampDistance() {
-    const span = this.bounds
-      ? Math.max(this.bounds.size[0], this.bounds.size[1], this.bounds.size[2], 1)
+    const frame = this.frameBounds();
+    const span = frame
+      ? Math.max(...frame.size, 1)
       : 120;
     this.distance = Math.max(span * 0.15, Math.min(span * 8, this.distance));
   }
@@ -272,6 +315,14 @@ export class Preview {
     // visible gain on a 3D view.
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
     if (!this.canvas.clientWidth || !this.canvas.clientHeight) return;
+    const aspect = this.canvas.clientWidth / this.canvas.clientHeight;
+    const frame = this.frameBounds();
+    if (frame && this.viewportAspect && aspect !== this.viewportAspect) {
+      // Preserve the user's relative zoom and orbit when the responsive panel changes shape.
+      this.distance *= fitDistance(frame.size, aspect, this.yaw, this.pitch)
+        / fitDistance(frame.size, this.viewportAspect, this.yaw, this.pitch);
+    }
+    this.viewportAspect = aspect;
     const width = Math.max(1, Math.round(this.canvas.clientWidth * ratio));
     const height = Math.max(1, Math.round(this.canvas.clientHeight * ratio));
     if (this.canvas.width !== width || this.canvas.height !== height) {
@@ -291,7 +342,7 @@ export class Preview {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     if (!this.count || !this.bounds) return;
 
-    const centre = this.bounds.centre;
+    const centre = this.frameBounds().centre;
     const view = identity();
     const cosPitch = Math.cos(this.pitch);
     const eye = [
@@ -310,8 +361,75 @@ export class Preview {
     gl.uniformMatrix4fv(this.uniforms.model, false, identity());
     gl.uniform3f(this.uniforms.light, 0.4, -0.6, 0.7);
     gl.uniform1f(this.uniforms.ambient, 0.35);
+    if (this.view === 'plate' && this.plate) {
+      gl.uniform1i(this.uniforms.unlit, 1);
+      this.bindBuffers(this.plate.buffers);
+      gl.drawArrays(gl.TRIANGLES, 0, this.plate.position.length / 3);
+    }
+    gl.uniform1i(this.uniforms.unlit, 0);
+    this.bindBuffers(this.buffers);
     gl.drawArrays(gl.TRIANGLES, 0, this.count);
   }
+}
+
+/** Match the layout planner's local bed coordinates, including corner reservations. */
+export function plateGeometry(options) {
+  if (!options) return null;
+  const width = Number(options.width), depth = Number(options.depth);
+  const centre = options.centre || [width / 2, depth / 2];
+  if (![width, depth, ...centre].every(Number.isFinite) || width <= 0 || depth <= 0) return null;
+  const min = [centre[0] - width / 2, centre[1] - depth / 2];
+  const position = [], color = [], normal = [];
+  const rect = (x, y, w, d, z, rgb) => {
+    for (const [dx, dy] of [[0,0],[w,0],[w,d],[0,0],[w,d],[0,d]]) {
+      position.push(min[0]+x+dx, min[1]+y+dy, z); color.push(...rgb); normal.push(0,0,1);
+    }
+  };
+  rect(0, 0, width, depth, -.35, [.13,.17,.21]);
+  const reservations = (options.keepoutBoxes || []).map(box => ({...box, kind:'keepout'}));
+  if (options.tower) {
+    if (options.towerBox) reservations.push({...options.towerBox, kind:'tower'});
+    else {
+      const strip = Math.min(width/2, Number(options.towerReserve) || 25);
+      reservations.push({min:[0,0],max:[strip,depth],kind:'tower'},
+        {min:[width-strip,0],max:[width,depth],kind:'tower'});
+    }
+  }
+  for (const box of reservations) {
+    if (![...box.min,...box.max].every(Number.isFinite)) continue;
+    const x = Math.max(0,box.min[0]), y = Math.max(0,box.min[1]);
+    const w = Math.min(width,box.max[0])-x, d = Math.min(depth,box.max[1])-y;
+    if (w > 0 && d > 0) rect(x,y,w,d,-.3,box.kind==='tower'?[.25,.34,.12]:[.42,.23,.17]);
+  }
+  const step = Math.max(10, Math.ceil(Math.max(width,depth)/60/10)*10);
+  for (let x=step; x<width; x+=step) rect(x,0,.22,depth,-.22,[.25,.31,.36]);
+  for (let y=step; y<depth; y+=step) rect(0,y,width,.22,-.22,[.25,.31,.36]);
+  const edge = Math.min(1, width/2, depth/2);
+  for (const [x,y,w,d] of [[0,0,width,edge],[0,depth-edge,width,edge],[0,0,edge,depth],[width-edge,0,edge,depth]])
+    rect(x,y,w,d,-.18,[.53,.61,.67]);
+  return {position:new Float32Array(position),color:new Float32Array(color),normal:new Float32Array(normal),
+    bounds:{lo:[...min,-.35],hi:[min[0]+width,min[1]+depth,0]},
+    description:{width,depth,centre,reservations}};
+}
+
+/** Identical, keyboard-accessible controls for both conversion workflows. */
+export function mountPlateControls(preview, root, arrange) {
+  root.querySelector('[data-arrange]').addEventListener('click', arrange);
+  const buttons = root.querySelectorAll('[data-camera]');
+  preview.updateControls = () => {
+    for (const button of buttons) {
+      button.setAttribute('aria-pressed', String(preview.view === button.dataset.camera));
+      button.disabled = button.dataset.camera === 'plate' && !preview.plate;
+    }
+    const description = preview.view === 'plate' && preview.plate?.description;
+    root.querySelector('[data-plate-note]').textContent = description
+      ? `${description.width} × ${description.depth} mm planning area${description.reservations.some(b=>b.kind==='tower')?' · green: prime-tower allowance':''}${description.reservations.some(b=>b.kind==='keepout')?' · rust: printer keepout':''}. Supports appear after slicing.`
+      : 'Model view · drag to orbit, scroll to zoom.';
+  };
+  for (const button of buttons) button.addEventListener('click', () => {
+    preview.view = button.dataset.camera; preview.reset(); preview.updateControls();
+  });
+  preview.updateControls();
 }
 
 /** Fit every corner of the bounds in the current camera, with a little margin.

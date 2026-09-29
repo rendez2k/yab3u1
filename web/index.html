@@ -520,11 +520,9 @@
             <option value="original">Original colours</option>
           </select>
         </div>
-        <div class="field">
-          <button type="button" id="previewreset">Reset view</button>
-        </div>
       </div>
-      <canvas id="convertpreview" width="760" height="420"
+      <div class="plate-tools" id="platecontrols"><div class="plate-tool-row"><div class="plate-view-switch" role="group" aria-label="Camera view"><button type="button" data-camera="model" aria-pressed="false">Model</button><button type="button" data-camera="plate" aria-pressed="true">Plate</button></div><button type="button" data-arrange>Arrange plate</button><button type="button" id="previewreset">Reset view</button></div><p class="hint" data-plate-note></p></div>
+    <canvas id="convertpreview" width="760" height="420"
               aria-label="Preview of the model to convert"></canvas>
       <p class="hint" id="previewmodehint">Output colours: the same appearance,
         printed from the filaments you chose. Original colours: the file as it was

@@ -31,3 +31,12 @@ body.has-model:has(#mode-single[aria-pressed="true"]) #converteractions { displa
   .workspace-actions .workspace-primary { margin:0; width:100%; }
   #actionbar .action-links { grid-template-columns:repeat(4,minmax(0,1fr)); }
 }
+/* The same compact camera and layout controls sit above both 3D canvases. */
+.plate-tools { margin: 8px 0; }
+.plate-tool-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.plate-tool-row button { padding: 7px 8px; min-height: 36px; font-size: 12px; }
+.plate-view-switch { display: flex; gap: 0; margin-right: auto; }
+.plate-view-switch button:first-child { border-radius: 10px 0 0 10px; }
+.plate-view-switch button:last-child { border-radius: 0 10px 10px 0; }
+.plate-view-switch button[aria-pressed="true"] { background: var(--accent, #b2f536); color: #111b08; border-color: var(--accent, #b2f536); }
+.plate-tools [data-plate-note] { margin: 6px 0; font-size: 11px; line-height: 1.4; }

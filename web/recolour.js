@@ -8,7 +8,7 @@ import {receiveModel} from './shared/modelHandoff.js';
 
 import { comparison, distance, norm, suggestMapping } from "./shared/colour.js";
 import { describeColourMapping, mappingFromPlan, planBlends, plausibleBlend, swapPaletteSlots } from "./shared/mix.js";
-import { Preview } from "./shared/preview.js";
+import { Preview, mountPlateControls } from "./shared/preview.js";
 import { LABELS, RECOLOUR_TARGETS } from "./shared/targets.js";
 import { thumbnailSizes } from "./shared/thumbnail.js";
 import { RecolourWorker, loadModelWithRecovery } from "./shared/workerClient.js";
@@ -30,7 +30,7 @@ import { mountCalibration } from './shared/calibrationPanel.js';
 import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } from './shared/supportInterface.js';
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 
-const VERSION = "2.6.22-review";
+const VERSION = "2.6.23-review";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -1125,6 +1125,10 @@ async function refreshPreview() {
   if (!state.preview) {
     state.preview = new Preview(canvas);
     $("previewreset").addEventListener("click", () => state.preview.reset());
+    mountPlateControls(state.preview, $('platecontrols'), () => {
+      const panel=$('copyoptions'); if (panel.tagName==='DETAILS') panel.open=true;
+      panel.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});
+    });
     window.addEventListener("resize", () => state.preview.resize());
   }
   if (!state.preview.ok) {
@@ -1195,6 +1199,7 @@ function applyPreview(soup, fit) {
       + "press Original or Loaded to retry";
     return;
   }
+  try { state.preview.setPlate(layoutSettings()); } catch { state.preview.setPlate(null); }
   state.preview.setSoup(positions, soup.colors, { fit });
   state.preview.resize();
   window.__preview = { mode: state.previewMode, triangles: soup.triangles,

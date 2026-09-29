@@ -14,7 +14,7 @@ import { RecolourWorker } from "./shared/workerClient.js";
 import { TARGETS } from "./shared/targets.js";
 import { ConvertSession } from "./shared/convertSession.js";
 import { REPAINT, SLOTS, assignmentPlan, colourName } from "./shared/assignment.js";
-import { Preview } from "./shared/preview.js";
+import { Preview, mountPlateControls } from "./shared/preview.js";
 import { thumbnailSizes } from "./shared/thumbnail.js";
 import { planLayout, fillLayout } from "./shared/layout.js";
 import { supportOf, transferSettings } from "./shared/printSettings.js";
@@ -23,7 +23,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.22-review";
+const VERSION = "2.6.23-review";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -36,6 +36,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "Both 3D previews now show a gridded planning bed and reserved prime-tower space. Switch between Model and Plate, reset the camera or jump straight to Arrange plate from matching compact controls.",
   "Plate layout controls now match Full Spectrum: remove, restore and add object copies, Fill plate and Undo. Both pages have persistent Preview, Palette, Plate layout and Export settings shortcuts.",
   "Optional PETG support: deliberately merge model colours to free a U1 input, or carry the original into Full Spectrum for three PLA colours and PETG interfaces. Experimental; review a small sliced test.",
   "Choose a Bambu printer and nozzle for a native project with its official profiles, exact filament list, painting and compatible designer settings. Colour-model import remains available as an explicit alternative.",
@@ -841,6 +842,10 @@ async function refreshPreview() {
   if (!preview) {
     preview = new Preview($("convertpreview"));
     $("previewreset").addEventListener("click", () => preview.reset());
+    mountPlateControls(preview, $('platecontrols'), () => {
+      const panel=$('platelayout'); if (panel.tagName==='DETAILS') panel.open=true;
+      panel.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});
+    });
     window.addEventListener("resize", () => preview.resize());
   }
   if (!preview.ok) {
@@ -885,6 +890,7 @@ async function refreshPreview() {
   }
   const fit = key !== previewKey;
   previewKey = key;
+  try { preview.setPlate(session.planningLayout()); } catch { preview.setPlate(null); }
   preview.setSoup(positions, soup.colors, { fit });
   preview.resize();
   note(`${soup.triangles.toLocaleString()} facets drawn`
