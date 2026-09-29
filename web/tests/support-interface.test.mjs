@@ -167,7 +167,19 @@ test('session blocks unresolved PETG exports, snapshots the role and clears it o
   assert(s.mergeColours(4,2));assert(!s.capacityStatus().blocked);
   assert.equal(s.printerPalette()[1].type,'PETG');
   assert(await s.convert('snapmaker',1));assert.equal(calls[0][5].interfaceSlot,2);assert.equal(calls[0][5].supportInterface,true);
+  // Experimenting must restore the original colours and discard the old export.
+  assert(s.canUndoMerge()); assert(s.undoMerge()); assert.equal(s.output,null);
+  assert.equal(s.rule[4],4); assert(s.capacityStatus().blocked); assert(!s.canUndoMerge());
+  assert.equal(s.interfaceSlot,2); assert(s.supportInterface);
+  assert(s.mergeColours(1,3)); assert.equal(s.rule[4],4); assert.equal(s.rule[1],3);
+  assert(!s.capacityStatus().blocked);
+  assert(s.mergeColours(4,2)); assert(s.undoMerge()); assert.equal(s.rule[1],3);
+  assert(s.undoMerge()); assert.deepEqual(s.rule,{1:1,2:2,3:3,4:4});
+  assert(s.mergeColours(4,2)); s.setSource(1,3);
+  assert(!s.canUndoMerge()); assert(!s.undoMerge()); assert.equal(s.rule[1],3);
+  s.reset(); assert(!s.canUndoMerge());
+  assert(s.mergeColours(4,2));
   s.setInterface(true,3);assert.equal(s.output,null);
   s.setTarget('bambu');assert(!s.supportInterface);
-  s.setTarget('snapmaker');s.setInterface(true);await s.load(file);assert(!s.supportInterface);assert.deepEqual(errors,[]);
+  s.setTarget('snapmaker');s.setInterface(true);await s.load(file);assert(!s.supportInterface);assert(!s.canUndoMerge());assert.deepEqual(errors,[]);
 });

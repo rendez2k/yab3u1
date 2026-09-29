@@ -59,6 +59,7 @@ export class ConvertSession {
     // Each map is source index (1-based) -> destination filament.
     this.rules = { [SLOTS]: {}, [REPAINT]: {} };
     this.assignmentMode = SLOTS;
+    this.mergeHistory = [];
     // U1 projects use the destination bed. Other targets retain an editable
     // planning area, initially measured from the source file.
     this.layout = targetLayout(this.target,
@@ -123,7 +124,19 @@ export class ConvertSession {
     if(!this.supportInterface || this.assignmentMode!==REPAINT || from===to) return false;
     const destinations=new Set(this.activeColourIds().map(id=>this.rule[id]));
     if(!destinations.has(from)||!destinations.has(to)) return false;
+    const before = {...this.rule};
     for(const id of Object.keys(this.rule)) if(this.rule[id]===from) this.rule[id]=to;
+    this.mergeHistory.push({before, after:JSON.stringify(this.rule)});
+    this.invalidate(); this.hooks.rule?.(this.rule); this.hooks.settings?.(); return true;
+  }
+
+  canUndoMerge() {
+    return this.assignmentMode===REPAINT && this.mergeHistory.at(-1)?.after===JSON.stringify(this.rule);
+  }
+
+  undoMerge() {
+    if(!this.supportInterface || !this.canUndoMerge()) return false;
+    this.rules[REPAINT] = this.mergeHistory.pop().before;
     this.invalidate(); this.hooks.rule?.(this.rule); this.hooks.settings?.(); return true;
   }
 
@@ -283,6 +296,8 @@ export class ConvertSession {
   }
 
   invalidate() {
+    // Manual assignment edits must not be overwritten by an older merge undo.
+    if(!this.canUndoMerge()) this.mergeHistory = [];
     this.keepAllSignature = null;
     this.revision += 1;
     this.dropOutput();
@@ -567,6 +582,7 @@ export class ConvertSession {
       this.carrySettings = true;
       this.supportMode = "auto";
     this.supportInterface = false; this.interfaceSlot = 4; this.interfaceColor = "#FFFFFF";
+    this.mergeHistory = [];
     this.u1Nozzle = "auto";
     this.filamentProfiles = [];
       this.layoutProblem = "";

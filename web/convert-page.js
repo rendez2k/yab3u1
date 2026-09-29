@@ -22,7 +22,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.17-review";
+const VERSION = "2.6.18-review";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -762,6 +762,7 @@ function syncInterface() {
   }
   if($('mergefrom').value===$('mergeto').value && ids.length>1)$('mergeto').value=String(ids[1]);
   $('petgmerge').hidden=ids.length<=3; syncMergePreview();
+  $('petgmergeundo').hidden=!session.canUndoMerge();
   try {
     const plan=session.conversionPlan();
     $('petgstatus').textContent=`${ids.length} PLA model colours + PETG in slot ${session.interfaceSlot}. ${ids.length<3?'No merge needed. ':''}The preview shows the colours chosen for export.`;
@@ -773,6 +774,10 @@ $('petgslot').addEventListener('change',()=>session.setInterface(true,Number($('
 $('petgcolor').addEventListener('input',()=>session.setInterface(true,session.interfaceSlot,$('petgcolor').value));
 ['mergefrom','mergeto'].forEach(id=>$(id).addEventListener('change',syncMergePreview));
 $('mergeapply').addEventListener('click',()=>session.mergeColours(Number($('mergefrom').value),Number($('mergeto').value)));
+$('mergeundo').addEventListener('click',()=>{
+  session.undoMerge();
+  if(!$('petgmerge').hidden) $('mergefrom').focus();
+});
 $('petgfullspectrum').addEventListener('click',()=>openColourWorkflow('blends'));
 
 function openColourWorkflow(purpose) {
