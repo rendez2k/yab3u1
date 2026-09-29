@@ -269,7 +269,6 @@ function validateSlotOrder(order,length) {
 export function swapPaletteSlots(palette,from,to) {
   const length=palette.reels.length;
   if(![from,to].every(i=>Number.isInteger(i) && i>=0 && i<length)) throw new Error('Invalid physical slot.');
-  if(palette.reels[from]?.role==='support-interface' || palette.reels[to]?.role==='support-interface') throw new Error('The PETG interface slot is reserved.');
   const reels=palette.reels.slice(), slotOrder=(palette.slotOrder || reels.map((_,i)=>i)).slice();
   validateSlotOrder(slotOrder,length);
   [reels[from],reels[to]]=[reels[to],reels[from]];

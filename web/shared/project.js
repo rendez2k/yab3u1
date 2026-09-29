@@ -31,7 +31,7 @@ import {
 } from "./targets.js";
 import { readFilamentProfiles, applyFilamentProfiles, prusaFilamentConfig } from './filamentProfiles.js';
 import { buildU1Profile, conservativeSpeeds, constrainLayers, resolveLayerHeight } from './u1Profiles.js';
-import { applyInterfaceSettings, validateInterfaceExport } from './supportInterface.js';
+import { applyInterfaceSettings, validateInterfaceExport, interfaceSlot } from './supportInterface.js';
 import { BASE_SETTINGS } from "../base_settings.js";
 
 export const SNAPMAKER_SPECTRUM_APPLICATION = "BambuStudio-2.3.5";
@@ -1798,7 +1798,7 @@ function sourceSettingMetadata(project, objectId, target = "bambu", options = {}
     report.values.support_type = (options.u1Profile?.cfg || BASE_SETTINGS).support_type;
     report.values.support_threshold_angle = (options.u1Profile?.cfg || BASE_SETTINGS).support_threshold_angle;
   }
-  if(options.supportInterface) applyInterfaceSettings(report.values);
+  if(options.supportInterface) applyInterfaceSettings(report.values,{reels:options.physical || options.reels});
   return Object.entries(report.values).map(([key, value]) =>
     `<metadata${target === "prusa" ? ' type="object"' : ""} key="${key}" value="${esc(value)}"/>`).join("");
 }
@@ -2028,8 +2028,8 @@ export function exportProject(project, plateId, objectIds, options) {
   Object.entries(options.mapping || {}).forEach(([source, id]) => {
     mapping[Number(source)] = Number(id);
   });
-  if(options.supportInterface && analyse(project,plateId,objectIds).used.some(id=>(mapping[id] ?? id)===4))
-    throw new ProjectError('A model region still uses reserved PETG slot 4. Apply a three-colour palette before exporting.');
+  if(options.supportInterface && analyse(project,plateId,objectIds).used.some(id=>Number(mapping[id] ?? id)===interfaceSlot(reels)))
+    throw new ProjectError(`A model region still uses reserved PETG slot ${interfaceSlot(reels)}. Apply a three-colour palette before exporting.`);
   const u1Profile = target === 'snapmaker' ? buildU1Profile(project.sourceSettings, reelTypes,
     options.u1Nozzle || 'auto', {blends: recipes.length > 0, carry: options.carrySettings !== false, layerHeight:options.layerHeight}) : null;
   options = {...options, u1Profile};
@@ -2438,7 +2438,7 @@ export function exportProject(project, plateId, objectIds, options) {
     }
     const filamentReport=applyFilamentProfiles(cfg,reels,{u1:true});
     u1Profile.filamentKeys.push(...filamentReport.keys);
-    const interfaceKeys=options.supportInterface ? applyInterfaceSettings(cfg,{global:true}) : [];
+    const interfaceKeys=options.supportInterface ? applyInterfaceSettings(cfg,{global:true,reels}) : [];
     const overrides = setProcessOverrides(cfg, carried, recipes.length > 0);
     cfg.different_settings_to_system[0] = [...new Set([...overrides, ...u1Profile.processKeys, ...interfaceKeys])].sort().join(';');
     for (let i=0; i<reelTypes.length; i++) cfg.different_settings_to_system[i+1] = u1Profile.filamentKeys.join(';');

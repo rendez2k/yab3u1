@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {interfaceDemoFile} from '../shared/supportInterfaceDemo.js';
-import {interfacePalette,INTERFACE_SETTINGS} from '../shared/supportInterface.js';
+import {interfacePalette,INTERFACE_SETTINGS,interfaceSlot,validateInterfaceExport} from '../shared/supportInterface.js';
 import {recommendWorkflow} from '../shared/recommend.js';
 import {planBlends,mappingFromPlan,swapPaletteSlots,describeColourMapping} from '../shared/mix.js';
 import {readProject,analyse,exportProject} from '../shared/project.js';
@@ -37,12 +37,12 @@ test('white PETG can never match a white model region; keep-exact excludes PETG'
   assert.equal(all(recommendWorkflow({mode:'loaded',sources:{1:'#FFFFFF'},loaded:reels,supportInterface:true,keepExact:['#FFFFFF']})).length,0);
   assert.throws(()=>recommendWorkflow({sources,loaded:[],supportInterface:true,keepExact:Object.values(sources)}),/at most three/);
 });
-test('swapping the three model slots preserves blends and cannot move PETG',()=>{
+test('swapping model slots preserves blends',()=>{
   const p=swapPaletteSlots(chosen,0,2);
   const shifted=planBlends(sources,p.reels,p.approximate,p.slotOrder);
   const outcome=describeColourMapping(sources,{physical:p.reels,mapping:mappingFromPlan(shifted),kept:shifted.recipes},true);
   assert.deepEqual(outcome.rows.map(r=>r.result),chosen.outcome.rows.map(r=>r.result));
-  assert.throws(()=>swapPaletteSlots(chosen,0,3),/reserved/);
+
 });
 test('native U1 config and object overrides retain interface settings and PETG profile',()=>{
   // Conflicting object overrides must not silently disable the new mode.
@@ -89,4 +89,37 @@ test('loaded PETG keeps its real colour and profile while the model slots stay f
     assert.deepEqual(p.reels[3],{...loaded[3],role:'support-interface'});
   }
   assert.deepEqual(loaded[3].profile,{name:'PETG preset'});
+});
+
+for(let index=0;index<4;index++) test(`PETG in slot ${index+1}: blends, suggestions and exported support selectors follow`,()=>{
+  const palette=swapPaletteSlots(chosen,3,index);
+  assert.equal(interfaceSlot(interfacePalette(palette.reels,true)),index+1);
+  const plan=planBlends(sources,palette.reels,palette.approximate,palette.slotOrder);
+  const mapping=mappingFromPlan(plan);
+  const outcome=describeColourMapping(sources,{physical:palette.reels,mapping,kept:plan.recipes},true);
+  assert.deepEqual(outcome.rows.map(r=>r.result),chosen.outcome.rows.map(r=>r.result));
+  assert(!Object.values(mapping).includes(index+1));
+  assert(plan.recipes.every(r=>r.a!==index+1&&r.b!==index+1));
+  for(const mode of ['model','loaded']) {
+    const suggestions=all(recommendWorkflow({mode,sources,loaded:palette.reels,supportInterface:true}));
+    assert(suggestions.length);
+    assert(suggestions.every(p=>interfaceSlot(p.reels)===index+1 && p.type==='PLA'));
+  }
+  const settings={...exportOptions,physical:palette.reels,mapping,recipes:plan.recipes};
+  const out=exportProject(project,plate,null,settings);
+  assert.deepEqual(out.problems,[]);
+  const cfg=JSON.parse(decode(out.entries.get('Metadata/project_settings.config')));
+  const base=index===0?'2':'1';
+  assert.equal(cfg.support_interface_filament,String(index+1));
+  assert.equal(cfg.support_filament,base);
+  assert.equal(cfg.wipe_tower_filament,base);
+  assert.equal(cfg.filament_type[index],'PETG');
+  assert.match(cfg.filament_settings_id[index],/PETG/);
+  const objects=decode(out.entries.get('Metadata/model_settings.config'));
+  assert(objects.includes(`key="support_interface_filament" value="${index+1}"`));
+  assert(objects.includes(`key="support_filament" value="${base}"`));
+  assert.throws(()=>validateInterfaceExport({target:'snapmaker',reels:palette.reels,mapping:{1:index+1}}),/reserved/);
+  assert.throws(()=>validateInterfaceExport({target:'snapmaker',reels:palette.reels,recipes:[{a:index+1,b:index===0?2:1}]}),/reserved/);
+  const white=planBlends({1:palette.reels[index].color},palette.reels,true);
+  assert.notEqual(white.rows[0].solid.slot,index+1);
 });

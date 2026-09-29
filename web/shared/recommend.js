@@ -169,7 +169,12 @@ export function recommendWorkflow({mode='model', sources, loaded, stock=null, ty
   if(supportInterface && type!=='PLA') throw Error('The PETG interface demo uses PLA model filaments.');
   function consider(reels) {
     if(supportInterface) {
-      reels=interfacePalette([...reels.slice(0,3),loaded?.[3] || {}],true);
+      if(mode==='loaded') reels=interfacePalette(reels,true);
+      else {
+        const reserved=interfacePalette(loaded?.length===4 ? loaded : [{},{},{},{}],true);
+        const index=reserved.findIndex(r=>r.role==='support-interface');
+        reels=reels.slice(); reels.splice(index,0,reserved[index]);
+      }
       validateInterfaceExport({target:'snapmaker',reels});
     }
     search.evaluated++;
@@ -186,7 +191,7 @@ export function recommendWorkflow({mode='model', sources, loaded, stock=null, ty
     }
     // Surface-area mean plus a worst-colour penalty protects small accents.
     result.score=error/total + .15*Math.max(...rows.map(r=>distance(r.original,r.result)));
-    const option={reels:reels.map(r=>({...r})),type:reels[0].type,...result,usesLoaded:mode==='loaded'};
+    const option={reels:reels.map(r=>({...r})),type:reels.find(r=>r.role!=='support-interface').type,...result,usesLoaded:mode==='loaded'};
     (result.approximate ? approximateOptions : options).push(option);
   }
   if(mode==='loaded') {

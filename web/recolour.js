@@ -25,10 +25,10 @@ import {createTextureImport} from './shared/textureImport.js';
 import { buildU1Profile, profileDescription, resolveLayerHeight } from './shared/u1Profiles.js';
 import { colourWeights } from './shared/surfaceWeights.js';
 import { mountCalibration } from './shared/calibrationPanel.js';
-import { interfacePalette, validateInterfaceExport } from './shared/supportInterface.js';
+import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } from './shared/supportInterface.js';
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 
-const VERSION = "2.6.15-demo";
+const VERSION = "2.6.16-demo";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -36,7 +36,7 @@ const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
 }[c]));
 
 const state = {
-  supportInterface:false, savedInterfaceReels:null,
+  supportInterface:false, savedInterfaceReels:null, interfacePosition:3,
   entries: null, project: null, plateId: null, objects: [], reels: [], target: "snapmaker", u1Nozzle: "auto",
   mix: null, mapping: {}, recipes: [], ticked: new Set(),
   previewMode: "original", preview: null, previewGeometry: "", previewFailed: "",
@@ -113,13 +113,14 @@ function setInterface(enabled) {
   if(enabled) {
     state.savedInterfaceReels={...state.modeReels,[state.workflow]:state.reels.map(r=>({...r}))};
     state.reels=interfacePalette(state.reels,true);
+    state.interfacePosition=interfaceSlot(state.reels)-1;
     state.modelType='PLA'; $('modelmaterial').value='PLA';
     if(state.strategy==='source') state.strategy='blend';
   } else {
     const saved=state.savedInterfaceReels;
     if(saved) {
       state.modeReels=saved;
-      state.reels=state.reels.map((r,i)=>i===3 ? {...saved[state.workflow][3]} : {...r,role:undefined});
+      state.reels=saved[state.workflow].map(r=>({...r}));
     }
   }
   state.supportInterface=enabled;
@@ -166,16 +167,22 @@ function colourChange(row) {
 }
 function renderPaletteSlots() {
   const host=$("paletteslots"), palette=state.recommendation;
-  host.hidden=state.workflow!=='model' || !palette;
+  host.hidden=(state.workflow!=='model' && !state.supportInterface) || !palette;
   $("slotoptions").hidden=host.hidden;
   if(host.hidden) { host.replaceChildren(); return; }
   host.innerHTML=`<p class="hint">Match the slots on your printer. Choosing an occupied slot swaps the two colours; blend recipes follow automatically.</p>
-    <div class="slot-arrangement">${palette.reels.map((reel,index)=>`<label class="slot-row"><i class="swatch" style="background:${esc(reel.color)}" aria-hidden="true"></i><span><strong>${esc(reel.name || colourName(reel.color))}</strong><small>${esc(reel.color)}</small></span><select data-palette-slot="${index}"${reel.role==='support-interface'?' disabled':''} aria-label="Slot for ${esc(reel.name || colourName(reel.color))} (${esc(reel.color)}), currently slot ${index+1}">${palette.reels.map((r,slot)=>({r,slot})).filter(({r})=>reel.role==='support-interface' || r.role!=='support-interface').map(({slot})=>`<option value="${slot}"${index===slot?' selected':''}>Slot ${slot+1}</option>`).join('')}</select></label>`).join('')}</div>`;
+    <div class="slot-arrangement">${palette.reels.map((reel,index)=>`<label class="slot-row"><i class="swatch" style="background:${esc(reel.color)}" aria-hidden="true"></i><span><strong>${esc(reel.name || colourName(reel.color))}</strong><small>${esc(reel.color)}</small></span><select data-palette-slot="${index}" aria-label="Slot for ${esc(reel.name || colourName(reel.color))} (${esc(reel.color)}), currently slot ${index+1}">${palette.reels.map((r,slot)=>({r,slot})).map(({slot})=>`<option value="${slot}"${index===slot?' selected':''}>Slot ${slot+1}</option>`).join('')}</select></label>`).join('')}</div>`;
   host.querySelectorAll('[data-palette-slot]').forEach(select=>select.addEventListener('change',()=>{
     const destination=Number(select.value);
     const option=swapPaletteSlots(state.recommendation,Number(select.dataset.paletteSlot),destination);
     state.recommendationOptions[state.recommendationIndex]=option;
     state.recommendation=option;
+    if(state.supportInterface) {
+      state.interfacePosition=interfaceSlot(option.reels)-1;
+      // All alternatives keep the chosen interface position when changing palette.
+      state.recommendationOptions=state.recommendationOptions.map(p=>
+        swapPaletteSlots(p,interfaceSlot(p.reels)-1,state.interfacePosition));
+    }
     // The selected suggestion is a fresh arrangement to review and apply.
     setReelView('recommended');
     state.overrides={}; state.ticked=new Set(); state.recipeKey='';
@@ -251,12 +258,17 @@ function requestRecommendation() {
   const sourceColours=Object.values(state.assessed.sourceColors).map(norm);
   state.keepExact=state.keepExact.filter(c=>sourceColours.includes(c));
   const input={mode:state.workflow,sources:state.assessed.sourceColors,
-    loaded:state.workflow==='loaded' ? state.reels : state.supportInterface ? [{},{},{},state.reels[3]] : [],
+    loaded:state.workflow==='loaded' ? state.reels : state.supportInterface
+      ? Array.from({length:4},(_,i)=>i===state.interfacePosition ? state.reels[interfaceSlot(state.reels)-1] : {}) : [],
     supportInterface:state.supportInterface,
     stock:state.workflow==='model' && state.useOwned ? state.stock : null,
     type:state.modelType,keepExact:state.workflow==='model' ? state.keepExact : [],
     weights,blends:state.strategy!=='solid',calibration:calibrationPanel?.active() || null};
-  const key=JSON.stringify({...input,loaded:input.loaded.map(({color,type})=>({color,type}))});
+  // Model colours and slot arrangement do not alter the palette search. Applying
+  // or moving a suggestion must not discard the palette the user just chose.
+  const keyReels=state.workflow==='model' && state.supportInterface
+    ? input.loaded.filter(r=>r.role==='support-interface') : input.loaded;
+  const key=JSON.stringify({...input,loaded:keyReels.map(({color,type,role})=>({color,type,role}))});
   if(key===recommendationKey) { renderRecommendation(); return; }
   invalidateRecommendation(); recommendationKey=key;
   renderRecommendation(state.workflow==='model' ? 'Comparing sets of original model colours…' : 'Calculating blends from your loaded filaments…');
@@ -318,7 +330,9 @@ function renderWorkflow() {
   $('interfacesettings').hidden=!state.supportInterface;
   $('modelmaterial').disabled=state.supportInterface;
   document.querySelector('[data-strategy="source"]').disabled=state.supportInterface;
-  $('interfacehint').textContent=state.supportInterface ? 'Slots 1–3: PLA model colours. Slot 4: PETG support interface only. Colour suggestions never use PETG. Supports appear after slicing, not in this model preview.' : 'Reserve slot 4 for PETG; use slots 1–3 for model colours and blends.';
+  const reserved=interfaceSlot(activeReels()), base=modelSlots(activeReels())[0];
+  $('interfacehint').textContent=state.supportInterface ? `Slot ${reserved}: PETG support interface only. The other three slots are PLA model colours. Move PETG under Arrange printer slots; colour suggestions never use it. Supports appear after slicing.` : 'Reserve one slot for PETG; use the other three for model colours and blends.';
+  $('interfacesettings').querySelector('p').textContent=`PLA support structure from slot ${base}, PETG contact layers from slot ${reserved}. Three dense interface layers, 0 mm top/bottom Z gap. Supports are enabled; source support style and painted areas are retained. The prime-tower shell uses PLA slot ${base}. These are starting settings: check the sliced interfaces and try a small print first.`;
   $('exacthint').textContent=`Keep essential colours exact (up to ${state.supportInterface?'three':'four'}). Extra colours need blends.${state.supportInterface?' PETG is never a model colour.':''} Surface percentages measure the original mesh.`;
   const model=state.workflow==='model';
   document.querySelectorAll('[data-workflow]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.workflow===state.workflow)));
@@ -657,7 +671,7 @@ function renderReels() {
     `<div class="field"><label for="reel${index}">Slot ${index + 1}</label>`
     + `<input type="color" id="reel${index}" value="${esc(reel.color)}">`
     + `<span class="hint reelname" id="reelname${index}">${esc(reel.name || colourName(reel.color))}</span>`
-    + `<select aria-label="Slot ${index+1} material" data-type="${index}"${state.supportInterface && index===3?' disabled':''}>${["PLA", "PETG", "ABS", "TPU", "ASA", "PA"]
+    + `<select aria-label="Slot ${index+1} material" data-type="${index}"${state.supportInterface && reel.role==='support-interface'?' disabled':''}>${["PLA", "PETG", "ABS", "TPU", "ASA", "PA"]
       .map((type) => `<option${type === reel.type ? " selected" : ""}>${type}</option>`)
       .join("")}</select></div>`).join("");
   state.reels.forEach((reel, index) => {
@@ -685,7 +699,7 @@ function renderReels() {
     state.locked[Number(box.dataset.lock)]=box.checked; refresh();
   }));
   $("reelnote").textContent = state.workflow==="loaded" ? "Set exactly what is loaded, including CMYK if that is your set. We keep these reels fixed and calculate their blends." : "These are the four reels selected for export. Load them in this order before printing.";
-  if(state.supportInterface) $('reelnote').textContent='Slots 1–3 are PLA model colours; slot 4 is reserved for PETG interfaces. Its swatch records your PETG colour and does not affect the model.';
+  if(state.supportInterface) $('reelnote').textContent=`Slot ${interfaceSlot(state.reels)} is reserved for PETG interfaces; the other slots are PLA model colours. The PETG swatch records your reel colour and does not affect the model.`;
   spoolImport.refresh();
 }
 
@@ -828,7 +842,9 @@ function resultPlan() {
     };
   }
   if (state.strategy === "solid") {
-    const mapping = suggestMapping(assessed.sourceColors, state.supportInterface ? slots.slice(0,3) : slots);
+    const available=modelSlots(reels);
+    const mapping = suggestMapping(assessed.sourceColors,available.map(slot=>slots[slot-1]));
+    for(const source of Object.keys(mapping)) mapping[source]=available[mapping[source]-1];
     for (const [source, slot] of Object.entries(state.overrides)) {
       if (Number(slot) > 0) mapping[source] = Number(slot);
     }
@@ -906,7 +922,7 @@ function renderMix(assessed) {
           : slots[(payload.mapping[row.source] || 1) - 1]);
       const options = ["<option value=\"0\">"
         + (blendMode ? "matching reel / blend" : "nearest") + "</option>"]
-        .concat((state.supportInterface?[1,2,3]:[1,2,3,4]).map((slot) =>
+        .concat(modelSlots(activeReels()).map((slot) =>
           `<option value="${slot}"${Number(state.overrides[row.source]) === slot
             ? " selected" : ""}>slot ${slot} · ${esc(slots[slot - 1])}</option>`))
         .join("");
@@ -1214,7 +1230,7 @@ function renderExport() {
     : state.strategy === "source"
       ? `Download a ${LABELS[target]} project keeping each source colour in its own slot. Check the settings and slice it before printing.`
       : `Download a ${LABELS[target]} project using the four loaded reels and the colour mapping above. Check the settings and slice it before printing.`;
-  if(state.supportInterface && !blocking) $('exportnote').textContent=`Demo export: three PLA model reels, ${mixtures} blend recipe(s), and PETG interfaces in slot 4. Supports enabled; three dense contact layers at 0 mm Z gap; PLA prime-tower shell. Check the sliced result and test a small print first.`;
+  if(state.supportInterface && !blocking) $('exportnote').textContent=`Demo export: three PLA model reels, ${mixtures} blend recipe(s), and PETG interfaces in slot ${interfaceSlot(payload.physical)}. Supports enabled; three dense contact layers at 0 mm Z gap; PLA prime-tower shell. Check the sliced result and test a small print first.`;
   if (!blocking && target === "prusa") {
     $("exportnote").textContent += " Open the file as a project in PrusaSlicer with a "
       + "four-extruder profile: the palette lives in the Full Spectrum description, "
