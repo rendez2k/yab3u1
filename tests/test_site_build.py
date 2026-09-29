@@ -73,6 +73,8 @@ PUBLIC_FILES = (
     "shared/calibrationPanel.js",
     "shared/calibrationSwatches.js",
     "shared/surfaceWeights.js",
+    "shared/supportInterface.js",
+    "shared/supportInterfaceDemo.js",
     "shared/layout.js",
     "shared/mix.js",
     "shared/mix_model.js",

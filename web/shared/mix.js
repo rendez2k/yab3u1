@@ -61,6 +61,7 @@ export function candidateRecipes(reels, ratios = RATIOS, predictor = mixHex) {
   const colors = reels.map((r) => norm((r || {}).color));
   for (let a = 0; a < colors.length; a += 1) {
     for (let b = a + 1; b < colors.length; b += 1) {
+      if (reels[a]?.role==='support-interface' || reels[b]?.role==='support-interface') continue;
       if (!colors[a] || !colors[b]) continue;
       if (material(reels[a]) !== material(reels[b])) continue;
       for (const percent of ratios) {
@@ -81,10 +82,13 @@ export function planMixtures(sourceColors, reels, ratios = RATIOS,
     plausibleBlend(slotColors[recipe.a-1],slotColors[recipe.b-1],recipe.color)));
   const rows = [];
   const used = new Map();
-  const approximateColours = new Map(slotColors.map(color=>[color,color]));
+  const approximateColours = new Map(slotColors.filter((_,i)=>reels[i].role!=='support-interface').map(color=>[color,color]));
   Object.keys(sourceColors).map(Number).sort((a, b) => a - b).forEach((source) => {
     const original = norm(sourceColors[source]);
-    const [solidSlot, solidError] = nearest(original, slotColors);
+    const modelSlots = reels.map((r,i)=>r.role==='support-interface' ? -1 : i).filter(i=>i>=0);
+    if (!modelSlots.length) throw Error('At least one model filament is required.');
+    const [nearestSlot, solidError] = nearest(original, modelSlots.map(i=>slotColors[i]));
+    const solidSlot = nearestSlot==null ? null : modelSlots[nearestSlot];
     let best = null;
     for (const recipe of candidates) {
       // Explicit approximations retain distinct source shades instead of merging
@@ -265,6 +269,7 @@ function validateSlotOrder(order,length) {
 export function swapPaletteSlots(palette,from,to) {
   const length=palette.reels.length;
   if(![from,to].every(i=>Number.isInteger(i) && i>=0 && i<length)) throw new Error('Invalid physical slot.');
+  if(palette.reels[from]?.role==='support-interface' || palette.reels[to]?.role==='support-interface') throw new Error('The PETG interface slot is reserved.');
   const reels=palette.reels.slice(), slotOrder=(palette.slotOrder || reels.map((_,i)=>i)).slice();
   validateSlotOrder(slotOrder,length);
   [reels[from],reels[to]]=[reels[to],reels[from]];

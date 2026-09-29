@@ -4,6 +4,7 @@ import { distance, norm, toLab } from './colour.js';
 import { colourName } from './assignment.js';
 import { describeColourMapping, mappingFromPlan, planBlends, RATIOS, MIN_IMPROVEMENT, POOR_COVERAGE } from './mix.js';
 import { mixFdmHex, approximateDistance } from './fdmMix.js';
+import { interfacePalette, validateInterfaceExport } from './supportInterface.js';
 
 const BASICS=['#FFFFFF','#000000','#808080','#FF0000','#0080C0','#0000FF',
   '#008000','#00FF00','#FFFF00','#FF9500','#00FFFF','#FF00FF','#800080','#8B4513','#FFC0CB'];
@@ -159,14 +160,20 @@ export function recommendPalette({sources,loaded,stock=null,locked=[],blends=tru
 }
 
 /** Two explicit workflows. Model-first does not use the saved printer palette. */
-export function recommendWorkflow({mode='model', sources, loaded, stock=null, type='PLA', keepExact=[], weights={}, blends=true, calibration=null}) {
+export function recommendWorkflow({mode='model', sources, loaded, stock=null, type='PLA', keepExact=[], weights={}, blends=true, calibration=null, supportInterface=false}) {
   const colours=[...new Set(Object.values(sources || {}).map(norm).filter(Boolean))];
   if(!colours.length) throw Error('Select a model with readable colours.');
   const options=[], approximateOptions=[];
   const search={evaluated:0,candidates:0,bounded:false};
+  const modelCount=supportInterface ? 3 : 4;
+  if(supportInterface && type!=='PLA') throw Error('The PETG interface demo uses PLA model filaments.');
   function consider(reels) {
+    if(supportInterface) {
+      reels=interfacePalette([...reels.slice(0,3),loaded?.[3] || {}],true);
+      validateInterfaceExport({target:'snapmaker',reels});
+    }
     search.evaluated++;
-    if(keepExact.some(color=>!reels.some(r=>norm(r.color)===norm(color)))) return;
+    if(keepExact.some(color=>!reels.some(r=>r.role!=='support-interface' && norm(r.color)===norm(color)))) return;
     let result=outcomeFor(sources,reels,blends,false,calibration);
     if(result.unresolved && blends) result=outcomeFor(sources,reels,true,true,calibration);
     if(result.unresolved) return;
@@ -187,7 +194,7 @@ export function recommendWorkflow({mode='model', sources, loaded, stock=null, ty
     // Never search replacements in this mode, including when a library is connected.
     consider(loaded);
   } else {
-    if(keepExact.length>4) throw Error('Keep at most four original colours exact; the remaining colours need blends.');
+    if(keepExact.length>modelCount) throw Error(`Keep at most ${supportInterface?'three':'four'} original colours exact; the remaining colours need blends.`);
     let pool=colours.map(color=>({color,type,name:colourName(color)}));
     if(stock!==null) {
       const owned=[...new Map(stock.filter(r=>material(r)===type && norm(r.color)).map(r=>[norm(r.color),{...r,color:norm(r.color),type}])).values()];
@@ -196,14 +203,14 @@ export function recommendWorkflow({mode='model', sources, loaded, stock=null, ty
       if(pool.length>16) { pool=pool.slice(0,16); search.bounded=true; }
     }
     search.candidates=pool.length;
-    if(pool.length && pool.length<4) {
-      const reels=pool.slice(); while(reels.length<4) reels.push({...pool[0]});
+    if(pool.length && pool.length<modelCount) {
+      const reels=pool.slice(); while(reels.length<modelCount) reels.push({...pool[0]});
       consider(reels);
     } else {
       const selected=[];
       function visit(start) {
-        if(selected.length===4) {consider(selected);return;}
-        for(let i=start;i<=pool.length-(4-selected.length);i++) {
+        if(selected.length===modelCount) {consider(selected);return;}
+        for(let i=start;i<=pool.length-(modelCount-selected.length);i++) {
           selected.push(pool[i]); visit(i+1); selected.pop();
         }
       }

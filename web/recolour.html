@@ -462,6 +462,7 @@
 </header>
 <main>
   <div class="studiointro"><h2>Keep your model’s colours.</h2><p>Choose the best reels for the model, or work with the filaments already loaded.</p></div>
+  <p id="interfacedemoload" hidden><button type="button" id="tryinterface">Try the four-colour support arch</button> <span class="hint">Generated sample · or open your own 3MF below.</span></p>
   <details class="extension-help" id="chrome-extension">
     <summary>From MakerWorld? Get the Chrome extension</summary>
     <p><a href="downloads/makerworld-yab3d-review-1.5.3.6.zip" download>Download Chrome extension 1.5.3.6 (ZIP)</a>
@@ -555,9 +556,14 @@
       <button type="button" data-workflow="loaded" aria-pressed="false">Use my loaded filaments</button>
     </div>
     <p class="hint" id="workflowhint"></p>
+    <section id="supportinterface" aria-label="PETG support interface demo">
+      <label class="check"><input type="checkbox" id="reservepetg">Three PLA colours + PETG interface · demo</label>
+      <p class="hint" id="interfacehint" role="status">Reserve slot 4 for PETG; use slots 1–3 for model colours and blends.</p>
+      <details id="interfacesettings" hidden><summary>Interface settings for this demo</summary><p class="hint">PLA support structure from slot 1, PETG contact layers from slot 4. Three dense interface layers, 0 mm top/bottom Z gap. Supports are enabled; source support style and painted areas are retained. The prime-tower shell uses PLA slot 1. These are starting settings: check the sliced interfaces and try a small print first.</p></details>
+    </section>
     <details id="modelchoices" class="compact-options"><summary id="modelchoicessummary">Colour preferences · PLA</summary>
       <label class="field">Filament material <select id="modelmaterial"><option>PLA</option><option>PETG</option><option>ABS</option><option>TPU</option><option>ASA</option><option>PA</option></select></label>
-      <p class="hint">Keep essential colours exact (up to four), especially small eyes, lettering, skin tones or logos. Surface percentages measure the original mesh before preview simplification; they do not account for visibility or cutouts.</p>
+      <p class="hint" id="exacthint">Keep essential colours exact (up to four), especially small eyes, lettering, skin tones or logos. Surface percentages measure the original mesh before preview simplification; they do not account for visibility or cutouts.</p>
       <div id="exactcolours" class="row"></div>
       <label class="check"><input type="checkbox" id="useowned"> Choose from my Spool Studio filaments only</label>
       <p class="hint" id="ownedhint"></p>
@@ -681,7 +687,7 @@
   need a real U1 slice. Nothing here slices for you or sends files to your printer.
   <p>Blend predictions use
     <a href="https://github.com/prusa3d/prusa-fdm-mixer">Prusa FDM Mixer</a>
-    for alternating filament layers. Suggestions search four reels together with 25/50/75% two-reel recipes.
+    for alternating filament layers. Suggestions search three model reels when PETG is reserved, or four otherwise, together with 25/50/75% two-reel recipes.
     <a href="THIRD_PARTY_NOTICES.txt">Credits and third-party notices</a>.</p></footer>
 <nav id="actionbar" aria-label="Project actions" hidden>
   <div class="action-inner">

@@ -25,8 +25,10 @@ import {createTextureImport} from './shared/textureImport.js';
 import { buildU1Profile, profileDescription, resolveLayerHeight } from './shared/u1Profiles.js';
 import { colourWeights } from './shared/surfaceWeights.js';
 import { mountCalibration } from './shared/calibrationPanel.js';
+import { interfacePalette, validateInterfaceExport } from './shared/supportInterface.js';
+import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 
-const VERSION = "2.6.14";
+const VERSION = "2.6.15-demo";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -34,6 +36,7 @@ const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
 }[c]));
 
 const state = {
+  supportInterface:false, savedInterfaceReels:null,
   entries: null, project: null, plateId: null, objects: [], reels: [], target: "snapmaker", u1Nozzle: "auto",
   mix: null, mapping: {}, recipes: [], ticked: new Set(),
   previewMode: "original", preview: null, previewGeometry: "", previewFailed: "",
@@ -91,7 +94,7 @@ state.modeReels.model = ['#FFFFFF','#000000','#0080C0','#FF0000'].map(color=>({c
 state.reels = state.modeReels.model.map(r=>({...r}));
 
 function saveReels() {
-  if(state.workflow!=="loaded") return;
+  if(state.workflow!=="loaded" || state.supportInterface) return;
   try { localStorage.setItem(REEL_KEY, JSON.stringify(state.reels.map(({color,type})=>({color,type})))); } catch (e) { /* fine */ }
 }
 
@@ -106,6 +109,26 @@ let recommendationWorker=null, recommendationKey='';
 function activeReels() {
   return state.reelView==='recommended' && state.recommendation ? state.recommendation.reels : state.reels;
 }
+function setInterface(enabled) {
+  if(enabled) {
+    state.savedInterfaceReels={...state.modeReels,[state.workflow]:state.reels.map(r=>({...r}))};
+    state.reels=interfacePalette(state.reels,true);
+    state.modelType='PLA'; $('modelmaterial').value='PLA';
+    if(state.strategy==='source') state.strategy='blend';
+  } else {
+    const saved=state.savedInterfaceReels;
+    if(saved) {
+      state.modeReels=saved;
+      state.reels=state.reels.map((r,i)=>i===3 ? {...saved[state.workflow][3]} : {...r,role:undefined});
+    }
+  }
+  state.supportInterface=enabled;
+  $('reservepetg').checked=enabled;
+  state.appliedSlotOrder=null;state.loadedTuning=null;state.overrides={};state.ticked=new Set();state.recipeKey='';
+  document.querySelectorAll('[data-strategy]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.strategy===state.strategy)));
+  invalidateRecommendation();renderReels();renderWorkflow();refresh();
+}
+$('reservepetg').addEventListener('change',()=>setInterface($('reservepetg').checked));
 function setReelView(view) {
   if(view===state.reelView) return;
   if(view==='recommended') {
@@ -147,7 +170,7 @@ function renderPaletteSlots() {
   $("slotoptions").hidden=host.hidden;
   if(host.hidden) { host.replaceChildren(); return; }
   host.innerHTML=`<p class="hint">Match the slots on your printer. Choosing an occupied slot swaps the two colours; blend recipes follow automatically.</p>
-    <div class="slot-arrangement">${palette.reels.map((reel,index)=>`<label class="slot-row"><i class="swatch" style="background:${esc(reel.color)}" aria-hidden="true"></i><span><strong>${esc(reel.name || colourName(reel.color))}</strong><small>${esc(reel.color)}</small></span><select data-palette-slot="${index}" aria-label="Slot for ${esc(reel.name || colourName(reel.color))} (${esc(reel.color)}), currently slot ${index+1}">${palette.reels.map((_,slot)=>`<option value="${slot}"${index===slot?' selected':''}>Slot ${slot+1}</option>`).join('')}</select></label>`).join('')}</div>`;
+    <div class="slot-arrangement">${palette.reels.map((reel,index)=>`<label class="slot-row"><i class="swatch" style="background:${esc(reel.color)}" aria-hidden="true"></i><span><strong>${esc(reel.name || colourName(reel.color))}</strong><small>${esc(reel.color)}</small></span><select data-palette-slot="${index}"${reel.role==='support-interface'?' disabled':''} aria-label="Slot for ${esc(reel.name || colourName(reel.color))} (${esc(reel.color)}), currently slot ${index+1}">${palette.reels.map((r,slot)=>({r,slot})).filter(({r})=>reel.role==='support-interface' || r.role!=='support-interface').map(({slot})=>`<option value="${slot}"${index===slot?' selected':''}>Slot ${slot+1}</option>`).join('')}</select></label>`).join('')}</div>`;
   host.querySelectorAll('[data-palette-slot]').forEach(select=>select.addEventListener('change',()=>{
     const destination=Number(select.value);
     const option=swapPaletteSlots(state.recommendation,Number(select.dataset.paletteSlot),destination);
@@ -197,12 +220,12 @@ function renderRecommendation(message) {
   $("morepalettes").textContent=state.showMorePalettes ? 'Fewer palettes' : 'More palettes';
   $("morepalettes").setAttribute('aria-expanded',String(state.showMorePalettes));
   if(message) $("recommendstatus").textContent=message;
-  else if(state.recommendationSearch?.found===false && result) $("recommendstatus").textContent=(state.workflow==='model' ? 'Load one of these sets of original colours and blend the remainder. ' : 'These recipes use only your four loaded filaments. ') + 'No close reproduction found: compare the original and predicted shades before accepting changes.';
+  else if(state.recommendationSearch?.found===false && result) $("recommendstatus").textContent=(state.workflow==='model' ? 'Load one of these sets of original colours and blend the remainder. ' : `These recipes use only your ${state.supportInterface?'three PLA':'four loaded'} filaments. `) + 'No close reproduction found: compare the original and predicted shades before accepting changes.';
   else if(state.recommendationSearch?.found===false) $("recommendstatus").textContent=state.recommendationSearch.reason
     + ' This is a search result, not proof that no palette could work.';
   else if(result) $("recommendstatus").textContent=state.workflow==='model'
     ? `${result.rough ? 'Original model colours to load.' : 'Closest options from your Spool Studio collection.'} Keep as many originals as possible and blend the rest. Ranking uses original surface area and colour error, with a penalty for the worst colour change. Keep exact protects essential accents.`
-    : 'Using only your four loaded filaments. Matching colours stay exact; remaining regions use the blend recipes below.';
+    : `Using only your ${state.supportInterface?'three PLA':'four loaded'} filaments. Matching colours stay exact; remaining regions use the blend recipes below.`;
   document.querySelectorAll('[data-reel-view]').forEach(button=>{
     button.setAttribute('aria-pressed',String(button.dataset.reelView===state.reelView && state.previewMode==='result'));
     const unavailable=button.dataset.reelView==='recommended' ? !result
@@ -228,7 +251,8 @@ function requestRecommendation() {
   const sourceColours=Object.values(state.assessed.sourceColors).map(norm);
   state.keepExact=state.keepExact.filter(c=>sourceColours.includes(c));
   const input={mode:state.workflow,sources:state.assessed.sourceColors,
-    loaded:state.workflow==='loaded' ? state.reels : [],
+    loaded:state.workflow==='loaded' ? state.reels : state.supportInterface ? [{},{},{},state.reels[3]] : [],
+    supportInterface:state.supportInterface,
     stock:state.workflow==='model' && state.useOwned ? state.stock : null,
     type:state.modelType,keepExact:state.workflow==='model' ? state.keepExact : [],
     weights,blends:state.strategy!=='solid',calibration:calibrationPanel?.active() || null};
@@ -290,6 +314,12 @@ $("advancedlink").addEventListener('click',()=>{
 });
 
 function renderWorkflow() {
+  $('supportinterface').hidden=state.target!=='snapmaker';
+  $('interfacesettings').hidden=!state.supportInterface;
+  $('modelmaterial').disabled=state.supportInterface;
+  document.querySelector('[data-strategy="source"]').disabled=state.supportInterface;
+  $('interfacehint').textContent=state.supportInterface ? 'Slots 1–3: PLA model colours. Slot 4: PETG support interface only. Colour suggestions never use PETG. Supports appear after slicing, not in this model preview.' : 'Reserve slot 4 for PETG; use slots 1–3 for model colours and blends.';
+  $('exacthint').textContent=`Keep essential colours exact (up to ${state.supportInterface?'three':'four'}). Extra colours need blends.${state.supportInterface?' PETG is never a model colour.':''} Surface percentages measure the original mesh.`;
   const model=state.workflow==='model';
   document.querySelectorAll('[data-workflow]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.workflow===state.workflow)));
   $("modelchoices").hidden=!model;
@@ -298,7 +328,7 @@ function renderWorkflow() {
   $("reelheading").textContent=model ? 'Palette selected for export' : 'Loaded filaments';
   $("workflowhint").textContent=model
     ? "Which filaments should I load? Start with the model’s original colours, keep as many exact as possible and make the others with blends."
-    : "What can I make with these filaments? Keep the four loaded reels fixed and find their closest achievable blends.";
+    : `What can I make with these filaments? Keep the ${state.supportInterface?'three PLA':'four loaded'} reels fixed and find their closest achievable blends.`;
   $("recommendheading").textContent=model ? 'Colours to load + colours to blend' : 'Blends from your loaded filaments';
   document.querySelector('[data-reel-view="loaded"]').textContent=model ? 'Applied' : 'Loaded';
   document.querySelector('[data-reel-view="recommended"]').textContent=model ? 'Suggested' : 'Blend result';
@@ -308,7 +338,7 @@ function renderWorkflow() {
   const colours=[...new Set(Object.values(state.assessed?.sourceColors || {}).map(norm))];
   const areas=colourWeights(state.assessed?.sourceColors || {},state.assessed?.surfaceAreas);
   const totalArea=Object.values(areas).reduce((a,b)=>a+b,0);
-  const signature=JSON.stringify([colours,state.keepExact,areas]);
+  const signature=JSON.stringify([colours,state.keepExact,areas,state.supportInterface]);
   if($("exactcolours").dataset.signature!==signature) {
     $("exactcolours").dataset.signature=signature;
     $("exactcolours").innerHTML=colours.map(c=>`<label class="check"><input type="checkbox" data-exact="${c}" ${state.keepExact.includes(c)?'checked':''}><i class="swatch" style="background:${c}"></i>Keep ${esc(colourName(c))} exact (${c})${totalArea ? ` · ${(100*(areas[c]||0)/totalArea).toFixed(1)}% surface` : ''}</label>`).join('');
@@ -622,11 +652,12 @@ function selectedObjects() {
 }
 
 function renderReels() {
+  state.reels=interfacePalette(state.reels,state.supportInterface);
   $("reels").innerHTML = state.reels.map((reel, index) =>
     `<div class="field"><label for="reel${index}">Slot ${index + 1}</label>`
     + `<input type="color" id="reel${index}" value="${esc(reel.color)}">`
     + `<span class="hint reelname" id="reelname${index}">${esc(reel.name || colourName(reel.color))}</span>`
-    + `<select aria-label="Slot ${index+1} material" data-type="${index}">${["PLA", "PETG", "ABS", "TPU", "ASA", "PA"]
+    + `<select aria-label="Slot ${index+1} material" data-type="${index}"${state.supportInterface && index===3?' disabled':''}>${["PLA", "PETG", "ABS", "TPU", "ASA", "PA"]
       .map((type) => `<option${type === reel.type ? " selected" : ""}>${type}</option>`)
       .join("")}</select></div>`).join("");
   state.reels.forEach((reel, index) => {
@@ -654,6 +685,7 @@ function renderReels() {
     state.locked[Number(box.dataset.lock)]=box.checked; refresh();
   }));
   $("reelnote").textContent = state.workflow==="loaded" ? "Set exactly what is loaded, including CMYK if that is your set. We keep these reels fixed and calculate their blends." : "These are the four reels selected for export. Load them in this order before printing.";
+  if(state.supportInterface) $('reelnote').textContent='Slots 1–3 are PLA model colours; slot 4 is reserved for PETG interfaces. Its swatch records your PETG colour and does not affect the model.';
   spoolImport.refresh();
 }
 
@@ -768,6 +800,10 @@ function resultPlan() {
   const assessed = state.assessed;
   const reels = activeReels();
   const slots = reels.map((reel) => norm(reel.color));
+  if(state.supportInterface) {
+    try { validateInterfaceExport({target:state.target,reels}); }
+    catch(error) {return {mapping:{},recipes:[],kept:[],physical:reels,blocked:error.message};}
+  }
   if (!assessed || !state.mix) {
     return { mapping: {}, recipes: [], kept: [], physical: reels,
              blocked: assessed ? "Analysing the selected colours…" : "tick at least one object" };
@@ -792,7 +828,7 @@ function resultPlan() {
     };
   }
   if (state.strategy === "solid") {
-    const mapping = suggestMapping(assessed.sourceColors, slots);
+    const mapping = suggestMapping(assessed.sourceColors, state.supportInterface ? slots.slice(0,3) : slots);
     for (const [source, slot] of Object.entries(state.overrides)) {
       if (Number(slot) > 0) mapping[source] = Number(slot);
     }
@@ -870,7 +906,7 @@ function renderMix(assessed) {
           : slots[(payload.mapping[row.source] || 1) - 1]);
       const options = ["<option value=\"0\">"
         + (blendMode ? "matching reel / blend" : "nearest") + "</option>"]
-        .concat([1, 2, 3, 4].map((slot) =>
+        .concat((state.supportInterface?[1,2,3]:[1,2,3,4]).map((slot) =>
           `<option value="${slot}"${Number(state.overrides[row.source]) === slot
             ? " selected" : ""}>slot ${slot} · ${esc(slots[slot - 1])}</option>`))
         .join("");
@@ -951,6 +987,7 @@ $('spectrumnozzle').addEventListener('change',()=>{
 });
 $("target").addEventListener("change", () => {
   state.target = $("target").value;
+  if(state.target!=='snapmaker' && state.supportInterface) setInterface(false);
   updateCopies();
   refreshPreview();
   cancelPlan();
@@ -1177,6 +1214,7 @@ function renderExport() {
     : state.strategy === "source"
       ? `Download a ${LABELS[target]} project keeping each source colour in its own slot. Check the settings and slice it before printing.`
       : `Download a ${LABELS[target]} project using the four loaded reels and the colour mapping above. Check the settings and slice it before printing.`;
+  if(state.supportInterface && !blocking) $('exportnote').textContent=`Demo export: three PLA model reels, ${mixtures} blend recipe(s), and PETG interfaces in slot 4. Supports enabled; three dense contact layers at 0 mm Z gap; PLA prime-tower shell. Check the sliced result and test a small print first.`;
   if (!blocking && target === "prusa") {
     $("exportnote").textContent += " Open the file as a project in PrusaSlicer with a "
       + "four-extruder profile: the palette lives in the Full Spectrum description, "
@@ -1189,7 +1227,7 @@ function exportRevision() {
   return JSON.stringify({epoch: state.epoch, plate: state.plateId,
     objects: state.objects, layout:state.layout, layoutError:state.layoutError, target: state.target, reels: state.reels, u1Nozzle:state.u1Nozzle,
     physical: payload.physical, mapping: payload.mapping, recipes: payload.recipes,
-    strategy: state.strategy, reviewed: state.reviewed, reelView:state.reelView,layerHeight:layerChoice()});
+    strategy: state.strategy, reviewed: state.reviewed, reelView:state.reelView,layerHeight:layerChoice(),supportInterface:state.supportInterface});
 }
 
 $("export").addEventListener("click", async () => {
@@ -1231,14 +1269,14 @@ $("export").addEventListener("click", async () => {
       target: state.target, reels: state.reels, physical: payload.physical,
       mapping: payload.mapping, recipes: payload.recipes,
       title: state.project.title, u1Nozzle:state.u1Nozzle, layout:state.layout,
-      layerHeight:layerChoice(),
+      layerHeight:layerChoice(),supportInterface:state.supportInterface,
       thumbnails: { main: rendered.main, small: rendered.small || null },
     });
     if (exportRevision() !== revision) return;
     const bytes = new Uint8Array(built.bytes);
     const blob = new Blob([bytes], { type: "application/vnd.ms-package.3dmanufacturing-3dmodel+xml" });
     const name = (state.project.title || "model").replace(/[^\w.-]+/g, "-")
-      + `-${state.target}-recoloured.3mf`;
+      + `-${state.target}${state.supportInterface?'-petg-interface':''}-recoloured.3mf`;
     log.innerHTML = `<span class="ok">wrote ${esc(name)} `
       + `(${(blob.size / 1048576).toFixed(2)} MB in `
       + `${((performance.now() - started) / 1000).toFixed(1)}s)</span>`;
@@ -1451,6 +1489,18 @@ $("target").innerHTML = RECOLOUR_TARGETS.map((id) =>
   `<option value="${id}">${esc(LABELS[id])}</option>`).join("");
 $("target").value = state.target;
 syncDestination();
+if(new URLSearchParams(location.search).get('interface')==='petg') {
+  setInterface(true);$('interfacedemoload').hidden=false;
+}
+$('tryinterface').addEventListener('click',async()=>{
+  const button=$('tryinterface');button.disabled=true;
+  button.textContent='Preparing the sample…';
+  try {
+    if(!state.supportInterface)setInterface(true);
+    await load(new File([await interfaceDemoFile()],'Four-colour support arch.3mf'),{target:'snapmaker'});
+  } catch(error) {$('loaderror').textContent=`Could not prepare the sample: ${error.message}`;}
+  finally {button.disabled=false;button.textContent='Try the four-colour support arch';}
+});
 
 receiveModel({mount: $("drop").parentElement, canReceive:()=>!state.project&&!state.loading, load:async (file, context={})=>{
   await load(file, context);

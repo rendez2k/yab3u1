@@ -31,6 +31,7 @@ import {
 } from "./targets.js";
 import { readFilamentProfiles, applyFilamentProfiles, prusaFilamentConfig } from './filamentProfiles.js';
 import { buildU1Profile, conservativeSpeeds, constrainLayers, resolveLayerHeight } from './u1Profiles.js';
+import { applyInterfaceSettings, validateInterfaceExport } from './supportInterface.js';
 import { BASE_SETTINGS } from "../base_settings.js";
 
 export const SNAPMAKER_SPECTRUM_APPLICATION = "BambuStudio-2.3.5";
@@ -1782,7 +1783,7 @@ function supportSplit(attrs) {
 function sourceSettingMetadata(project, objectId, target = "bambu", options = {}, painted = false) {
   const source = { ...(project.sourceSettings || {}),
                    ...(project.meta.get(objectId)?.settings || {}) };
-  if (target==='snapmaker' && options.layerHeight && options.carrySettings===false) {
+  if (target==='snapmaker' && options.layerHeight && options.carrySettings===false && !options.supportInterface) {
     return `<metadata key="layer_height" value="${resolveLayerHeight(source,options.u1Profile.match,options.layerHeight).height}"/>`;
   }
   const report = transferSettings(source, target, { object: true, baseline: options.u1Profile?.cfg });
@@ -1797,6 +1798,7 @@ function sourceSettingMetadata(project, objectId, target = "bambu", options = {}
     report.values.support_type = (options.u1Profile?.cfg || BASE_SETTINGS).support_type;
     report.values.support_threshold_angle = (options.u1Profile?.cfg || BASE_SETTINGS).support_threshold_angle;
   }
+  if(options.supportInterface) applyInterfaceSettings(report.values);
   return Object.entries(report.values).map(([key, value]) =>
     `<metadata${target === "prusa" ? ' type="object"' : ""} key="${key}" value="${esc(value)}"/>`).join("");
 }
@@ -2001,6 +2003,8 @@ export function exportProject(project, plateId, objectIds, options) {
   const reelColours = reels.map((reel) => norm(reel.color) || "#FFFFFF");
   const reelTypes = reels.map((reel) => reel.type || "PLA");
   const recipes = options.recipes || [];
+  if(options.supportInterface) validateInterfaceExport({target,reels,mapping:options.mapping,recipes,supportMode:options.supportMode});
+  else if(reels.some(r=>r.role==='support-interface')) throw new ProjectError('Reserved support filament requires PETG interface mode.');
   if (!convert) {
     try {
       checkRecipes(4, recipes);
@@ -2024,6 +2028,8 @@ export function exportProject(project, plateId, objectIds, options) {
   Object.entries(options.mapping || {}).forEach(([source, id]) => {
     mapping[Number(source)] = Number(id);
   });
+  if(options.supportInterface && analyse(project,plateId,objectIds).used.some(id=>(mapping[id] ?? id)===4))
+    throw new ProjectError('A model region still uses reserved PETG slot 4. Apply a three-colour palette before exporting.');
   const u1Profile = target === 'snapmaker' ? buildU1Profile(project.sourceSettings, reelTypes,
     options.u1Nozzle || 'auto', {blends: recipes.length > 0, carry: options.carrySettings !== false, layerHeight:options.layerHeight}) : null;
   options = {...options, u1Profile};
@@ -2298,7 +2304,7 @@ export function exportProject(project, plateId, objectIds, options) {
     // from the facet's own reference.
     const extruderOf = (value) => (standard ? ""
       : `<metadata key="extruder" value="${value}"/>`);
-    const preserve = target === "snapmaker" ? options.carrySettings !== false || Boolean(options.layerHeight)
+    const preserve = target === "snapmaker" ? options.carrySettings !== false || Boolean(options.layerHeight) || Boolean(options.supportInterface)
       : options.preserveSourceSettings;
     const sourceId = String(root.objectId);
     if (preserve && target === "snapmaker" && !paintedByObject.has(sourceId)) {
@@ -2432,11 +2438,12 @@ export function exportProject(project, plateId, objectIds, options) {
     }
     const filamentReport=applyFilamentProfiles(cfg,reels,{u1:true});
     u1Profile.filamentKeys.push(...filamentReport.keys);
+    const interfaceKeys=options.supportInterface ? applyInterfaceSettings(cfg,{global:true}) : [];
     const overrides = setProcessOverrides(cfg, carried, recipes.length > 0);
-    cfg.different_settings_to_system[0] = [...new Set([...overrides, ...u1Profile.processKeys])].sort().join(';');
+    cfg.different_settings_to_system[0] = [...new Set([...overrides, ...u1Profile.processKeys, ...interfaceKeys])].sort().join(';');
     for (let i=0; i<reelTypes.length; i++) cfg.different_settings_to_system[i+1] = u1Profile.filamentKeys.join(';');
     cfg.different_settings_to_system[reelTypes.length+1] = 'nozzle_diameter;min_layer_height;max_layer_height';
-    settingNotes = { carry, supportMode: mode, carried, support: supportNote,
+    settingNotes = { carry, supportMode: mode, carried, support: supportNote, supportInterface:Boolean(options.supportInterface),
                      supportsPainted: painted, overrides: cfg.different_settings_to_system[0].split(";"), profile: u1Profile.match.process.name, nozzle: u1Profile.match.nozzle, materials: cfg.filament_settings_id.slice(), notes: [...u1Profile.match.notes, ...speed.notes, ...supportSpeedNotes, ...layerNotes, ...filamentReport.notes] };
     members.set(SRC_BBL_PROJECT, encoder.encode(JSON.stringify(cfg, null, 4)));
   } else if (target === "bambu" || target === "orca") {
