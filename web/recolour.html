@@ -609,6 +609,11 @@
 
   <div class="card hidden" id="exportcard">
     <h2>Export your project</h2>
+    <div id="subdivideoptions" hidden>
+      <label class="check"><input type="checkbox" id="subdividemix">Subdivide Mix Layer <span class="hint">· experimental</span></label>
+      <p class="hint">Split layers in blended areas into thinner colour sublayers. May reduce visible bands; your blend ratios stay the same. Re-slice and compare a small test.</p>
+      <p id="subdividelayerhint" class="hint" hidden>Your selected layer height is the parent layer: the slicer divides it further. Filament opacity and surface angle still affect visible stripes. The 3D preview does not simulate sublayers.</p>
+    </div>
     <details id="layeroptions" class="compact-options"><summary id="layersummary">Layer height · preserve designer settings</summary>
       <label class="field">Regular layer height<select id="spectrumlayermode"><option value="preserve">Preserve designer settings</option><option value="preset">Use printer preset</option><option value="height:0.08">0.08 mm · extra fine</option><option value="height:0.10">0.10 mm · colour mixing</option><option value="height:0.12">0.12 mm · fine</option><option value="height:0.16">0.16 mm · balanced</option><option value="height:0.20">0.20 mm · standard</option><option value="height:0.24">0.24 mm · draft</option><option value="height:0.28">0.28 mm · coarse</option><option value="custom">Custom layer height</option></select></label>
       <p id="blendlayerhint" class="hint" hidden>Full Spectrum blends: Snapmaker recommends 0.10 mm with a 0.4 mm nozzle. Finer layers take longer; filament translucency also affects the result. <button type="button" id="useblendlayer">Use 0.10 mm for blends</button> <a href="https://wiki.snapmaker.com/en/snapmaker_orca/color_mixing_match_guide" target="_blank" rel="noopener">Why 0.10 mm?</a></p>

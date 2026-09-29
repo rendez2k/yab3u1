@@ -2004,6 +2004,8 @@ export function exportProject(project, plateId, objectIds, options) {
   const reelColours = reels.map((reel) => norm(reel.color) || "#FFFFFF");
   const reelTypes = reels.map((reel) => reel.type || "PLA");
   const recipes = options.recipes || [];
+  if(options.subdivideMixLayer && (target!=='snapmaker' || !recipes.length))
+    throw new ProjectError('Subdivide Mix Layer requires a Snapmaker Orca project with blend recipes.');
   if(options.supportInterface) validateInterfaceExport({target,reels,mapping:options.mapping,recipes,supportMode:options.supportMode});
   else if(reels.some(r=>r.role==='support-interface')) throw new ProjectError('Reserved support filament requires PETG interface mode.');
   if (!convert) {
@@ -2416,6 +2418,7 @@ export function exportProject(project, plateId, objectIds, options) {
     cfg.filament_colour = table.physical.map((colour) => `${colour}FF`);
     cfg.extruder_colour = table.physical.slice();
     snapmakerConfig(cfg, table.physical, reelTypes, recipes);
+    if(options.subdivideMixLayer) cfg.dithering_local_z_mode='1';
     // The U1 compatibility the original converter always had: the source's own
     // print intent where this Orca accepts it, and its support decision.  Both are
     // in the session's snapshot, so a control change cannot be overtaken by an
@@ -2444,7 +2447,7 @@ export function exportProject(project, plateId, objectIds, options) {
     cfg.different_settings_to_system[0] = [...new Set([...overrides, ...u1Profile.processKeys, ...interfaceKeys])].sort().join(';');
     for (let i=0; i<reelTypes.length; i++) cfg.different_settings_to_system[i+1] = u1Profile.filamentKeys.join(';');
     cfg.different_settings_to_system[reelTypes.length+1] = 'nozzle_diameter;min_layer_height;max_layer_height';
-    settingNotes = { carry, supportMode: mode, carried, support: options.supportInterface ? `supports enabled; PETG interface in slot ${interfaceSlot(reels)}` : supportNote, supportInterface:Boolean(options.supportInterface),
+    settingNotes = { carry, supportMode: mode, carried, subdivideMixLayer:Boolean(options.subdivideMixLayer), support: options.supportInterface ? `supports enabled; PETG interface in slot ${interfaceSlot(reels)}` : supportNote, supportInterface:Boolean(options.supportInterface),
                      supportsPainted: painted, overrides: cfg.different_settings_to_system[0].split(";"), profile: u1Profile.match.process.name, nozzle: u1Profile.match.nozzle, materials: cfg.filament_settings_id.slice(), notes: [...u1Profile.match.notes, ...speed.notes, ...supportSpeedNotes, ...layerNotes, ...filamentReport.notes] };
     members.set(SRC_BBL_PROJECT, encoder.encode(JSON.stringify(cfg, null, 4)));
   } else if (target === "bambu" || target === "orca") {

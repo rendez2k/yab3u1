@@ -156,6 +156,20 @@ test('choosing 0.16 mm overrides the 0.10 mm mixing profile globally and on obje
   assert(decode(out.entries.get('Metadata/model_settings.config')).includes('key="layer_height" value="0.16"'));
   assert(cfg.different_settings_to_system[0].split(';').includes('layer_height'));
 });
+test('subdividing a U1 blend is explicit and preserves PETG, layer height and recipes',()=>{
+  const readCfg=out=>JSON.parse(decode(out.entries.get('Metadata/project_settings.config')));
+  const base={...exportOptions,layerHeight:{mode:'custom',value:'0.16'}};
+  const off=exportProject(project,plate,null,base),on=exportProject(project,plate,null,{...base,subdivideMixLayer:true});
+  const a=readCfg(off),b=readCfg(on);
+  assert.equal(a.dithering_local_z_mode,'0');assert.equal(b.dithering_local_z_mode,'1');
+  assert(b.different_settings_to_system[0].split(';').includes('dithering_local_z_mode'));
+  assert.equal(b.layer_height,'0.16');assert.equal(b.mixed_filament_definitions,a.mixed_filament_definitions);
+  assert.equal(b.support_interface_filament,a.support_interface_filament);
+  assert.deepEqual(b.filament_type,a.filament_type);
+  assert.equal(on.settings.subdivideMixLayer,true);
+  assert.throws(()=>exportProject(project,plate,null,{...base,target:'bambu',subdivideMixLayer:true}),/Subdivide Mix Layer requires/);
+  assert.throws(()=>exportProject(project,plate,null,{...base,recipes:[],subdivideMixLayer:true}),/Subdivide Mix Layer requires/);
+});
 test('session blocks unresolved PETG exports, snapshots the role and clears it on new files',async()=>{
   const calls=[],errors=[];
   const worker={dispose(){},load:async()=>({meta:{kind:'bambu',title:'Four',colors:['#FFFFFF','#000000','#FF0000','#00FF00'],types:Array(4).fill('PLA'),plates:[{id:1}]},summary:{}}),

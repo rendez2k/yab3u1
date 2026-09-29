@@ -4,6 +4,8 @@ The main converter now offers **PETG support** for U1 output. Tick it to reserve
 
 Full Spectrum now offers named layer-height choices (0.08–0.28 mm, filtered by nozzle limits), alongside preserve, printer preset and custom. Only Custom shows the numeric field. Active U1 blends show Snapmaker's 0.10 mm / 0.4 mm nozzle recommendation, applied only when selected. A chosen 0.16 mm writes 0.16 globally and per object even though the underlying process name remains 0.10mm Color Mixing.
 
+For U1 blend exports, **Subdivide Mix Layer · experimental** is an explicit, initially unticked comparison option. It exports `dithering_local_z_mode=1` and marks the process setting as overridden. Blend ratios, the chosen parent layer height and PETG support assignments are unchanged. The ordinary 0.10 mm recommendation is hidden while subdivision is enabled: the slicer divides the selected parent layer further. The surface preview does not simulate sublayers or predict how much banding will remain. Compare a freshly sliced small test before deciding on a default.
+
 If hosted access to Moonraker is blocked, download the local launcher and run `node yab3d-local.cjs http://YOUR-U1-IP --petg-review`. This serves this review build locally without widening printer CORS permissions. Sending still requires a fresh slot review and an explicit send action.
 
 Open `recolour.html?interface=petg` and choose **Try the four-colour support arch**, or load a painted 3MF. The generated arch is an original, reusable test model; it contains no uploaded user geometry.

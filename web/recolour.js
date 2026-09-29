@@ -28,7 +28,7 @@ import { mountCalibration } from './shared/calibrationPanel.js';
 import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } from './shared/supportInterface.js';
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 
-const VERSION = "2.6.19-review";
+const VERSION = "2.6.20-review";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -59,6 +59,10 @@ function layerChoice() {
   return state.target==='snapmaker' ? (mode.startsWith('height:') ? {mode:'custom',value:mode.slice(7)} : {mode,value:$('spectrumlayerheight').value}) : null;
 }
 $('useblendlayer').addEventListener('click',()=>{$('spectrumlayermode').value='height:0.10';clearReview();refresh();});
+$('subdividemix').addEventListener('change',()=>{clearReview();renderExport();});
+function subdivideChoice() {
+  return state.target==='snapmaker' && $('subdividemix').checked && Boolean(resultPlan().recipes.length);
+}
 ['spectrumlayermode','spectrumlayerheight'].forEach(id=>$(id).addEventListener('input',()=>{clearReview();refresh();}));
 function updateCopies() {
   const copies=Number($("spectrumcopies").value),spacing=Number($("spectrumgap").value);
@@ -558,6 +562,7 @@ function setLoading(active) {
 }
 
 function resetForUpload() {
+  $('subdividemix').checked=false;
   state.approximate=false;
   invalidateRecommendation();
   $("loadedmodel").classList.add("hidden");
@@ -1199,6 +1204,8 @@ function renderExport() {
   $('spectrumprofile').classList.toggle('hidden',state.target!=='snapmaker');
   $('layeroptions').hidden=state.target!=='snapmaker';
   $('blendlayerhint').hidden=true;
+  $('subdivideoptions').hidden=true;
+  $('subdividelayerhint').hidden=!subdivideChoice();
   $('spectrumcustomlayer').hidden=$('spectrumlayermode').value!=='custom';
   $('layersummary').textContent='Layer height · '+($('spectrumlayermode').value.startsWith('height:') ? $('spectrumlayermode').selectedOptions[0].textContent : ({preserve:'preserve designer settings',preset:'printer preset',custom:`${$('spectrumlayerheight').value || '—'} mm custom`})[$('spectrumlayermode').value]);
   let profileError='';
@@ -1213,7 +1220,8 @@ function renderExport() {
         const layer=resolveLayerHeight({...state.project.sourceSettings,...meta.settings},profile.match,layerChoice());
         return `<p>${meta.name?`${esc(meta.name)}: `:''}${esc(layer.text)}</p>`;
       }).join('');
-      $('blendlayerhint').hidden=payload.recipes.length===0 || profile.match.nozzle!=='0.4';
+      $('subdivideoptions').hidden=payload.recipes.length===0;
+      $('blendlayerhint').hidden=payload.recipes.length===0 || profile.match.nozzle!=='0.4' || subdivideChoice();
       $('useblendlayer').hidden=layerChoice()?.mode==='custom' && Number(layerChoice().value)===0.1;
       $('spectrumlayermode').querySelectorAll('option[value^="height:"]').forEach(option=>{
         const height=Number(option.value.slice(7));option.disabled=height<profile.match.minLayer || height>profile.match.maxLayer;
@@ -1254,6 +1262,7 @@ function renderExport() {
       ? `Download a ${LABELS[target]} project keeping each source colour in its own slot. Check the settings and slice it before printing.`
       : `Download a ${LABELS[target]} project using the four loaded reels and the colour mapping above. Check the settings and slice it before printing.`;
   if(state.supportInterface && !blocking) $('exportnote').textContent=`Demo export: three PLA model reels, ${mixtures} blend recipe(s), and PETG interfaces in slot ${interfaceSlot(payload.physical)}. Supports enabled; three dense contact layers at 0 mm Z gap; PLA prime-tower shell. Check the sliced result and test a small print first.`;
+  if(!blocking && subdivideChoice()) $('exportnote').textContent+=' Subdivide Mix Layer is enabled for this export.';
   if (!blocking && target === "prusa") {
     $("exportnote").textContent += " Open the file as a project in PrusaSlicer with a "
       + "four-extruder profile: the palette lives in the Full Spectrum description, "
@@ -1266,7 +1275,7 @@ function exportRevision() {
   return JSON.stringify({epoch: state.epoch, plate: state.plateId,
     objects: state.objects, layout:state.layout, layoutError:state.layoutError, target: state.target, reels: state.reels, u1Nozzle:state.u1Nozzle,
     physical: payload.physical, mapping: payload.mapping, recipes: payload.recipes,
-    strategy: state.strategy, reviewed: state.reviewed, reelView:state.reelView,layerHeight:layerChoice(),supportInterface:state.supportInterface});
+    strategy: state.strategy, reviewed: state.reviewed, reelView:state.reelView,layerHeight:layerChoice(),supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice()});
 }
 
 $("export").addEventListener("click", async () => {
@@ -1308,7 +1317,7 @@ $("export").addEventListener("click", async () => {
       target: state.target, reels: state.reels, physical: payload.physical,
       mapping: payload.mapping, recipes: payload.recipes,
       title: state.project.title, u1Nozzle:state.u1Nozzle, layout:state.layout,
-      layerHeight:layerChoice(),supportInterface:state.supportInterface,
+      layerHeight:layerChoice(),supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice(),
       thumbnails: { main: rendered.main, small: rendered.small || null },
     });
     if (exportRevision() !== revision) return;
