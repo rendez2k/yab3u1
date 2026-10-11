@@ -16,6 +16,7 @@ import { encodePng } from "./png.js";
 import { downscale, renderIso } from "./raster.js";
 import { layoutOffsets, planLayout } from "./layout.js";
 import { surfaceAreas } from './surfaceWeights.js';
+import {exportComparisonJob} from './comparisonExport.js';
 
 // Preview detail level, in triangles: a small fixture is drawn verbatim, a big
 // model is clustered down to this so the picture stays a recognisable surface
@@ -367,6 +368,11 @@ self.onmessage = async (event) => {
     }
     if (!loaded) throw new Error("no project is loaded yet");
     const { project: parsed } = loaded;
+    if(type==='comparison-export') {
+      const built=exportComparisonJob(parsed,message.plateId,message.job,message.options);
+      const bytes=await writeZip([...built.entries].map(([name,data])=>({name,data})));
+      post({type:'comparison-exported',id,bytes},[bytes.buffer]);return;
+    }
     if (type === "prepare-swaps") {
       const { prepareSwapProject } = await import("./swapProject.js");
       const built = prepareSwapProject(parsed, message.plateId, message.objects,

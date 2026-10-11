@@ -1,4 +1,5 @@
 import {receiveModel} from './shared/modelHandoff.js';
+import {mountOptimiser} from './shared/optimiserPanel.js';
 // The online page: open a painted 3MF, recolour it onto four reels (with predicted
 // blends if you want them), preview it, export a project for Snapmaker, Bambu or
 // PrusaSlicer, and plan reel changes from a real slice.
@@ -30,7 +31,7 @@ import { mountCalibration } from './shared/calibrationPanel.js';
 import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } from './shared/supportInterface.js';
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 
-const VERSION = "2.6.24-review";
+const VERSION = "2.6.25-review";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -55,7 +56,7 @@ const state = {
 
 window.__recolour = state;                    // the QA harness and the console
 
-let printerPanel=null, calibrationPanel=null;
+let printerPanel=null, calibrationPanel=null, printOptimiser=null;
 function layerChoice() {
   const mode=$('spectrumlayermode').value;
   return state.target==='snapmaker' ? (mode.startsWith('height:') ? {mode:'custom',value:mode.slice(7)} : {mode,value:$('spectrumlayerheight').value}) : null;
@@ -1299,6 +1300,7 @@ function renderActionBar(blocking,needsReview) {
 // ------------------------------------------------------------------ export ----
 
 function renderExport() {
+  printOptimiser?.check();
   $('printeroptionssummary').textContent=`Printer settings · ${LABELS[state.target] || state.target}`;
   printerPanel?.refresh();
   $("printersetup").hidden=state.target!=="snapmaker";
@@ -1660,3 +1662,17 @@ receiveModel({mount: $("drop").parentElement, canReceive:()=>!state.project&&!st
   await load(file, context);
   return Boolean(state.project);
 }});
+
+printOptimiser=mountOptimiser($('printoptimiser'),()=>{
+  if(!state.project||state.loading||state.exporting||!state.assessed||!state.bounds)throw Error('Load a model and wait for its analysis to finish.');
+  const payload=resultPlan();
+  if(payload.blocked)throw Error(payload.blocked);
+  if($('export').disabled)throw Error('Apply and review the palette and export settings before comparing.');
+  const options={target:state.target,reels:state.reels,physical:payload.physical,mapping:payload.mapping,
+    recipes:payload.recipes,title:state.project.title,u1Nozzle:state.u1Nozzle,layerHeight:layerChoice(),
+    supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice()};
+  const hasSupports=[state.project.sourceSettings,...state.objects.map(id=>state.project.meta.get(String(id))?.settings)].some(s=>['1','true'].includes(String(s?.enable_support)));
+  return {signature:exportRevision(),worker:background(),plateId:state.plateId,objects:state.footprints,
+    quantities:state.quantities,layout:layoutSettings(),mapping:payload.mapping,recipes:payload.recipes,options,
+    additionalMaterials:state.supportInterface||payload.recipes.length>0||hasSupports||state.supportsPainted};
+});

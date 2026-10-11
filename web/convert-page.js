@@ -1,4 +1,5 @@
 import {quantityRows, bindQuantityButtons, syncQuantityButtons} from './shared/objectQuantities.js';
+import {mountOptimiser} from './shared/optimiserPanel.js';
 import {mountBambuPrinterPicker} from './shared/bambuPrinterPicker.js';
 import {mountPrinter} from './shared/printerPanel.js';
 import {bambuImportGuide} from './shared/bambuImportGuide.js';
@@ -23,7 +24,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.24-review";
+const VERSION = "2.6.25-review";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -36,6 +37,7 @@ const cap = (text) => String(text || "").replace(/^[a-z]/, (c) => c.toUpperCase(
 /* ---------- version and what's new ---------- */
 
 const CHANGES = [
+  "Print-time comparison on both pages: compare fixed orders or complete sets per hour, split colour groups, test sequential singles, and compare two printers using locally sliced timing reports.",
   "Both 3D previews now show a gridded planning bed and reserved prime-tower space. Switch between Model and Plate, reset the camera or jump straight to Arrange plate from matching compact controls.",
   "Plate layout controls now match Full Spectrum: remove, restore and add object copies, Fill plate and Undo. Both pages have persistent Preview, Palette, Plate layout and Export settings shortcuts.",
   "Optional PETG support: deliberately merge model colours to free a U1 input, or carry the original into Full Spectrum for three PLA colours and PETG interfaces. Experimental; review a small sliced test.",
@@ -220,10 +222,13 @@ function renderOutput(entry) {
 /* ---------- session ---------- */
 
 let printerPanel = null;
+let printOptimiser = null;
 let cancelModelTransfer = () => {};
 const session = new ConvertSession(() => new RecolourWorker(), {
+  invalidated:()=>printOptimiser?.invalidate(),
   status: (text) => setStatus(text),
   cleared: () => {
+    printOptimiser?.invalidate();
     $('convertstatus').dataset.busy='true';
     cancelModelTransfer();
     $('transferstatus').textContent = '';
@@ -1118,3 +1123,15 @@ const syncPrimary=()=>{ $('converterprimary').textContent=session.busy?'Preparin
 new MutationObserver(syncPrimary).observe($('convertgo'),{attributes:true,childList:true});
 new ResizeObserver(()=>document.documentElement.style.setProperty('--workspace-action-height',`${$('converteractions').getBoundingClientRect().height}px`)).observe($('converteractions'));
 syncPrimary();
+printOptimiser=mountOptimiser($('printoptimiser'),()=>{
+  if(!session.state||session.boundsPending||session.busy)throw Error('Load a model and wait for its analysis to finish.');
+  const plan=session.conversionPlan();
+  const options={target:session.target,physical:plan.physical,mapping:plan.mapping,recipes:[],convert:true,
+    assignmentMode:session.assignmentMode,bambuSetup:session.bambuSetup,title:session.state.title,
+    preserveSourceSettings:session.preserveSourceSettings,carrySettings:session.carrySettings,
+    supportMode:session.supportMode,u1Nozzle:session.u1Nozzle,...session.interfaceOptions()};
+  const hasSupports=[session.state.sourceSettings,...session.state.objectSettings.map(o=>o.settings)].some(s=>['1','true'].includes(String(s?.enable_support)));
+  return {signature:`${session.epoch}:${session.revision}`,worker:session.worker,plateId:session.state.plateId,
+    objects:session.state.footprints,quantities:session.layout.quantities||{},layout:session.planningLayout(),
+    mapping:plan.mapping,recipes:[],options,additionalMaterials:session.supportInterface||(session.supportMode!=='off'&&(hasSupports||session.state.supportsPainted))};
+});

@@ -301,6 +301,7 @@ export class ConvertSession {
     this.keepAllSignature = null;
     this.revision += 1;
     this.dropOutput();
+    this.hooks.invalidated?.();
   }
 
   setTarget(target) {

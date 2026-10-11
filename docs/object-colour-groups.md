@@ -1,5 +1,7 @@
 # Object colour groups — 2.6.24 review
 
+Historical preparation milestone. Version 2.6.25 adds the [print strategy comparison](print-optimiser.md); its current capabilities and limits supersede the future-work notes below.
+
 Both conversion pages now show source-filament swatches and dimensions beside object quantities. The source colour group selector can remove a whole group, keep only that group for a separate export, restore one of every object, or undo the last group change. Single-colour groups require exactly one decoded source filament; objects with unknown paint are not classified as single-colour. Repainting, blends and support materials can still introduce additional output filaments.
 
 Objects and Fill plate are available beside both previews, with the same disabled state and feedback as the existing layout controls. Top view frames the planning area from above. Original mesh vertices, triangle paint and component relationships are unchanged by these controls.
