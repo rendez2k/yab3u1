@@ -879,15 +879,25 @@ export function selectionBounds(project, plateId, objectIds) {
  * happened (and why a copy count may have been capped).
  */
 const footprintCache = new WeakMap();
+const objectReportCache = new WeakMap();
+function objectReports(project, plateId) {
+  if (!objectReportCache.has(project)) objectReportCache.set(project, new Map());
+  const cache = objectReportCache.get(project);
+  if (!cache.has(plateId)) cache.set(plateId, analyse(project, plateId, null));
+  return cache.get(plateId);
+}
 export function selectionFootprints(project, plateId, objectIds) {
   if (!footprintCache.has(project)) footprintCache.set(project,new Map());
   const cache = footprintCache.get(project), key = JSON.stringify([plateId,objectIds]);
   if (cache.has(key)) return cache.get(key);
   const instances = selectionInstances(project, plateId, objectIds);
+  const reports = instances.length ? objectReports(project, plateId).objects : [];
   const footprints = [...new Set(instances.map(([id])=>String(id)))].map(objectId=>({
     objectId, name:project.meta.get(objectId)?.name || `Object ${objectId}`,
     instances:instances.filter(([id])=>String(id)===objectId).length,
     bounds:selectionBounds(project,plateId,[objectId]),
+    colours:reports.find(r=>r.id===objectId)?.colours || [],
+    undecodable:reports.find(r=>r.id===objectId)?.undecodable || 0,
   }));
   cache.set(key,footprints);
   return footprints;
@@ -1907,7 +1917,7 @@ export function conversionUsage(project) {
   try {
     for (const plate of project.plates) {
       if (!eligibleObjects(project, plate.id).length) continue;
-      const report = analyse(project, plate.id, null);
+      const report = objectReports(project, plate.id);
       report.used.forEach(id => used.add(id));
       if (report.counts.undecodable_paint) uncertain = true;
     }

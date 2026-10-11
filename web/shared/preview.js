@@ -265,12 +265,12 @@ export class Preview {
       }
     }
     this.updateControls?.();
-    if (this.view === 'plate') this.reset();
+    if (this.view !== 'model') this.reset();
     else this.requestDraw();
   }
 
   frameBounds() {
-    if (!this.bounds || this.view !== 'plate' || !this.plate) return this.bounds;
+    if (!this.bounds || this.view === 'model' || !this.plate) return this.bounds;
     return bounds(new Float32Array([...this.bounds.lo, ...this.bounds.hi,
       ...this.plate.bounds.lo, ...this.plate.bounds.hi]));
   }
@@ -285,8 +285,8 @@ export class Preview {
   }
 
   reset() {
-    this.yaw = -0.6;
-    this.pitch = this.view === 'plate' && this.plate ? 0.78 : 0.5;
+    this.yaw = this.view === 'top' ? 0 : -0.6;
+    this.pitch = this.view === 'top' ? Math.PI / 2 - .001 : this.view === 'plate' && this.plate ? 0.78 : 0.5;
     this.pan = [0, 0];
     const frame = this.frameBounds();
     if (frame) {
@@ -361,7 +361,7 @@ export class Preview {
     gl.uniformMatrix4fv(this.uniforms.model, false, identity());
     gl.uniform3f(this.uniforms.light, 0.4, -0.6, 0.7);
     gl.uniform1f(this.uniforms.ambient, 0.35);
-    if (this.view === 'plate' && this.plate) {
+    if (this.view !== 'model' && this.plate) {
       gl.uniform1i(this.uniforms.unlit, 1);
       this.bindBuffers(this.plate.buffers);
       gl.drawArrays(gl.TRIANGLES, 0, this.plate.position.length / 3);
@@ -413,15 +413,30 @@ export function plateGeometry(options) {
 }
 
 /** Identical, keyboard-accessible controls for both conversion workflows. */
-export function mountPlateControls(preview, root, arrange) {
+export function mountPlateControls(preview, root, arrange, actions = {}) {
   root.querySelector('[data-arrange]').addEventListener('click', arrange);
+  const switcher=root.querySelector('.plate-view-switch');
+  const top=document.createElement('button');top.type='button';top.dataset.camera='top';top.textContent='Top';switcher.append(top);
+  for(const [key,label] of [['objects','Objects'],['fill','Fill plate']]) {
+    if(!actions[key])continue;
+    const button=document.createElement('button');button.type='button';button.textContent=label;
+    button.addEventListener('click',actions[key]);root.querySelector('.plate-tool-row').append(button);
+    if(key==='fill' && actions.fillSource) {
+      const sync=()=>{button.disabled=actions.fillSource.disabled;};sync();
+      new MutationObserver(sync).observe(actions.fillSource,{attributes:true,attributeFilter:['disabled']});
+      const status=document.createElement('p');status.className='hint';status.setAttribute('role','status');root.append(status);
+      const report=()=>{status.textContent=actions.fillMessage?.() || '';};
+      button.addEventListener('click',report);
+      if(actions.fillStatus) new MutationObserver(report).observe(actions.fillStatus,{attributes:true,attributeFilter:['hidden'],childList:true,characterData:true,subtree:true});
+    }
+  }
   const buttons = root.querySelectorAll('[data-camera]');
   preview.updateControls = () => {
     for (const button of buttons) {
       button.setAttribute('aria-pressed', String(preview.view === button.dataset.camera));
-      button.disabled = button.dataset.camera === 'plate' && !preview.plate;
+      button.disabled = button.dataset.camera !== 'model' && !preview.plate;
     }
-    const description = preview.view === 'plate' && preview.plate?.description;
+    const description = preview.view !== 'model' && preview.plate?.description;
     root.querySelector('[data-plate-note]').textContent = description
       ? `${description.width} × ${description.depth} mm planning area${description.reservations.some(b=>b.kind==='tower')?' · green: prime-tower allowance':''}${description.reservations.some(b=>b.kind==='keepout')?' · rust: printer keepout':''}. Supports appear after slicing.`
       : 'Model view · drag to orbit, scroll to zoom.';

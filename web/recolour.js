@@ -30,7 +30,7 @@ import { mountCalibration } from './shared/calibrationPanel.js';
 import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } from './shared/supportInterface.js';
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 
-const VERSION = "2.6.23-review";
+const VERSION = "2.6.24-review";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -114,12 +114,27 @@ $('spectrumarrangement').addEventListener('change',()=>{
   }
   layoutChanged();
 });
-function renderQuantityFields() {
-  $('spectrumquantities').innerHTML=quantityRows(eligibleForPlate().map(id=>({objectId:id,
+function quantityObjects() {
+  return eligibleForPlate().map(id=>({objectId:id,
     name:state.project.meta.get(id)?.name || `Object ${id}`,
-    instances:state.footprints.find(f=>f.objectId===id)?.instances || 1})),state.quantities);
+    colours:state.assessed?.objects.find(o=>o.id===id)?.colours || [],
+    undecodable:state.assessed?.objects.find(o=>o.id===id)?.undecodable || 0,
+    ...state.footprints.find(f=>f.objectId===id)}));
 }
-bindQuantityButtons($('spectrumquantities'));
+function renderQuantityFields() {
+  $('spectrumquantities').innerHTML=quantityRows(quantityObjects(),state.quantities);
+}
+bindQuantityButtons($('spectrumquantities'), {
+  key:()=>`${state.epoch}:${state.plateId}`,
+  objects:quantityObjects,read:()=>state.quantities,
+  write:quantities=>{
+    state.quantities=quantities;
+    $('objects').querySelectorAll('[data-object]').forEach(box=>{box.checked=(quantities[box.dataset.object]??1)!==0;});
+    state.objects=selectedObjects();
+    $('spectrumarrangement').value='objects';$('spectrumcopies').value=1;
+    renderQuantityFields();layoutChanged();refresh();
+  },
+});
 $('spectrumquantities').addEventListener('input',event=>{
   const id=event.target.dataset.object;if(!id)return;
   state.quantities[id]=event.target.value.trim()===''?NaN:Number(event.target.value);
@@ -1128,7 +1143,11 @@ async function refreshPreview() {
     mountPlateControls(state.preview, $('platecontrols'), () => {
       const panel=$('copyoptions'); if (panel.tagName==='DETAILS') panel.open=true;
       panel.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});
-    });
+    }, {fill:()=>fillSpectrum(),fillSource:$('spectrumfill'),fillStatus:$('spectrumfillresult'),fillMessage:()=>$('spectrumfillresult').textContent,objects:()=>{
+      $('copyoptions').open=true;$('spectrumobjectoptions').open=true;
+      $('spectrumobjectoptions').scrollIntoView({block:'center'});
+      $('spectrumobjectoptions').querySelector('summary').focus({preventScroll:true});
+    }});
     window.addEventListener("resize", () => state.preview.resize());
   }
   if (!state.preview.ok) {

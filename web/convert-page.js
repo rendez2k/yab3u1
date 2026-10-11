@@ -23,7 +23,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.23-review";
+const VERSION = "2.6.24-review";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -845,7 +845,11 @@ async function refreshPreview() {
     mountPlateControls(preview, $('platecontrols'), () => {
       const panel=$('platelayout'); if (panel.tagName==='DETAILS') panel.open=true;
       panel.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});
-    });
+    }, {fill:()=>fillPlate(),fillSource:$('layoutfill'),fillStatus:$('fillfeedback'),fillMessage:()=>$('fillfeedback').hidden?'':$('fillresult').textContent,objects:()=>{
+      $('objectquantities').open=true;
+      $('objectquantities').scrollIntoView({block:'center'});
+      $('objectquantities').querySelector('summary').focus({preventScroll:true});
+    }});
     window.addEventListener("resize", () => preview.resize());
   }
   if (!preview.ok) {
@@ -992,7 +996,12 @@ $("convertplate").addEventListener("change", async () => {
   refreshPreview();
 });
 $('layoutarrangement').addEventListener('change',()=>session.setLayout({arrangement:$('layoutarrangement').value,copies:1,...($('layoutarrangement').value==='objects'?{}:{quantities:{}})}));
-bindQuantityButtons($('quantityfields'));
+bindQuantityButtons($('quantityfields'), {
+  key:()=>`${session.epoch}:${session.state?.plateId}`,
+  objects:()=>session.state?.footprints || [],
+  read:()=>session.layout.quantities || {},
+  write:quantities=>session.setLayout({quantities,copies:1,arrangement:'objects'}),
+});
 $('quantityfields').addEventListener('input',event=>{
   if (!event.target.dataset.object) return;
   const quantities = {...session.layout.quantities};
