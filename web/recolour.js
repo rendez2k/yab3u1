@@ -1673,6 +1673,16 @@ receiveModel({mount: $("drop").parentElement, canReceive:()=>!state.project&&!st
   return Boolean(state.project);
 }});
 
+export {state, load, refresh, renderObjects, renderQuantityFields, layoutChanged, textureImporter};
+export const workbenchSource = () => retainedModel?.file || null;
+export function workbenchPreview() {
+  if(!state.project || !state.preview || state.preview.ok || state.loading || !state.assessed)return null;
+  const payload=resultPlan(),colours=paletteOf(payload,state.previewMode);
+  const mapping=state.previewMode==='result'&&state.strategy!=='source'?payload.mapping:null;
+  return {key:JSON.stringify([state.epoch,state.plateId,state.objects,colours,mapping,state.layout]),
+    render:()=>background().thumbnail(state.plateId,state.objects,colours,mapping,{size:768,layout:state.layout})};
+}
+
 printOptimiser=mountSequential($('printoptimiser'),()=>{
   if(!state.project||state.loading||state.exporting||!state.assessed||!state.bounds)throw Error('Load a model and wait for its analysis to finish.');
   const payload=resultPlan();

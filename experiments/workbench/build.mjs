@@ -1,0 +1,26 @@
+import {readFile, writeFile, mkdir, cp} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
+import path from 'node:path';
+import {execFileSync} from 'node:child_process';
+const here=path.dirname(fileURLToPath(import.meta.url)), root=path.resolve(here,'../..');
+execFileSync('python',['tools/build_site.py'],{cwd:root,stdio:'pipe'});
+const out=path.join(root,'dist-workbench');
+await mkdir(out,{recursive:true});
+await cp(path.join(root,'dist'),out,{recursive:true});
+for(const [source,controller,kind] of [['index.html','convert-page.js','converter'],['recolour.html','recolour.js','spectrum']]) {
+  let html=await readFile(path.join(root,'dist',source),'utf8');
+  const script=new RegExp(`<script type="module" src="(?:\\./)?${controller.replace('.','\\.')}"></script>`);
+  if(!script.test(html))throw Error(`Missing engine entry: ${controller}`);
+  html=html.replace(script,'<script type="module" src="./engine-view.js"></script>')
+    .replace('</head>','<link rel="stylesheet" href="engine-view.css"></head>')
+    .replace('<body',`<body data-engine="${kind}"`);
+  await writeFile(path.join(out,`${kind}-view.html`),html);
+}
+for(const name of ['workbench.css','workbench.js','engine-view.css','engine-view.js','view-layout.js'])await cp(path.join(here,name),path.join(out,name));
+await mkdir(path.join(out,'fonts'),{recursive:true});
+await cp(path.join(here,'node_modules/@fontsource-variable/ibm-plex-sans/files/ibm-plex-sans-latin-wght-normal.woff2'),path.join(out,'fonts/plex-sans.woff2'));
+await cp(path.join(here,'node_modules/@fontsource-variable/ibm-plex-sans/LICENSE'),path.join(out,'fonts/OFL.txt'));
+const shell=await readFile(path.join(here,'index.html'),'utf8');
+await writeFile(path.join(out,'index.html'),shell);
+await writeFile(path.join(out,'recolour.html'),shell.replace('data-initial="converter"','data-initial="spectrum"'));
+console.log(`Workbench 2.6.27-test: ${out}`);

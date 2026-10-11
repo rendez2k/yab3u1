@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-11T21:39:20Z",
+  "title": "Design System: YAB3D Workbench preview",
+  "extensions": {
+    "scope": {
+      "artifact": "experiments/workbench",
+      "version": "v2.6.27-test",
+      "build": "dist-workbench",
+      "boundary": "Production web UI remains incumbent. This system governs only the separate Workbench preview.",
+      "sources": ["PRODUCT.md", "docs/workbench-direction.md", "experiments/workbench/workbench.css", "experiments/workbench/engine-view.css", "experiments/workbench/index.html", "experiments/workbench/README.md", "experiments/workbench/build.mjs"]
+    },
+    "colorMeta": {
+      "paper": {"role": "neutral", "displayName": "Warm paper"},
+      "panel": {"role": "neutral", "displayName": "Warm inspector surface"},
+      "accent": {"role": "primary", "displayName": "Burnt orange"},
+      "stage": {"role": "neutral", "displayName": "Charcoal model stage"},
+      "dark-accent": {"role": "primary", "displayName": "Dark-interface orange"}
+    },
+    "typographyMeta": {
+      "display": {"displayName": "Stage introduction", "purpose": "Empty-stage headline; self-hosted IBM Plex Sans registered as Plex."},
+      "headline": {"displayName": "Task heading", "purpose": "Main inspector task headings."},
+      "body": {"displayName": "Platform text", "purpose": "Engine body copy and inherited platform control font."}
+    },
+    "shadows": [{"name": "help-dialog", "value": "0 20px 70px #0004", "purpose": "Help dialog only; inspector groups and controls remain flat."}],
+    "breakpoints": [
+      {"name": "engine-narrow-desktop", "value": "1050px", "context": "max-width in engine frame"},
+      {"name": "shell-compact", "value": "900px", "context": "max-width in outer shell"},
+      {"name": "engine-stacked", "value": "760px", "context": "max-width in engine frame"},
+      {"name": "shell-mobile", "value": "560px", "context": "max-width in outer shell"}
+    ],
+    "focus": {
+      "shell": "outline:2px solid var(--focus);outline-offset:3px",
+      "engine": "outline:2px solid var(--focus);outline-offset:2px"
+    },
+    "extractionNotes": "Primitives live only in DESIGN.md frontmatter. No motion or tonal-ramp tokens were found in the preview stylesheets; none have been synthesised. Snippet fallback values are source values, not new palette choices.",
+    "assets": [
+      {"path": "web/assets/yab3d-mark-96.png", "buildPath": "assets/yab3d-mark-96.png", "provenance": "Existing YAB3D project identity mark, reused unchanged."},
+      {"path": "fonts/plex-sans.woff2", "provenance": "Build copies @fontsource-variable/ibm-plex-sans/files/ibm-plex-sans-latin-wght-normal.woff2.", "licence": "OFL; copied to fonts/OFL.txt"}
+    ],
+    "review": {
+      "disposition": "ship",
+      "basis": "Supplied finish-review verdict pass; not an independent whole-surface review by the documenter.",
+      "resolved": ["Mobile feedback visible", "0.6 mm nozzle retained in control and state", "Corrected h2 hierarchy; zero axe violations in checked views"],
+      "captures": [".impeccable/review/desktop.png", ".impeccable/review/mobile.png"]
+    }
+  },
+  "components": [
+    {
+      "name": "Primary shell action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Stable main action; label changes with project readiness.",
+      "html": "<button class=\"ds-primary\">Open model</button>",
+      "css": ".ds-primary{font:600 14px/1.45 'Segoe UI',system-ui,sans-serif;background:var(--accent,#ad3f16);color:var(--panel,#fffefa);border:1px solid var(--accent,#ad3f16);border-radius:6px;padding:8px 13px;min-height:36px;min-width:190px;cursor:pointer}.ds-primary:hover:not(:disabled){filter:brightness(1.12)}.ds-primary:focus-visible{outline:2px solid var(--focus,#b44418);outline-offset:3px}.ds-primary:disabled{opacity:.5;cursor:not-allowed}"
+    },
+    {
+      "name": "Secondary shell action",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Open, Batch and Help controls in the compact project bar.",
+      "html": "<button class=\"ds-secondary\">Help</button>",
+      "css": ".ds-secondary{font:14px/1.45 'Segoe UI',system-ui,sans-serif;color:var(--ink,#282922);background:var(--panel,#fffefa);border:1px solid var(--line,#d8d8d0);border-radius:6px;padding:8px 13px;min-height:36px;cursor:pointer}.ds-secondary:hover:not(:disabled){background:var(--soft,#f6e8df);border-color:var(--accent,#ad3f16)}.ds-secondary:focus-visible{outline:2px solid var(--focus,#b44418);outline-offset:3px}.ds-secondary:disabled{opacity:.5;cursor:not-allowed}"
+    },
+    {
+      "name": "Stage control",
+      "kind": "button",
+      "refersTo": "button-stage",
+      "description": "Compact control on the charcoal model stage, with a light selected state.",
+      "html": "<button class=\"ds-stage\" aria-pressed=\"true\">Top</button>",
+      "css": ".ds-stage{font:500 12px/1.5 'Segoe UI',system-ui,sans-serif;background:#30382f;border:1px solid #596251;color:#eef2e9;border-radius:5px;min-height:30px;padding:5px 9px;cursor:pointer}.ds-stage[aria-pressed=true]{background:#e9ede0;color:#272d23;border-color:#e9ede0}.ds-stage:focus-visible{outline:2px solid var(--focus,#b44418);outline-offset:2px}.ds-stage:disabled{opacity:.5}"
+    },
+    {
+      "name": "Inspector field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Native input with compact platform type and a visible keyboard outline.",
+      "html": "<label class=\"ds-field\">Copies<input class=\"ds-input\" type=\"number\" min=\"1\" value=\"1\"></label>",
+      "css": ".ds-field{display:flex;flex-direction:column;gap:5px;font:12px/1.5 'Segoe UI',system-ui,sans-serif;color:var(--text,#282922)}.ds-input{font:13px/1.5 'Segoe UI',system-ui,sans-serif;border-radius:6px;min-height:36px;max-width:100%;border:1px solid var(--line,#d8d8d0);padding:7px 10px;box-shadow:none;caret-color:var(--accent,#ad3f16)}.ds-input:focus-visible{outline:2px solid var(--focus,#b44418);outline-offset:2px}"
+    },
+    {
+      "name": "Task navigation",
+      "kind": "nav",
+      "refersTo": "nav-selected",
+      "description": "Labelled task icon with semantic current-page state.",
+      "html": "<nav aria-label=\"Workspace panels\"><button class=\"ds-nav\" aria-current=\"page\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M3 7h7l2 2h9v11H3zM3 7V4h7l2 3\"/></svg><span>Project</span></button></nav>",
+      "css": ".ds-nav{display:grid;justify-items:center;gap:5px;font:12px/1.45 'Segoe UI',system-ui,sans-serif;padding:10px 2px;border:1px solid transparent;border-radius:6px;background:none;color:var(--ink,#282922);min-height:36px;cursor:pointer}.ds-nav svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}.ds-nav[aria-current=page],.ds-nav:hover:not(:disabled){background:var(--soft,#f6e8df);border-color:var(--accent,#ad3f16)}.ds-nav[aria-current=page]{color:var(--accent,#ad3f16)}.ds-nav:focus-visible{outline:2px solid var(--focus,#b44418);outline-offset:3px}"
+    },
+    {
+      "name": "Test version tag",
+      "kind": "chip",
+      "refersTo": "test-label",
+      "description": "Non-interactive metadata distinguishing the separate preview.",
+      "html": "<span class=\"ds-test-label\">Test version</span>",
+      "css": ".ds-test-label{font:10px/1.45 'Segoe UI',system-ui,sans-serif;color:var(--ink,#282922);padding:3px 6px;border:1px solid var(--line,#d8d8d0);border-radius:3px;white-space:nowrap}"
+    },
+    {
+      "name": "Flat inspector group",
+      "kind": "card",
+      "refersTo": "inspector-group",
+      "description": "Unboxed fieldset; separation comes from hierarchy and spacing.",
+      "html": "<fieldset class=\"ds-group\"><legend>Destination</legend><p>Choose the printer and nozzle in Project.</p></fieldset>",
+      "css": ".ds-group{border:0;border-radius:0;box-shadow:none;background:none;padding:0;margin:0 0 24px;min-width:0;color:var(--text,#282922);font:14px/1.5 'Segoe UI',system-ui,sans-serif}.ds-group legend{font-size:14px;letter-spacing:0;font-weight:600;padding:0;margin-bottom:12px}.ds-group p{font-size:12px;line-height:1.55;color:var(--dim,#62645b)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Working Studio",
+    "overview": "This document governs only experiments/workbench, the separate v2.6.27-test preview and its dist-workbench build. The production web UI remains the incumbent system; this root document does not authorise restyling it. The direction and workflow contract remain in docs/workbench-direction.md.\n\nWarm paper surrounds a charcoal model stage. Burnt orange identifies action and selection; restrained borders and compact controls support practical model work. IBM Plex Sans gives the headings a distinct voice while familiar platform typography carries the controls. The YAB3D name, existing mark and UK English are durable identity commitments from PRODUCT.md.",
+    "keyCharacteristics": ["Warm inspector surfaces and a charcoal model stage.", "Restrained orange action and selection states.", "Compact, gently rounded controls with explicit focus feedback.", "Flat inspector groups with typographic hierarchy."],
+    "rules": [{"name": "The Source Palette Rule", "body": "Preserve the shell and inspector token mappings from their own stylesheets; do not normalise their distinct muted or dark action-text colours during unrelated work.", "section": "colors"}],
+    "dos": ["Do apply these tokens only to the separate Workbench preview.", "Do keep status, selection and keyboard focus visible as panels and viewports change.", "Do retain the existing YAB3D mark and self-hosted OFL font licence.", "Do label software-rendered fallback images as static and sample models as synthetic."],
+    "donts": ["Don't treat this document as a replacement for the production UI's incumbent system.", "Don't invent tonal ramps, motion tokens or decorative imagery absent from the implementation.", "Don't conceal preview limitations or use preview images as proof of physical print results."]
+  }
+}
