@@ -154,6 +154,7 @@ function cornerCells(size, width, depth, columns, rows, spacing, box) {
  * single centred copy.
  */
 export function planLayout(bounds, options = {}) {
+  if (options.colourGroups?.length) return planColourGroups(bounds, options);
   if (options.arrangement === 'objects') return planObjects(bounds, options);
   const modelSize = boxSize(bounds);
   const padding = Math.max(0, Number(options.padding) || 0);
@@ -318,7 +319,7 @@ function planObjects(bounds, options) {
   // Bounded search of complete requested sets. Try several deterministic orders;
   // rectangle packing is conservative, so this is a fit found, not a maximum.
   if (!invalid && items.length && !items.some(i=>i.z > (options.maxHeight ?? Infinity))) {
-    for (let count=1; count<=64 && count*items.length<=512; count++) {
+    for (let count=1; count<=(options.capacityLimit || 64) && count*items.length<=512; count++) {
       const all = Array.from({length:count},(_,copy)=>items.map(i=>({...i,copy}))).flat();
       let packed = null;
       for (const score of [i=>i.w*i.h,i=>Math.max(i.w,i.h),i=>i.h,i=>i.w]) {
@@ -342,4 +343,38 @@ function planObjects(bounds, options) {
     tower:Boolean(options.tower),towerBox:options.tower && options.towerBox || null,
     reserve:options.tower && !options.towerBox ? 2*(options.towerReserve||TOWER_RESERVE_PER_SIDE):0,
     footprintNotes:options.footprintNotes || []};
+}
+
+/** Pack pieces within colour groups, then place the groups as separate boxes.
+ * The gap is a planning allowance; the destination slicer validates clearance. */
+function planColourGroups(bounds, options) {
+  const base={...options,colourGroups:null,copies:1,capacityLimit:1};
+  const groups=[];
+  for(const [index,group] of options.colourGroups.entries()) {
+    const footprints=options.footprints.filter(f=>group.objects.includes(String(f.objectId)));
+    const box=emptyBox();footprints.forEach(f=>addBox(box,f.bounds));
+    const candidates=[];
+    for(const fraction of [.25,.5,.75,1]) {
+      const width=options.width*fraction;
+      const plan=planObjects(box,{...base,width,centre:[width/2,options.depth/2],footprints,
+        tower:false,keepoutBoxes:[],edgeMargin:0});
+      if(plan.blocked)continue;
+      const packed=emptyBox();
+      for(const p of plan.placements) {
+        const f=footprints.find(f=>String(f.objectId)===p.objectId);
+        addBox(packed,{min:f.bounds.min.map((n,a)=>n+p.offset[a]-(a<2?plan.padding:0)),
+          max:f.bounds.max.map((n,a)=>n+p.offset[a]+(a<2?plan.padding:0))});
+      }
+      candidates.push({plan,bounds:packed});
+    }
+    candidates.sort((a,b)=>boxSize(a.bounds)[0]*boxSize(a.bounds)[1]-boxSize(b.bounds)[0]*boxSize(b.bounds)[1]);
+    if(!candidates.length)return {...planObjects(bounds,{...base,footprints:[]}),blocked:true};
+    groups.push({objectId:String(index),...candidates[0]});
+  }
+  const outer=planObjects(bounds,{...base,footprints:groups,quantities:{},padding:0,
+    spacing:Math.max(Number(options.spacing)||0,Number(options.groupGap)||25)});
+  return {...outer,arrangement:'objects',placements:outer.placements.flatMap(p=>
+    groups[Number(p.objectId)].plan.placements.map(piece=>({...piece,
+      offset:piece.offset.map((n,a)=>n+p.offset[a])}))),footprintNotes:[
+    ...(options.footprintNotes||[]),'Colour groups need head and gantry clearance checks in the slicer.']};
 }

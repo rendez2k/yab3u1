@@ -1,5 +1,6 @@
 import {receiveModel} from './shared/modelHandoff.js';
-import {mountOptimiser} from './shared/optimiserPanel.js';
+import {mountSequential} from './shared/sequentialPanel.js';
+import {mountObjectActions} from './shared/objectActions.js';
 // The online page: open a painted 3MF, recolour it onto four reels (with predicted
 // blends if you want them), preview it, export a project for Snapmaker, Bambu or
 // PrusaSlicer, and plan reel changes from a real slice.
@@ -31,7 +32,7 @@ import { mountCalibration } from './shared/calibrationPanel.js';
 import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } from './shared/supportInterface.js';
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 
-const VERSION = "2.6.25-review";
+const VERSION = "2.6.26-review";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -116,6 +117,7 @@ $('spectrumarrangement').addEventListener('change',()=>{
   layoutChanged();
 });
 function quantityObjects() {
+  if(!state.project)return [];
   return eligibleForPlate().map(id=>({objectId:id,
     name:state.project.meta.get(id)?.name || `Object ${id}`,
     colours:state.assessed?.objects.find(o=>o.id===id)?.colours || [],
@@ -132,7 +134,7 @@ bindQuantityButtons($('spectrumquantities'), {
     state.quantities=quantities;
     $('objects').querySelectorAll('[data-object]').forEach(box=>{box.checked=(quantities[box.dataset.object]??1)!==0;});
     state.objects=selectedObjects();
-    $('spectrumarrangement').value='objects';$('spectrumcopies').value=1;
+    $('spectrumarrangement').value='objects';
     renderQuantityFields();layoutChanged();refresh();
   },
 });
@@ -142,7 +144,7 @@ $('spectrumquantities').addEventListener('input',event=>{
   const box=[...$('objects').querySelectorAll('[data-object]')].find(b=>b.dataset.object===id);
   box.checked=state.quantities[id]!==0;
   const before=state.objects.join(',');state.objects=selectedObjects();
-  $('spectrumarrangement').value='objects';$('spectrumcopies').value=1;
+  $('spectrumarrangement').value='objects';
   layoutChanged();
   if(before!==state.objects.join(','))refresh();
 });
@@ -741,7 +743,7 @@ function renderObjects() {
     box.addEventListener("change", () => {
       state.quantities[box.dataset.object]=box.checked?1:0;
       state.objects = selectedObjects();
-      $("spectrumcopies").value=1;clearFill();renderQuantityFields();
+      clearFill();renderQuantityFields();
       // A different selection is a different mapping: the tick above it no longer
       // approves what would be written.
       clearReview();
@@ -1140,6 +1142,13 @@ async function refreshPreview() {
   const canvas = $("preview");
   if (!state.preview) {
     state.preview = new Preview(canvas);
+    mountObjectActions(state.preview,$('platecontrols'),()=>({key:`${state.epoch}:${state.plateId}`,
+      objects:quantityObjects(),quantities:state.quantities,copies:Number($('spectrumcopies').value),
+      arrangement:$('spectrumarrangement').value,busy:state.loading||state.exporting}),patch=>{
+        state.quantities={...patch.quantities};$('spectrumcopies').value=patch.copies;$('spectrumarrangement').value=patch.arrangement;
+        $('objects').querySelectorAll('[data-object]').forEach(box=>{box.checked=(state.quantities[box.dataset.object]??1)>0;});
+        state.objects=selectedObjects();renderQuantityFields();layoutChanged();refresh();
+      });
     $("previewreset").addEventListener("click", () => state.preview.reset());
     mountPlateControls(state.preview, $('platecontrols'), () => {
       const panel=$('copyoptions'); if (panel.tagName==='DETAILS') panel.open=true;
@@ -1221,6 +1230,7 @@ function applyPreview(soup, fit) {
   }
   try { state.preview.setPlate(layoutSettings()); } catch { state.preview.setPlate(null); }
   state.preview.setSoup(positions, soup.colors, { fit });
+  state.preview.setPickRanges(soup.pickRanges);
   state.preview.resize();
   window.__preview = { mode: state.previewMode, triangles: soup.triangles,
                        floats: positions.length, colors: soup.colors.length,
@@ -1663,14 +1673,14 @@ receiveModel({mount: $("drop").parentElement, canReceive:()=>!state.project&&!st
   return Boolean(state.project);
 }});
 
-printOptimiser=mountOptimiser($('printoptimiser'),()=>{
+printOptimiser=mountSequential($('printoptimiser'),()=>{
   if(!state.project||state.loading||state.exporting||!state.assessed||!state.bounds)throw Error('Load a model and wait for its analysis to finish.');
   const payload=resultPlan();
   if(payload.blocked)throw Error(payload.blocked);
   if($('export').disabled)throw Error('Apply and review the palette and export settings before comparing.');
   const options={target:state.target,reels:state.reels,physical:payload.physical,mapping:payload.mapping,
     recipes:payload.recipes,title:state.project.title,u1Nozzle:state.u1Nozzle,layerHeight:layerChoice(),
-    supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice()};
+    supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice(),preserveSourceSettings:true};
   const hasSupports=[state.project.sourceSettings,...state.objects.map(id=>state.project.meta.get(String(id))?.settings)].some(s=>['1','true'].includes(String(s?.enable_support)));
   return {signature:exportRevision(),worker:background(),plateId:state.plateId,objects:state.footprints,
     quantities:state.quantities,layout:layoutSettings(),mapping:payload.mapping,recipes:payload.recipes,options,

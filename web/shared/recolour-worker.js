@@ -144,6 +144,7 @@ function preparePreview(plateId, objectIds, mode, colors, mapping, haveGeometry,
   const sendPositions = haveGeometry !== current.id;
   return {
     geometryId: current.id,
+    pickRanges: current.pickRanges || [],
     positions: sendPositions ? current.positions.slice() : null,
     colors: colours,
     triangles: current.triangles,
@@ -211,11 +212,17 @@ function objectView(plateId, objectIds, layout) {
   const key = `${plateId}|${(objectIds||[]).join(',')}|${JSON.stringify(layout)}`;
   if (viewCache?.key === key) return {...viewCache.view,reused:true};
   const {plan} = project.layoutInstances(loaded.project,plateId,objectIds,layout);
-  const parts = plan.placements.map(p=>{
+  const footprints=project.selectionFootprints(loaded.project,plateId,objectIds);
+  const offsets=plan && !plan.placements ? layoutOffsets(ensureBounds(plateId,objectIds),plan,layout.centre || [0,0]) : [[0,0,0]];
+  const placements=plan?.placements || offsets.flatMap(offset=>footprints.map(f=>({objectId:f.objectId,offset})));
+  const parts = placements.map(p=>{
     const id = `${plateId}|${p.objectId}`;
-    if (!objectGeometry.has(id)) objectGeometry.set(id,buildGeometry(id,plateId,[p.objectId]));
+    if (!objectGeometry.has(id)) {
+      objectGeometry.set(id,buildGeometry(id,plateId,[p.objectId]));
+      self.__geometryBuilds=++geometryBuilds;
+    }
     const base = objectGeometry.get(id);
-    return {base,offset:p.offset};
+    return {base,offset:p.offset,objectId:p.objectId};
   });
   const total = parts.reduce((n,p)=>n+p.base.triangleCount,0), meshes = new Map();
   for (const p of parts) {
@@ -227,14 +234,16 @@ function objectView(plateId, objectIds, layout) {
   const length = parts.reduce((n,p)=>n+p.mesh.positions.length,0);
   const positions = new Float32Array(length), states = new Int32Array(length/9);
   let at = 0;
-  for (const {mesh,offset} of parts) {
+  const pickRanges=[];
+  for (const {mesh,offset,objectId} of parts) {
+    pickRanges.push({objectId,start:at/3,count:mesh.positions.length/3});
     for(let i=0;i<mesh.positions.length;i++) positions[at+i] = mesh.positions[i]+offset[i%3];
     states.set(mesh.states,at/9); at+=mesh.positions.length;
   }
-  const view = {id:++geometrySeq,positions,states,triangles:length/9,simplified:true,
+  const view = {id:++geometrySeq,positions,states,pickRanges,triangles:length/9,simplified:true,
     subdivided:parts.reduce((n,p)=>n+p.base.subdivided,0),unknown:parts.reduce((n,p)=>n+p.base.unknown,0),
     total:parts.reduce((n,p)=>n+p.base.total,0),soupTriangles:length/9,ms:0,reused:false,
-    copies:plan.copies,capacity:plan.capacity,planCopies:plan.copies};
+    copies:plan?.copies || 1,capacity:plan?.capacity,planCopies:plan?.copies || 1};
   viewCache = {key,view}; return view;
 }
 
@@ -254,57 +263,7 @@ function ensureBounds(plateId, objectIds) {
  * a facet budget selects a rebuilt surface for each copy.
  */
 function instanceView(plateId, objectIds, layout) {
-  if (layout?.arrangement === 'objects') return objectView(plateId,objectIds,layout);
-  const base = ensureGeometry(plateId, objectIds, layout && layout.estimate);
-  if (!layout) {
-    return { id: base.id, positions: base.positions, states: base.states,
-             triangles: base.triangleCount, simplified: base.simplified,
-             subdivided: base.subdivided, unknown: base.unknown, total: base.total,
-             soupTriangles: base.soupTriangles, ms: base.ms, reused: false,
-             copies: 1 };
-  }
-  const bounds = ensureBounds(plateId, objectIds);
-  const viewKey = `${base.id}|${layoutKey(layout)}|${JSON.stringify(layout.centre || [0, 0])}`;
-  if (viewCache && viewCache.key === viewKey) return { ...viewCache.view, reused: true };
-  const plan = planLayout(bounds, layout);
-  if (plan.blocked) {
-    throw new Error("this model does not fit the layout box, so there is nothing "
-      + "to draw");
-  }
-  const offsets = layoutOffsets(bounds, plan, layout.centre || [0, 0]);
-  const budget = 120000;
-  const perCopy = Math.max(1, Math.floor(budget / offsets.length));
-  const detailKey = `${base.id}|${perCopy}`;
-  if (!detailCache || detailCache.key !== detailKey) {
-    detailCache = { key: detailKey,
-      mesh: clusterWithinBudget(base.positions, base.states, perCopy) };
-  }
-  const mesh = detailCache.mesh;
-  const keep = mesh.positions.length / 9;
-  const positions = new Float32Array(keep * offsets.length * 9);
-  const states = new Int32Array(keep * offsets.length);
-  let at = 0;
-  for (const [dx, dy, dz] of offsets) {
-    for (let index = 0; index < keep; index += 1) {
-      const from = index * 9;
-      for (let corner = 0; corner < 3; corner += 1) {
-        positions[at * 9 + corner * 3] = mesh.positions[from + corner * 3] + dx;
-        positions[at * 9 + corner * 3 + 1] = mesh.positions[from + corner * 3 + 1] + dy;
-        positions[at * 9 + corner * 3 + 2] = mesh.positions[from + corner * 3 + 2] + dz;
-      }
-      states[at] = mesh.states[index];
-      at += 1;
-    }
-  }
-  const view = { id: ++geometrySeq, positions: positions.subarray(0, at * 9),
-           states: states.subarray(0, at), triangles: at,
-           simplified: base.simplified || keep < base.triangleCount, subdivided: base.subdivided,
-           unknown: base.unknown, total: base.total,
-           soupTriangles: base.soupTriangles, ms: base.ms, reused: true,
-           copies: offsets.length, capacity: plan.capacity,
-           planCopies: plan.copies };
-  viewCache = { key: viewKey, view };
-  return view;
+  return objectView(plateId,objectIds,layout);
 }
 
 /** The layout part of a geometry cache key: a spacing edit must not reuse a

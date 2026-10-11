@@ -15,6 +15,17 @@ export function groupQuantities(objects, quantities, group, action) {
 }
 const safeColour = value => /^#[0-9a-f]{6}$/i.test(value) ? value : '#808080';
 
+/** Turn a set multiplier into explicit quantities before editing one copy. */
+export function editObjectCopy(objects,quantities,copies,objectId,action) {
+  if(!['duplicate','remove'].includes(action)||!objects.some(o=>String(o.objectId)===String(objectId)))throw Error('Select an object first.');
+  if(!Number.isInteger(copies)||copies<1)throw Error('Choose a valid copy count first.');
+  const next=Object.fromEntries(objects.map(o=>[o.objectId,(quantities[o.objectId]??1)*copies]));
+  if(!(next[objectId]>0))throw Error('This object is no longer on the plate.');
+  next[objectId]+=action==='duplicate'?1:-1;
+  if(Object.values(next).some(n=>!Number.isInteger(n)||n<0||n>64))throw Error('Direct editing supports up to 64 copies of each object. Reduce the plate copy count first.');
+  return {quantities:next,copies:1,arrangement:'objects'};
+}
+
 /** Shared object controls for the converter and Full Spectrum. */
 export function quantityRows(objects, quantities = {}) {
   const groups = new Map([['all','All objects']]);
@@ -24,7 +35,7 @@ export function quantityRows(objects, quantities = {}) {
     groups.set(group,group==='multi' ? 'Multicoloured objects' : `Only filament ${object.colours[0].extruder} · ${object.colours[0].color}`);
   }
   const toolbar = `<div class="object-group-tools"><label>Source colour group<select data-object-group>${[...groups].map(([key,label])=>`<option value="${esc(key)}">${esc(label)}</option>`).join('')}</select></label><div class="quantity-actions"><button type="button" data-group-action="remove">Remove group</button><button type="button" data-group-action="only">Keep only group</button><button type="button" data-group-action="restore">Restore all</button><button type="button" data-group-action="undo" hidden>Undo group change</button></div><p class="hint">Source paint only. Supports, blends and repainting can use additional filaments. Keep a group to export it separately, then undo to return to the other parts.</p><p class="hint" data-group-status role="status"></p></div>`;
-  return toolbar + objects.map(f => {
+  return `<details class="object-groups"><summary>Manage by source colour</summary>${toolbar}</details>` + objects.map(f => {
     const count = quantities[f.objectId] ?? 1;
     const name = esc(f.name);
     const colours=(f.colours||[]).map(c=>`<span class="object-swatch" style="background:${safeColour(c.color)}" title="Source filament ${esc(c.extruder)} · ${esc(c.color)}"></span>`).join('');

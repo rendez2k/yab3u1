@@ -11,6 +11,38 @@ export function outputTools(object, mapping={}, recipes=[]) {
   return [...tools].sort((a,b)=>a-b);
 }
 
+/** Prepare the visible objects: single-filament groups first, mixed parts last.
+ * This deliberately does not score time or infer complete assembly sets. */
+export function sequentialPlates(context) {
+  const groups=new Map(),copies=Number(context.layout.copies||1);
+  if(!Number.isInteger(copies)||copies<1)throw Error('Choose a valid plate copy count.');
+  for(const o of context.objects){
+    const count=(context.quantities[o.objectId]??1)*copies;if(count===0)continue;
+    if(!Number.isInteger(count)||count<0||count>64)throw Error('Sequential preparation supports 1–64 copies of each object per plate.');
+    const tools=outputTools(o,context.mapping,context.recipes);
+    const key=tools?.length===1&&!context.options.supportInterface?tools[0]:'multi';
+    if(!groups.has(key))groups.set(key,[]);groups.get(key).push({...o,count});
+  }
+  if(!groups.size)throw Error('Keep at least one object on the plate.');
+  const singles=[...groups].filter(([key])=>key!=='multi').sort(([a],[b])=>a-b);
+  const batches=[];
+  if(singles.length)batches.push({key:'single',rows:singles.flatMap(([,rows])=>rows),mergeGroups:singles.map(([filament,rows])=>({
+    label:`Filament ${filament} group`,objects:rows.map(o=>String(o.objectId))}))});
+  if(groups.has('multi'))batches.push({key:'multi',rows:groups.get('multi')});
+  return batches.map(({key,rows,mergeGroups},index)=>{
+    const quantities=Object.fromEntries(rows.map(o=>[o.objectId,o.count]));
+    const extraSupport=Boolean(context.options.supportInterface);
+    const sequence=key!=='multi'?'by object':'by layer';
+    const layout={...context.layout,arrangement:'objects',copies:1,quantities,footprints:rows,colourGroups:mergeGroups};
+    const box=emptyBox();rows.forEach(o=>addBox(box,o.bounds));
+    const plan=planLayout(box,layout);
+    if(plan.blocked||plan.capped)throw Error(`${key==='multi'?'The by-layer parts':'The separated colour groups'} do not fit one plate. Reduce their quantity before preparing plates.`);
+    return {id:`plate-${index+1}`,objects:rows.map(o=>o.objectId),names:rows.map(o=>o.name),
+      label:key==='multi'?'By-layer parts':'Merged colour groups',
+      count:rows.reduce((n,o)=>n+o.count*(o.instances||1),0),sequence,quantities,layout,extraSupport,mergeGroups};
+  });
+}
+
 /** Compare fixed quantities and quality. Packing is a bounded heuristic; time
  * ranking is deliberately impossible until every required slice has evidence. */
 export function buildStrategies(context, {objective='order',sets=1,turnaround=10,parallel=false,sequential=false}={}) {

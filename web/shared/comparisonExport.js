@@ -1,9 +1,10 @@
 import {exportProject, SRC_BBL_PROJECT, SRC_BBL_MODEL, analyse, conversionUsage} from './project.js';
+import {outputTools} from './printOptimiser.js';
 const encode=new TextEncoder(),decode=new TextDecoder();
 
 export function exportComparisonJob(project,plateId,job,options) {
-  if(!['bambu','snapmaker'].includes(options.target))throw Error('Timing comparisons currently support Bambu Studio and Snapmaker Orca.');
-  if(options.target==='bambu'&&!options.bambuSetup)throw Error('Choose a native Bambu printer profile for comparable timings.');
+  if(!['bambu','snapmaker'].includes(options.target))throw Error('Sequential plates currently support Bambu Studio and Snapmaker Orca.');
+  if(options.target==='bambu'&&!options.bambuSetup)throw Error('Choose a native Bambu printer profile for sequential plates.');
   if(!job.objects?.length||!['by layer','by object'].includes(job.sequence))throw Error('Invalid comparison job.');
   if(options.target==='snapmaker' && (options.physical||options.reels||[]).length>4) {
     if(options.recipes?.length||options.supportInterface)throw Error('This U1 comparison has more than four physical filaments. Apply a compatible palette before comparing.');
@@ -23,14 +24,18 @@ export function exportComparisonJob(project,plateId,job,options) {
     options={...options,physical:used.map(id=>physical[id-1]),mapping};
   }
   if(job.sequence==='by object') {
-    if(options.supportInterface||options.recipes?.length)throw Error('Sequential comparison is not available with support interfaces or blends.');
+    if(options.supportInterface)throw Error('PETG interface plates must keep printing by layer.');
     const report=analyse(project,plateId,job.objects);
     for(const o of report.objects.filter(o=>o.selected)) {
-      if(o.undecodable || new Set(o.colours.map(c=>options.mapping?.[c.extruder]??c.extruder)).size!==1)
+      if(outputTools(o,options.mapping,options.recipes)?.length!==1)
         throw Error('Sequential candidates require decoded, single-filament objects.');
+      const tool=outputTools(o,options.mapping,options.recipes)[0];
+      const settings={...project.sourceSettings,...project.meta.get(String(o.id))?.settings};
+      if(Object.entries(settings).some(([key,value])=>/(?:support(?:_material)?(?:_interface)?|wall|sparse_infill|solid_infill|perimeter|infill)_(?:extruder|filament)$/.test(key)&&Number(value)>0&&Number(options.mapping?.[value]??value)!==tool))
+        throw Error('These parts use another filament for supports or infill. Keep them on a by-layer plate.');
     }
   }
-  const built=exportProject(project,plateId,job.objects,{...options,layout:job.layout});
+  const built=exportProject(project,plateId,job.objects,{...options,layout:job.layout,mergeGroups:job.mergeGroups});
   if(built.problems.length)throw Error(built.problems[0]);
   const config=JSON.parse(decode.decode(built.entries.get(SRC_BBL_PROJECT)));
   config.print_sequence=job.sequence;

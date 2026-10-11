@@ -1,5 +1,6 @@
 import {quantityRows, bindQuantityButtons, syncQuantityButtons} from './shared/objectQuantities.js';
-import {mountOptimiser} from './shared/optimiserPanel.js';
+import {mountSequential} from './shared/sequentialPanel.js';
+import {mountObjectActions} from './shared/objectActions.js';
 import {mountBambuPrinterPicker} from './shared/bambuPrinterPicker.js';
 import {mountPrinter} from './shared/printerPanel.js';
 import {bambuImportGuide} from './shared/bambuImportGuide.js';
@@ -24,7 +25,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.25-review";
+const VERSION = "2.6.26-review";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -846,6 +847,9 @@ async function refreshPreview() {
   note("Preparing 3D preview…");
   if (!preview) {
     preview = new Preview($("convertpreview"));
+    mountObjectActions(preview,$('platecontrols'),()=>({key:`${session.epoch}:${session.state?.plateId}`,
+      objects:session.state?.footprints||[],quantities:session.layout.quantities||{},copies:session.layout.copies,
+      arrangement:session.layout.arrangement,busy:session.busy||session.boundsPending}),patch=>session.setLayout(patch));
     $("previewreset").addEventListener("click", () => preview.reset());
     mountPlateControls(preview, $('platecontrols'), () => {
       const panel=$('platelayout'); if (panel.tagName==='DETAILS') panel.open=true;
@@ -901,6 +905,7 @@ async function refreshPreview() {
   previewKey = key;
   try { preview.setPlate(session.planningLayout()); } catch { preview.setPlate(null); }
   preview.setSoup(positions, soup.colors, { fit });
+  preview.setPickRanges(soup.pickRanges);
   preview.resize();
   note(`${soup.triangles.toLocaleString()} facets drawn`
     + (soup.subdivided ? ` · ${soup.subdivided.toLocaleString()} sub-divided facets `
@@ -1005,7 +1010,7 @@ bindQuantityButtons($('quantityfields'), {
   key:()=>`${session.epoch}:${session.state?.plateId}`,
   objects:()=>session.state?.footprints || [],
   read:()=>session.layout.quantities || {},
-  write:quantities=>session.setLayout({quantities,copies:1,arrangement:'objects'}),
+  write:quantities=>session.setLayout({quantities,arrangement:'objects'}),
 });
 $('quantityfields').addEventListener('input',event=>{
   if (!event.target.dataset.object) return;
@@ -1013,7 +1018,7 @@ $('quantityfields').addEventListener('input',event=>{
   $('quantityfields').querySelectorAll('input').forEach(input=>{
     quantities[input.dataset.object] = input.value.trim() === '' ? NaN : Number(input.value);
   });
-  session.setLayout({quantities,copies:1,arrangement:'objects'});
+  session.setLayout({quantities,arrangement:'objects'});
 });
 ["layoutcopies", "layoutspacing", "layoutwidth", "layoutdepth"].forEach((id) => {
   $(id).addEventListener("input", () => {
@@ -1123,7 +1128,7 @@ const syncPrimary=()=>{ $('converterprimary').textContent=session.busy?'Preparin
 new MutationObserver(syncPrimary).observe($('convertgo'),{attributes:true,childList:true});
 new ResizeObserver(()=>document.documentElement.style.setProperty('--workspace-action-height',`${$('converteractions').getBoundingClientRect().height}px`)).observe($('converteractions'));
 syncPrimary();
-printOptimiser=mountOptimiser($('printoptimiser'),()=>{
+printOptimiser=mountSequential($('printoptimiser'),()=>{
   if(!session.state||session.boundsPending||session.busy)throw Error('Load a model and wait for its analysis to finish.');
   const plan=session.conversionPlan();
   const options={target:session.target,physical:plan.physical,mapping:plan.mapping,recipes:[],convert:true,

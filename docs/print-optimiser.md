@@ -1,4 +1,18 @@
-# Print strategy comparison — 2.6.25 review
+# Object editing and merged sequential groups — 2.6.26 review
+
+Both the converter and Full Spectrum now offer **Merge colour groups for sequential printing** in the layout controls. The time-ranking interface below has been removed from both pages.
+
+- Click a visible object, or select it from the preview dropdown, then **Duplicate**, **Remove this copy** or **Undo**. Editing a filled plate materialises its existing totals before changing one object's count. Removing an entire source object/colour through the collapsed list retains the plate multiplier and all unrelated copies. Linked source instances are explicitly labelled and remain together.
+- **Prepare plates** merges same-output-filament parts into one logical slicer object per colour, on one sequential plate. Individual meshes, paint and composed instance transforms remain intact. Each cloned part has a unique resource ID. Multicoloured parts, including blends using multiple tools, go to a separate by-layer plate. PETG interface projects stay by layer.
+- Groups are packed as distinct blocks with a 25 mm planning gap. This is not a head or gantry clearance calculation: open the project in the destination slicer, Arrange, then Slice. Reduce quantities if groups cannot fit or the slicer rejects the clearance.
+- Merging rejects modifiers, part-specific overrides and differing transferable print settings. Extra support/infill filament assignments are checked at export; unsupported combinations fail with an explanation. Native Bambu exports use the selected printer/nozzle setup. U1 split exports retain the existing guarded palette compaction.
+- Preparation validates and caches actual archives; changing the model, quantities or export settings invalidates them. There are no timing scores or claims of a measured speedup.
+
+Validation: 105 JavaScript tests and 12 site-build tests passed. New coverage checks exact transformed vertices, paint, settings, unique part IDs, incompatible merges, preview hit testing, per-copy worker ranges and cache reuse. DOM interaction checks cover removal, duplication, undo, stale asynchronous preparation, escaped names and collapsed lists on both pages. The real Stabby Pumpkin file, with one body variant and three copies of its parts, round-tripped through both H2C and U1: 15 single-colour parts became three logical groups (9 orange, 3 yellow, 3 green), with 2,005,734 triangles retained; six multicoloured objects remained separate. No source file was modified.
+
+CUA exits during startup, so live browser appearance remains unverified. Installed slicer clearance remains unverified; the earlier CLI limitation below still applies. No printer commands were sent.
+
+## Historical implementation — 2.6.25 (superseded UI)
 
 Open **Optimise print time** inside Plate layout on the converter, or Copies & spacing in Full Spectrum. Full Spectrum requires an applied, reviewed palette first. Both pages use the same component.
 

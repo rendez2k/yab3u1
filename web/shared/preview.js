@@ -29,12 +29,14 @@ out vec4 outColor;
 uniform vec3 uLight;
 uniform float uAmbient;
 uniform bool uUnlit;
+uniform bool uSelected;
 void main() {
   if (uUnlit) { outColor = vec4(vColor, 1.0); return; }
   vec3 normal = normalize(vNormal);
   float diffuse = max(dot(normal, normalize(uLight)), 0.0);
   float wrap = 0.35 * max(dot(normal, normalize(vec3(-uLight.x, -uLight.y, uLight.z))), 0.0);
   vec3 shade = vColor * (uAmbient + 0.75 * diffuse + wrap);
+  if (uSelected) shade = mix(shade, vec3(0.30, 0.75, 1.0), 0.55);
   outColor = vec4(clamp(shade, 0.0, 1.0), 1.0);
 }`;
 
@@ -89,6 +91,8 @@ export class Preview {
     this.plate = null;
     this.view = 'plate';
     this.lastPositions = null;      // the geometry whose buffers are uploaded
+    this.pickRanges=[];
+    this.selectedRange=null;
     this.frame = 0;                 // pending animation-frame id, if any
     this.yaw = -0.6;
     this.pitch = 0.5;
@@ -118,6 +122,7 @@ export class Preview {
       light: gl.getUniformLocation(this.program, "uLight"),
       ambient: gl.getUniformLocation(this.program, "uAmbient"),
       unlit: gl.getUniformLocation(this.program, "uUnlit"),
+      selected: gl.getUniformLocation(this.program, "uSelected"),
     };
     this.attributes = {
       position: gl.getAttribLocation(this.program, "aPosition"),
@@ -138,10 +143,12 @@ export class Preview {
     canvas.addEventListener("pointerdown", (event) => {
       this.dragging = event.button === 2 || event.shiftKey ? "pan" : "orbit";
       this.last = [event.clientX, event.clientY];
+      this.pointerStart=[event.clientX,event.clientY];this.pointerMoved=false;
       canvas.setPointerCapture(event.pointerId);
     });
     canvas.addEventListener("pointermove", (event) => {
       if (!this.dragging) return;
+      if(Math.hypot(event.clientX-this.pointerStart[0],event.clientY-this.pointerStart[1])>5)this.pointerMoved=true;
       const dx = event.clientX - this.last[0];
       const dy = event.clientY - this.last[1];
       this.last = [event.clientX, event.clientY];
@@ -155,9 +162,17 @@ export class Preview {
       this.requestDraw();
     });
     const stop = (event) => {
+      const click=event.type==='pointerup' && this.dragging==='orbit' && !this.pointerMoved;
       this.dragging = null;
       if (event.pointerId !== undefined) {
         try { canvas.releasePointerCapture(event.pointerId); } catch (error) { /* fine */ }
+      }
+      if(click){
+        this.draw();
+        const rect=canvas.getBoundingClientRect();
+        const triangle=pickTriangle(this.lastPositions,this.viewProjection,
+          2*(event.clientX-rect.left)/rect.width-1,1-2*(event.clientY-rect.top)/rect.height);
+        this.selectRange(this.pickRanges.findIndex(r=>triangle>=r.start/3&&triangle<(r.start+r.count)/3));
       }
     };
     canvas.addEventListener("pointerup", stop);
@@ -192,6 +207,7 @@ export class Preview {
   setSoup(positions, colors, { fit = true } = {}) {
     if (!this.ok) return;
     if (!positions || !positions.length) {
+      this.setPickRanges([]);
       this.count = 0;
       this.bounds = null;
       this.lastPositions = null;
@@ -207,6 +223,7 @@ export class Preview {
       return;
     }
     const gl = this.gl;
+    this.selectedRange=null;
     const normals = new Float32Array(positions.length);
     for (let i = 0; i < positions.length; i += 9) {
       const ax = positions[i], ay = positions[i + 1], az = positions[i + 2];
@@ -238,6 +255,18 @@ export class Preview {
       this.clampDistance();
       this.requestDraw();
     }
+  }
+
+  setPickRanges(ranges) {
+    this.pickRanges=ranges||[];
+    this.onRangesChange?.();
+    this.onSelectionChange?.(this.selectedRange);
+  }
+
+  selectRange(index) {
+    this.selectedRange=Number.isInteger(index)&&index>=0&&index<this.pickRanges.length?index:null;
+    this.onSelectionChange?.(this.selectedRange);
+    this.requestDraw();
   }
 
   upload(buffer, location, data, size) {
@@ -356,11 +385,12 @@ export class Preview {
                                    Math.max(0.1, this.distance * 0.01),
                                    this.distance * 40 + 1000);
     gl.useProgram(this.program);
-    gl.uniformMatrix4fv(this.uniforms.viewProjection, false,
-                        multiply(projection, view));
+    this.viewProjection=multiply(projection, view);
+    gl.uniformMatrix4fv(this.uniforms.viewProjection, false,this.viewProjection);
     gl.uniformMatrix4fv(this.uniforms.model, false, identity());
     gl.uniform3f(this.uniforms.light, 0.4, -0.6, 0.7);
     gl.uniform1f(this.uniforms.ambient, 0.35);
+    gl.uniform1i(this.uniforms.selected,0);
     if (this.view !== 'model' && this.plate) {
       gl.uniform1i(this.uniforms.unlit, 1);
       this.bindBuffers(this.plate.buffers);
@@ -369,7 +399,38 @@ export class Preview {
     gl.uniform1i(this.uniforms.unlit, 0);
     this.bindBuffers(this.buffers);
     gl.drawArrays(gl.TRIANGLES, 0, this.count);
+    const selected=this.selectedRange==null?null:this.pickRanges?.[this.selectedRange];
+    if(selected){
+      gl.uniform1i(this.uniforms.selected,1);gl.depthFunc(gl.LEQUAL);
+      gl.drawArrays(gl.TRIANGLES,selected.start,selected.count);
+      gl.depthFunc(gl.LESS);gl.uniform1i(this.uniforms.selected,0);
+    }
   }
+}
+
+/** Pick the nearest visible triangle, not its enclosing box or colour. */
+export function pickTriangle(positions,matrix,x,y) {
+  if(!positions||!matrix||![x,y].every(Number.isFinite))return -1;
+  let nearest=Infinity,hit=-1;
+  const project=(i)=>{
+    const a=positions[i],b=positions[i+1],c=positions[i+2];
+    const w=matrix[3]*a+matrix[7]*b+matrix[11]*c+matrix[15];
+    if(w<=0)return null;
+    return [(matrix[0]*a+matrix[4]*b+matrix[8]*c+matrix[12])/w,
+      (matrix[1]*a+matrix[5]*b+matrix[9]*c+matrix[13])/w,
+      (matrix[2]*a+matrix[6]*b+matrix[10]*c+matrix[14])/w];
+  };
+  for(let i=0;i<positions.length;i+=9){
+    const a=project(i),b=project(i+3),c=project(i+6);if(!a||!b||!c)continue;
+    const d=(b[1]-c[1])*(a[0]-c[0])+(c[0]-b[0])*(a[1]-c[1]);
+    if(Math.abs(d)<1e-12)continue;
+    const u=((b[1]-c[1])*(x-c[0])+(c[0]-b[0])*(y-c[1]))/d;
+    const v=((c[1]-a[1])*(x-c[0])+(a[0]-c[0])*(y-c[1]))/d,t=1-u-v;
+    if(Math.min(u,v,t)<-1e-7)continue;
+    const z=u*a[2]+v*b[2]+t*c[2];
+    if(z>=-1&&z<=1&&z<nearest){nearest=z;hit=i/9;}
+  }
+  return hit;
 }
 
 /** Match the layout planner's local bed coordinates, including corner reservations. */

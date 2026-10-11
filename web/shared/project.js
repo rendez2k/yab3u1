@@ -631,6 +631,8 @@ function readMeta(entries, project) {
           extruder: partExtruder ? Number(partExtruder[1]) : null,
           subtype: attr(part[1], "subtype") || "normal_part",
           firstid: null, lastid: null, range: false,
+          settings: Object.fromEntries([...part[2].matchAll(/<metadata key="([^"]*)" value="([^"]*)"/g)]
+            .filter(m=>SOURCE_KEYS.includes(m[1])).map(m=>[m[1],m[2]])),
         });
       }
       project.meta.set(String(id), entry);
@@ -2176,7 +2178,7 @@ export function exportProject(project, plateId, objectIds, options) {
       }
     }
   }
-  const rootObjects = [];
+  let rootObjects = [];
   // Native Orca imports need a configured root per copy. Sharing a root loses
   // inherited base filaments on later copies and confuses tower collision checks.
   // The large mesh members are still shared by all of these small wrappers.
@@ -2281,12 +2283,53 @@ export function exportProject(project, plateId, objectIds, options) {
     throw new ProjectError("nothing is selected, so there is nothing to write");
   }
 
+  // Merge at the slicer's logical-object level. Keep each original mesh as a
+  // distinct part, including its paint, local rotation and instance placement.
+  if (options.mergeGroups?.length) {
+    if (!separateCopies || standard || options.thumbnails) throw new ProjectError('Colour-group merging requires a native project without a stale thumbnail.');
+    const assigned=new Set(), merged=[];
+    let meshId=Math.max(0,...[...blocksByMember.values()].flatMap(blocks=>[...blocks.keys()].map(Number)))+1;
+    for(const group of options.mergeGroups) {
+      const roots=rootObjects.filter(root=>group.objects.includes(root.objectId));
+      if(!roots.length)throw new ProjectError('A colour group contains no printable objects.');
+      let signature=null;
+      const parts=[],components=[];
+      for(const root of roots) {
+        if(assigned.has(root.id))throw new ProjectError('An object belongs to more than one colour group.');
+        assigned.add(root.id);
+        const meta=project.meta.get(root.objectId);
+        if(root.parts.some(p=>p.subtype!=='normal_part') || meta?.parts?.some(p=>Object.keys(p.settings||{}).some(k=>!['name','extruder'].includes(k))))
+          throw new ProjectError(`${root.name} has modifiers or part-specific settings. Keep it on a by-layer plate instead of merging it.`);
+        const settings=sourceSettingMetadata(project,root.objectId,target,options,supportPaintPresent(project,plateId,[root.objectId]));
+        const current=JSON.stringify([...settings.matchAll(/<metadata\b([^>]*)\/>/g)].map(m=>[attr(m[1],'key'),attr(m[1],'value')]).sort(([a],[b])=>a.localeCompare(b)));
+        if(signature!==null&&signature!==current)throw new ProjectError(`${group.label}: these parts have different print settings. Match their settings in the slicer before merging.`);
+        signature=current;
+        const tags=[...root.components.matchAll(/<component\b([^>]*)\/>/g)];
+        for(let i=0;i<tags.length;i++) {
+          const attributes=tags[i][1], output=attr(attributes,'p:path').replace(/^\//,'');
+          const member=[...memberNames].find(([,name])=>name===output)?.[0];
+          const blocks=blocksByMember.get(member),source=blocks?.get(attr(attributes,'objectid'));
+          if(!source)throw new ProjectError('A merged part is missing its mesh.');
+          const id=String(meshId++);
+          // Unique IDs are essential: copies may otherwise overwrite each
+          // other's per-part metadata in Bambu and Orca.
+          blocks.set(id,source.replace(/(<object\b[^>]*\bid=")[^"]+"/,'$1'+id+'"').replace(/p:UUID="[^"]*"/g,()=>`p:UUID="${uuid()}"`));
+          parts.push({...root.parts[i],id});
+          components.push(`<component p:path="/${esc(output)}" objectid="${id}" p:UUID="${uuid()}" transform="${transformText(matmul(matrixFromText(attr(attributes,'transform')),matrixFromText(root.itemTransform)))}"/>`);
+        }
+      }
+      merged.push({...roots[0],name:group.label,parts,components:components.join('\n'),itemTransform:transformText(IDENTITY_MATRIX())});
+    }
+    if(assigned.size!==rootObjects.length)throw new ProjectError('Colour groups do not include every selected copy.');
+    rootObjects=merged;
+  }
+
   // The saved thumbnail is the *output* view: the caller renders it from the
   // same geometry and the same palette/mapping as this export (in the worker,
   // without WebGL).  An engine-only call may omit it and get no PNG members.
   const instanceCounts = new Map();
   let plateCopyIndex = 0;
-  const plateInstances = instances.filter(([id]) => chosen.has(String(id)))
+  const plateInstances = options.mergeGroups?.length ? rootObjects.map(root=>({objectId:root.id,instanceId:0})) : instances.filter(([id]) => chosen.has(String(id)))
     .map(([id]) => {
       const root = separateCopies ? rootObjects[plateCopyIndex++]
         : rootObjects.find((entry) => entry.objectId === String(id));
@@ -2341,7 +2384,7 @@ export function exportProject(project, plateId, objectIds, options) {
   // list already carries the layout-composed placement, so the item writes it as
   // it is -- composing again here would double the offset.
   let copyIndex = 0;
-  const itemsXml = instances.map(([objectId, itemTransform]) => {
+  const itemsXml = options.mergeGroups?.length ? rootObjects.map(root=>`<item objectid="${root.id}" p:UUID="${uuid()}" transform="${root.itemTransform}" printable="1"/>`).join('\n') : instances.map(([objectId, itemTransform]) => {
     if (!chosen.has(String(objectId))) return "";
     const root = separateCopies ? rootObjects[copyIndex++]
       : rootObjects.find((entry) => entry.objectId === String(objectId));
