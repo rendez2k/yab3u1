@@ -1,8 +1,12 @@
 import {composeView} from './view-layout.js';
+import {mountWorkbenchObjects} from './object-tools.js';
 const kind=document.body.dataset.engine,$=id=>document.getElementById(id);
 const view=composeView(document,kind);
 let engine, currentPanel='project', lastReport='', source=null;
 let fallbackKey='',fallbackPending=false,fallbackUrl=null;
+let objectTools, busySince=0;
+const progress=view.make('div',{class:'workbench-progress',hidden:'',role:'status','aria-live':'polite'},'<span class="working-orb" aria-hidden="true"></span><div><strong>Preparing your model…</strong><p></p></div>');
+view.stage.append(progress);
 const fallback=view.make('div',{class:'software-preview',hidden:''},'<div><img alt="Static preview of the current model and colours"></div><p>Static preview · 3D acceleration is unavailable in this browser. Use Layout to edit objects.</p>');
 view.stage.append(fallback);
 const parentHost=window.parent!==window ? window.parent : null;
@@ -28,7 +32,7 @@ document.addEventListener('click',event=>{
   }
   const id=b.dataset.jump||b.dataset.convertJump;
   if(id&&panelFor(id))setPanel(panelFor(id));
-  if(b.matches('[data-arrange]')||/^(Objects|Arrange plate)$/.test(b.textContent.trim()))setPanel('layout');
+  if(b.matches('[data-arrange]')||/^(Objects|Object list|Arrange plate)$/.test(b.textContent.trim()))setPanel('layout');
   if(b.id==='advancedlink')setPanel('colours');
   if(b.id==='capacityrepaint')setPanel('colours');
 },true);
@@ -97,9 +101,45 @@ function tick() {
       .finally(()=>{fallbackPending=false;fallback.querySelector('p').dataset.busy='false';});
   }
   if(!loaded){fallback.hidden=true;document.body.classList.remove('software-mode');fallbackKey='';}
+  const previewNote=$('previewnote');
+  const preparing=busy||fallbackPending||(kind==='converter'?s.boundsPending||/^Preparing 3D preview/.test(previewNote?.textContent||''):previewNote?.dataset.busy==='true'||Boolean(loaded&&!s.assessed));
+  progress.hidden=!preparing;view.stage.setAttribute('aria-busy',String(Boolean(preparing)));
+  if(preparing){
+    if(!busySince)busySince=performance.now();
+    progress.querySelector('strong').textContent=busy?'Reading your model…':fallbackPending?'Drawing the plate preview…':'Preparing the plate preview…';
+    progress.querySelector('p').textContent=`${((performance.now()-busySince)/1000).toFixed(1)}s · ${busy?(status||'Reading the file in your browser.'): 'Measuring objects and building the preview. Large models can take longer.'}`;
+  }else busySince=0;
+  try{objectTools?.sync();}catch{}
+  clarifyControls();
+}
+
+function clarifyControls(){
+  const text=(node,value)=>{if(node&&node.textContent!==value)node.textContent=value;};
+  const groups=document.querySelectorAll('.object-group-tools');
+  for(const group of groups){
+    text(group.closest('details')?.querySelector('summary'),'Select parts by their original filament');
+    const selector=group.querySelector('[data-object-group]');
+    text(group.querySelector('[data-group-action="remove"]'),'Remove matching parts');
+    text(group.querySelector('[data-group-action="only"]'),'Keep only matching parts');
+    text(group.querySelector('[data-group-action="restore"]'),'Restore all parts');
+    let explanation=group.querySelector('[data-group-explanation]');
+    if(!explanation){explanation=view.make('p',{'data-group-explanation':'',class:'hint'});group.prepend(explanation);}
+    let data;try{data=engine.workbenchObjects();}catch{continue;}
+    const value=selector?.value||'all',matching=data.objects.filter(o=>value==='all'||(!o.undecodable&&(value==='multi'?o.colours?.length>1:o.colours?.length===1&&`filament:${o.colours[0].extruder}`===value)));
+    text(explanation,`Matches ${matching.length} object types: ${matching.map(o=>o.name).join(', ')||'none'}. These buttons change which whole parts are on the plate. They do not repaint or join their geometry.`);
+  }
+  const seq=document.querySelector('[data-sequential]')?.parentElement;
+  if(seq){const label=[...seq.childNodes].find(n=>n.nodeType===3&&n.textContent.trim());if(label)label.textContent=' Print single-colour groups sequentially';}
+  for(const b of document.querySelectorAll('button')){
+    if(b.textContent==='Fill plate')b.textContent='Fill with whole sets';
+    if(b.closest('.plate-tool-row')&&b.textContent==='Fill with whole sets')b.hidden=true;
+    if(b.closest('.plate-tool-row')&&b.textContent==='Objects')b.textContent='Object list';
+  }
+  text($('mergeapply'),'Replace this colour');text($('mergeundo'),'Undo colour replacement');
 }
 try {
   engine=await import(kind==='converter'?'./convert-page.js':'./recolour.js');
+  objectTools=mountWorkbenchObjects($('platecontrols'),()=>engine.workbenchObjects());
   window.workbenchEngine=api;
   parentHost?.workbench?.ready(kind,api);
   tick();setInterval(tick,250);

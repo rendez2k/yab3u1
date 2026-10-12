@@ -1,6 +1,6 @@
 # YAB3D Workbench test
 
-An isolated alternative interface, v2.6.27-test. It does not replace `web/index.html`, the production build or the PETG review deployment.
+An isolated alternative interface, v2.6.28-test. It does not replace `web/index.html`, the production build or the PETG review deployment.
 
 ```powershell
 cd experiments/workbench
@@ -22,6 +22,10 @@ The build writes `dist-workbench/`. Deploy that directory to the `workbench-test
 The original controllers expose narrow exports for this adapter. Their established entry points do not opt into the alternative layout or static preview.
 
 ## Behaviour
+
+Select an object on the model or by name, enter the number of **new copies**, then choose **Add copies**. **Fill with this object** searches for room for that object without changing sibling quantities; it repacks objects using the current bed, tower, support and spacing allowances. This is a conservative fit, bounded to 64 copies per object, not a certified maximum. Undo restores the prior counts. **Fill with whole sets** remains in Layout and repeats the entire current parts list.
+
+The compact preview toolbar groups view controls separately from object editing. A visible spinning indicator and elapsed timer cover model loading, measurement and preview drawing. Colour replacement, part filtering and sequential slicer groups have separate explanations and labels.
 
 First entry into the other mode carries the original source, selected plate, destination, copies, quantities, layout and PETG reservation. Revisiting an existing experiment retains its edits; it does not silently overwrite them. Work is not persisted after closing the tab. Help explains this distinction.
 

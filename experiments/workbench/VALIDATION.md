@@ -1,4 +1,18 @@
-# Workbench v2.6.27-test validation
+# Workbench validation
+
+## v2.6.28-test — object editing and feedback
+
+Published test deploy: `6acca785be2297d73300ce14`. Thirteen deployed asset hashes and all four entry points matched the local build; the established production and PETG sites remain unchanged.
+
+- Eight workbench tests pass: original DOM parity/isolation plus multiple-copy edits, prior set multipliers, unchanged sibling totals, invalid counts, real packing constraints, no-fit preservation and cancellation.
+- Eleven existing object/layout test cases pass, including the layout script's 13 internal checks and preview/export placement parity.
+- Live synthetic sample in Convert: adding three produces four total, Undo restores one, Fill adds twenty to produce 21. In Full Spectrum: adding two produces three total and Fill adds eighteen to produce 21. Controls and counts agree in both modes.
+- Live loading observation recorded Reading and Drawing phases; feedback cleared after completion. No deliberate worker delay was added.
+- Desktop and mobile toolbar inspection completed; at 390 x 844, there was no horizontal overflow and the selected-object view retained 163 px of static model rendering space after the mobile adjustment.
+- Checked view: axe 4.12.1 reports 47 passes, zero violations and zero incomplete checks; no page errors reported.
+- WebGL remains unavailable in the remote browser. Name selection and static preview were exercised; physical printer writes and GPU picking were not tested.
+
+## v2.6.27-test baseline
 
 Preview: https://workbench-test--yab3u1.netlify.app/
 

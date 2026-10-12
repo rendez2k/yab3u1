@@ -1144,6 +1144,12 @@ printOptimiser=mountSequential($('printoptimiser'),()=>{
 // Narrow adapter for the isolated workbench experiment. The established page
 // still owns all validation, worker lifetime and export behaviour.
 export {session, openFiles, textureImporter, refreshPreview};
+export function workbenchObjects() {
+  return {key:`${session.epoch}:${session.state?.plateId}`,objects:session.state?.footprints||[],
+    quantities:session.layout.quantities||{},copies:session.layout.copies,arrangement:session.layout.arrangement,
+    bounds:session.state?.bounds,layout:session.planningLayout(),preview,
+    busy:session.busy||session.boundsPending,apply:patch=>session.setLayout(patch)};
+}
 export function workbenchPreview() {
   if(!session.state || !preview || preview.ok || session.busy || session.boundsPending)return null;
   const plan=assignmentPlan(session.assignmentMode,session.state.colours,session.rule);

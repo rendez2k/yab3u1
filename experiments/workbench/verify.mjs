@@ -2,7 +2,7 @@ import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 const base=process.argv[2]||'https://workbench-test--yab3u1.netlify.app';
 const hash=b=>createHash('sha256').update(b).digest('hex');
-const assets=['workbench.js','workbench.css','engine-view.js','engine-view.css','view-layout.js','convert-page.js','recolour.js','shared/preview.js','shared/modelHandoff.js','fonts/plex-sans.woff2','fonts/OFL.txt'];
+const assets=['workbench.js','workbench.css','engine-view.js','engine-view.css','view-layout.js','object-tools.js','object-edits.js','convert-page.js','recolour.js','shared/preview.js','shared/modelHandoff.js','fonts/plex-sans.woff2','fonts/OFL.txt'];
 await Promise.all(assets.map(async name=>{
   const response=await fetch(`${base}/${name}`);
   if(!response.ok)throw Error(`${name}: HTTP ${response.status}`);

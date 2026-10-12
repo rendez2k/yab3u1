@@ -52,7 +52,12 @@ export function composeView(doc,kind) {
     content.append(...children);panels[key].append(make('p',{'data-before-model':'',class:'hint'},'Open a model to use these controls.'),content);
   }
   if(kind==='converter')for(const node of [$('convertplate').closest('.row'),$('printercapacity'),$('bambuprinter')])node.setAttribute('data-requires-model','');
+  const previewToolbar=doc.querySelector(kind==='converter'?'#convertpreviewtoolbar':'.previewtoolbar');
+  $('platecontrols').querySelector('.plate-tool-row').prepend(previewToolbar);
+  $('platecontrols').querySelector('[data-arrange]').hidden=true;
   for(const p of Object.values(panels))p.querySelectorAll('.card').forEach(n=>n.classList.remove('card'));
+  panels.colours.querySelector('.task-heading').after(make('div',{class:'workflow-explanation'},'<strong>Colour replacement changes the paint, not the parts.</strong><p>For example, replacing green with orange makes every green region print in orange. Orange regions stay orange. No objects are joined or removed.</p><p>With PETG support, replace a PLA colour to free one printer input. Use Undo to compare another choice. Full Spectrum can also approximate shades using blends.</p>'));
+  panels.layout.querySelector('.task-heading').after(make('details',{class:'workflow-explanation'},'<summary>Copies, sets and colour groups explained</summary><p><strong>Add copies:</strong> select one object and enter how many new copies you want. <strong>Fill with this object:</strong> adds that object while keeping the other quantities, repacking the plate to find room.</p><p><strong>Fill with whole sets:</strong> repeats the current list of parts together, including their quantities. A set is that list, not a finished assembled model.</p><p><strong>Select parts by original filament:</strong> finds whole parts to keep or remove. A multicoloured pumpkin stays a whole object.</p><p><strong>Sequential printing:</strong> exports same-colour parts as one slicer group per filament, with their separate meshes preserved. Multicoloured parts go on a separate plate. Colours do not change.</p>'));
   panels.project.hidden=false;
   // Contextual help remains available without consuming the main viewport.
   stage.append(make('div',{class:'stage-caption'},'Drag to orbit · Scroll to zoom · Click an object to select'));

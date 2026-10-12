@@ -1674,6 +1674,16 @@ receiveModel({mount: $("drop").parentElement, canReceive:()=>!state.project&&!st
 }});
 
 export {state, load, refresh, renderObjects, renderQuantityFields, layoutChanged, textureImporter};
+export function workbenchObjects() {
+  return {key:`${state.epoch}:${state.plateId}`,objects:quantityObjects(),quantities:state.quantities,
+    copies:Number($('spectrumcopies').value),arrangement:$('spectrumarrangement').value,
+    bounds:state.bounds,layout:state.project?layoutSettings():null,preview:state.preview,
+    busy:state.loading||state.exporting||Boolean(state.project&&!state.bounds),apply:patch=>{
+      state.quantities={...patch.quantities};$('spectrumcopies').value=patch.copies;$('spectrumarrangement').value=patch.arrangement;
+      $('objects').querySelectorAll('[data-object]').forEach(box=>{box.checked=(state.quantities[box.dataset.object]??1)>0;});
+      state.objects=selectedObjects();renderQuantityFields();layoutChanged();refresh();
+    }};
+}
 export const workbenchSource = () => retainedModel?.file || null;
 export function workbenchPreview() {
   if(!state.project || !state.preview || state.preview.ok || state.loading || !state.assessed)return null;

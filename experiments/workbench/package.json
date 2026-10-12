@@ -1,1 +1,1 @@
-{"private":true,"type":"module","scripts":{"build":"node build.mjs","test":"node --test workbench.test.mjs"},"devDependencies":{"@fontsource-variable/ibm-plex-sans":"5.3.0","linkedom":"0.18.13"}}
+{"private":true,"type":"module","scripts":{"build":"node build.mjs","test":"node --test *.test.mjs"},"devDependencies":{"@fontsource-variable/ibm-plex-sans":"5.3.0","linkedom":"0.18.13"}}
