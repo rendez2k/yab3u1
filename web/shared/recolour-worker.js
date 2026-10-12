@@ -21,7 +21,7 @@ import {exportComparisonJob} from './comparisonExport.js';
 // Preview detail level, in triangles: a small fixture is drawn verbatim, a big
 // model is clustered down to this so the picture stays a recognisable surface
 // instead of a scatter of kept triangles.
-const PREVIEW_TARGET = 60000;
+let PREVIEW_TARGET = 60000, previewBudget=120000;
 
 let loaded = null;            // {entries, project, meta}
 let geometry = null;          // {key, positions, states, meta} of the last preview
@@ -226,7 +226,7 @@ function objectView(plateId, objectIds, layout) {
   });
   const total = parts.reduce((n,p)=>n+p.base.triangleCount,0), meshes = new Map();
   for (const p of parts) {
-    const budget = Math.max(1,Math.floor(120000*p.base.triangleCount/Math.max(1,total)));
+    const budget = Math.max(1,Math.floor(previewBudget*p.base.triangleCount/Math.max(1,total)));
     const id = `${p.base.id}|${budget}`;
     if (!meshes.has(id)) meshes.set(id,clusterWithinBudget(p.base.positions,p.base.states,budget));
     p.mesh = meshes.get(id);
@@ -292,6 +292,7 @@ self.onmessage = async (event) => {
   const { id, type } = message;
   try {
     if (type === "load") {
+      PREVIEW_TARGET=message.detailedPreview?150000:60000;previewBudget=message.detailedPreview?600000:120000;
       const started = Date.now();
       const entries = await readZip(new Uint8Array(message.bytes));
       post({ type: "progress", id, stage: "zip", ms: Date.now() - started });
@@ -418,6 +419,7 @@ self.onmessage = async (event) => {
                                            { target: message.target,
                                              mapping: message.mapping || {},
                                              removeUnused: message.removeUnused === true,
+                                             selectionAware:message.selectionAware === true,
                                              includeUnused: message.includeUnused || [],
                                              assignmentMode: message.assignmentMode
                                                || null,

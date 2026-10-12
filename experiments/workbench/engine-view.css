@@ -45,3 +45,17 @@ body:not([data-ready=true]) [data-requires-model],body[data-ready=true] [data-be
 body[data-ready=true] #stage-feedback #convertstatus,body[data-ready=true] #stage-feedback #loadstatus{display:none}
 @media(max-width:760px){#engine-workspace #stage:has(.workbench-object-tools[data-selected=true]){flex-basis:60%;min-height:300px}}
 .software-mode .plate-view-switch{display:none!important}
+.task-heading{padding:0 0 16px!important;width:100%;min-width:0;max-width:100%;text-align:left}
+#inspector .workflow-explanation{border:0;margin:0 0 20px;padding:0}
+#inspector [data-task]>*{min-width:0;max-width:100%}
+#inspector select{max-width:100%}#inspector .row{flex-wrap:wrap}
+.filament-tools{margin-bottom:22px}.filament-row{display:flex;align-items:center;gap:8px;padding:8px 0}
+.filament-row i{width:22px;height:22px;flex:none;border:1px solid var(--line);border-radius:4px}
+.filament-row span{flex:1;font-size:12px}.filament-row button{font-size:12px}
+.filament-tools [data-replace]{padding:12px;background:var(--panel2);border-radius:6px}
+.filament-tools [data-replace] label{display:block}.filament-tools select{display:block;width:100%;margin:8px 0}
+.filament-tools p{font-size:12px}.filament-tools [data-undo]{margin-top:8px}
+.workbench-object-tools[data-selected=false] .object-edit-row:has([data-object-edit=undo]:not(:disabled)){display:flex}
+.workbench-object-tools[data-selected=false] .object-edit-row>*:not([data-object-edit=undo]){display:none}
+#inspector #convertgo,#inspector #recommendapply,#inspector #export{display:none}
+.colour-workflow{margin:0 0 22px}.colour-workflow [role=group]{display:flex;gap:6px}.colour-workflow p{font-size:12px;color:var(--dim);margin:8px 0}

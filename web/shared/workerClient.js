@@ -58,7 +58,7 @@ export class RecolourWorker {
    */
   load(bytes, options = {}, onProgress = null) {
     if (typeof options === "function") return this.load(bytes, {}, options);
-    return this.request("load", { bytes, light: options.light === true },
+    return this.request("load", { bytes, light: options.light === true, detailedPreview:options.detailedPreview===true||Boolean(globalThis.document?.body?.dataset.engine) },
                         { transfer: [bytes], onProgress });
   }
 
@@ -113,6 +113,7 @@ export class RecolourWorker {
                                      filamentProfiles: options.filamentProfiles || [],
                                      assignmentMode: options.assignmentMode || null,
                                      removeUnused: options.removeUnused === true,
+                                     selectionAware:options.selectionAware === true,
                                      includeUnused: options.includeUnused || [],
                                      thumbnails: options.thumbnails || null })
       .then((reply) => ({ bytes: reply.bytes, ms: reply.ms,

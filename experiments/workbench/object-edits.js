@@ -8,6 +8,14 @@ export function editCopies(state,id,amount) {
   return {quantities,copies:1,arrangement:'objects'};
 }
 
+export function editSelection(state,selection,amount){
+  const quantities=Object.fromEntries(state.objects.map(o=>[o.objectId,(state.quantities[o.objectId]??1)*state.copies]));
+  if(!selection.length)throw Error('Select one or more objects first.');
+  for(const id of selection){if(!(id in quantities))throw Error('This selection is no longer on the plate.');quantities[id]+=amount;}
+  if(Object.values(quantities).some(n=>!Number.isInteger(n)||n<0||n>64))throw Error('Choose quantities between 0 and 64 per object.');
+  return {quantities,copies:1,arrangement:'objects'};
+}
+
 export async function fillObject(state,id,planLayout,yieldTurn=()=>Promise.resolve()) {
   const base=editCopies(state,id,0),current=base.quantities[id];
   if(!state.bounds||!state.layout?.footprints?.length)throw Error('Wait for the object sizes to finish loading.');

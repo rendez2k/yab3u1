@@ -1680,6 +1680,8 @@ export function workbenchObjects() {
     bounds:state.bounds,layout:state.project?layoutSettings():null,preview:state.preview,
     busy:state.loading||state.exporting||Boolean(state.project&&!state.bounds),apply:patch=>{
       state.quantities={...patch.quantities};$('spectrumcopies').value=patch.copies;$('spectrumarrangement').value=patch.arrangement;
+      for(const [key,id]of Object.entries({spacing:'spectrumgap',width:'spectrumwidth',depth:'spectrumdepth'}))if(patch[key]!==undefined)$(id).value=patch[key];
+      if(patch.tower!==undefined)$('spectrumtower').checked=patch.tower;
       $('objects').querySelectorAll('[data-object]').forEach(box=>{box.checked=(state.quantities[box.dataset.object]??1)>0;});
       state.objects=selectedObjects();renderQuantityFields();layoutChanged();refresh();
     }};

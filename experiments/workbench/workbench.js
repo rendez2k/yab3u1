@@ -1,6 +1,9 @@
 import {interfaceDemoFile} from './shared/supportInterfaceDemo.js';
 import {receiveModel} from './shared/modelHandoff.js';
 const $=id=>document.getElementById(id),frames=new Map();
+const menu=document.createElement('details');menu.className='project-menu';menu.innerHTML='<summary>App menu</summary><div></div>';document.querySelector('.topbar').append(menu);for(const id of ['open','batch','help','theme'])menu.querySelector('div').append($(id));menu.addEventListener('click',e=>{if(e.target.closest('button'))menu.open=false;});
+const projects=new WeakMap();let nextProject=0;
+const projectId=f=>{if(!f)return null;if(!projects.has(f))projects.set(f,++nextProject);return projects.get(f);};
 let active=document.body.dataset.initial||'converter',panel='project',file=null,theme='light',changing=false;
 try{theme=localStorage.getItem('yab3d-workbench-theme')||'light';}catch{}
 if(!['light','dark'].includes(theme))theme='light';
@@ -22,7 +25,7 @@ window.workbench={
   failed(kind,message){const record=frames.get(kind);if(record){clearTimeout(record.timer);record.reject(Error(message));}},
   panelChanged(kind,value){if(kind===active)nav(value);},
   report(r){const record=frames.get(r.kind);if(record)record.report=r;showReport(r);},
-  sourceChanged(kind,next){const record=frames.get(kind);if(record)record.file=next;if(kind===active)file=next;},
+  sourceChanged(kind,next){const record=frames.get(kind);if(record){record.file=next;record.project=projectId(next);}if(kind===active)file=next;},
   async switchMode(kind,purpose){
     if(changing)return;
     if(kind===active){if(purpose){const api=await ensure(kind);api.setPanel('output');}return;}
@@ -32,12 +35,17 @@ window.workbench={
     }
     changing=true;
     await guard(async()=>{
-      const options=previous?.api?.context()||{},original=file;
+      const options=previous?.api?.context()||{},original=previous?.api?.source()||file;
+      if(previous){previous.view=previous.api.captureView();previous.file=original;previous.project=projectId(original);}
       $('workspace-status').textContent=`Opening ${kind==='spectrum'?'Full Spectrum':'Convert'}…`;
       const api=await ensure(kind);active=kind;modeButtons();
       for(const [key,r]of frames)r.frame.hidden=key!==kind;
-      if(original&&frames.get(kind).file!==original)await api.load(original,{...options,fromMode:true,purpose});
-      else api.setPanel('colours');
+      const destination=frames.get(kind);
+      if(original&&destination.project!==projectId(original)){
+        if(await api.load(original,{...options,fromMode:true,purpose})){
+          const loaded=api.source();if(loaded)projects.set(loaded,projectId(original));destination.project=projectId(original);destination.file=loaded;
+        }
+      }else api.restoreView(destination.view);
       const r=frames.get(kind).report;if(r)showReport(r);
     });changing=false;
   },
@@ -51,7 +59,7 @@ $('primary').addEventListener('click',()=>frames.get(active)?.api?.primary());
 $('help').addEventListener('click',()=>$('help-dialog').showModal());
 $('integrations').addEventListener('click',()=>{$('help-dialog').close();frames.get(active)?.api?.setPanel('help');});
 $('theme').addEventListener('click',()=>setTheme(theme==='light'?'dark':'light'));
-document.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key==='o'){event.preventDefault();$('open').click();}});
+document.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key==='o'){event.preventDefault();$('open').click();}else frames.get(active)?.api?.key?.(event);});
 setTheme(theme);modeButtons();
 await guard(()=>ensure(active));
 receiveModel({mount:document.body,canReceive:()=>!file,load:async(incoming,context)=>(await ensure(active)).load(incoming,context)});

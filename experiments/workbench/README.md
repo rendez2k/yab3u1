@@ -1,6 +1,6 @@
 # YAB3D Workbench test
 
-An isolated alternative interface, v2.6.28-test. It does not replace `web/index.html`, the production build or the PETG review deployment.
+An isolated alternative interface, v2.6.29-test. It does not replace `web/index.html`, the production build or the PETG review deployment.
 
 ```powershell
 cd experiments/workbench
@@ -34,3 +34,13 @@ The existing WebGL preview supplies orbit, zoom, object selection and the planni
 Chrome installation instructions and the existing ZIP remain in Help → Tools & information. That ZIP still opens the established review app, which the interface states explicitly. The workbench's original-file receiver supports compatible handoffs.
 
 The generated arch sample is synthetic. Private user models are not included in the deploy.
+
+## 2.6.29 interaction changes
+
+Colours → Convert has an explicit **Remove filament** action. Choose the replacement for any remaining painted regions; undo restores the previous mapping. Removing the last object that uses a filament removes that filament from the plate and export. Numbered support/infill references and uncertain paint are retained conservatively.
+
+Shift-click adds copies to the 3D selection, Ctrl/Cmd-click toggles them, Ctrl/Cmd+A selects all visible copies, and Delete removes the selection. Ctrl/Cmd+Z restores up to 30 plate edits; text inputs keep their native editing shortcuts. The toolbar offers the same quantity actions without a keyboard.
+
+Colour workflows are selected in Colours. Revisiting an existing mode restores its panel and scroll position without reloading the source. Sequential preparation is the main action when enabled in Layout. App commands are consolidated into the top-right menu.
+
+Workbench previews use a bounded 600,000-triangle plate budget and crease-aware normal smoothing. These are preview-only opt-ins; geometry and paint in exports are untouched.

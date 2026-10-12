@@ -45,3 +45,15 @@ Independent finish review identified narrow-screen status visibility, first-swit
 The existing Chrome extension ZIP still opens the established review app. Help labels that destination; to try this workbench with a MakerWorld project, open its original file here. The workbench includes the compatible original-file handoff receiver.
 
 Each colour mode retains its own in-memory experiment. The first switch carries source and setup; subsequent visits preserve that mode's edits. Closing the tab discards the model session. These behaviours are explained in Help.
+
+## 2.6.29 interaction and palette follow-up (12 October 2026)
+
+- Affected suite: 29 Node test cases passed, including the existing conversion (48 internal checks), race (21), assignment (15) and layout (13) scripts. New checks cover selection-aware slot cleanup, explicit filament replacement, support-reference retention, multi-selection, repeated undo, crease-aware normals and export/readback.
+- Local Stabby Pumpkin check: removing the stem exported nine objects, four filaments and 2,936,801 retained triangles. No source or exported private files were uploaded. The same ten-object preview increased from 70,064 to 337,592 triangles; measured worker load/preview times were 22.755 and 22.674 seconds respectively. This is one local measurement, not a general performance guarantee.
+- Live synthetic five-object fixture: removing green changed the UI and footer to four filaments; the actual worker export read back orange, black, white and yellow. The capacity block cleared and the four remaining source rows stayed available.
+- Live explicit Remove filament replaced grey with red, reduced four filaments to three, and Undo restored four. Add copies, Delete and Ctrl+Z were exercised through the UI handlers.
+- Convert → Full Spectrum → Convert preserved the converter epoch (no reload), quantities, active Colours panel and its 180 px scroll position. Sequential preparation remained in Layout and prepared a plate without switching colour workflows.
+- At 2100 × 1200 the inspector heading occupied its full 365 px content width. At 390 × 844 neither document overflowed horizontally, and the static model retained 174 px height. Axe 4.12.1 reported 47 passes, zero violations and zero incomplete checks. Browser error collection was empty.
+- All 21 published asset hashes and four entry points matched the final build. Production and the PETG test site remained outside the workbench deployment.
+
+The browser session still had no WebGL2. The denser mesh and smooth-normal calculations were tested locally, but GPU rendering and modifier-click picking were not visually validated on the user's hardware. No printer writes or physical-print claims were made. Undo shortcuts apply to plate edits; filament removal has its own visible Undo control.

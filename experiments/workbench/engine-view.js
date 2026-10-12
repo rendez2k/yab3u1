@@ -1,10 +1,11 @@
 import {composeView} from './view-layout.js';
 import {mountWorkbenchObjects} from './object-tools.js';
+import {mountFilamentTools} from './filament-tools.js';
 const kind=document.body.dataset.engine,$=id=>document.getElementById(id);
 const view=composeView(document,kind);
 let engine, currentPanel='project', lastReport='', source=null;
 let fallbackKey='',fallbackPending=false,fallbackUrl=null;
-let objectTools, busySince=0;
+let objectTools, filamentTools, busySince=0;
 const progress=view.make('div',{class:'workbench-progress',hidden:'',role:'status','aria-live':'polite'},'<span class="working-orb" aria-hidden="true"></span><div><strong>Preparing your model…</strong><p></p></div>');
 view.stage.append(progress);
 const fallback=view.make('div',{class:'software-preview',hidden:''},'<div><img alt="Static preview of the current model and colours"></div><p>Static preview · 3D acceleration is unavailable in this browser. Use Layout to edit objects.</p>');
@@ -26,6 +27,7 @@ document.addEventListener('click',event=>{
   const b=event.target.closest('button,a');if(!b)return;
   if(b.matches('[data-open-model]'))api.open();
   if(b.matches('[data-open-sample]'))parentHost?.workbench?.sample();
+  if(b.dataset.colourWorkflow)parentHost?.workbench?.switchMode(b.dataset.colourWorkflow);
   if(b.matches('[data-close-batch]'))setPanel('project');
   if(['petgfullspectrum','capacityblend','capacityswaps'].includes(b.id)||b.matches('[data-model-workflow]')) {
     event.preventDefault();event.stopImmediatePropagation();parentHost?.workbench?.switchMode('spectrum',b.id==='capacityswaps'?'reel-changes':'blends');return;
@@ -41,6 +43,9 @@ function context() {
   const s=engine.state;return {target:s.target,plateId:String(s.plateId??''),supportInterface:s.supportInterface,interfaceSlot:s.interfacePosition+1,interfaceColor:s.reels[s.interfacePosition]?.color,layout:{quantities:{...s.quantities},copies:Number($('spectrumcopies').value),spacing:Number($('spectrumgap').value),width:Number($('spectrumwidth').value),depth:Number($('spectrumdepth').value),tower:$('spectrumtower').checked,arrangement:$('spectrumarrangement').value},u1Nozzle:s.u1Nozzle};
 }
 const api={kind,setPanel,context,
+  key:event=>objectTools?.key(event),
+  captureView:()=>({panel:currentPanel,scroll:view.inspector.scrollTop}),
+  restoreView(saved){if(saved){setPanel(saved.panel);view.inspector.scrollTop=saved.scroll;}},
   source:()=>kind==='converter'?engine.session.sourceFile:engine.workbenchSource(),
   theme:value=>document.documentElement.dataset.theme=value,
   open:()=>{if(kind==='converter')$('mode-single').click();const input=$(kind==='converter'?'convertfile':'file');input.value='';input.click();},
@@ -73,8 +78,9 @@ const api={kind,setPanel,context,
     tick();
     return kind==='converter'?Boolean(engine.session.state):Boolean(engine.state.project);
   },
-  primary(){if(kind==='converter'&&!$('batchpanel').classList.contains('hidden'))return;setPanel(kind==='spectrum'&&$('mainaction').dataset.action==='apply'?'colours':'output');$(kind==='converter'?'converterprimary':'mainaction').click();},
+  primary(){if(kind==='converter'&&!$('batchpanel').classList.contains('hidden'))return;const sequential=sequentialAction();if(sequential){sequential.click();return;}setPanel(kind==='spectrum'&&$('mainaction').dataset.action==='apply'?'colours':'output');$(kind==='converter'?'converterprimary':'mainaction').click();},
 };
+function sequentialAction(){if(currentPanel!=='layout'||!document.querySelector('[data-sequential]')?.checked)return null;const pack=document.querySelector('[data-pack]');return pack&&!pack.hidden?pack:document.querySelector('[data-prepare]');}
 function tick() {
   if(!engine)return;
   const s=kind==='converter'?engine.session:engine.state;
@@ -84,8 +90,9 @@ function tick() {
   if(file&&file!==source){source=file;parentHost?.workbench?.sourceChanged(kind,file);}
   view.empty.hidden=loaded||busy;
   const batch=kind==='converter'&&!$('batchpanel').classList.contains('hidden');
-  const button=$(kind==='converter'?'converterprimary':'mainaction');
-  const status=kind==='converter'?$('convertstatus').textContent:$('loadstatus').textContent||$('actionstatus').textContent;
+  const button=sequentialAction()||$(kind==='converter'?'converterprimary':'mainaction');
+  let status=kind==='converter'?$('convertstatus').textContent:$('loadstatus').textContent||$('actionstatus').textContent;
+  if(kind==='converter'&&loaded&&!busy&&status.includes('Nothing has been uploaded'))status=`${s.state.displayName}: ${s.capacityStatus().needed} filament${s.capacityStatus().needed===1?'':'s'} used on this plate. Files stay in your browser.`;
   const report={kind,loaded,busy,batch,title:file?.yab3dDisplayName||file?.name||'Untitled project',status:status||'Files stay in your browser.',action:loaded?button.textContent:'Open a model to start',disabled:!loaded||button.disabled||batch};
   const serial=JSON.stringify(report);if(serial!==lastReport){lastReport=serial;parentHost?.workbench?.report(report);}
   let snapshot;try{snapshot=engine.workbenchPreview();}catch{}
@@ -110,6 +117,7 @@ function tick() {
     progress.querySelector('p').textContent=`${((performance.now()-busySince)/1000).toFixed(1)}s · ${busy?(status||'Reading the file in your browser.'): 'Measuring objects and building the preview. Large models can take longer.'}`;
   }else busySince=0;
   try{objectTools?.sync();}catch{}
+  try{filamentTools?.sync();}catch{}
   clarifyControls();
 }
 
@@ -139,6 +147,7 @@ function clarifyControls(){
 }
 try {
   engine=await import(kind==='converter'?'./convert-page.js':'./recolour.js');
+  if(kind==='converter'){engine.session.selectionAware=true;filamentTools=mountFilamentTools(view.panels.colours.querySelector('[data-requires-model]'),engine.session);}
   objectTools=mountWorkbenchObjects($('platecontrols'),()=>engine.workbenchObjects());
   window.workbenchEngine=api;
   parentHost?.workbench?.ready(kind,api);

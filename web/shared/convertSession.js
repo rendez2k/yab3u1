@@ -21,6 +21,7 @@
 import { planLayout, targetLayout } from "./layout.js";
 import { REPAINT, SLOTS, identityRule, normaliseMode, conversionPalette } from "./assignment.js";
 import { planningAllowance } from "./printSettings.js";
+import {selectionUsage} from './selectionUsage.js';
 export const TYPED_3MF = "application/vnd.ms-package.3dmanufacturing-3dmodel+xml";
 
 export { identityRule };
@@ -95,7 +96,7 @@ export class ConvertSession {
 
   activeColourIds() {
     if (!this.state) return [];
-    const usage = this.state.filamentUsage;
+    const usage = this.effectiveUsage();
     return this.state.colours.map((_,i)=>i+1).filter(id=>!usage || usage.kept.includes(id) || this.state.includeUnused.includes(id));
   }
 
@@ -103,8 +104,23 @@ export class ConvertSession {
     return {supportInterface:this.supportInterface,interfaceSlot:this.interfaceSlot,interfaceColor:this.interfaceColor};
   }
 
+  effectiveUsage() {
+    return this.selectionAware&&this.state?selectionUsage(this.state.footprints,this.layout.quantities,this.state.filamentUsage,this.state.colours.length):this.state?.filamentUsage;
+  }
+
+  syncSelectionSlots() {
+    if(!this.selectionAware||!this.state)return;
+    const active=this.activeColourIds(),key=active.join(',');
+    if(this.selectionSlotsKey===key)return;
+    this.selectionSlotsKey=key;
+    const rule=this.rules[SLOTS],all=this.state.colours.map((_,i)=>i+1);
+    if(!this.effectiveUsage()?.reservedThrough)[...active.sort((a,b)=>(rule[a]||a)-(rule[b]||b)),...all.filter(i=>!active.includes(i))].forEach((id,i)=>rule[id]=i+1);
+    this.hooks.loaded?.(this.state);
+    this.hooks.rule?.(this.rule);
+  }
+
   conversionPlan() {
-    return conversionPalette({colors:this.state.colours,types:this.state.types,filamentUsage:this.state.filamentUsage},
+    return conversionPalette({colors:this.state.colours,types:this.state.types,filamentUsage:this.effectiveUsage()},
       {target:this.target,mapping:this.rule,assignmentMode:this.assignmentMode,filamentProfiles:this.filamentProfiles,
        removeUnused:Boolean(this.state.filamentUsage),includeUnused:this.state.includeUnused,...this.interfaceOptions()});
   }
@@ -128,6 +144,20 @@ export class ConvertSession {
     for(const id of Object.keys(this.rule)) if(this.rule[id]===from) this.rule[id]=to;
     this.mergeHistory.push({before, after:JSON.stringify(this.rule)});
     this.invalidate(); this.hooks.rule?.(this.rule); this.hooks.settings?.(); return true;
+  }
+
+  removeFilament(from,to) {
+    if(!this.state) throw Error('Open a model first.');
+    const active=this.activeColourIds();
+    const current=this.assignmentMode===SLOTS?identityRule(this.state.colours.length):{...this.rule};
+    const used=new Set(active.map(id=>current[id]||id));
+    if(!used.has(from)) throw Error('This filament is already unused.');
+    if(!used.has(to)||from===to) throw Error('Choose a different replacement filament.');
+    if(from<=(this.effectiveUsage()?.reservedThrough||0)) throw Error('This filament is referenced by support or infill settings. Change those references before removing it.');
+    for(const id of Object.keys(current)) if(current[id]===from) current[id]=to;
+    this.rules[REPAINT]=current; this.assignmentMode=REPAINT;
+    this.invalidate();this.hooks.mode?.(REPAINT);this.hooks.rule?.(this.rule);this.hooks.settings?.();
+    return true;
   }
 
   canUndoMerge() {
@@ -167,7 +197,7 @@ export class ConvertSession {
     }
     // Match the writer's conservative whole-project cleanup, including numbered
     // support/infill references. A repaint cannot remove those reserved entries.
-    const reserved = this.state?.filamentUsage?.reservedThrough || 0;
+    const reserved = this.effectiveUsage()?.reservedThrough || 0;
     const destinations = new Set([...this.activeColourIds().map(id => this.rule[id] || id),
       ...Array.from({length: reserved}, (_, i) => i + 1)]);
     const needed = destinations.size, capacity = this.inputCapacity();
@@ -199,12 +229,12 @@ export class ConvertSession {
 
   destinationIds() {
     return this.physicalSlots()
-      ? Array.from({length: Math.max(4, this.state?.colours.length || 0)}, (_,i)=>i+1)
+      ? Array.from({length: Math.max(4, this.selectionAware?this.activeColourIds().length:this.state?.colours.length || 0)}, (_,i)=>i+1)
       : this.activeColourIds();
   }
 
   setUnused(source, include) {
-    if (!this.state?.filamentUsage?.unused.includes(source)) return false;
+    if (!this.effectiveUsage()?.unused.includes(source)) return false;
     const selected = new Set(this.state.includeUnused);
     if (include) selected.add(source); else selected.delete(source);
     this.state.includeUnused = [...selected];
@@ -213,6 +243,7 @@ export class ConvertSession {
     const count = this.state.colours.length;
     this.rules = { [SLOTS]: identityRule(count), [REPAINT]: identityRule(count) };
     this.invalidate();
+    this.selectionSlotsKey=null;this.syncSelectionSlots();
     if (this.hooks.loaded) this.hooks.loaded(this.state);
     return true;
   }
@@ -404,6 +435,7 @@ export class ConvertSession {
     }
     this.layoutProblem = "";
     this.invalidate();
+    this.syncSelectionSlots();
     if (this.hooks.layout) this.hooks.layout(this.layout);
     return true;
   }
@@ -426,6 +458,7 @@ export class ConvertSession {
           || plate !== this.state.plateId) return null;
       this.state.bounds = bounds || null;
       this.state.footprints = reply?.footprints || [];
+      this.syncSelectionSlots();
       // Supports follow the selection, so the plate that is in force now decides
       // what the support control says; a stale flag would describe the old plate.
       if (painted !== null) this.state.supportsPainted = painted;
@@ -488,6 +521,7 @@ export class ConvertSession {
 
   /** Read a new file.  Every older load, export and download is abandoned first. */
   async load(file) {
+    this.selectionSlotsKey=null;
     const token = (this.epoch += 1);
     this.revision += 1;
     // A new file cancels any export still writing: bump the sequence so its
@@ -696,6 +730,7 @@ export class ConvertSession {
       // drawn with the palette *this* mode writes.
       assignmentMode: this.assignmentMode,
       includeUnused: this.state.includeUnused.slice(),
+      selectionAware: Boolean(this.selectionAware),
       layout: this.planningLayout(),
       preserveSourceSettings: this.preserveSourceSettings,
       carrySettings: this.carrySettings,
@@ -736,6 +771,7 @@ export class ConvertSession {
                                                   snapshot.title,
                                                   { thumbnails,
                                                     removeUnused: true,
+                                                    selectionAware: snapshot.selectionAware,
                                                     supportInterface:snapshot.supportInterface,
                                                     interfaceSlot:snapshot.interfaceSlot,
                                                     interfaceColor:snapshot.interfaceColor,

@@ -33,6 +33,7 @@ import { readFilamentProfiles, applyFilamentProfiles, prusaFilamentConfig } from
 import { buildU1Profile, conservativeSpeeds, constrainLayers, resolveLayerHeight } from './u1Profiles.js';
 import { applyInterfaceSettings, validateInterfaceExport, interfaceSlot } from './supportInterface.js';
 import { BASE_SETTINGS } from "../base_settings.js";
+import {selectionUsage} from './selectionUsage.js';
 
 export const SNAPMAKER_SPECTRUM_APPLICATION = "BambuStudio-2.3.5";
 // The agnostic colour model is written by this tool and says so: no Bambu Studio
@@ -1955,7 +1956,13 @@ export function conversionUsage(project) {
 export function convertProject(project, plateId, objectIds, options = {}) {
   // A virtual blend is not one more solid reel: refuse before anything is built.
   refuseMixtures(project, "convert");
-  const {physical,mapping,slots} = conversionPalette({...project,filamentUsage:options.removeUnused ? conversionUsage(project) : null},options);
+  if(options.selectionAware){
+    objectIds=(objectIds?.length?objectIds:eligibleObjects(project,plateId)).filter(id=>(options.layout?.quantities?.[id]??1)>0);
+    if(!objectIds.length)throw new ProjectError('Keep at least one object on the plate before exporting.');
+  }
+  let usage=options.removeUnused?conversionUsage(project):null;
+  if(options.selectionAware&&usage)usage=selectionUsage(selectionFootprints(project,plateId,objectIds),options.layout?.quantities,usage,project.colors.length);
+  const {physical,mapping,slots} = conversionPalette({...project,filamentUsage:usage},options);
   return exportProject(project, plateId, objectIds, {
     target: options.target,
     bambuSetup: options.bambuSetup || null,

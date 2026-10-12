@@ -6,6 +6,7 @@
 // export's placement and the plan's palette exactly; the only thing computed here
 // is flat shading from the face normals.
 
+import {smoothPreviewNormals} from './previewNormals.js';
 const VERTEX_SHADER = `#version 300 es
 in vec3 aPosition;
 in vec3 aColor;
@@ -93,6 +94,7 @@ export class Preview {
     this.lastPositions = null;      // the geometry whose buffers are uploaded
     this.pickRanges=[];
     this.selectedRange=null;
+    this.selectedRanges=new Set();this.multiSelect=Boolean(canvas.ownerDocument?.body?.dataset.engine);
     this.frame = 0;                 // pending animation-frame id, if any
     this.yaw = -0.6;
     this.pitch = 0.5;
@@ -141,7 +143,7 @@ export class Preview {
   bindEvents() {
     const canvas = this.canvas;
     canvas.addEventListener("pointerdown", (event) => {
-      this.dragging = event.button === 2 || event.shiftKey ? "pan" : "orbit";
+      this.dragging = event.button === 2 || (event.shiftKey&&!this.multiSelect) ? "pan" : "orbit";
       this.last = [event.clientX, event.clientY];
       this.pointerStart=[event.clientX,event.clientY];this.pointerMoved=false;
       canvas.setPointerCapture(event.pointerId);
@@ -172,7 +174,7 @@ export class Preview {
         const rect=canvas.getBoundingClientRect();
         const triangle=pickTriangle(this.lastPositions,this.viewProjection,
           2*(event.clientX-rect.left)/rect.width-1,1-2*(event.clientY-rect.top)/rect.height);
-        this.selectRange(this.pickRanges.findIndex(r=>triangle>=r.start/3&&triangle<(r.start+r.count)/3));
+        this.selectRange(this.pickRanges.findIndex(r=>triangle>=r.start/3&&triangle<(r.start+r.count)/3),event);
       }
     };
     canvas.addEventListener("pointerup", stop);
@@ -224,6 +226,7 @@ export class Preview {
     }
     const gl = this.gl;
     this.selectedRange=null;
+    this.selectedRanges.clear();
     const normals = new Float32Array(positions.length);
     for (let i = 0; i < positions.length; i += 9) {
       const ax = positions[i], ay = positions[i + 1], az = positions[i + 2];
@@ -242,7 +245,7 @@ export class Preview {
     }
     this.upload(this.buffers.position, this.attributes.position, positions, 3);
     this.upload(this.buffers.color, this.attributes.color, colors, 3);
-    this.upload(this.buffers.normal, this.attributes.normal, normals, 3);
+    this.upload(this.buffers.normal, this.attributes.normal, this.multiSelect?smoothPreviewNormals(positions,normals):normals, 3);
     this.count = positions.length / 3;
     this.lastPositions = positions;
     const hadGeometry = Boolean(this.bounds);
@@ -263,8 +266,10 @@ export class Preview {
     this.onSelectionChange?.(this.selectedRange);
   }
 
-  selectRange(index) {
+  selectRange(index,modifiers={}) {
     this.selectedRange=Number.isInteger(index)&&index>=0&&index<this.pickRanges.length?index:null;
+    if(!this.multiSelect||!(modifiers.shiftKey||modifiers.ctrlKey||modifiers.metaKey))this.selectedRanges?.clear();
+    if(this.selectedRange!==null){if(this.multiSelect&&(modifiers.ctrlKey||modifiers.metaKey)&&this.selectedRanges.has(index))this.selectedRanges.delete(index);else this.selectedRanges?.add(index);}
     this.onSelectionChange?.(this.selectedRange);
     this.requestDraw();
   }
@@ -399,11 +404,13 @@ export class Preview {
     gl.uniform1i(this.uniforms.unlit, 0);
     this.bindBuffers(this.buffers);
     gl.drawArrays(gl.TRIANGLES, 0, this.count);
-    const selected=this.selectedRange==null?null:this.pickRanges?.[this.selectedRange];
+    for(const index of this.multiSelect?this.selectedRanges:[this.selectedRange]){
+    const selected=index==null?null:this.pickRanges?.[index];
     if(selected){
       gl.uniform1i(this.uniforms.selected,1);gl.depthFunc(gl.LEQUAL);
       gl.drawArrays(gl.TRIANGLES,selected.start,selected.count);
       gl.depthFunc(gl.LESS);gl.uniform1i(this.uniforms.selected,0);
+    }
     }
   }
 }

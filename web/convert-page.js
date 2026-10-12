@@ -394,7 +394,7 @@ function renderChoices(state) {
   $("convertmap").innerHTML = rows;
   $("negativevolumes").hidden = !state.negativeVolumes;
   $("layeractions").hidden = !state.customLayerActions;
-  const unused = state.filamentUsage?.unused || [];
+  const unused = session.effectiveUsage()?.unused || [];
   $("unusedfilaments").innerHTML = unused.length ? `<strong>${unused.length} unused filament${unused.length===1?'':'s'} found</strong><p>Unticked filaments are left out of the export. Tick any you want to keep. Changing this selection resets slot assignments.</p>`
     + unused.map(id=>`<label style="display:flex;align-items:center;gap:8px;margin:8px 0"><input type="checkbox" data-unused="${id}" ${state.includeUnused.includes(id)?'checked':''}><span class="swatch" style="background:${esc(hex(state.colours[id-1]))}"></span>Keep unused filament ${id} · ${esc(swatchLabel(state.colours[id-1]))}</label>`).join('') : '';
   $("unusedfilaments").querySelectorAll('[data-unused]').forEach(input=>input.addEventListener('change',()=>{session.setUnused(Number(input.dataset.unused),input.checked);refreshPreview();}));

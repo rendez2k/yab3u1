@@ -16,11 +16,11 @@ for(const [source,controller,kind] of [['index.html','convert-page.js','converte
     .replace('<body',`<body data-engine="${kind}"`);
   await writeFile(path.join(out,`${kind}-view.html`),html);
 }
-for(const name of ['workbench.css','workbench.js','engine-view.css','engine-view.js','view-layout.js','object-edits.js','object-tools.js'])await cp(path.join(here,name),path.join(out,name));
+for(const name of ['workbench.css','workbench.js','engine-view.css','engine-view.js','view-layout.js','object-edits.js','object-tools.js','plate-history.js','filament-tools.js'])await cp(path.join(here,name),path.join(out,name));
 await mkdir(path.join(out,'fonts'),{recursive:true});
 await cp(path.join(here,'node_modules/@fontsource-variable/ibm-plex-sans/files/ibm-plex-sans-latin-wght-normal.woff2'),path.join(out,'fonts/plex-sans.woff2'));
 await cp(path.join(here,'node_modules/@fontsource-variable/ibm-plex-sans/LICENSE'),path.join(out,'fonts/OFL.txt'));
 const shell=await readFile(path.join(here,'index.html'),'utf8');
 await writeFile(path.join(out,'index.html'),shell);
 await writeFile(path.join(out,'recolour.html'),shell.replace('data-initial="converter"','data-initial="spectrum"'));
-console.log(`Workbench 2.6.28-test: ${out}`);
+console.log(`Workbench 2.6.29-test: ${out}`);
