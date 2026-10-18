@@ -2,6 +2,7 @@ import {interfaceDemoFile} from './shared/supportInterfaceDemo.js';
 import {receiveModel} from './shared/modelHandoff.js';
 const $=id=>document.getElementById(id),frames=new Map();
 const menu=document.createElement('details');menu.className='project-menu';menu.innerHTML='<summary>App menu</summary><div></div>';document.querySelector('.topbar').append(menu);for(const id of ['open','batch','help','theme'])menu.querySelector('div').append($(id));menu.addEventListener('click',e=>{if(e.target.closest('button'))menu.open=false;});
+document.querySelector('.topbar').append($('primary'));
 const projects=new WeakMap();let nextProject=0;
 const projectId=f=>{if(!f)return null;if(!projects.has(f))projects.set(f,++nextProject);return projects.get(f);};
 let active=document.body.dataset.initial||'converter',panel='project',file=null,theme='light',changing=false;

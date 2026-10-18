@@ -4,6 +4,7 @@ const base=process.argv[2]||'https://workbench-test--yab3u1.netlify.app';
 const hash=b=>createHash('sha256').update(b).digest('hex');
 const assets=['workbench.js','workbench.css','engine-view.js','engine-view.css','view-layout.js','object-tools.js','object-edits.js','convert-page.js','recolour.js','shared/preview.js','shared/modelHandoff.js','fonts/plex-sans.woff2','fonts/OFL.txt'];
 assets.push('filament-tools.js','plate-history.js','shared/selectionUsage.js','shared/previewNormals.js','shared/convertSession.js','shared/project.js','shared/workerClient.js','shared/recolour-worker.js');
+assets.push('studio.css','studio-tools.js','model-edit.js','model-edit-worker.js','mesh-cut.js','vendor/earcut.js','vendor/EARCUT-LICENSE');
 await Promise.all(assets.map(async name=>{
   const response=await fetch(`${base}/${name}`);
   if(!response.ok)throw Error(`${name}: HTTP ${response.status}`);

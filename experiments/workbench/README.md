@@ -1,6 +1,6 @@
 # YAB3D Workbench test
 
-An isolated alternative interface, v2.6.29-test. It does not replace `web/index.html`, the production build or the PETG review deployment.
+An isolated alternative interface, v2.6.30-test. It does not replace `web/index.html`, the production build or the PETG review deployment.
 
 ```powershell
 cd experiments/workbench
@@ -44,3 +44,13 @@ Shift-click adds copies to the 3D selection, Ctrl/Cmd-click toggles them, Ctrl/C
 Colour workflows are selected in Colours. Revisiting an existing mode restores its panel and scroll position without reloading the source. Sequential preparation is the main action when enabled in Layout. App commands are consolidated into the top-right menu.
 
 Workbench previews use a bounded 600,000-triangle plate budget and crease-aware normal smoothing. These are preview-only opt-ins; geometry and paint in exports are untouched.
+
+## 2.6.30 studio workflow
+
+The light canvas, floating Select / Colour / Split / Arrange toolbar and contextual inspector follow the user's supplied editor references. The primary export action stays in the header. Selected geometry has a thin outline, keeping its filament colours visible. Mobile layout keeps the canvas above the independently scrolling inspector; reduced-motion disables transitions.
+
+**Colour** previews a whole selected copy or replacement of one existing paint colour on the selection. Apply writes independent mesh resources, preserving unselected copies and the remaining paint. The edit preview uses original paint; export palette substitutions still apply afterwards. **Split** offers an axis-aligned plane cut with closed caps (including holes), or separation of disconnected shells. Resulting parts sit on the bed and can immediately be recoloured, duplicated, removed or packed. Freehand curves and connector generation are not part of this release. Nested assemblies, modifier volumes and cuts through subdivided support/seam painting are rejected with an explanation.
+
+The tool-island Undo button and Ctrl/Cmd+Z share one action: undo plate changes, then the most recent model edit. Its label identifies the next kind of edit. Six model snapshots are held in memory. Select multiple enables touch selection on the canvas and object list. A new source clears model undo. Worker edits can be cancelled before the validated archive begins loading; controls are locked during that final load. Source and export print settings are retained through edits.
+
+Geometry edits are implemented in workbench-only workers. The common engine exports are adapter hooks; production entry points do not activate the studio tools, light stage or selection outline. Earcut 3.0.2 supplies cap triangulation under ISC; its licence ships alongside the vendor module.

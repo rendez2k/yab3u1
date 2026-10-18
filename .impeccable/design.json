@@ -1,114 +1,662 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-11T21:39:20Z",
-  "title": "Design System: YAB3D Workbench preview",
+  "generatedAt": "2026-10-18T10:22:00Z",
+  "title": "Design System: YAB3D Workbench studio",
   "extensions": {
     "scope": {
       "artifact": "experiments/workbench",
-      "version": "v2.6.27-test",
+      "version": "v2.6.30-test",
       "build": "dist-workbench",
-      "boundary": "Production web UI remains incumbent. This system governs only the separate Workbench preview.",
-      "sources": ["PRODUCT.md", "docs/workbench-direction.md", "experiments/workbench/workbench.css", "experiments/workbench/engine-view.css", "experiments/workbench/index.html", "experiments/workbench/README.md", "experiments/workbench/build.mjs"]
+      "boundary": "Production web UI retains its incumbent system. These tokens govern only the separate Workbench studio.",
+      "sources": [
+        "PRODUCT.md",
+        "experiments/workbench/STUDIO-BRIEF.md",
+        "docs/workbench-direction.md",
+        "experiments/workbench/studio.css",
+        "experiments/workbench/workbench.css",
+        "experiments/workbench/engine-view.css",
+        "experiments/workbench/index.html",
+        "experiments/workbench/workbench.js",
+        "experiments/workbench/studio-tools.js",
+        "experiments/workbench/build.mjs"
+      ]
     },
     "colorMeta": {
-      "paper": {"role": "neutral", "displayName": "Warm paper"},
-      "panel": {"role": "neutral", "displayName": "Warm inspector surface"},
-      "accent": {"role": "primary", "displayName": "Burnt orange"},
-      "stage": {"role": "neutral", "displayName": "Charcoal model stage"},
-      "dark-accent": {"role": "primary", "displayName": "Dark-interface orange"}
+      "paper": {
+        "role": "neutral",
+        "displayName": "Cool shell grey",
+        "tonalRamp": [
+          "oklch(15% 0.0034 247.86)",
+          "oklch(26.4% 0.0034 247.86)",
+          "oklch(37.9% 0.0034 247.86)",
+          "oklch(49.3% 0.0034 247.86)",
+          "oklch(60.7% 0.0034 247.86)",
+          "oklch(72.1% 0.0034 247.86)",
+          "oklch(83.6% 0.0034 247.86)",
+          "oklch(95% 0.0034 247.86)"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "White inspector surface",
+        "tonalRamp": [
+          "oklch(15% 0.0000 89.88)",
+          "oklch(26.4% 0.0000 89.88)",
+          "oklch(37.9% 0.0000 89.88)",
+          "oklch(49.3% 0.0000 89.88)",
+          "oklch(60.7% 0.0000 89.88)",
+          "oklch(72.1% 0.0000 89.88)",
+          "oklch(83.6% 0.0000 89.88)",
+          "oklch(95% 0.0000 89.88)"
+        ]
+      },
+      "panel-secondary": {
+        "role": "neutral",
+        "displayName": "Inset field grey",
+        "tonalRamp": [
+          "oklch(15% 0.0025 228.78)",
+          "oklch(26.4% 0.0025 228.78)",
+          "oklch(37.9% 0.0025 228.78)",
+          "oklch(49.3% 0.0025 228.78)",
+          "oklch(60.7% 0.0025 228.78)",
+          "oklch(72.1% 0.0025 228.78)",
+          "oklch(83.6% 0.0025 228.78)",
+          "oklch(95% 0.0025 228.78)"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Pale model canvas",
+        "tonalRamp": [
+          "oklch(15% 0.0017 247.84)",
+          "oklch(26.4% 0.0017 247.84)",
+          "oklch(37.9% 0.0017 247.84)",
+          "oklch(49.3% 0.0017 247.84)",
+          "oklch(60.7% 0.0017 247.84)",
+          "oklch(72.1% 0.0017 247.84)",
+          "oklch(83.6% 0.0017 247.84)",
+          "oklch(95% 0.0017 247.84)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Graphite ink",
+        "tonalRamp": [
+          "oklch(15% 0.0113 237.07)",
+          "oklch(26.4% 0.0113 237.07)",
+          "oklch(37.9% 0.0113 237.07)",
+          "oklch(49.3% 0.0113 237.07)",
+          "oklch(60.7% 0.0113 237.07)",
+          "oklch(72.1% 0.0113 237.07)",
+          "oklch(83.6% 0.0113 237.07)",
+          "oklch(95% 0.0113 237.07)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Slate secondary text",
+        "tonalRamp": [
+          "oklch(15% 0.0165 238.26)",
+          "oklch(26.4% 0.0165 238.26)",
+          "oklch(37.9% 0.0165 238.26)",
+          "oklch(49.3% 0.0165 238.26)",
+          "oklch(60.7% 0.0165 238.26)",
+          "oklch(72.1% 0.0165 238.26)",
+          "oklch(83.6% 0.0165 238.26)",
+          "oklch(95% 0.0165 238.26)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Cool divider grey",
+        "tonalRamp": [
+          "oklch(15% 0.0059 239.83)",
+          "oklch(26.4% 0.0059 239.83)",
+          "oklch(37.9% 0.0059 239.83)",
+          "oklch(49.3% 0.0059 239.83)",
+          "oklch(60.7% 0.0059 239.83)",
+          "oklch(72.1% 0.0059 239.83)",
+          "oklch(83.6% 0.0059 239.83)",
+          "oklch(95% 0.0059 239.83)"
+        ]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Studio green",
+        "tonalRamp": [
+          "oklch(15% 0.0834 164.45)",
+          "oklch(26.4% 0.0834 164.45)",
+          "oklch(37.9% 0.0834 164.45)",
+          "oklch(49.3% 0.0834 164.45)",
+          "oklch(60.7% 0.0834 164.45)",
+          "oklch(72.1% 0.0834 164.45)",
+          "oklch(83.6% 0.0834 164.45)",
+          "oklch(95% 0.0834 164.45)"
+        ]
+      },
+      "soft": {
+        "role": "primary",
+        "displayName": "Pale selection green",
+        "tonalRamp": [
+          "oklch(15% 0.0125 164.80)",
+          "oklch(26.4% 0.0125 164.80)",
+          "oklch(37.9% 0.0125 164.80)",
+          "oklch(49.3% 0.0125 164.80)",
+          "oklch(60.7% 0.0125 164.80)",
+          "oklch(72.1% 0.0125 164.80)",
+          "oklch(83.6% 0.0125 164.80)",
+          "oklch(95% 0.0125 164.80)"
+        ]
+      },
+      "on-accent": {
+        "role": "primary",
+        "displayName": "Primary action text",
+        "tonalRamp": [
+          "oklch(15% 0.0000 89.88)",
+          "oklch(26.4% 0.0000 89.88)",
+          "oklch(37.9% 0.0000 89.88)",
+          "oklch(49.3% 0.0000 89.88)",
+          "oklch(60.7% 0.0000 89.88)",
+          "oklch(72.1% 0.0000 89.88)",
+          "oklch(83.6% 0.0000 89.88)",
+          "oklch(95% 0.0000 89.88)"
+        ]
+      },
+      "focus": {
+        "role": "primary",
+        "displayName": "Studio focus green",
+        "tonalRamp": [
+          "oklch(15% 0.0834 164.45)",
+          "oklch(26.4% 0.0834 164.45)",
+          "oklch(37.9% 0.0834 164.45)",
+          "oklch(49.3% 0.0834 164.45)",
+          "oklch(60.7% 0.0834 164.45)",
+          "oklch(72.1% 0.0834 164.45)",
+          "oklch(83.6% 0.0834 164.45)",
+          "oklch(95% 0.0834 164.45)"
+        ]
+      },
+      "hover-line": {
+        "role": "primary",
+        "displayName": "Muted green edge",
+        "tonalRamp": [
+          "oklch(15% 0.0187 164.45)",
+          "oklch(26.4% 0.0187 164.45)",
+          "oklch(37.9% 0.0187 164.45)",
+          "oklch(49.3% 0.0187 164.45)",
+          "oklch(60.7% 0.0187 164.45)",
+          "oklch(72.1% 0.0187 164.45)",
+          "oklch(83.6% 0.0187 164.45)",
+          "oklch(95% 0.0187 164.45)"
+        ]
+      },
+      "selection": {
+        "role": "primary",
+        "displayName": "Text selection green",
+        "tonalRamp": [
+          "oklch(15% 0.0350 164.09)",
+          "oklch(26.4% 0.0350 164.09)",
+          "oklch(37.9% 0.0350 164.09)",
+          "oklch(49.3% 0.0350 164.09)",
+          "oklch(60.7% 0.0350 164.09)",
+          "oklch(72.1% 0.0350 164.09)",
+          "oklch(83.6% 0.0350 164.09)",
+          "oklch(95% 0.0350 164.09)"
+        ]
+      },
+      "selection-ink": {
+        "role": "primary",
+        "displayName": "Text selection ink",
+        "tonalRamp": [
+          "oklch(15% 0.0331 162.57)",
+          "oklch(26.4% 0.0331 162.57)",
+          "oklch(37.9% 0.0331 162.57)",
+          "oklch(49.3% 0.0331 162.57)",
+          "oklch(60.7% 0.0331 162.57)",
+          "oklch(72.1% 0.0331 162.57)",
+          "oklch(83.6% 0.0331 162.57)",
+          "oklch(95% 0.0331 162.57)"
+        ]
+      },
+      "error": {
+        "role": "neutral",
+        "displayName": "Error red",
+        "tonalRamp": [
+          "oklch(15% 0.1696 26.13)",
+          "oklch(26.4% 0.1696 26.13)",
+          "oklch(37.9% 0.1696 26.13)",
+          "oklch(49.3% 0.1696 26.13)",
+          "oklch(60.7% 0.1696 26.13)",
+          "oklch(72.1% 0.1696 26.13)",
+          "oklch(83.6% 0.1696 26.13)",
+          "oklch(95% 0.1696 26.13)"
+        ]
+      },
+      "dark-paper": {
+        "role": "neutral",
+        "displayName": "Dark shell",
+        "tonalRamp": [
+          "oklch(15% 0.0084 240.26)",
+          "oklch(26.4% 0.0084 240.26)",
+          "oklch(37.9% 0.0084 240.26)",
+          "oklch(49.3% 0.0084 240.26)",
+          "oklch(60.7% 0.0084 240.26)",
+          "oklch(72.1% 0.0084 240.26)",
+          "oklch(83.6% 0.0084 240.26)",
+          "oklch(95% 0.0084 240.26)"
+        ]
+      },
+      "dark-panel": {
+        "role": "neutral",
+        "displayName": "Dark inspector surface",
+        "tonalRamp": [
+          "oklch(15% 0.0102 242.05)",
+          "oklch(26.4% 0.0102 242.05)",
+          "oklch(37.9% 0.0102 242.05)",
+          "oklch(49.3% 0.0102 242.05)",
+          "oklch(60.7% 0.0102 242.05)",
+          "oklch(72.1% 0.0102 242.05)",
+          "oklch(83.6% 0.0102 242.05)",
+          "oklch(95% 0.0102 242.05)"
+        ]
+      },
+      "dark-panel-secondary": {
+        "role": "neutral",
+        "displayName": "Dark inset field",
+        "tonalRamp": [
+          "oklch(15% 0.0121 243.19)",
+          "oklch(26.4% 0.0121 243.19)",
+          "oklch(37.9% 0.0121 243.19)",
+          "oklch(49.3% 0.0121 243.19)",
+          "oklch(60.7% 0.0121 243.19)",
+          "oklch(72.1% 0.0121 243.19)",
+          "oklch(83.6% 0.0121 243.19)",
+          "oklch(95% 0.0121 243.19)"
+        ]
+      },
+      "dark-canvas": {
+        "role": "neutral",
+        "displayName": "Dark model canvas",
+        "tonalRamp": [
+          "oklch(15% 0.0109 260.68)",
+          "oklch(26.4% 0.0109 260.68)",
+          "oklch(37.9% 0.0109 260.68)",
+          "oklch(49.3% 0.0109 260.68)",
+          "oklch(60.7% 0.0109 260.68)",
+          "oklch(72.1% 0.0109 260.68)",
+          "oklch(83.6% 0.0109 260.68)",
+          "oklch(95% 0.0109 260.68)"
+        ]
+      },
+      "dark-ink": {
+        "role": "neutral",
+        "displayName": "Light ink",
+        "tonalRamp": [
+          "oklch(15% 0.0042 236.50)",
+          "oklch(26.4% 0.0042 236.50)",
+          "oklch(37.9% 0.0042 236.50)",
+          "oklch(49.3% 0.0042 236.50)",
+          "oklch(60.7% 0.0042 236.50)",
+          "oklch(72.1% 0.0042 236.50)",
+          "oklch(83.6% 0.0042 236.50)",
+          "oklch(95% 0.0042 236.50)"
+        ]
+      },
+      "dark-muted": {
+        "role": "neutral",
+        "displayName": "Light secondary text",
+        "tonalRamp": [
+          "oklch(15% 0.0158 235.44)",
+          "oklch(26.4% 0.0158 235.44)",
+          "oklch(37.9% 0.0158 235.44)",
+          "oklch(49.3% 0.0158 235.44)",
+          "oklch(60.7% 0.0158 235.44)",
+          "oklch(72.1% 0.0158 235.44)",
+          "oklch(83.6% 0.0158 235.44)",
+          "oklch(95% 0.0158 235.44)"
+        ]
+      },
+      "dark-line": {
+        "role": "neutral",
+        "displayName": "Dark divider",
+        "tonalRamp": [
+          "oklch(15% 0.0157 237.06)",
+          "oklch(26.4% 0.0157 237.06)",
+          "oklch(37.9% 0.0157 237.06)",
+          "oklch(49.3% 0.0157 237.06)",
+          "oklch(60.7% 0.0157 237.06)",
+          "oklch(72.1% 0.0157 237.06)",
+          "oklch(83.6% 0.0157 237.06)",
+          "oklch(95% 0.0157 237.06)"
+        ]
+      },
+      "dark-accent": {
+        "role": "primary",
+        "displayName": "Light studio green",
+        "tonalRamp": [
+          "oklch(15% 0.0751 162.95)",
+          "oklch(26.4% 0.0751 162.95)",
+          "oklch(37.9% 0.0751 162.95)",
+          "oklch(49.3% 0.0751 162.95)",
+          "oklch(60.7% 0.0751 162.95)",
+          "oklch(72.1% 0.0751 162.95)",
+          "oklch(83.6% 0.0751 162.95)",
+          "oklch(95% 0.0751 162.95)"
+        ]
+      },
+      "dark-soft": {
+        "role": "primary",
+        "displayName": "Dark selection green",
+        "tonalRamp": [
+          "oklch(15% 0.0378 164.18)",
+          "oklch(26.4% 0.0378 164.18)",
+          "oklch(37.9% 0.0378 164.18)",
+          "oklch(49.3% 0.0378 164.18)",
+          "oklch(60.7% 0.0378 164.18)",
+          "oklch(72.1% 0.0378 164.18)",
+          "oklch(83.6% 0.0378 164.18)",
+          "oklch(95% 0.0378 164.18)"
+        ]
+      },
+      "dark-on-accent": {
+        "role": "primary",
+        "displayName": "Dark primary action text",
+        "tonalRamp": [
+          "oklch(15% 0.0266 161.89)",
+          "oklch(26.4% 0.0266 161.89)",
+          "oklch(37.9% 0.0266 161.89)",
+          "oklch(49.3% 0.0266 161.89)",
+          "oklch(60.7% 0.0266 161.89)",
+          "oklch(72.1% 0.0266 161.89)",
+          "oklch(83.6% 0.0266 161.89)",
+          "oklch(95% 0.0266 161.89)"
+        ]
+      },
+      "dark-focus": {
+        "role": "primary",
+        "displayName": "Light focus green",
+        "tonalRamp": [
+          "oklch(15% 0.0751 162.95)",
+          "oklch(26.4% 0.0751 162.95)",
+          "oklch(37.9% 0.0751 162.95)",
+          "oklch(49.3% 0.0751 162.95)",
+          "oklch(60.7% 0.0751 162.95)",
+          "oklch(72.1% 0.0751 162.95)",
+          "oklch(83.6% 0.0751 162.95)",
+          "oklch(95% 0.0751 162.95)"
+        ]
+      },
+      "dark-hover-line": {
+        "role": "primary",
+        "displayName": "Light green edge",
+        "tonalRamp": [
+          "oklch(15% 0.0751 162.95)",
+          "oklch(26.4% 0.0751 162.95)",
+          "oklch(37.9% 0.0751 162.95)",
+          "oklch(49.3% 0.0751 162.95)",
+          "oklch(60.7% 0.0751 162.95)",
+          "oklch(72.1% 0.0751 162.95)",
+          "oklch(83.6% 0.0751 162.95)",
+          "oklch(95% 0.0751 162.95)"
+        ]
+      },
+      "dark-error": {
+        "role": "neutral",
+        "displayName": "Light error red",
+        "tonalRamp": [
+          "oklch(15% 0.1192 27.56)",
+          "oklch(26.4% 0.1192 27.56)",
+          "oklch(37.9% 0.1192 27.56)",
+          "oklch(49.3% 0.1192 27.56)",
+          "oklch(60.7% 0.1192 27.56)",
+          "oklch(72.1% 0.1192 27.56)",
+          "oklch(83.6% 0.1192 27.56)",
+          "oklch(95% 0.1192 27.56)"
+        ]
+      }
     },
     "typographyMeta": {
-      "display": {"displayName": "Stage introduction", "purpose": "Empty-stage headline; self-hosted IBM Plex Sans registered as Plex."},
-      "headline": {"displayName": "Task heading", "purpose": "Main inspector task headings."},
-      "body": {"displayName": "Platform text", "purpose": "Engine body copy and inherited platform control font."}
+      "display": {
+        "displayName": "Empty-stage introduction",
+        "purpose": "Plex headline on an empty canvas; 26px in the stacked view."
+      },
+      "headline": {
+        "displayName": "Context heading",
+        "purpose": "Current task or selected-object context."
+      },
+      "body": {
+        "displayName": "Plex interface text",
+        "purpose": "IBM Plex Sans for body copy and controls, with distinct shell and engine line heights."
+      },
+      "metadata": {
+        "displayName": "Functional metadata",
+        "purpose": "Test tag, status and compact navigation labels."
+      }
     },
-    "shadows": [{"name": "help-dialog", "value": "0 20px 70px #0004", "purpose": "Help dialog only; inspector groups and controls remain flat."}],
+    "shadows": [
+      {
+        "name": "studio-shadow",
+        "value": "0 4px 18px #172c3810",
+        "purpose": "Tool island, view controls and selected side navigation."
+      },
+      {
+        "name": "studio-shadow-dark",
+        "value": "0 4px 18px #0003",
+        "purpose": "Dark-theme floating control surfaces."
+      },
+      {
+        "name": "button-hover",
+        "value": "0 2px 5px #172c3810",
+        "purpose": "Tactile hover feedback."
+      },
+      {
+        "name": "app-menu",
+        "value": "0 8px 32px #172c3824",
+        "purpose": "App menu popup."
+      },
+      {
+        "name": "progress",
+        "value": "0 6px 28px #172c3820",
+        "purpose": "Floating worker progress surface."
+      },
+      {
+        "name": "help-dialog",
+        "value": "0 20px 70px #0004",
+        "purpose": "Help dialog over #151911aa backdrop."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease",
+        "value": "cubic-bezier(.16,1,.3,1)",
+        "purpose": "Studio press, shadow and context arrival easing."
+      },
+      {
+        "name": "colour-transition",
+        "value": "140ms ease",
+        "purpose": "Button background and text colour changes."
+      },
+      {
+        "name": "press-transition",
+        "value": "180ms var(--ease)",
+        "purpose": "Shadow and transform feedback; active transform is translateY(1px) scale(.98)."
+      },
+      {
+        "name": "inspector-arrive",
+        "value": "220ms var(--ease)",
+        "purpose": "Context arrival from translateX(5px) and blur(.4px)."
+      },
+      {
+        "name": "workbench-spin",
+        "value": "1s linear infinite",
+        "purpose": "Existing progress orb; no animation under reduced motion."
+      }
+    ],
     "breakpoints": [
-      {"name": "engine-narrow-desktop", "value": "1050px", "context": "max-width in engine frame"},
-      {"name": "shell-compact", "value": "900px", "context": "max-width in outer shell"},
-      {"name": "engine-stacked", "value": "760px", "context": "max-width in engine frame"},
-      {"name": "shell-mobile", "value": "560px", "context": "max-width in outer shell"}
+      {
+        "name": "engine-compact",
+        "value": "1050px",
+        "context": "max-width in engine frame: 300px inspector."
+      },
+      {
+        "name": "shell-compact",
+        "value": "900px",
+        "context": "max-width in outer shell: inherited project-title and test-tag hiding."
+      },
+      {
+        "name": "stacked",
+        "value": "760px",
+        "context": "Engine frame stacks canvas over inspector; relevant mobile controls use 44px targets. Shell header targets also increase here."
+      },
+      {
+        "name": "shell-mobile",
+        "value": "560px",
+        "context": "Outer shell bottom navigation and compact header; tool labels replace their icons except Undo."
+      }
     ],
     "focus": {
-      "shell": "outline:2px solid var(--focus);outline-offset:3px",
-      "engine": "outline:2px solid var(--focus);outline-offset:2px"
+      "interactive": "outline:2px solid var(--focus);outline-offset:3px"
     },
-    "extractionNotes": "Primitives live only in DESIGN.md frontmatter. No motion or tonal-ramp tokens were found in the preview stylesheets; none have been synthesised. Snippet fallback values are source values, not new palette choices.",
+    "reducedMotion": "@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}",
+    "extractionNotes": "DESIGN.md frontmatter owns the primitives. studio.css loads after the shell and engine base styles; its overrides define this world. Snippet fallbacks are actual source values. Tonal ramps are synthesized OKLCH display aids at fixed hue/chroma, not implemented CSS tokens or new normative palette values.",
     "assets": [
-      {"path": "web/assets/yab3d-mark-96.png", "buildPath": "assets/yab3d-mark-96.png", "provenance": "Existing YAB3D project identity mark, reused unchanged."},
-      {"path": "fonts/plex-sans.woff2", "provenance": "Build copies @fontsource-variable/ibm-plex-sans/files/ibm-plex-sans-latin-wght-normal.woff2.", "licence": "OFL; copied to fonts/OFL.txt"}
+      {
+        "path": "web/assets/yab3d-mark-96.png",
+        "buildPath": "assets/yab3d-mark-96.png",
+        "provenance": "Existing YAB3D project identity mark, reused unchanged."
+      },
+      {
+        "path": "fonts/plex-sans.woff2",
+        "provenance": "Build copies @fontsource-variable/ibm-plex-sans/files/ibm-plex-sans-latin-wght-normal.woff2.",
+        "licence": "OFL; copied to fonts/OFL.txt"
+      },
+      {
+        "kind": "model-content",
+        "provenance": "User-supplied models or runtime-rendered synthetic demonstrations; the support arch is synthetic. No generated decorative raster or third-party reference screenshot ships."
+      }
     ],
     "review": {
       "disposition": "ship",
-      "basis": "Supplied finish-review verdict pass; not an independent whole-surface review by the documenter.",
-      "resolved": ["Mobile feedback visible", "0.6 mm nozzle retained in control and state", "Corrected h2 hierarchy; zero axe violations in checked views"],
-      "captures": [".impeccable/review/desktop.png", ".impeccable/review/mobile.png"]
+      "basis": "Supplied finish-review disposition, scoped to the resolved fixes; not an independent whole-product review by the documenter.",
+      "resolved": [
+        "Unified Undo for plate history followed by model edits",
+        "Touch multiselection on canvas and object list",
+        "44px mobile targets for the reviewed navigation, model tools, view controls and selection controls"
+      ],
+      "captures": [
+        ".impeccable/review/desktop.jpg",
+        ".impeccable/review/mobile.jpg"
+      ]
     }
   },
   "components": [
     {
-      "name": "Primary shell action",
+      "name": "Header primary action",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "Stable main action; label changes with project readiness.",
-      "html": "<button class=\"ds-primary\">Open model</button>",
-      "css": ".ds-primary{font:600 14px/1.45 'Segoe UI',system-ui,sans-serif;background:var(--accent,#ad3f16);color:var(--panel,#fffefa);border:1px solid var(--accent,#ad3f16);border-radius:6px;padding:8px 13px;min-height:36px;min-width:190px;cursor:pointer}.ds-primary:hover:not(:disabled){filter:brightness(1.12)}.ds-primary:focus-visible{outline:2px solid var(--focus,#b44418);outline-offset:3px}.ds-primary:disabled{opacity:.5;cursor:not-allowed}"
+      "description": "Persistent project action in the header; label follows project readiness.",
+      "html": "<button class=\"ds-primary\">Apply palette</button>",
+      "css": ".ds-primary{font:600 13px/1.45 Plex,'Segoe UI',sans-serif;background:var(--accent,#246b50);color:var(--on-accent,#fff);border:1px solid transparent;border-radius:8px;padding:9px 18px;min-height:36px;min-width:150px;cursor:pointer;transition:background-color 140ms ease,color 140ms ease,box-shadow 180ms var(--ease,cubic-bezier(.16,1,.3,1)),transform 180ms var(--ease,cubic-bezier(.16,1,.3,1))}.ds-primary:hover:not(:disabled){background:var(--accent,#246b50);filter:brightness(1.08)}.ds-primary:hover:not(:disabled){box-shadow:0 2px 5px #172c3810}.ds-primary:active:not(:disabled){transform:translateY(1px) scale(.98)}.ds-primary:disabled{opacity:.5;cursor:not-allowed}.ds-primary:focus-visible{outline:2px solid var(--focus,#246b50);outline-offset:3px}@media(max-width:760px){.ds-primary{min-height:44px}}@media(prefers-reduced-motion:reduce){.ds-primary{animation:none!important;transition:none!important;scroll-behavior:auto!important}}"
     },
     {
-      "name": "Secondary shell action",
+      "name": "Inspector secondary action",
       "kind": "button",
       "refersTo": "button-secondary",
-      "description": "Open, Batch and Help controls in the compact project bar.",
-      "html": "<button class=\"ds-secondary\">Help</button>",
-      "css": ".ds-secondary{font:14px/1.45 'Segoe UI',system-ui,sans-serif;color:var(--ink,#282922);background:var(--panel,#fffefa);border:1px solid var(--line,#d8d8d0);border-radius:6px;padding:8px 13px;min-height:36px;cursor:pointer}.ds-secondary:hover:not(:disabled){background:var(--soft,#f6e8df);border-color:var(--accent,#ad3f16)}.ds-secondary:focus-visible{outline:2px solid var(--focus,#b44418);outline-offset:3px}.ds-secondary:disabled{opacity:.5;cursor:not-allowed}"
+      "description": "Quiet inset action for selection, object edits and Cancel.",
+      "html": "<button class=\"ds-secondary\">Add copies</button>",
+      "css": ".ds-secondary{font:500 12px/1.5 Plex,'Segoe UI',sans-serif;background:var(--panel2,#f3f5f6);color:var(--text,#22282c);border:1px solid transparent;border-radius:8px;padding:7px 10px;min-height:36px;cursor:pointer;transition:background-color 140ms ease,color 140ms ease,box-shadow 180ms var(--ease,cubic-bezier(.16,1,.3,1)),transform 180ms var(--ease,cubic-bezier(.16,1,.3,1))}.ds-secondary:hover:not(:disabled){box-shadow:0 2px 5px #172c3810}.ds-secondary:active:not(:disabled){transform:translateY(1px) scale(.98)}.ds-secondary:disabled{opacity:.5;cursor:not-allowed}.ds-secondary:focus-visible{outline:2px solid var(--focus,#246b50);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-secondary{animation:none!important;transition:none!important;scroll-behavior:auto!important}}"
     },
     {
-      "name": "Stage control",
+      "name": "Touch multiselection toggle",
       "kind": "button",
-      "refersTo": "button-stage",
-      "description": "Compact control on the charcoal model stage, with a light selected state.",
-      "html": "<button class=\"ds-stage\" aria-pressed=\"true\">Top</button>",
-      "css": ".ds-stage{font:500 12px/1.5 'Segoe UI',system-ui,sans-serif;background:#30382f;border:1px solid #596251;color:#eef2e9;border-radius:5px;min-height:30px;padding:5px 9px;cursor:pointer}.ds-stage[aria-pressed=true]{background:#e9ede0;color:#272d23;border-color:#e9ede0}.ds-stage:focus-visible{outline:2px solid var(--focus,#b44418);outline-offset:2px}.ds-stage:disabled{opacity:.5}"
+      "refersTo": "button-selected",
+      "description": "Pressed state exposes selection toggling for taps on the canvas or object rows.",
+      "html": "<button class=\"ds-multiple\" aria-pressed=\"true\">Select multiple</button>",
+      "css": ".ds-multiple{font:500 12px/1.5 Plex,'Segoe UI',sans-serif;background:var(--panel2,#f3f5f6);color:var(--text,#22282c);border:1px solid transparent;border-radius:8px;padding:8px 12px;min-height:36px;cursor:pointer;transition:background-color 140ms ease,color 140ms ease,box-shadow 180ms var(--ease,cubic-bezier(.16,1,.3,1)),transform 180ms var(--ease,cubic-bezier(.16,1,.3,1))}.ds-multiple[aria-pressed=true]{background:var(--soft,#e8f2ed);color:var(--accent,#246b50);box-shadow:inset 0 0 0 1px var(--accent,#246b50)}.ds-multiple:hover:not(:disabled){box-shadow:0 2px 5px #172c3810}.ds-multiple:active:not(:disabled){transform:translateY(1px) scale(.98)}.ds-multiple:disabled{opacity:.5;cursor:not-allowed}.ds-multiple:focus-visible{outline:2px solid var(--focus,#246b50);outline-offset:3px}@media(max-width:760px){.ds-multiple{min-width:44px;min-height:44px}}@media(prefers-reduced-motion:reduce){.ds-multiple{animation:none!important;transition:none!important;scroll-behavior:auto!important}}"
     },
     {
       "name": "Inspector field",
       "kind": "input",
       "refersTo": "input",
-      "description": "Native input with compact platform type and a visible keyboard outline.",
-      "html": "<label class=\"ds-field\">Copies<input class=\"ds-input\" type=\"number\" min=\"1\" value=\"1\"></label>",
-      "css": ".ds-field{display:flex;flex-direction:column;gap:5px;font:12px/1.5 'Segoe UI',system-ui,sans-serif;color:var(--text,#282922)}.ds-input{font:13px/1.5 'Segoe UI',system-ui,sans-serif;border-radius:6px;min-height:36px;max-width:100%;border:1px solid var(--line,#d8d8d0);padding:7px 10px;box-shadow:none;caret-color:var(--accent,#ad3f16)}.ds-input:focus-visible{outline:2px solid var(--focus,#b44418);outline-offset:2px}"
+      "description": "Native property field on a cool inset surface, with accent focus and tabular numerals.",
+      "html": "<label class=\"ds-field\">New copies<input class=\"ds-input\" type=\"number\" min=\"1\" value=\"1\"></label>",
+      "css": ".ds-field{display:flex;align-items:center;justify-content:space-between;gap:10px;font:12px/1.5 Plex,'Segoe UI',sans-serif;color:var(--text,#22282c)}.ds-input{font:13px/1.5 Plex,'Segoe UI',sans-serif;font-variant-numeric:tabular-nums;background:var(--panel2,#f3f5f6);color:var(--text,#22282c);border:1px solid transparent;border-radius:8px;min-height:36px;width:68px;padding:7px 10px;caret-color:var(--accent,#246b50)}.ds-input:focus-visible{outline:2px solid var(--focus,#246b50);outline-offset:3px}"
     },
     {
       "name": "Task navigation",
       "kind": "nav",
       "refersTo": "nav-selected",
-      "description": "Labelled task icon with semantic current-page state.",
-      "html": "<nav aria-label=\"Workspace panels\"><button class=\"ds-nav\" aria-current=\"page\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M3 7h7l2 2h9v11H3zM3 7V4h7l2 3\"/></svg><span>Project</span></button></nav>",
-      "css": ".ds-nav{display:grid;justify-items:center;gap:5px;font:12px/1.45 'Segoe UI',system-ui,sans-serif;padding:10px 2px;border:1px solid transparent;border-radius:6px;background:none;color:var(--ink,#282922);min-height:36px;cursor:pointer}.ds-nav svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}.ds-nav[aria-current=page],.ds-nav:hover:not(:disabled){background:var(--soft,#f6e8df);border-color:var(--accent,#ad3f16)}.ds-nav[aria-current=page]{color:var(--accent,#ad3f16)}.ds-nav:focus-visible{outline:2px solid var(--focus,#b44418);outline-offset:3px}"
+      "description": "Visible task label and line icon; selected task is a raised white surface.",
+      "html": "<nav class=\"ds-tasknav\" aria-label=\"Workspace panels\"><button class=\"ds-task\" aria-current=\"page\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M3 7h7l2 2h9v11H3zM3 7V4h7l2 3\"/></svg><span>Project</span></button></nav>",
+      "css": ".ds-tasknav{display:flex;padding:14px 9px;gap:8px;background:var(--paper,#f1f3f5)}.ds-task{display:grid;justify-items:center;gap:5px;border:0;border-radius:10px;padding:11px 3px;min-height:60px;background:none;color:var(--muted,#626c73);font:11px/1.45 Plex,'Segoe UI',sans-serif;cursor:pointer;transition:background-color 140ms ease,color 140ms ease,box-shadow 180ms var(--ease,cubic-bezier(.16,1,.3,1)),transform 180ms var(--ease,cubic-bezier(.16,1,.3,1))}.ds-task svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}.ds-task[aria-current=page]{background:var(--panel,#fff);color:var(--accent,#246b50);box-shadow:var(--studio-shadow,0 4px 18px #172c3810)}.ds-task:hover:not(:disabled){background:var(--soft,#e8f2ed)}.ds-task:hover:not(:disabled){box-shadow:0 2px 5px #172c3810}.ds-task:active:not(:disabled){transform:translateY(1px) scale(.98)}.ds-task:disabled{opacity:.5;cursor:not-allowed}.ds-task:focus-visible{outline:2px solid var(--focus,#246b50);outline-offset:3px}@media(max-width:560px){.ds-task{display:flex;align-items:center;gap:4px;min-height:44px;padding:6px 4px;border-radius:7px}.ds-task svg{width:16px;height:16px}}@media(prefers-reduced-motion:reduce){.ds-task{animation:none!important;transition:none!important;scroll-behavior:auto!important}}"
     },
     {
       "name": "Test version tag",
       "kind": "chip",
       "refersTo": "test-label",
-      "description": "Non-interactive metadata distinguishing the separate preview.",
+      "description": "Non-interactive metadata identifying the isolated test interface.",
       "html": "<span class=\"ds-test-label\">Test version</span>",
-      "css": ".ds-test-label{font:10px/1.45 'Segoe UI',system-ui,sans-serif;color:var(--ink,#282922);padding:3px 6px;border:1px solid var(--line,#d8d8d0);border-radius:3px;white-space:nowrap}"
+      "css": ".ds-test-label{font:11px/1.45 Plex,'Segoe UI',sans-serif;background:var(--panel,#fff);color:var(--muted,#626c73);padding:3px 7px;border:0;border-radius:5px;white-space:nowrap}"
     },
     {
       "name": "Flat inspector group",
       "kind": "card",
       "refersTo": "inspector-group",
-      "description": "Unboxed fieldset; separation comes from hierarchy and spacing.",
+      "description": "Unboxed settings group; hierarchy comes from type and spacing.",
       "html": "<fieldset class=\"ds-group\"><legend>Destination</legend><p>Choose the printer and nozzle in Project.</p></fieldset>",
-      "css": ".ds-group{border:0;border-radius:0;box-shadow:none;background:none;padding:0;margin:0 0 24px;min-width:0;color:var(--text,#282922);font:14px/1.5 'Segoe UI',system-ui,sans-serif}.ds-group legend{font-size:14px;letter-spacing:0;font-weight:600;padding:0;margin-bottom:12px}.ds-group p{font-size:12px;line-height:1.55;color:var(--dim,#62645b)}"
+      "css": ".ds-group{border:0;border-radius:0;box-shadow:none;background:none;padding:0;margin:0 0 24px;min-width:0;color:var(--text,#22282c);font:14px/1.5 Plex,'Segoe UI',sans-serif}.ds-group legend{font-size:13px;letter-spacing:0;font-weight:600;padding:0;margin-bottom:12px}.ds-group p{font-size:12px;line-height:1.55;color:var(--dim,#626c73)}"
+    },
+    {
+      "name": "Model tool island",
+      "kind": "custom",
+      "refersTo": "tool-island",
+      "description": "Four model tools share selection, followed by one unified Undo action.",
+      "html": "<nav class=\"ds-toolstrip\" aria-label=\"Model tools\"><button class=\"ds-tool\" aria-pressed=\"true\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m5 3 14 9-7 1-3 7z\"/></svg><span>Select</span></button><button class=\"ds-tool\" aria-pressed=\"false\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m14 3 7 7-10 10H4v-7zM11 6l7 7M3 21h18\"/></svg><span>Colour</span></button><button class=\"ds-tool\" aria-pressed=\"false\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M3 4h7v6H3zM14 14h7v6h-7zM18 3 6 21\"/></svg><span>Split</span></button><button class=\"ds-tool\" aria-pressed=\"false\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/></svg><span>Arrange</span></button><button class=\"ds-tool ds-undo\" aria-label=\"Undo plate edit\" title=\"Undo plate edit (Ctrl/Cmd+Z)\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m8 5-5 5 5 5M3 10h10a6 6 0 0 1 0 12\"/></svg></button></nav>",
+      "css": ".ds-toolstrip{display:inline-flex;gap:4px;padding:5px;background:var(--panel,#fff);border-radius:12px;box-shadow:var(--studio-shadow,0 4px 18px #172c3810)}.ds-tool{display:flex;align-items:center;gap:7px;padding:7px 10px;border:0;border-radius:8px;background:transparent;color:var(--muted,#626c73);font:500 12px/1.5 Plex,'Segoe UI',sans-serif;white-space:nowrap;min-height:36px;cursor:pointer;transition:background-color 140ms ease,color 140ms ease,box-shadow 180ms var(--ease,cubic-bezier(.16,1,.3,1)),transform 180ms var(--ease,cubic-bezier(.16,1,.3,1))}.ds-tool[aria-pressed=true]{background:var(--soft,#e8f2ed);color:var(--accent,#246b50)}.ds-tool:hover:not(:disabled){background:var(--panel2,#f3f5f6)}.ds-tool svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.ds-tool.ds-undo{border-left:1px solid var(--line,#e1e5e8);border-radius:0 7px 7px 0;margin-left:3px;min-width:36px}.ds-tool:hover:not(:disabled){box-shadow:0 2px 5px #172c3810}.ds-tool:active:not(:disabled){transform:translateY(1px) scale(.98)}.ds-tool:disabled{opacity:.5;cursor:not-allowed}.ds-tool:focus-visible{outline:2px solid var(--focus,#246b50);outline-offset:3px}@media(max-width:760px){.ds-toolstrip{padding:4px;gap:2px}.ds-tool{min-height:44px;min-width:44px;font-size:11px;padding:6px 8px;gap:5px}.ds-tool.ds-undo{min-width:44px}}@media(max-width:560px){.ds-tool{padding:6px 10px}.ds-tool svg{display:none}.ds-undo svg{display:block}}@media(prefers-reduced-motion:reduce){.ds-tool{animation:none!important;transition:none!important;scroll-behavior:auto!important}}"
+    },
+    {
+      "name": "Selected object row",
+      "kind": "custom",
+      "refersTo": "object-row-selected",
+      "description": "Object name and quantity mirror the shared selection in the canvas.",
+      "html": "<button class=\"ds-object\" aria-pressed=\"true\"><span>Four-colour support arch · part 1</span><span>×1</span></button>",
+      "css": ".ds-object{display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;padding:10px;border:1px solid transparent;border-radius:8px;min-height:36px;background:none;box-shadow:none;color:var(--text,#22282c);font:500 12px/1.5 Plex,'Segoe UI',sans-serif;cursor:pointer;transition:background-color 140ms ease,color 140ms ease,box-shadow 180ms var(--ease,cubic-bezier(.16,1,.3,1)),transform 180ms var(--ease,cubic-bezier(.16,1,.3,1))}.ds-object[aria-pressed=true]{background:var(--soft,#e8f2ed);color:var(--accent,#246b50)}.ds-object span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-object span:last-child{color:var(--dim,#626c73);font-size:11px;flex:none}.ds-object:hover:not(:disabled){box-shadow:none}.ds-object:active:not(:disabled){transform:translateY(1px) scale(.98)}.ds-object:focus-visible{outline:2px solid var(--focus,#246b50);outline-offset:3px}@media(max-width:760px){.ds-object{min-height:44px;min-width:44px}}@media(prefers-reduced-motion:reduce){.ds-object{animation:none!important;transition:none!important;scroll-behavior:auto!important}}"
     }
   ],
   "narrative": {
     "northStar": "The Working Studio",
-    "overview": "This document governs only experiments/workbench, the separate v2.6.27-test preview and its dist-workbench build. The production web UI remains the incumbent system; this root document does not authorise restyling it. The direction and workflow contract remain in docs/workbench-direction.md.\n\nWarm paper surrounds a charcoal model stage. Burnt orange identifies action and selection; restrained borders and compact controls support practical model work. IBM Plex Sans gives the headings a distinct voice while familiar platform typography carries the controls. The YAB3D name, existing mark and UK English are durable identity commitments from PRODUCT.md.",
-    "keyCharacteristics": ["Warm inspector surfaces and a charcoal model stage.", "Restrained orange action and selection states.", "Compact, gently rounded controls with explicit focus feedback.", "Flat inspector groups with typographic hierarchy."],
-    "rules": [{"name": "The Source Palette Rule", "body": "Preserve the shell and inspector token mappings from their own stylesheets; do not normalise their distinct muted or dark action-text colours during unrelated work.", "section": "colors"}],
-    "dos": ["Do apply these tokens only to the separate Workbench preview.", "Do keep status, selection and keyboard focus visible as panels and viewports change.", "Do retain the existing YAB3D mark and self-hosted OFL font licence.", "Do label software-rendered fallback images as static and sample models as synthetic."],
-    "donts": ["Don't treat this document as a replacement for the production UI's incumbent system.", "Don't invent tonal ramps, motion tokens or decorative imagery absent from the implementation.", "Don't conceal preview limitations or use preview images as proof of physical print results."]
+    "overview": "This document governs only `experiments/workbench`, the separate **v2.6.30-test** interface and its `dist-workbench` build. The production `web` UI retains its incumbent system. These tokens do not authorise production restyling. The approved surface direction is recorded in `experiments/workbench/STUDIO-BRIEF.md`; the broader workflow contract remains in `docs/workbench-direction.md`.\n\nA pale model canvas occupies most of the workspace. Neutral white controls, cool grey surroundings and restrained green states keep the model visually central. A compact floating tool island and a quiet contextual inspector give editing controls a stable place. IBM Plex Sans now carries headings, body copy and controls. The YAB3D name, existing mark and UK English remain the durable identity commitments from `PRODUCT.md`.",
+    "keyCharacteristics": [
+      "Cool neutral-white surfaces and a large pale model canvas.",
+      "Green action, selection and focus states.",
+      "One floating model-tool island and a scrolling contextual inspector.",
+      "Compact Plex typography, modest rounded controls and soft structural shadows."
+    ],
+    "rules": [
+      {
+        "name": "The Shared Palette Rule",
+        "body": "Read the studio override as the shell and engine colour authority; do not reintroduce the superseded orange action or charcoal light-mode stage from the base stylesheets.",
+        "section": "colors"
+      },
+      {
+        "name": "The Floating Controls Rule",
+        "body": "Reserve soft structural elevation for controls over the canvas and transient surfaces; keep inspector groups flat.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do apply these tokens only to the separate Workbench studio.",
+      "Do preserve visible focus, selection, status and the inspector's independent scrolling.",
+      "Do keep the four model tools together and use the shared Undo action.",
+      "Do retain touch multiselection and the implemented 44px mobile targets.",
+      "Do retain the existing YAB3D mark, self-hosted Plex font and OFL licence.",
+      "Do label software-rendered previews as static and demonstration models as synthetic."
+    ],
+    "donts": [
+      "Don't apply the studio palette to the production UI without a separate approved change.",
+      "Don't restore the old orange controls or charcoal light-mode stage from superseded base CSS.",
+      "Don't add duplicate action bars, decorative cards or decorative raster imagery to this workbench direction.",
+      "Don't treat model previews as proof of physical print results."
+    ]
   }
 }

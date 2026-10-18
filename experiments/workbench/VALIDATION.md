@@ -1,5 +1,18 @@
 # Workbench validation
 
+## 2.6.30 studio workflow (18 October 2026)
+
+- 28 affected Node tests pass, covering plate history, keyboard and touch multi-selection, removal, source-slot cleanup, preview/export placement parity, and the new geometry editor. Cut checks verify closed shared edges, opposite cap orientation, holes, volume conservation, rejected open meshes, preserved painting, untouched source resources, settings and ZIP export/readback.
+- Chrome with WebGL: exercised selected-copy colouring, original-colour replacement preview/cancel, plane cutting and undo in Convert and Full Spectrum. A late asynchronous scene-list refresh defect after undo was fixed and covered by a DOM regression test. The final Full Spectrum cut/undo restored one selectable arch and its scene count.
+- The saved local Flippin Pumpkin Prusa fixture loaded and rendered with original colours. A colour edit and Snapmaker conversion retained the remaining paint and compatible source settings. Private model files and exports are not deployed. The previously referenced Desktop Stabby file was unavailable, so this release does not claim a new check of that file.
+- Desktop 1440 × 1000 and mobile 390 × 844 were visually checked. Mobile horizontal overflow and colour-obscuring selection tint were corrected. Selection now uses an outline. Captures show the actual WebGL model, a compact toolbar and the contextual inspector. Reduced-motion rules disable the added transitions.
+- The finish-review fix batch unified toolbar Undo with Ctrl/Cmd+Z, added modifier-free Select multiple, and increased mobile controls to 44 px. Live checks verified plate undo, both split parts selected by ordinary clicks, and 44 px tool/camera target heights.
+- Geometry operations are planar cuts or disconnected-part separation, not freehand curved cuts or connector generation. Unsupported assemblies, modifier volumes and cuts through subdivided support/seam paint fail before replacing the current project. No printer commands or physical-print validation were performed.
+
+Published test deploy: `6ad49d0aec0bb0dcbe65861e` at https://workbench-test--yab3u1.netlify.app/. All 28 asset hashes and four entry points matched the build; both established sites remain outside this deployment. The live Converter opened the saved Flippin Pumpkin fixture with four used filaments.
+
+A fresh substitute finish reviewer scored all three listed interaction fixes resolved and returned **ship** for that fix list. The documenter updated DESIGN.md and its token sidecar to the implemented workbench-only system. These handoffs substituted fresh default agents because the shipped named roles were unavailable. `git diff --check` passed.
+
 ## v2.6.28-test — object editing and feedback
 
 Published test deploy: `6acca785be2297d73300ce14`. Thirteen deployed asset hashes and all four entry points matched the local build; the established production and PETG sites remain unchanged.

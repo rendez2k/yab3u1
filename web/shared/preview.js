@@ -13,10 +13,11 @@ in vec3 aColor;
 in vec3 aNormal;
 uniform mat4 uViewProjection;
 uniform mat4 uModel;
+uniform highp float uOutline;
 out vec3 vColor;
 out vec3 vNormal;
 void main() {
-  vec4 world = uModel * vec4(aPosition, 1.0);
+  vec4 world = uModel * vec4(aPosition + aNormal * uOutline, 1.0);
   vColor = aColor;
   vNormal = mat3(uModel) * aNormal;
   gl_Position = uViewProjection * world;
@@ -31,7 +32,9 @@ uniform vec3 uLight;
 uniform float uAmbient;
 uniform bool uUnlit;
 uniform bool uSelected;
+uniform highp float uOutline;
 void main() {
+  if (uOutline > 0.0) { outColor = vec4(0.14, 0.42, 0.31, 1.0); return; }
   if (uUnlit) { outColor = vec4(vColor, 1.0); return; }
   vec3 normal = normalize(vNormal);
   float diffuse = max(dot(normal, normalize(uLight)), 0.0);
@@ -125,6 +128,7 @@ export class Preview {
       ambient: gl.getUniformLocation(this.program, "uAmbient"),
       unlit: gl.getUniformLocation(this.program, "uUnlit"),
       selected: gl.getUniformLocation(this.program, "uSelected"),
+      outline: gl.getUniformLocation(this.program, "uOutline"),
     };
     this.attributes = {
       position: gl.getAttribLocation(this.program, "aPosition"),
@@ -175,6 +179,7 @@ export class Preview {
         const triangle=pickTriangle(this.lastPositions,this.viewProjection,
           2*(event.clientX-rect.left)/rect.width-1,1-2*(event.clientY-rect.top)/rect.height);
         this.selectRange(this.pickRanges.findIndex(r=>triangle>=r.start/3&&triangle<(r.start+r.count)/3),event);
+        this.onPick?.({triangle,event});
       }
     };
     canvas.addEventListener("pointerup", stop);
@@ -201,6 +206,7 @@ export class Preview {
   setColors(colors) {
     if (!this.ok || !this.count || !this.lastPositions) return false;
     if (!colors || colors.length !== this.lastPositions.length) return false;
+    this.lastColors=colors;
     this.upload(this.buffers.color, this.attributes.color, colors, 3);
     this.requestDraw();
     return true;
@@ -248,6 +254,7 @@ export class Preview {
     this.upload(this.buffers.normal, this.attributes.normal, this.multiSelect?smoothPreviewNormals(positions,normals):normals, 3);
     this.count = positions.length / 3;
     this.lastPositions = positions;
+    this.lastColors=colors;
     const hadGeometry = Boolean(this.bounds);
     this.bounds = bounds(positions);
     if (fit || !hadGeometry) {
@@ -268,8 +275,10 @@ export class Preview {
 
   selectRange(index,modifiers={}) {
     this.selectedRange=Number.isInteger(index)&&index>=0&&index<this.pickRanges.length?index:null;
-    if(!this.multiSelect||!(modifiers.shiftKey||modifiers.ctrlKey||modifiers.metaKey))this.selectedRanges?.clear();
-    if(this.selectedRange!==null){if(this.multiSelect&&(modifiers.ctrlKey||modifiers.metaKey)&&this.selectedRanges.has(index))this.selectedRanges.delete(index);else this.selectedRanges?.add(index);}
+    const toggle=this.multiSelect&&(this.selectionToggle||modifiers.ctrlKey||modifiers.metaKey);
+    if(!this.multiSelect||!(modifiers.shiftKey||toggle))this.selectedRanges?.clear();
+    if(this.selectedRange!==null){if(toggle&&this.selectedRanges.has(index))this.selectedRanges.delete(index);else this.selectedRanges?.add(index);}
+    if(toggle&&!this.selectedRanges.has(this.selectedRange))this.selectedRange=this.selectedRanges.values().next().value??null;
     this.onSelectionChange?.(this.selectedRange);
     this.requestDraw();
   }
@@ -285,7 +294,7 @@ export class Preview {
   /** Decorative bed geometry stays separate from the model and export buffers. */
   setPlate(options) {
     if (!this.ok) return;
-    const plate = plateGeometry(options);
+    const plate = plateGeometry(this.multiSelect?{...options,light:this.canvas.ownerDocument.documentElement.dataset.theme!=='dark'}:options);
     const key = JSON.stringify(plate?.description);
     if (key === this.plateKey) return;
     this.plateKey = key;
@@ -372,7 +381,8 @@ export class Preview {
     const width = this.canvas.width;
     const height = this.canvas.height;
     gl.viewport(0, 0, width, height);
-    gl.clearColor(0.09, 0.10, 0.12, 1);
+    const light=this.multiSelect&&this.canvas.ownerDocument.documentElement.dataset.theme!=='dark';
+    gl.clearColor(...(light?[.962,.966,.970,1]:[.09,.10,.12,1]));
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     if (!this.count || !this.bounds) return;
 
@@ -394,8 +404,9 @@ export class Preview {
     gl.uniformMatrix4fv(this.uniforms.viewProjection, false,this.viewProjection);
     gl.uniformMatrix4fv(this.uniforms.model, false, identity());
     gl.uniform3f(this.uniforms.light, 0.4, -0.6, 0.7);
-    gl.uniform1f(this.uniforms.ambient, 0.35);
+    gl.uniform1f(this.uniforms.ambient, this.multiSelect?0.48:0.35);
     gl.uniform1i(this.uniforms.selected,0);
+    gl.uniform1f(this.uniforms.outline,0);
     if (this.view !== 'model' && this.plate) {
       gl.uniform1i(this.uniforms.unlit, 1);
       this.bindBuffers(this.plate.buffers);
@@ -403,8 +414,15 @@ export class Preview {
     }
     gl.uniform1i(this.uniforms.unlit, 0);
     this.bindBuffers(this.buffers);
+    // Workbench selection keeps the filament colours readable inside a silhouette.
+    if(this.multiSelect&&!this.suppressSelection){
+      gl.enable(gl.CULL_FACE);gl.cullFace(gl.FRONT);
+      gl.uniform1f(this.uniforms.outline,this.distance*1.4/Math.max(1,height));
+      for(const i of this.selectedRanges){const r=this.pickRanges[i];if(r)gl.drawArrays(gl.TRIANGLES,r.start,r.count);}
+      gl.uniform1f(this.uniforms.outline,0);gl.disable(gl.CULL_FACE);
+    }
     gl.drawArrays(gl.TRIANGLES, 0, this.count);
-    for(const index of this.multiSelect?this.selectedRanges:[this.selectedRange]){
+    for(const index of this.suppressSelection||this.multiSelect?[]:[this.selectedRange]){
     const selected=index==null?null:this.pickRanges?.[index];
     if(selected){
       gl.uniform1i(this.uniforms.selected,1);gl.depthFunc(gl.LEQUAL);
@@ -453,7 +471,8 @@ export function plateGeometry(options) {
       position.push(min[0]+x+dx, min[1]+y+dy, z); color.push(...rgb); normal.push(0,0,1);
     }
   };
-  rect(0, 0, width, depth, -.35, [.13,.17,.21]);
+  const light=options.light;
+  rect(0, 0, width, depth, -.35, light?[.88,.90,.91]:[.13,.17,.21]);
   const reservations = (options.keepoutBoxes || []).map(box => ({...box, kind:'keepout'}));
   if (options.tower) {
     if (options.towerBox) reservations.push({...options.towerBox, kind:'tower'});
@@ -467,17 +486,17 @@ export function plateGeometry(options) {
     if (![...box.min,...box.max].every(Number.isFinite)) continue;
     const x = Math.max(0,box.min[0]), y = Math.max(0,box.min[1]);
     const w = Math.min(width,box.max[0])-x, d = Math.min(depth,box.max[1])-y;
-    if (w > 0 && d > 0) rect(x,y,w,d,-.3,box.kind==='tower'?[.25,.34,.12]:[.42,.23,.17]);
+    if (w > 0 && d > 0) rect(x,y,w,d,-.3,light?(box.kind==='tower'?[.76,.84,.74]:[.90,.76,.69]):(box.kind==='tower'?[.25,.34,.12]:[.42,.23,.17]));
   }
   const step = Math.max(10, Math.ceil(Math.max(width,depth)/60/10)*10);
-  for (let x=step; x<width; x+=step) rect(x,0,.22,depth,-.22,[.25,.31,.36]);
-  for (let y=step; y<depth; y+=step) rect(0,y,width,.22,-.22,[.25,.31,.36]);
+  for (let x=step; x<width; x+=step) rect(x,0,.18,depth,-.22,light?[.77,.80,.82]:[.25,.31,.36]);
+  for (let y=step; y<depth; y+=step) rect(0,y,width,.18,-.22,light?[.77,.80,.82]:[.25,.31,.36]);
   const edge = Math.min(1, width/2, depth/2);
   for (const [x,y,w,d] of [[0,0,width,edge],[0,depth-edge,width,edge],[0,0,edge,depth],[width-edge,0,edge,depth]])
     rect(x,y,w,d,-.18,[.53,.61,.67]);
   return {position:new Float32Array(position),color:new Float32Array(color),normal:new Float32Array(normal),
     bounds:{lo:[...min,-.35],hi:[min[0]+width,min[1]+depth,0]},
-    description:{width,depth,centre,reservations}};
+    description:{width,depth,centre,reservations,light}};
 }
 
 /** Identical, keyboard-accessible controls for both conversion workflows. */

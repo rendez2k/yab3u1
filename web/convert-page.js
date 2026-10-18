@@ -1144,6 +1144,10 @@ printOptimiser=mountSequential($('printoptimiser'),()=>{
 // Narrow adapter for the isolated workbench experiment. The established page
 // still owns all validation, worker lifetime and export behaviour.
 export {session, openFiles, textureImporter, refreshPreview};
+const workbenchSettingKeys=['target','inputCapacities','bambuSetup','bambuRequired','u1Nozzle','supportMode','supportInterface','interfaceSlot','interfaceColor','carrySettings','preserveSourceSettings','filamentProfiles','assignmentMode','rules'];
+export function workbenchCaptureSettings(){return structuredClone(Object.fromEntries(workbenchSettingKeys.filter(k=>session[k]!==undefined).map(k=>[k,session[k]])));}
+export function workbenchRestoreSettings(saved){if(!saved||!session.state)return;Object.assign(session,saved);for(const rule of Object.values(session.rules))session.state.colours.forEach((_,i)=>{if(rule[i+1]===undefined)rule[i+1]=i+1;});session.selectionSlotsKey=null;session.syncSelectionSlots();session.invalidate();session.hooks.loaded?.(session.state);session.hooks.mode?.(session.assignmentMode);session.hooks.rule?.(session.rule);session.hooks.settings?.();return refreshPreview();}
+export async function workbenchSourceColours(){const s=session.state;if(!s)return null;return (await session.worker.preview(s.plateId,null,'original',paletteTable(s.colours),null,previewGeometryId,s.coloursUsed||0,session.planningLayout())).colors;}
 export function workbenchObjects() {
   return {key:`${session.epoch}:${session.state?.plateId}`,objects:session.state?.footprints||[],
     quantities:session.layout.quantities||{},copies:session.layout.copies,arrangement:session.layout.arrangement,

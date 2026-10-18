@@ -1674,6 +1674,10 @@ receiveModel({mount: $("drop").parentElement, canReceive:()=>!state.project&&!st
 }});
 
 export {state, load, refresh, renderObjects, renderQuantityFields, layoutChanged, textureImporter};
+const workbenchSettingKeys=['target','u1Nozzle','supportInterface','interfacePosition','reels','strategy','overrides','workflow','modelType','keepExact','useOwned','modelApplied','modeReels','locked','appliedSlotOrder','loadedTuning','reelView'];
+export function workbenchCaptureSettings(){return {state:structuredClone(Object.fromEntries(workbenchSettingKeys.filter(k=>state[k]!==undefined).map(k=>[k,state[k]]))),controls:Object.fromEntries(['spectrumlayermode','spectrumlayerheight','subdividemix'].map(id=>[id,$(id).type==='checkbox'?$(id).checked:$(id).value]))};}
+export function workbenchRestoreSettings(saved){if(!saved||!state.project)return;Object.assign(state,saved.state);state.reviewed=false;for(const [id,value]of Object.entries(saved.controls))if($(id).type==='checkbox')$(id).checked=value;else $(id).value=value;renderReels();renderWorkflow();return refresh();}
+export async function workbenchSourceColours(){if(!state.project)return null;return (await background().preview(state.plateId,state.objects,'original',paletteOf(null,'original'),null,state.geometryId,state.assessed?.counts.triangles||0,state.layout)).colors;}
 export function workbenchObjects() {
   return {key:`${state.epoch}:${state.plateId}`,objects:quantityObjects(),quantities:state.quantities,
     copies:Number($('spectrumcopies').value),arrangement:$('spectrumarrangement').value,

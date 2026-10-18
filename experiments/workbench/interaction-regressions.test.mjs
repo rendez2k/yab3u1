@@ -31,6 +31,20 @@ test('multi-select toggles, Shift adds, deleting two distinct copies preserves u
 test('normal smoothing removes shallow facets but preserves a right-angle edge without changing geometry',()=>{
  const positions=new Float32Array([0,0,0,0,0,0,0,0,0]),before=positions.slice();const flat=new Float32Array([0,0,1,.5,0,Math.sqrt(.75),0,1,0]);const n=smoothPreviewNormals(positions,flat);assert.ok(n[0]>.2&&n[0]<.3);assert.deepEqual(Array.from(n.slice(6)),[0,1,0]);assert.deepEqual(positions,before);
 });
+
+test('touch multiselect adds and toggles copies without modifier keys',()=>{
+ const p=Object.create(Preview.prototype);Object.assign(p,{multiSelect:true,selectionToggle:true,pickRanges:[{objectId:'1'},{objectId:'2'}],selectedRanges:new Set(),requestDraw(){}});
+ p.selectRange(0);p.selectRange(1);assert.deepEqual([...p.selectedRanges],[0,1]);
+ p.selectRange(1);assert.deepEqual([...p.selectedRanges],[0]);assert.equal(p.selectedRange,0);
+ p.selectRange(0);assert.equal(p.selectedRanges.size,0);assert.equal(p.selectedRange,null);
+});
+
+test('a committed model revision clears load-time layout history, then records later plate edits',()=>{
+ let s={key:'revision-2',quantities:{old:1,new:1},copies:1,arrangement:'objects',apply(p){Object.assign(s,p);}};
+ const h=plateHistory(()=>s);h.observe();s.quantities={old:0,new:1};h.observe();assert.equal(h.canUndo,true);
+ h.reset();assert.equal(h.canUndo,false);assert.equal(h.undo(),false);
+ h.apply({quantities:{old:0,new:2}});assert.equal(h.canUndo,true);h.undo();assert.deepEqual(s.quantities,{old:0,new:1});
+});
 test('actual 3MF export removes excluded geometry and its unused filament; readback keeps remaining colours',async()=>{
  const enc=new TextEncoder();const ids=[1,2,3,4,5];
  const model=`<model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" unit="millimeter"><resources>${ids.map(id=>`<object id="${id}" type="model"><mesh><vertices><vertex x="0" y="0" z="0"/><vertex x="10" y="0" z="0"/><vertex x="0" y="10" z="10"/></vertices><triangles><triangle v1="0" v2="1" v3="2"/></triangles></mesh></object>`).join('')}</resources><build>${ids.map(id=>`<item objectid="${id}" transform="1 0 0 0 1 0 0 0 1 ${id*15} 0 0"/>`).join('')}</build></model>`;

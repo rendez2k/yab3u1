@@ -15,8 +15,9 @@ export function mountWorkbenchObjects(host,getState) {
     const s=getState();
     history.observe();
     if(s.key!==key){key=s.key;id='';lastRange=null;message.textContent='Shift-click to add objects; Ctrl/Cmd-click to toggle. Delete removes selected copies. Ctrl/Cmd+Z undoes plate edits.';}
-    const catalogue=JSON.stringify(s.objects.map(o=>[o.objectId,o.name]));
-    if(catalogue!==list){list=catalogue;select.replaceChildren(new Option('Click an object or choose here',''));for(const o of s.objects)select.add(new Option(o.name||String(o.objectId),String(o.objectId)));}
+    const visible=s.objects.filter(o=>(s.quantities[o.objectId]??1)*s.copies>0);
+    const catalogue=JSON.stringify(visible.map(o=>[o.objectId,o.name]));
+    if(catalogue!==list){list=catalogue;select.replaceChildren(new Option('Click an object or choose here',''));for(const o of visible)select.add(new Option(o.name||String(o.objectId),String(o.objectId)));if(!visible.some(o=>String(o.objectId)===id))id='';}
     const range=s.preview?.pickRanges[s.preview.selectedRange];
     if(range&&range!==lastRange){id=String(range.objectId);lastRange=range;}
     else if(!range&&lastRange&&s.preview?.ok){id='';lastRange=null;}
@@ -66,5 +67,5 @@ export function mountWorkbenchObjects(host,getState) {
   }
   doc.addEventListener('keydown',keydown);
   for(const type of ['click','input','change'])doc.addEventListener(type,()=>{history.observe();queueMicrotask(()=>history.observe());},true);
-  return {sync,key:keydown};
+  return {sync,key:keydown,act,selected:()=>selected(getState()),element:bar,history};
 }

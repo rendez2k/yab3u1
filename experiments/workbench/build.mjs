@@ -12,15 +12,17 @@ for(const [source,controller,kind] of [['index.html','convert-page.js','converte
   const script=new RegExp(`<script type="module" src="(?:\\./)?${controller.replace('.','\\.')}"></script>`);
   if(!script.test(html))throw Error(`Missing engine entry: ${controller}`);
   html=html.replace(script,'<script type="module" src="./engine-view.js"></script>')
-    .replace('</head>','<link rel="stylesheet" href="engine-view.css"></head>')
+    .replace('</head>','<link rel="stylesheet" href="engine-view.css"><link rel="stylesheet" href="studio.css"></head>')
     .replace('<body',`<body data-engine="${kind}"`);
   await writeFile(path.join(out,`${kind}-view.html`),html);
 }
-for(const name of ['workbench.css','workbench.js','engine-view.css','engine-view.js','view-layout.js','object-edits.js','object-tools.js','plate-history.js','filament-tools.js'])await cp(path.join(here,name),path.join(out,name));
+for(const name of ['workbench.css','workbench.js','engine-view.css','engine-view.js','view-layout.js','object-edits.js','object-tools.js','plate-history.js','filament-tools.js','studio.css','studio-tools.js','mesh-cut.js'])await cp(path.join(here,name),path.join(out,name));
+for(const name of ['model-edit.js','model-edit-worker.js'])await writeFile(path.join(out,name),(await readFile(path.join(here,name),'utf8')).replaceAll('../../web/','./'));
+await cp(path.join(here,'vendor'),path.join(out,'vendor'),{recursive:true});
 await mkdir(path.join(out,'fonts'),{recursive:true});
 await cp(path.join(here,'node_modules/@fontsource-variable/ibm-plex-sans/files/ibm-plex-sans-latin-wght-normal.woff2'),path.join(out,'fonts/plex-sans.woff2'));
 await cp(path.join(here,'node_modules/@fontsource-variable/ibm-plex-sans/LICENSE'),path.join(out,'fonts/OFL.txt'));
 const shell=await readFile(path.join(here,'index.html'),'utf8');
 await writeFile(path.join(out,'index.html'),shell);
 await writeFile(path.join(out,'recolour.html'),shell.replace('data-initial="converter"','data-initial="spectrum"'));
-console.log(`Workbench 2.6.29-test: ${out}`);
+console.log(`Workbench 2.6.30-test: ${out}`);
