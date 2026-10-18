@@ -45,7 +45,7 @@ export function cutMesh(faces,axis,height,capAttributes='') {
   const uv=[0,1,2].filter(a=>a!==axis),project=p=>[p[uv[0]],p[uv[1]]];
   const inside=(p,loop)=>{let yes=false;for(let i=0,j=loop.length-1;i<loop.length;j=i++){const a=project(loop[i]),b=project(loop[j]);if((a[1]>p[1])!==(b[1]>p[1])&&p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])yes=!yes;}return yes;};
   const depth=loops.map((loop,i)=>loops.filter((other,j)=>i!==j&&inside(project(loop[0]),other)).length);
-  let caps=0;
+  const openHalves=halves.map(f=>f.slice());let caps=0;
   for(let i=0;i<loops.length;i++){
     if(depth[i]%2)continue;
     const rings=[loops[i],...loops.filter((l,j)=>depth[j]===depth[i]+1&&inside(project(l[0]),loops[i]))];
@@ -56,7 +56,7 @@ export function cutMesh(faces,axis,height,capAttributes='') {
       halves[0].push({points:tri,attrs:capAttributes});halves[1].push({points:[tri[0],tri[2],tri[1]],attrs:capAttributes});caps++;
     }
   }
-  return {halves,caps};
+  return {halves,caps,openHalves,loops};
 }
 
 /** Separate disconnected mesh shells; a shared vertex keeps touching pieces together. */

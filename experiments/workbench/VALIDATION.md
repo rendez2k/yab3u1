@@ -1,5 +1,17 @@
 # Workbench validation
 
+## 2.6.31 colour separation and joints (18 October 2026)
+
+- 35 affected Node tests pass. New joint tests check closed, oppositely paired mesh edges; pin and socket dimensions and volume on X/Y/Z cuts with either pin side; exact shared mating caps for shallow curved seams; retained paint and input bytes; invalid dimensions, thin material, flat paint patches and open boundaries. The archive integration test separates a green region with a pin, removes it, exports a one-filament remainder, and retains source settings.
+- Chrome/WebGL checks: Convert separates the generated stalk with a pin and socket; its green single-colour button selects the detached part; Delete removes only that part and reduces the project to one filament; Ctrl+Z restores it. Model Undo restores the original joined model. Full Spectrum removes the green painted region, keeps a closed orange remainder, then Undo restores the original. A DOM regression check covers refreshed colour shortcuts after removal/undo, exclusion of unknown paint, and guarding Delete during a split preview.
+- Local private Flippin Pumpkin Prusa source: the green stalk is one painted region of a connected mesh, with a 214-edge boundary spanning approximately 0.47 mm in Z. It separates with a 3 mm diameter × 3 mm pin, 0.3 mm diameter clearance and the matching socket; Snapmaker export validation reports no problems. Both sides share the same mating surface. Source bytes and compatible support/layer settings are retained. The user fixture and generated export remain local and are excluded from the build and Git.
+- Desktop 1440 × 1000 and mobile 390 × 844 captures show the real model, highlighted green region, configurable joint settings and reachable Apply/Cancel actions. The inspector form scrolls independently. The one detector pass found no primary findings and one inherited advisory in the linked base stylesheet. A fresh substitute finish reviewer returned **ship**, with no material fixes; 36 px mobile Apply/Cancel buttons were noted as optional polish, not a regression.
+- These are locating/glue joints. Physical fit and print success have not been tested. Automatic placement rejects insufficient clearance and unsupported seams rather than changing the source. Arbitrary wrapping painted regions, flat paint patches, nested assemblies and conflicting subdivided support/seam painting remain outside the supported edit path.
+
+Published test deploy: `6ad4c7102cf0843869f5c11b` at https://workbench-test--yab3u1.netlify.app/. All 30 asset hashes and four entry points match the build; the two established sites remain outside this deployment. The generated green-stalk sample contains no user geometry.
+
+The fresh substitute documenter confirmed that DESIGN.md and its token sidecar still describe the incumbent system and left them unchanged. Both skill handoffs used fresh generic agents because the named roles were unavailable. `git diff --check` passed.
+
 ## 2.6.30 studio workflow (18 October 2026)
 
 - 28 affected Node tests pass, covering plate history, keyboard and touch multi-selection, removal, source-slot cleanup, preview/export placement parity, and the new geometry editor. Cut checks verify closed shared edges, opposite cap orientation, holes, volume conservation, rejected open meshes, preserved painting, untouched source resources, settings and ZIP export/readback.

@@ -10,6 +10,8 @@ Motion: a short, gentle context-panel arrival and tactile button press. No motio
 
 Geometry changes must reach the downloaded 3MF, preserve unrelated objects, paint and settings, and be undoable. Colour replacement affects selected copies only. Separate existing parts and planar cuts are explicit operations; never label an open colour surface as a printable solid. Reject unsupported cuts before replacing the current model.
 
+The colour-separation extension stays inside Split: highlight an original painted region, keep both resulting parts or remove that region, and optionally add a locating pin with a matching socket. Use the actual region boundary, including shallow curved seams where both caps can share a mating surface. Reject flat paint patches, invalid boundaries and insufficient material. Single-colour whole-object selection remains in Select, with wording that distinguishes it from removing paint regions. Keep Apply and Cancel visible while dimension settings scroll, on desktop and mobile. This extends the incumbent design rather than establishing a new visual system.
+
 References inspected: the user's two videos and four UI images; Shapr3D's adaptive selection menus (https://support.shapr3d.com/hc/en-us/articles/7873882619548-Adaptive-user-interface); Prusa's distinction between separate objects and attached parts (https://help.prusa3d.com/article/cut-tool_1779).
 
 Validate desktop and mobile together, including a loaded project, selected-object controls, colour preview/cancel, split/export round trips, undo and reduced motion. Build and deploy only the workbench-test alias.

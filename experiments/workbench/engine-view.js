@@ -28,7 +28,7 @@ const panelFor=id=>{
 document.addEventListener('click',event=>{
   const b=event.target.closest('button,a');if(!b)return;
   if(b.matches('[data-open-model]'))api.open();
-  if(b.matches('[data-open-sample]'))parentHost?.workbench?.sample();
+  if(b.matches('[data-open-sample]'))parentHost?.workbench?.sample(b.dataset.openSample);
   if(b.dataset.colourWorkflow)parentHost?.workbench?.switchMode(b.dataset.colourWorkflow);
   if(b.matches('[data-close-batch]'))setPanel('project');
   if(['petgfullspectrum','capacityblend','capacityswaps'].includes(b.id)||b.matches('[data-model-workflow]')) {

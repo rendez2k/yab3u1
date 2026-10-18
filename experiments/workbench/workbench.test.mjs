@@ -23,7 +23,7 @@ for(const [kind,file,features]of [
 }
 test('test build does not replace the production entry or publish private models',async()=>{
   const shell=await readFile(new URL('./index.html',import.meta.url),'utf8');
-  assert.match(shell,/2\.6\.30-test/);assert.match(shell,/data-panel="layout"/);
+  assert.match(shell,/2\.6\.31-test/);assert.match(shell,/data-panel="layout"/);
   const builder=await readFile(new URL('./build.mjs',import.meta.url),'utf8');
   assert.match(builder,/dist-workbench/);assert.doesNotMatch(builder,/Desktop|Stabby|Flippin/);
 });
@@ -38,4 +38,16 @@ test('undo reload repopulates the scene list when geometry arrives after the rev
   state.objects=[{objectId:'10',name:'Support arch'}];state.busy=false;
   studio.sync();assert.equal(view.inspector.querySelector('[data-scene-count]').textContent,'1');
   assert.match(view.inspector.querySelector('[data-scene-list]').textContent,/Support arch.*×1/);
+});
+test('quick colour selection follows removal and undo; Delete cannot remove whole objects during a split preview',()=>{
+  const {document}=parseHTML('<html><body><main></main><aside></aside><section></section></body></html>');
+  const make=(tag,attrs={},html='')=>{const n=document.createElement(tag);for(const [k,v]of Object.entries(attrs))n.setAttribute(k,v);n.innerHTML=html;return n;};
+  const view={stage:document.querySelector('main'),inspector:document.querySelector('aside'),panels:{},make};
+  const state={key:'same-revision',objects:[{objectId:'1',name:'Body',colours:[{extruder:1}]},{objectId:'2',name:'Stalk',colours:[{extruder:2}]}],quantities:{},copies:1,busy:false};
+  const studio=mountStudio({view,kind:'spectrum',engine:{state:{project:{colors:['#F58231','#22864C']}},workbenchObjects:()=>state},api:{source:()=>null},objects:{selected:()=>[],element:document.querySelector('section')},setPanel(){}});
+  studio.sync();assert(view.inspector.querySelector('[data-find-colour="2"]'));
+  state.quantities={2:0};studio.sync();assert.equal(view.inspector.querySelector('[data-find-colour="2"]'),null);
+  state.quantities={};studio.sync();assert(view.inspector.querySelector('[data-find-colour="2"]'));
+  state.objects[1].undecodable=1;studio.show('select');assert.equal(view.inspector.querySelector('[data-find-colour="2"]'),null);
+  studio.show('split');let prevented=false;assert(studio.key({key:'Delete',preventDefault(){prevented=true;}}));assert(prevented);assert.match(view.inspector.querySelector('.studio-message').textContent,/remove only a colour/);
 });

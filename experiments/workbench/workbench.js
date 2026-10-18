@@ -50,7 +50,7 @@ window.workbench={
       const r=frames.get(kind).report;if(r)showReport(r);
     });changing=false;
   },
-  async sample(){await guard(async()=>{const api=await ensure(active);await api.load(new File([await interfaceDemoFile()],'Four-colour support arch.3mf'));});},
+  async sample(kind){await guard(async()=>{const api=await ensure(active),joint=kind==='joint';const bytes=joint?await (await import('./joint-sample.js')).jointSampleFile():await interfaceDemoFile();await api.load(new File([bytes],joint?'Colour split sample.3mf':'Four-colour support arch.3mf'));});},
 };
 for(const b of document.querySelectorAll('[data-panel]'))b.addEventListener('click',()=>guard(async()=>{nav(b.dataset.panel);(await ensure(active)).setPanel(panel);}));
 for(const b of document.querySelectorAll('[data-engine]'))b.addEventListener('click',()=>window.workbench.switchMode(b.dataset.engine));

@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {cutMesh,connectedParts,signedVolume} from './mesh-cut.js';
 import {editProject} from './model-edit.js';
+import {jointSampleFile} from './joint-sample.js';
 import {readZip,writeZip} from '../../web/zip.js';
 import {interfaceDemoFile} from '../../web/shared/supportInterfaceDemo.js';
 import * as project from '../../web/shared/project.js';
@@ -47,4 +48,14 @@ test('separate and cut produce real exportable meshes, not preview-only geometry
   const q=project.readProject(cut.entries),chosen=cut.changes[0].created.map(x=>x.id);
   const out=project.convertProject(q,1,chosen,{target:'snapmaker',assignmentMode:'slots',removeUnused:true,selectionAware:true,mapping:{1:1,2:2,3:3,4:4}});
   assert.deepEqual(out.problems,[]);const read=project.readProject(out.entries);assert(project.analyse(read,1,null).counts.triangles>60);
+});
+test('colour detachment exports a stalk and socket; removing it drops green without losing settings or source',async()=>{
+  const entries=await readZip(await jointSampleFile()),original=entries.get(project.MODEL_FILE).slice();
+  const detached=editProject(entries,{objectIds:['1'],operation:'separate-colour',from:2,connector:{diameter:3,length:3,clearance:.3}});
+  const p=project.readProject(detached.entries),ids=detached.changes[0].created.map(o=>o.id);
+  assert.equal(ids.length,2);assert.deepEqual(project.analyse(p,1,[ids[0]]).used,[1]);assert.deepEqual(project.analyse(p,1,[ids[1]]).used,[2]);
+  const removed=editProject(entries,{objectIds:['1'],operation:'remove-colour',from:2}),q=project.readProject(removed.entries),remaining=removed.changes[0].created.map(o=>o.id);
+  const out=project.convertProject(q,1,remaining,{target:'snapmaker',assignmentMode:'slots',selectionAware:true,removeUnused:true,mapping:{1:1}});
+  assert.deepEqual(out.problems,[]);assert.deepEqual(project.readProject(out.entries).colors,['#F58231']);
+  assert.deepEqual(entries.get(project.MODEL_FILE),original);assert.equal(q.sourceSettings.layer_height,'0.2');
 });

@@ -4,6 +4,7 @@ import {readProject,selectionInstances,matrixFromText,matmul,applyMatrix,isHidde
 import {decode,encode} from '../../web/shared/paint.js';
 import {leafTriangles} from '../../web/shared/standard.js';
 import {cutMesh,connectedParts} from './mesh-cut.js';
+import {closeInterface,separateColour} from './mesh-joint.js';
 const decoder=new TextDecoder(),encoder=new TextEncoder();
 const text=(entries,name)=>decoder.decode(entries.get(name)||new Uint8Array());
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
@@ -13,7 +14,7 @@ const paintLeaf=n=>` paint_color="${encode({kind:'leaf',state:n})}"`;
 const stripPaint=s=>s.replace(/\s*(?:slic3rpe:)?(?:mmu_segmentation|paint_color)="[^"]*"/g,'');
 
 function objectBlock(entries,member,id){const found=[...text(entries,member).matchAll(/<object\b([^>]*)>([\s\S]*?)<\/object>/g)].find(m=>attr(m[1],'id')===String(id));if(!found)throw Error('A referenced part is missing from the source file.');return found[2];}
-function sourceParts(project,plateId,id){
+export function sourceParts(project,plateId,id){
   const object=project.objects.get(String(id)),meta=project.meta.get(String(id))||{};
   if(!object)throw Error('Select an object on the current plate.');
   const parts=[];
@@ -48,7 +49,7 @@ function recolour(part,from,to){
   })};
 }
 
-function cutPart(part,axis,height){
+function cutPart(part,axis,height,connector){
   const faces=[];
   for(const f of part.faces){
     const crosses=f.points.some(p=>p[axis]<height-1e-6)&&f.points.some(p=>p[axis]>height+1e-6);
@@ -61,7 +62,17 @@ function cutPart(part,axis,height){
   }
   if(faces.every(f=>f.points.every(p=>p[axis]>=height-1e-6)))return [null,part];
   if(faces.every(f=>f.points.every(p=>p[axis]<=height+1e-6)))return [part,null];
-  return cutMesh(faces,axis,height,paintLeaf(part.base)).halves.map(f=>({...part,faces:f}));
+  const cut=cutMesh(faces,axis,height,paintLeaf(part.base));
+  const halves=connector?closeInterface(...cut.openHalves,cut.loops,{normal:[0,1,2].map(i=>i===axis?1:0),attrsA:paintLeaf(part.base),attrsB:paintLeaf(part.base),connector}).halves:cut.halves;
+  return halves.map(f=>({...part,faces:f}));
+}
+
+function colourFaces(part){
+  return part.faces.flatMap(f=>{
+    const code=paintRE.exec(f.attrs)?.[1],node=code?decode(code):{kind:'leaf',state:part.base};
+    if(node.kind==='split')for(const a of f.attrs.matchAll(/(?:support|seam)[\w:]*="([0-9a-f]+)"/gi))if(decode(a[1]).kind!=='leaf')throw Error('This object has overlapping subdivided colour and support/seam painting. Separate it in the slicer to preserve both.');
+    return leafTriangles(f.points,node).map(leaf=>({points:leaf.triangle,attrs:node.kind==='leaf'?f.attrs:stripPaint(f.attrs)+paintLeaf(leaf.state||part.base),colour:leaf.state||part.base}));
+  });
 }
 
 function meshXml(part,id){
@@ -72,10 +83,11 @@ function meshXml(part,id){
 }
 const settingsXml=settings=>Object.entries(settings||{}).map(([k,v])=>`<metadata key="${esc(k)}" value="${esc(v)}"/>`).join('');
 
-export function editProject(input,{plateId=1,objectIds=[],operation,from='all',colour,axis=2,position=50}={}){
+export function editProject(input,{plateId=1,objectIds=[],operation,from='all',colour,axis=2,position=50,connector=null}={}){
   const entries=new Map(input),project=readProject(entries,{allowNegative:true});
   if(!objectIds.length)throw Error('Select an object first.');
-  if(!['colour','cut','separate'].includes(operation))throw Error('Choose Colour or Split.');
+  if(!['colour','cut','separate','separate-colour','remove-colour'].includes(operation))throw Error('Choose Colour or Split.');
+  if(operation.endsWith('-colour')&&(!Number.isInteger(Number(from))||Number(from)<1||Number(from)>project.colors.length))throw Error('Choose a source colour to separate.');
   const colours=project.colors.slice();let target=0;
   if(operation==='colour'){
     if(!/^#[0-9a-f]{6}$/i.test(colour||''))throw Error('Choose a valid filament colour.');
@@ -85,18 +97,31 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
   let next=Math.max(1,...[...project.objects.keys()].map(Number))+1;
   const resources=[],newItems=[],newMeta=[],changes=[];
   for(const oldId of objectIds){
-    const {parts,meta}=sourceParts(project,plateId,oldId);let groups=[];
+    const {parts,meta}=sourceParts(project,plateId,oldId);let groups=[],names=[];
     if(operation==='colour')groups=[parts.map(p=>recolour(p,from,target))];
     else {
       if(parts.some(p=>isHiddenPart(p.subtype)))throw Error('This object contains a negative or modifier volume. Split it in your slicer so its cutouts stay correct.');
-      if(operation==='separate'){
+      if(operation.endsWith('-colour')){
+        const rest=[],detached=[];let found=false;
+        for(const part of parts){
+          const faces=colourFaces(part);
+          if(!faces.some(f=>f.colour===Number(from))){rest.push(part);continue;}
+          found=true;
+          const result=separateColour(faces,Number(from),{connector:operation==='remove-colour'?null:connector,capAttributes:paintLeaf});
+          if(result.remaining.length)rest.push({...part,faces:result.remaining});
+          detached.push(...result.parts.map(faces=>[{...part,base:Number(from),faces}]));
+        }
+        if(!found)throw Error('This colour is not painted on one of the selected objects. Select only objects that use it.');
+        if(rest.length){groups.push(rest);names.push('remainder');}
+        if(operation==='separate-colour')for(let i=0;i<detached.length;i++){groups.push(detached[i]);names.push(`colour ${from}${detached.length>1?` · ${i+1}`:''}`);}
+      }else if(operation==='separate'){
         groups=parts.flatMap(p=>connectedParts(p.faces).map(faces=>[{...p,faces}]));
         if(groups.length<2)throw Error('This is one connected piece. Use a plane cut to make separate parts.');
         if(groups.length>64)throw Error('This object contains more than 64 disconnected shells. Repair or group them in your slicer first.');
       } else {
         if(!Number.isFinite(position)||position<=0||position>=100)throw Error('Place the cut between 1% and 99% of the object.');
         let lo=Infinity,hi=-Infinity;for(const p of parts)for(const f of p.faces)for(const v of f.points){lo=Math.min(lo,v[axis]);hi=Math.max(hi,v[axis]);}
-        const height=lo+(hi-lo)*position/100;groups=[[],[]];for(const part of parts){const split=cutPart(part,axis,height);split.forEach((p,i)=>{if(p)groups[i].push(p);});}
+        const height=lo+(hi-lo)*position/100;groups=[[],[]];for(const part of parts){const split=cutPart(part,axis,height,connector);split.forEach((p,i)=>{if(p)groups[i].push(p);});}
         if(groups.some(g=>!g.length))throw Error('The cut leaves an empty part. Change the cut position.');
       }
     }
@@ -107,7 +132,7 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
         let floor=Infinity;for(const p of group)for(const f of p.faces)for(const v of f.points)floor=Math.min(floor,v[2]);
         group=group.map(p=>({...p,faces:p.faces.map(f=>({...f,points:f.points.map(v=>[v[0],v[1],v[2]-floor])}))}));
       }
-      const id=String(next++),name=(meta.name||`Object ${oldId}`)+(operation==='colour'?' · coloured':` · part ${g+1}`);
+      const id=String(next++),name=(meta.name||`Object ${oldId}`)+(operation==='colour'?' · coloured':` · ${names[g]||`part ${g+1}`}`);
       const components=[],partMeta=[];
       for(const p of group){const pid=String(next++);resources.push(meshXml(p,pid));components.push(`<component objectid="${pid}"/>`);partMeta.push(`<part id="${pid}" subtype="${esc(p.subtype)}"><metadata key="name" value="${esc(p.name)}"/><metadata key="extruder" value="${p.base}"/>${settingsXml(p.settings)}</part>`);}
       resources.push(`<object id="${id}" type="model"><components>${components.join('')}</components></object>`);
