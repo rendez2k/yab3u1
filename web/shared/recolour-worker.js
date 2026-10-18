@@ -329,7 +329,9 @@ self.onmessage = async (event) => {
     if (!loaded) throw new Error("no project is loaded yet");
     const { project: parsed } = loaded;
     if(type==='comparison-export') {
+      post({type:'progress',id,message:'Building plate geometry and checking settings'});
       const built=exportComparisonJob(parsed,message.plateId,message.job,message.options);
+      post({type:'progress',id,message:'Compressing the 3MF project'});
       const bytes=await writeZip([...built.entries].map(([name,data])=>({name,data})));
       post({type:'comparison-exported',id,bytes},[bytes.buffer]);return;
     }

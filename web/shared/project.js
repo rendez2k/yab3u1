@@ -2243,7 +2243,9 @@ export function exportProject(project, plateId, objectIds, options) {
                    extruder: !convert && part?.subtype === 'negative_part' ? 1 : resolveExtruder(project, mapping, highest, sourceExtruder,
                                              `${name} (${member} object `
                                              + `${component.objectid})`),
-                   subtype: (part && part.subtype) || "normal_part" });
+                   // Prusa's ModelPart is the same printable volume as Orca's
+                   // normal_part. Native exports must use the destination name.
+                   subtype: isPrintablePart(part?.subtype) ? "normal_part" : part.subtype });
       if (target === "prusa") {
         // PrusaSlicer wants the mesh in the object, with the volume range in
         // triangle indices. Only one volume per object reaches here.
@@ -2305,8 +2307,10 @@ export function exportProject(project, plateId, objectIds, options) {
         if(assigned.has(root.id))throw new ProjectError('An object belongs to more than one colour group.');
         assigned.add(root.id);
         const meta=project.meta.get(root.objectId);
-        if(root.parts.some(p=>p.subtype!=='normal_part') || meta?.parts?.some(p=>Object.keys(p.settings||{}).some(k=>!['name','extruder'].includes(k))))
-          throw new ProjectError(`${root.name} has modifiers or part-specific settings. Keep it on a by-layer plate instead of merging it.`);
+        if(root.parts.some(p=>!isPrintablePart(p.subtype)))
+          throw new ProjectError(`${root.name} contains modifiers or negative volumes. Keep it on a separate by-layer plate to retain their roles without merging.`);
+        if(meta?.parts?.some(p=>Object.keys(p.settings||{}).some(k=>!['name','extruder'].includes(k))))
+          throw new ProjectError(`${root.name} has part-specific print settings. Match those settings in your slicer before merging.`);
         const settings=sourceSettingMetadata(project,root.objectId,target,options,supportPaintPresent(project,plateId,[root.objectId]));
         const current=JSON.stringify([...settings.matchAll(/<metadata\b([^>]*)\/>/g)].map(m=>[attr(m[1],'key'),attr(m[1],'value')]).sort(([a],[b])=>a.localeCompare(b)));
         if(signature!==null&&signature!==current)throw new ProjectError(`${group.label}: these parts have different print settings. Match their settings in the slicer before merging.`);

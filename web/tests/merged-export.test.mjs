@@ -49,3 +49,17 @@ test('same-colour objects with different print intent are not silently merged',a
   assert.throws(()=>exportProject(p,plate,objects,{...options(p),layout:targetLayout('snapmaker',{copies:1,spacing:5}),
     mergeGroups:[{label:'Same colour',objects}]}),/different print settings/);
 });
+
+test('Prusa printable volume aliases are accepted without bypassing genuine part settings',async()=>{
+  const p=await source(),plate=p.plates[0].id,objects=['10'],opts=options(p);
+  p.meta.get('10').parts[0].subtype='ModelPart';
+  p.meta.get('10').settings={layer_height:'0.16',enable_support:'1'};
+  const layout=targetLayout('snapmaker',{arrangement:'objects',copies:2,spacing:5,footprints:selectionFootprints(p,plate,objects)});
+  const job={objects,sequence:'by object',layout,mergeGroups:[{label:'Orange parts',objects}]};
+  const plain=readProject(exportProject(p,plate,objects,{...opts,layout}).entries);
+  const q=readProject(exportComparisonJob(p,plate,job,opts).entries);
+  assert.deepEqual(vertices(q),vertices(plain));assert.equal(q.items.length,1);
+  const meta=[...q.meta.values()][0];assert(meta.parts.every(part=>part.subtype==='normal_part'));assert.equal(meta.settings.enable_support,'1');assert.equal(Number(meta.settings.layer_height),.16);
+  p.meta.get('10').parts[0].settings={layer_height:'.12'};
+  assert.throws(()=>exportComparisonJob(p,plate,job,opts),/part-specific/);
+});

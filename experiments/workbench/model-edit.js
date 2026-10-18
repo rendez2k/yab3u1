@@ -1,6 +1,6 @@
 // Workbench-only editing. Source objects and archive members remain intact.
 // Each edited copy gets new resources so shared meshes cannot repaint siblings.
-import {readProject,selectionInstances,matrixFromText,matmul,applyMatrix,isHiddenPart,MODEL_FILE,SRC_BBL_MODEL,SRC_BBL_PROJECT} from '../../web/shared/project.js';
+import {readProject,selectionInstances,matrixFromText,matmul,applyMatrix,isHiddenPart,isPrintablePart,MODEL_FILE,SRC_BBL_MODEL,SRC_BBL_PROJECT} from '../../web/shared/project.js';
 import {decode,encode} from '../../web/shared/paint.js';
 import {leafTriangles} from '../../web/shared/standard.js';
 import {cutMesh,connectedParts} from './mesh-cut.js';
@@ -29,7 +29,7 @@ export function sourceParts(project,plateId,id){
       for(const v of body.matchAll(/<vertex\b([^>]*)\/>/g)){const p=['x','y','z'].map(a=>Number(attr(v[1],a)));if(p.some(n=>!Number.isFinite(n)))throw Error('The source has an invalid vertex.');points.push(applyMatrix(matrix,p));}
       const faces=[];
       for(const t of body.matchAll(/<triangle\b([^>]*)\/>/g)){const ids=['v1','v2','v3'].map(a=>Number(attr(t[1],a)));if(ids.some(i=>!points[i]))throw Error('A source triangle references a missing vertex.');faces.push({points:ids.map(i=>points[i]),attrs:t[1].replace(/\s*v[123]="[^"]*"/g,'')});}
-      parts.push({name:part.name||meta.name||`Object ${id}`,base,settings:part.settings||{},subtype:part.subtype||'normal_part',faces});
+      parts.push({name:part.name||meta.name||`Object ${id}`,base,settings:part.settings||{},subtype:isPrintablePart(part.subtype)?'normal_part':part.subtype,faces});
     }
   }
   if(!parts.length)throw Error('This object has no printable instances.');

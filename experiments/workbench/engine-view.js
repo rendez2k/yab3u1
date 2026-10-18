@@ -96,7 +96,9 @@ function tick() {
   const button=sequentialAction()||$(kind==='converter'?'converterprimary':'mainaction');
   let status=kind==='converter'?$('convertstatus').textContent:$('loadstatus').textContent||$('actionstatus').textContent;
   if(kind==='converter'&&loaded&&!busy&&status.includes('Nothing has been uploaded'))status=`${s.state.displayName}: ${s.capacityStatus().needed} filament${s.capacityStatus().needed===1?'':'s'} used on this plate. Files stay in your browser.`;
-  const report={kind,loaded,busy,batch,title:file?.yab3dDisplayName||file?.name||'Untitled project',status:status||'Files stay in your browser.',action:studio?.pending?'Apply or cancel edit':loaded?button.textContent:'Open a model to start',disabled:studio?.pending||busy||!loaded||button.disabled||batch};
+  const plateStatus=currentPanel==='layout'?document.querySelector('#printoptimiser [data-status]'):null,plateBusy=plateStatus?.dataset.busy==='true';
+  if(plateStatus?.textContent)status=plateStatus.textContent;
+  const report={kind,loaded,busy:busy||plateBusy,batch,title:file?.yab3dDisplayName||file?.name||'Untitled project',status:status||'Files stay in your browser.',action:studio?.pending?'Apply or cancel edit':loaded?button.textContent:'Open a model to start',disabled:studio?.pending||busy||!loaded||button.disabled||batch};
   const serial=JSON.stringify(report);if(serial!==lastReport){lastReport=serial;parentHost?.workbench?.report(report);}
   let snapshot;try{snapshot=engine.workbenchPreview();}catch{}
   if(snapshot&&!fallbackPending&&snapshot.key!==fallbackKey){

@@ -1,3 +1,16 @@
+## 2.6.33 sequential preparation regression (18 October 2026)
+
+- Reproduced the reported failure on the real local Flippin Pumpkin Prusa source after separating its green stalk with a connector. Prusa's ordinary `ModelPart` volume role survived the edit and was incorrectly rejected as a modifier. New edits and native exports now normalise printable roles to `normal_part`; cached, previously split archives also work without repeating the edit. Genuine modifier volumes, per-part overrides and conflicting object settings remain rejected.
+- The affected and regression suite ran 141 tests. 140 passed in the sandbox; the single Python-spawning optimiser runner failed to launch there and passed when rerun with process permission. New checks cover Prusa aliases, unchanged geometry and painting, source print settings, real part-override rejection, and preparation failure followed by successful retry.
+- The cached real split archive now produces a sequential green-stalk job and a separate multicolour by-layer job. Both archives were read back: native part roles, sequence, colours and compatible support/layer settings were retained. The private source, diagnostic harness and generated files remain local and are excluded from Git and deployment.
+- Chrome/WebGL exercised the actual worker with that cached archive: two prepared jobs appeared and Download this plate succeeded. Desktop 1440 × 1000 and mobile 390 × 844 captures show feedback immediately below Prepare plates, a reachable download action and the loaded model. Worker geometry/compression messages also reach the shell status line. Failure clears partial downloads and busy state, and re-enables preparation.
+- One detector pass found the inherited border/shadow advisory and the static fallback image's initially absent `src`. That fallback is hidden until a generated object URL is assigned, so it is not a visible broken image; the checked WebGL captures show the model. No stylesheet or design-system change was needed.
+- These checks establish export and UI behaviour, not physical sequential clearance or print success. The existing slicer Arrange/Slice check remains necessary.
+
+Published test deploy: `6ad4f38e006e11d47ee3e39c` at https://workbench-test--yab3u1.netlify.app/. All 32 deployed asset hashes and four entry points match the tested build; the established production and PETG sites remain outside this deployment.
+
+The fresh substitute finish reviewer returned **ship**, with no material fixes. The substitute documenter confirmed the incumbent design system still applies and made no system changes. Both used generic agents because the named skill roles were unavailable. `git diff --check` passed.
+
 ## 2.6.32 pin orientation and colour plate jobs (18 October 2026)
 
 - 37 affected Node tests pass. New checks cover rigid pin-up rotation (including downward and tilted axes), source immutability, bed placement, opt-out, conflicting pin directions, one-region selection leaving other same-colour areas unchanged, and exported colour jobs preserving geometry, counts, painting and sequence.

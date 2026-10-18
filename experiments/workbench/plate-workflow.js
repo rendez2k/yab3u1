@@ -31,15 +31,14 @@ export function mountSequential(host,getContext) {
   host.innerHTML=`<section class="sequential-panel"><label class="studio-field">Print layout<select data-print-mode><option value="together">Together on one plate</option><option value="colours">Separate plates by colour</option><option value="sequential">Sequential colour groups</option></select></label>
     <div data-options hidden><p class="hint" data-mode-help></p>
     <label data-printer-row hidden>Bambu printer and nozzle<select data-printer><option value="">Choose your printer</option></select></label>
-    <button type="button" data-prepare>Prepare plates</button>
+    <button type="button" data-prepare>Prepare plates</button><p data-status role="status" aria-live="polite"></p>
     <p class="hint" data-mode-check></p>
-    <div data-plates></div><button type="button" data-pack hidden>Download all plates</button></div>
-    <p data-status role="status" aria-live="polite"></p></section>`;
+    <div data-plates></div><button type="button" data-pack hidden>Download all plates</button></div></section>`;
   const $=selector=>host.querySelector(selector),profiles=new BambuProfiles();
   const mode=()=>$('[data-print-mode]').value;
   let context=null,jobs=[],generation=0,busy=false;
-  const status=text=>$('[data-status]').textContent=text;
-  const lock=value=>{busy=value;$('[data-status]').dataset.busy=String(value);host.querySelectorAll('button,select').forEach(b=>b.disabled=value);};
+  const status=(text,state='progress')=>{const node=$('[data-status]');node.textContent=text;node.dataset.state=state;};
+  const lock=value=>{busy=value;$('[data-status]').dataset.busy=String(value);host.querySelector('section').setAttribute('aria-busy',String(value));$('[data-prepare]').textContent=value?'Preparing plates…':'Prepare plates';host.querySelectorAll('button,select').forEach(b=>b.disabled=value);};
   const reset=()=>{generation++;context=null;jobs=[];$('[data-plates]').replaceChildren();$('[data-pack]').hidden=true;status('');};
   const check=()=>{if(context){try{if(getContext().signature!==context.signature)reset();}catch{reset();}}};
   const current=()=>{if(!context||getContext().signature!==context.signature)throw Error('The plate changed. Prepare the plates again.');};
@@ -47,7 +46,7 @@ export function mountSequential(host,getContext) {
   const filename=job=>`${job.id}-${job.filament?`filament-${job.filament}`:job.sequence==='by object'?'colour-groups-sequential':'multicolour-by-layer'}.3mf`;
   async function bytes(job){
     current();const stamp=generation;
-    const result=await context.worker.request('comparison-export',{plateId:context.plateId,job,options:context.options});
+    const result=await context.worker.request('comparison-export',{plateId:context.plateId,job,options:context.options},{onProgress:progress=>{if(stamp===generation)status(`${progress.message} · ${job.label}`);}});
     current();if(stamp!==generation)throw Error('The plate changed while exporting. Prepare again.');
     return new Uint8Array(result.bytes);
   }
@@ -83,7 +82,7 @@ export function mountSequential(host,getContext) {
         for(const job of jobs){status(`Preparing ${job.label.toLowerCase()}…`);job.bytes=await bytes(job);preparedBytes+=job.bytes.length;if(preparedBytes>256*1024*1024)throw Error('These plates are too large to prepare together. Reduce the quantities and try again.');}
         $('[data-plates]').innerHTML='<ol class="sequential-plates">'+jobs.map(job=>`<li>${/^#[0-9a-f]{6}$/i.test(job.colour||'')?`<i class="plate-colour" style="background:${job.colour}" aria-hidden="true"></i>`:''}<strong>${esc(job.label)}</strong> · ${job.count} object${job.count===1?'':'s'} · ${job.sequence==='by object'?'Sequential':'By layer'}<p class="hint">${job.names.map(esc).join(', ')}${job.extraSupport?' · Extra support material retained; this plate stays by layer.':''}</p><button type="button" data-download="${job.id}">Download this plate</button></li>`).join('')+'</ol>';
         $('[data-pack]').hidden=false;
-        status(`${jobs.length} plate${jobs.length===1?'':'s'} prepared. Object counts and colours are preserved.`);return;
+        status(`${jobs.length} plate${jobs.length===1?'':'s'} ready to download below. Object counts and colours are preserved.`,'success');return;
       }
       if(button.dataset.download){current();const job=jobs.find(j=>j.id===button.dataset.download);download(filename(job),job.bytes);status('Plate downloaded. Arrange and check it in the slicer.');return;}
       if(button.hasAttribute('data-pack')){
@@ -92,7 +91,7 @@ export function mountSequential(host,getContext) {
         files.push({name:'Read me.txt',data:new TextEncoder().encode(mode()==='colours'?'Each single-colour group has its own 3MF. Multicoloured and PETG-interface parts stay on a separate by-layer plate. Filament assignments, quantities and compatible settings are retained. Open each project in the selected slicer, or change its printer there if using another printer. Check supports and slice before printing.\n':'Same-colour parts share one logical slicer object per filament, preserving individual meshes. Groups share a sequential plate; multicoloured and PETG-interface parts print by layer separately. The 25 mm group gap is a planning allowance only. Arrange and Slice in the destination slicer to validate head and gantry clearance. Use separate colour plates if clearance fails. No print time is certified.\n')});
         const packed=await writeZip(files);current();if(stamp!==generation)return;download(mode()==='colours'?'colour-plates.zip':'sequential-plates.zip',packed);status('Plates downloaded. Each 3MF is a separate print job.');
       }
-    }catch(error){status(error.message==='Apply and review the palette and export settings before comparing.'?'Open Output and confirm the colour mapping, then return here to prepare plates.':error.message);}finally{lock(false);}
+    }catch(error){jobs=[];$('[data-plates]').replaceChildren();$('[data-pack]').hidden=true;status(`Could not prepare plates. ${error.message==='Apply and review the palette and export settings before comparing.'?'Open Output and confirm the colour mapping, then return here to prepare plates.':error.message}`,'error');}finally{lock(false);}
   });
   for(const type of ['input','change'])document.addEventListener(type,event=>{if(!host.contains(event.target))check();});
   return {invalidate:reset,check};

@@ -1,6 +1,6 @@
 # YAB3D Workbench test
 
-An isolated alternative interface, v2.6.32-test. It does not replace `web/index.html`, the production build or the PETG review deployment.
+An isolated alternative interface, v2.6.33-test. It does not replace `web/index.html`, the production build or the PETG review deployment.
 
 ```powershell
 cd experiments/workbench
@@ -70,3 +70,7 @@ In **Select**, colour buttons select all single-colour objects using that origin
 After choosing a painted colour, choose its **Painted region**. Disconnected areas of the same colour are listed separately, so an arm does not automatically select the eyes. The preview highlight is approximate; the edit uses the exact connected painted faces. Invalid boundaries are explained and cannot be applied. For the local pumpkin fixture, the green stalk separates, but the black regions wrap around the surface and the two main white hands have inconsistent paint edges. They still require editing in a slicer; this release does not claim automatic separation of those parts. Choosing black never includes white by default.
 
 In **Arrange → Print layout**, choose **Separate plates by colour** for one 3MF per single-colour group, with multicoloured or PETG-interface objects on another by-layer plate. **Sequential colour groups** puts each single-colour group into one logical slicer object and prepares a separate by-layer plate for multicoloured objects. Quantities, individual meshes and compatible settings are retained. Download jobs individually or together. All jobs initially use the chosen printer setup; change the printer in the destination slicer when sending a job to another machine. Sequential spacing is a planning allowance, and the slicer must validate head and gantry clearance. There is no guaranteed time saving.
+
+## 2.6.33 sequential preparation fix
+
+Prusa normal volumes (ModelPart) are now normalised to the native normal_part role, including previously split archives. They no longer trigger a false modifier rejection. Genuine modifiers, differing object settings and part-specific overrides remain checked. Preparation progress, failures and ready-to-download feedback appear directly below Prepare plates and in the workbench status line. Failure clears the busy indicator and leaves preparation available to retry.
