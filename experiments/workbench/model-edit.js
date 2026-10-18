@@ -5,6 +5,7 @@ import {decode,encode} from '../../web/shared/paint.js';
 import {leafTriangles} from '../../web/shared/standard.js';
 import {cutMesh,connectedParts} from './mesh-cut.js';
 import {closeInterface,separateColour} from './mesh-joint.js';
+import {orientPinUp} from './orientation.js';
 const decoder=new TextDecoder(),encoder=new TextEncoder();
 const text=(entries,name)=>decoder.decode(entries.get(name)||new Uint8Array());
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
@@ -63,8 +64,9 @@ function cutPart(part,axis,height,connector){
   if(faces.every(f=>f.points.every(p=>p[axis]>=height-1e-6)))return [null,part];
   if(faces.every(f=>f.points.every(p=>p[axis]<=height+1e-6)))return [part,null];
   const cut=cutMesh(faces,axis,height,paintLeaf(part.base));
-  const halves=connector?closeInterface(...cut.openHalves,cut.loops,{normal:[0,1,2].map(i=>i===axis?1:0),attrsA:paintLeaf(part.base),attrsB:paintLeaf(part.base),connector}).halves:cut.halves;
-  return halves.map(f=>({...part,faces:f}));
+  const joined=connector?closeInterface(...cut.openHalves,cut.loops,{normal:[0,1,2].map(i=>i===axis?1:0),attrsA:paintLeaf(part.base),attrsB:paintLeaf(part.base),connector}):{halves:cut.halves};
+  const pinSide=connector?.side==='base'?0:1;
+  return joined.halves.map((f,i)=>({...part,faces:f,pinDirections:joined.joint&&i===pinSide?[joined.joint.normal.map(v=>v*(pinSide===0?1:-1))]:[]}));
 }
 
 function colourFaces(part){
@@ -75,6 +77,23 @@ function colourFaces(part){
   });
 }
 
+export function inspectRegions(input,{plateId=1,objectIds=[],from}={},progress=()=>{}){
+  if(objectIds.length!==1)throw Error('Select one object to choose a painted region.');
+  const project=readProject(input,{allowNegative:true}),{parts}=sourceParts(project,plateId,objectIds[0]),regions=[];
+  for(const [partIndex,part] of parts.entries()){
+    const faces=colourFaces(part),groups=connectedParts(faces.filter(f=>f.colour===Number(from)));
+    if(groups.length>32)throw Error('This colour has more than 32 disconnected patches. Separate it in your slicer or use a plane cut.');
+    for(const [index,group] of groups.entries()){
+      progress(`Checking colour region ${regions.length+1}…`);
+      const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
+      for(const f of group)for(const p of f.points)for(let i=0;i<3;i++){min[i]=Math.min(min[i],p[i]);max[i]=Math.max(max[i],p[i]);}
+      let error='';try{separateColour(faces,Number(from),{region:index,capAttributes:paintLeaf});}catch(e){error=e.message;}
+      regions.push({id:`${partIndex}:${index}`,size:max.map((v,i)=>v-min[i]),bounds:{min,max},error,triangles:group.length});
+    }
+  }
+  return regions;
+}
+
 function meshXml(part,id){
   const vertices=[],triangles=[],indices=new Map();
   const add=p=>{const key=p.map(n=>Number(n.toFixed(7))).join(',');if(indices.has(key))return indices.get(key);const index=vertices.length;indices.set(key,index);vertices.push(`<vertex x="${+p[0].toFixed(7)}" y="${+p[1].toFixed(7)}" z="${+p[2].toFixed(7)}"/>`);return index;};
@@ -83,7 +102,7 @@ function meshXml(part,id){
 }
 const settingsXml=settings=>Object.entries(settings||{}).map(([k,v])=>`<metadata key="${esc(k)}" value="${esc(v)}"/>`).join('');
 
-export function editProject(input,{plateId=1,objectIds=[],operation,from='all',colour,axis=2,position=50,connector=null}={}){
+export function editProject(input,{plateId=1,objectIds=[],operation,from='all',colour,axis=2,position=50,connector=null,region=null,orientPins=true}={}){
   const entries=new Map(input),project=readProject(entries,{allowNegative:true});
   if(!objectIds.length)throw Error('Select an object first.');
   if(!['colour','cut','separate','separate-colour','remove-colour'].includes(operation))throw Error('Choose Colour or Split.');
@@ -103,13 +122,14 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
       if(parts.some(p=>isHiddenPart(p.subtype)))throw Error('This object contains a negative or modifier volume. Split it in your slicer so its cutouts stay correct.');
       if(operation.endsWith('-colour')){
         const rest=[],detached=[];let found=false;
-        for(const part of parts){
+        for(const [partIndex,part] of parts.entries()){
           const faces=colourFaces(part);
           if(!faces.some(f=>f.colour===Number(from))){rest.push(part);continue;}
+          if(region&&Number(region.split(':')[0])!==partIndex){rest.push(part);continue;}
           found=true;
-          const result=separateColour(faces,Number(from),{connector:operation==='remove-colour'?null:connector,capAttributes:paintLeaf});
-          if(result.remaining.length)rest.push({...part,faces:result.remaining});
-          detached.push(...result.parts.map(faces=>[{...part,base:Number(from),faces}]));
+          const result=separateColour(faces,Number(from),{connector:operation==='remove-colour'?null:connector,capAttributes:paintLeaf,region:region?Number(region.split(':')[1]):null});
+          if(result.remaining.length)rest.push({...part,faces:result.remaining,pinDirections:connector?.side==='base'?result.joints.filter(Boolean).map(j=>j.normal):[]});
+          detached.push(...result.parts.map((faces,i)=>[{...part,base:Number(from),faces,pinDirections:connector&&connector.side!=='base'&&result.joints[i]?[result.joints[i].normal.map(v=>-v)]:[]}]));
         }
         if(!found)throw Error('This colour is not painted on one of the selected objects. Select only objects that use it.');
         if(rest.length){groups.push(rest);names.push('remainder');}
@@ -129,6 +149,7 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
     for(let g=0;g<groups.length;g++){
       let group=groups[g];
       if(operation!=='colour'){
+        if(connector&&orientPins)group=orientPinUp(group,group.flatMap(p=>p.pinDirections||[]));
         let floor=Infinity;for(const p of group)for(const f of p.faces)for(const v of f.points)floor=Math.min(floor,v[2]);
         group=group.map(p=>({...p,faces:p.faces.map(f=>({...f,points:f.points.map(v=>[v[0],v[1],v[2]-floor])}))}));
       }

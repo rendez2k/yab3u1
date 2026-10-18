@@ -118,15 +118,18 @@ export function closeInterface(a,b,loops,{normal:direction,attrsA='',attrsB='',c
 }
 
 /** faces have flat, resolved source colour IDs. Preserve their other attributes. */
-export function separateColour(faces,colour,{connector=null,capAttributes=c=>` paint_color="${c}"`}={}){
-  const selected=faces.filter(f=>f.colour===colour),rest=faces.filter(f=>f.colour!==colour);
+export function separateColour(faces,colour,{connector=null,capAttributes=c=>` paint_color="${c}"`,region=null}={}){
+  let selected=faces.filter(f=>f.colour===colour);
   if(!selected.length)throw Error('This colour is not painted on the selected object. Choose another colour or object.');
+  const allGroups=connectedParts(selected);
+  if(region!==null){if(!Number.isInteger(region)||!allGroups[region])throw Error('That colour region is no longer available. Choose it again.');selected=allGroups[region];}
+  const selectedSet=new Set(selected),rest=faces.filter(f=>!selectedSet.has(f));
   if(!rest.length){if(connector)throw Error('The whole object uses this colour. It has no joining surface for a pin.');return {remaining:[],parts:[selected],joints:[]};}
-  const groups=connectedParts(selected);if(groups.length>32)throw Error('This colour has too many separate patches. Select a simpler part or use a plane cut.');
+  const groups=region===null?allGroups:[selected];if(groups.length>32)throw Error('This colour has too many separate patches. Select one region or use a plane cut.');
   let remaining=rest;const parts=[],joints=[];
   for(const group of groups){
     const {loops,rim}=boundary(group);
-    if(!loops.length){if(connector)throw Error('This colour is already a disconnected part. Turn off the locating pin to separate it.');parts.push(group);continue;}
+    if(!loops.length){if(connector)throw Error('This colour is already a disconnected part. Turn off the locating pin to separate it.');parts.push(group);joints.push(null);continue;}
     // Verify both surfaces really share this boundary; never cap an unrelated hole.
     const expected=new Map(rim.map(e=>[edgeKey(e.a,e.b),e])),matches=new Map(),adjacent=new Map();
     for(const f of remaining)for(let i=0;i<3;i++){const a=f.points[i],b=f.points[(i+1)%3],k=edgeKey(a,b),e=expected.get(k);if(!e)continue;if(key(a)!==key(e.b))throw Error('The painted boundary has inconsistent winding. Repair the mesh in your slicer first.');matches.set(k,(matches.get(k)||0)+1);adjacent.set(f.colour,(adjacent.get(f.colour)||0)+Math.hypot(...sub(a,b)));}
@@ -135,7 +138,7 @@ export function separateColour(faces,colour,{connector=null,capAttributes=c=>` p
     const result=closeInterface(remaining,group,loops,{attrsA:capAttributes(other),attrsB:capAttributes(colour),connector});
     // A flat painted patch encloses no solid volume and is not a detachable object.
     if(signedVolume(result.halves[1])<.01||signedVolume(result.halves[0])<.01)throw Error('This colour is a surface patch rather than a solid protruding part. Use a plane cut to give it thickness.');
-    remaining=result.halves[0];parts.push(result.halves[1]);if(result.joint)joints.push(result.joint);
+    remaining=result.halves[0];parts.push(result.halves[1]);joints.push(result.joint);
   }
   return {remaining,parts,joints};
 }

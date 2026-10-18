@@ -3,6 +3,7 @@ const svg=name=>`<svg viewBox="0 0 24 24" aria-hidden="true">${icons[name]}</svg
 export function mountStudio({view,engine,kind,api,objects,setPanel}){
   const doc=view.stage.ownerDocument,make=view.make;
   let multiple=false,preferredColour='';
+  let regions=[],regionPending=false,regionWorker=null,regionRequest=0,regionKey='';const regionCache=new WeakMap();
   let mode='select',selectionKey='',knownSource=null,working=false,committing=false,worker=null,rejectPending=null,baseColours=null,sourceColours=null,previewPending=false,previewRequest=0,undo=[],request=0;
   const tools=make('nav',{class:'studio-toolstrip','aria-label':'Model tools'},Object.entries({select:'Select',colour:'Colour',split:'Split',arrange:'Arrange'}).map(([key,label])=>`<button data-studio-tool="${key}" aria-pressed="${key===mode}" title="${label}">${svg(key)}<span>${label}</span></button>`).join('')+'<button data-studio-undo title="Undo model edit (Ctrl+Z)" aria-label="Undo model edit" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5-5 5 5 5M3 10h10a6 6 0 0 1 0 12"/></svg></button>');
   view.stage.append(tools);
@@ -20,8 +21,36 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
   const splitMethod=()=>settings.querySelector('[data-split-method]')?.value||'cut';
   const splitOperation=()=>splitMethod()==='by-colour'?settings.querySelector('[data-colour-action]').value:splitMethod();
   const applyLabel=()=>mode==='colour'?'Apply colour':splitOperation()==='remove-colour'?'Remove coloured part':splitMethod()==='by-colour'?'Separate colour':'Split objects';
+  const chosenRegion=()=>regions.find(r=>r.id===settings.querySelector('[data-region-piece]')?.value);
+  function stopRegions(){regionRequest++;regionWorker?.terminate();regionWorker=null;regionPending=false;regionKey='';regions=[];}
+  function regionFeedback(){const selected=chosenRegion();message.textContent=selected?.error?`${selected.error} This region has not been changed.`:regions.length>1?'Choose one region. Other areas using this colour stay on the model. The highlight is a simplified preview.':'';}
+  async function loadRegions(){
+    const from=settings.querySelector('[data-region-colour]')?.value,file=api.source(),ids=selected();
+    const key=`${from}|${ids.join(',')}`;if(key===regionKey)return;
+    stopRegions();regionKey=key;const picker=settings.querySelector('[data-region-piece]');if(!picker)return;
+    picker.replaceChildren(new Option('Checking colour regions…',''));
+    if(!from){picker.replaceChildren(new Option('Choose a colour first',''));sync();return;}
+    if(ids.length!==1){message.textContent='Select one object to choose a painted region.';sync();return;}
+    if(!file)return;
+    const stamp=regionRequest;regionPending=true;message.textContent='Checking the separate regions of this colour…';sync();
+    try{
+      let cache=regionCache.get(file);if(!cache){cache=new Map();regionCache.set(file,cache);}
+      let result=cache.get(key);
+      if(!result){const bytes=await file.arrayBuffer();if(stamp!==regionRequest)return;
+        result=await new Promise((resolve,reject)=>{regionWorker=new Worker(new URL('./model-edit-worker.js',import.meta.url),{type:'module'});regionWorker.onmessage=({data})=>{if(data.progress){message.textContent=data.progress;return;}data.error?reject(Error(data.error)):resolve(data.regions);};regionWorker.onerror=()=>reject(Error('Region checking stopped. Choose the colour again to retry.'));regionWorker.postMessage({bytes,options:{operation:'inspect-regions',plateId:api.context().plateId,objectIds:ids,from}},[bytes]);});
+        cache.set(key,result);
+      }
+      if(stamp!==regionRequest)return;regions=result;
+      picker.replaceChildren(new Option(regions.length>1?'Choose a region':'Selected region',''));
+      regions.forEach((r,i)=>picker.add(new Option(`Region ${i+1} · ${r.size.map(n=>n.toFixed(1)).join(' × ')} mm${r.error?' · needs slicer editing':''}`,r.id)));
+      if(regions.length===1)picker.value=regions[0].id;
+      if(!regions.length)throw Error('This object has no regions in that colour.');
+      regionFeedback();
+    }catch(e){if(stamp===regionRequest){regionKey='';message.textContent=e.message;}}
+    finally{if(stamp===regionRequest){regionWorker?.terminate();regionWorker=null;regionPending=false;preview();sync();}}
+  }
   function loadSourcePreview(){const stamp=++previewRequest;previewPending=true;engine.workbenchSourceColours().then(colours=>{if(stamp!==previewRequest)return;sourceColours=colours;previewPending=false;preview();sync();}).catch(error=>{if(stamp!==previewRequest)return;previewPending=false;message.textContent=error.message;sync();});}
-  function restorePreview(){previewRequest++;previewPending=false;sourceColours=null;const p=state().preview;if(p){p.suppressSelection=false;if(baseColours&&baseColours.length===p.lastPositions?.length)p.setColors(baseColours);p.requestDraw();}baseColours=null;}
+  function restorePreview(){stopRegions();previewRequest++;previewPending=false;sourceColours=null;const p=state().preview;if(p){p.suppressSelection=false;if(baseColours&&baseColours.length===p.lastPositions?.length)p.setColors(baseColours);p.requestDraw();}baseColours=null;}
   function show(next){
     if(working)return;
     restorePreview();mode=next;message.textContent='';
@@ -54,7 +83,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
       panel.querySelector('[data-edit-apply]').textContent='Apply colour';
       loadSourcePreview();
     }else if(mode==='split'){
-      settings.innerHTML='<label class="studio-field">Split method<select data-split-method><option value="by-colour">By painted colour</option><option value="cut">Plane cut</option><option value="separate">Disconnected parts</option></select></label><div data-region-settings><label class="studio-field">Colour to separate<select data-region-colour aria-label="Colour to separate"><option value="">Choose a source colour</option></select></label><div class="studio-region-swatches" data-region-swatches aria-label="Choose a source colour"></div><label class="studio-field">What to do<select data-colour-action><option value="separate-colour">Keep both parts</option><option value="remove-colour">Remove this coloured part</option></select></label></div><div data-plane-settings hidden><label class="studio-field">Direction<select data-cut-axis><option value="2">Horizontal · Z</option><option value="0">Left / right · X</option><option value="1">Front / back · Y</option></select></label><label class="studio-field">Cut position <output data-cut-label>50%</output><input type="range" min="1" max="99" step="0.5" value="50" data-cut-position></label></div><div data-joint-settings><label class="studio-check"><input type="checkbox" data-add-pin> Add locating pin &amp; socket</label><div data-pin-settings hidden><div class="studio-dimensions"><label>Diameter (mm)<input type="number" min="1" max="20" step="0.1" value="3" data-pin-diameter></label><label>Length (mm)<input type="number" min="1" max="20" step="0.1" value="3" data-pin-length></label><label>Fit clearance (mm)<input type="number" min="0.05" max="1" step="0.05" value="0.3" data-pin-clearance></label></div><label class="studio-field">Pin on<select data-pin-side><option value="selected">Separated colour / upper half</option><option value="base">Remaining model / lower half</option></select></label><p class="hint">Pin position is fitted automatically. Clearance is added to the socket diameter; its depth is 0.2 mm longer than the pin. Check the fit with a small test print.</p></div></div><p class="hint" data-split-hint></p>';
+      settings.innerHTML='<label class="studio-field">Split method<select data-split-method><option value="by-colour">By painted colour</option><option value="cut">Plane cut</option><option value="separate">Disconnected parts</option></select></label><div data-region-settings><label class="studio-field">Colour to separate<select data-region-colour aria-label="Colour to separate"><option value="">Choose a source colour</option></select></label><div class="studio-region-swatches" data-region-swatches aria-label="Choose a source colour"></div><label class="studio-field">Painted region<select data-region-piece aria-label="Painted region"><option value="">Choose a colour first</option></select></label><label class="studio-field">What to do<select data-colour-action><option value="separate-colour">Keep both parts</option><option value="remove-colour">Remove this coloured part</option></select></label></div><div data-plane-settings hidden><label class="studio-field">Direction<select data-cut-axis><option value="2">Horizontal · Z</option><option value="0">Left / right · X</option><option value="1">Front / back · Y</option></select></label><label class="studio-field">Cut position <output data-cut-label>50%</output><input type="range" min="1" max="99" step="0.5" value="50" data-cut-position></label></div><div data-joint-settings><label class="studio-check"><input type="checkbox" data-add-pin> Add locating pin &amp; socket</label><div data-pin-settings hidden><div class="studio-dimensions"><label>Diameter (mm)<input type="number" min="1" max="20" step="0.1" value="3" data-pin-diameter></label><label>Length (mm)<input type="number" min="1" max="20" step="0.1" value="3" data-pin-length></label><label>Fit clearance (mm)<input type="number" min="0.05" max="1" step="0.05" value="0.3" data-pin-clearance></label></div><label class="studio-field">Pin on<select data-pin-side><option value="selected">Separated colour / upper half</option><option value="base">Remaining model / lower half</option></select></label><label class="studio-check"><input type="checkbox" data-orient-pins checked> Orient pins upwards</label><p class="hint">The pin-bearing part is turned and placed on the bed. Check its contact area and supports in the slicer. Pin position is fitted automatically. Clearance is added to the socket diameter; its depth is 0.2 mm longer than the pin. Check the fit with a small test print.</p></div></div><p class="hint" data-split-hint></p>';
       const area=settings.querySelector('[data-region-colour]');
       for(const {colour,index} of commonColours()){area.add(new Option(sourceName(colour,index-1),String(index)));const b=make('button',{'data-region-colour-button':String(index),'aria-label':sourceName(colour,index-1),'aria-pressed':'false'},`<i aria-hidden="true"></i><span>${index}</span>`);b.style.setProperty('--swatch',colour);settings.querySelector('[data-region-swatches]').append(b);}
       if(preferredColour&&commonColours().some(c=>String(c.index)===preferredColour))area.value=preferredColour;
@@ -83,16 +112,30 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
       settings.querySelector('[data-pin-side]').options[0].textContent=method==='by-colour'?'Separated colour':'Upper / positive half';settings.querySelector('[data-pin-side]').options[1].textContent=method==='by-colour'?'Remaining model':'Lower / negative half';
       settings.querySelector('[data-split-hint]').textContent=method==='cut'?'Cuts through the object and closes both faces. Both parts stay on this plate.':method==='by-colour'?(removing?'Removes the highlighted coloured region and closes the remaining model. Undo brings it back.':'Follows the original paint boundary and closes both parts. Best for protruding parts such as a stalk; flat paint patches cannot be detached.'):'Separates existing disconnected pieces without changing their painting. Turn to By painted colour for a part joined to the model.';
       if(method==='cut')for(const r of ranges){let lo=Infinity,hi=-Infinity;for(let i=r.start*3+axis;i<(r.start+r.count)*3;i+=3){lo=Math.min(lo,p.lastPositions[i]);hi=Math.max(hi,p.lastPositions[i]);}const cut=lo+(hi-lo)*position/100;for(let i=r.start*3;i<(r.start+r.count)*3;i+=9){const side=(p.lastPositions[i+axis]+p.lastPositions[i+3+axis]+p.lastPositions[i+6+axis])/3>cut,rgb=side?[.34,.64,.85]:[.94,.57,.28];for(let k=0;k<9;k++)colours[i+k]=.45*colours[i+k]+.55*rgb[k%3];}}
-      if(method==='by-colour'){const from=settings.querySelector('[data-region-colour]').value,hex=palette()[Number(from)-1],match=hex?[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255):null;for(const b of settings.querySelectorAll('[data-region-colour-button]'))b.setAttribute('aria-pressed',String(b.dataset.regionColourButton===from));if(match)for(const r of ranges)for(let i=r.start*3;i<(r.start+r.count)*3;i+=3){const yes=match.every((c,j)=>Math.abs(c-source[i+j])<.015);if(!yes)for(let j=0;j<3;j++)colours[i+j]=source[i+j]*.18+.68;}}
+      if(method==='by-colour'){
+        const from=settings.querySelector('[data-region-colour]').value,hex=palette()[Number(from)-1],match=hex?[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255):null,region=chosenRegion();
+        for(const b of settings.querySelectorAll('[data-region-colour-button]'))b.setAttribute('aria-pressed',String(b.dataset.regionColourButton===from));
+        if(match)for(const r of ranges){
+          const bounds=state().objects.find(o=>String(o.objectId)===String(r.objectId))?.bounds,min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
+          for(let i=r.start*3;i<(r.start+r.count)*3;i+=3)for(let j=0;j<3;j++){min[j]=Math.min(min[j],p.lastPositions[i+j]);max[j]=Math.max(max[j],p.lastPositions[i+j]);}
+          const offset=min.map((v,j)=>bounds?(v+max[j]-bounds.min[j]-bounds.max[j])/2:0);
+          for(let i=r.start*3;i<(r.start+r.count)*3;i+=3){
+            const yes=match.every((c,j)=>Math.abs(c-source[i+j])<.015)&&(!region||[0,1,2].every(j=>p.lastPositions[i+j]-offset[j]>=region.bounds.min[j]-.25&&p.lastPositions[i+j]-offset[j]<=region.bounds.max[j]+.25));
+            if(!yes)for(let j=0;j<3;j++)colours[i+j]=source[i+j]*.18+.68;
+          }
+        }
+      }
     }
     p.suppressSelection=true;p.setColors(colours);sync();
   }
   async function loadSnapshot(saved){if(!await api.load(saved.file,{...saved.context,edit:true}))throw Error('The edited model could not be opened.');await engine.workbenchRestoreSettings?.(saved.settings);objects.history.reset();knownSource=api.source();setPanel('edit');}
   async function apply(){
-    if(working||previewPending||!['colour','split'].includes(mode))return;
+    if(working||previewPending||regionPending||!['colour','split'].includes(mode))return;
     const s=state(),ids=selected(),before=snapshot();if(!ids.length||!before.file)return;
     if(mode==='split'&&splitMethod()==='by-colour'&&!settings.querySelector('[data-region-colour]').value){message.textContent='Choose the source colour to separate.';return;}
     const options={objectIds:ids,plateId:before.context.plateId,operation:mode==='colour'?'colour':splitOperation(),from:mode==='colour'?settings.querySelector('[data-paint-area]')?.value||'all':settings.querySelector('[data-region-colour]')?.value,colour:settings.querySelector('[data-paint-colour]')?.value,axis:Number(settings.querySelector('[data-cut-axis]')?.value||2),position:Number(settings.querySelector('[data-cut-position]')?.value||50)};
+    if(mode==='split'&&splitMethod()==='by-colour'){const region=chosenRegion();if(!region||region.error){message.textContent=region?.error||'Choose one colour region first.';return;}options.region=region.id;}
+    if(mode==='split')options.orientPins=settings.querySelector('[data-orient-pins]')?.checked!==false;
     if(mode==='split'&&settings.querySelector('[data-add-pin]').checked&&['cut','separate-colour'].includes(options.operation))options.connector={diameter:Number(settings.querySelector('[data-pin-diameter]').value),length:Number(settings.querySelector('[data-pin-length]').value),clearance:Number(settings.querySelector('[data-pin-clearance]').value),side:settings.querySelector('[data-pin-side]').value};
     const stamp=++request;working=true;restorePreview();message.textContent='Preparing your edit…';sync();
     try{
@@ -112,7 +155,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
       committing=true;sync();
       try{await loadSnapshot(next);}catch(error){await loadSnapshot(before);throw error;}
       undo.push(before);if(undo.length>6)undo.shift();
-      mode='select';selectionKey='';message.textContent=options.operation==='colour'?'Colour applied to the selected copies.':options.operation==='remove-colour'?'Coloured part removed; the remaining surface is closed. Undo restores it.':options.connector?'Parts separated with a locating pin and matching socket. Arrange the plate to see them apart; Undo restores the original.':'Parts separated. Select a part to colour it, duplicate it or arrange the plate.';render();
+      mode='select';selectionKey='';message.textContent=options.operation==='colour'?'Colour applied to the selected copies.':options.operation==='remove-colour'?'Coloured part removed; the remaining surface is closed. Undo restores it.':options.connector?`Parts separated with a locating pin and matching socket.${options.orientPins?' Pins face upwards.':''} Use Arrange to prepare colour plates or sequential groups; Undo restores the original.`:'Parts separated. Use Arrange to prepare colour plates or sequential groups.';render();
     }catch(error){if(stamp===request)message.textContent=error.message;}finally{worker?.terminate();worker=null;rejectPending=null;working=false;committing=false;sync();}
   }
   async function undoEdit(){if(working||!undo.length)return;working=true;restorePreview();message.textContent='Restoring your previous model…';try{await loadSnapshot(undo.at(-1));undo.pop();mode='select';selectionKey='';render();message.textContent='Model edit undone.';}catch(e){message.textContent=e.message;}finally{working=false;sync();}}
@@ -135,7 +178,8 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
     panel.setAttribute('aria-busy',String(working));for(const b of tools.querySelectorAll('button')){b.disabled=working||s.busy;if(b.dataset.studioTool)b.setAttribute('aria-pressed',String(b.dataset.studioTool===mode));}const undoButton=tools.querySelector('[data-studio-undo]'),nextUndo=undoKind();undoButton.disabled=working||s.busy||!nextUndo;undoButton.setAttribute('aria-label',nextUndo?`Undo ${nextUndo} edit`:'Undo');undoButton.title=nextUndo?`Undo ${nextUndo} edit (Ctrl/Cmd+Z)`:'Nothing to undo';
     for(const control of panel.querySelectorAll('input,select,button'))if(!control.closest('.workbench-object-tools'))control.disabled=working||s.busy;
     panel.querySelector('[data-edit-cancel]').disabled=committing;
-    apply.disabled=working||s.busy||previewPending||(mode==='split'&&splitMethod()==='by-colour'&&!settings.querySelector('[data-region-colour]')?.value);
+    apply.disabled=working||s.busy||previewPending||regionPending||(mode==='split'&&splitMethod()==='by-colour'&&(!chosenRegion()||Boolean(chosenRegion().error)));
+    const regionPicker=settings.querySelector('[data-region-piece]');if(regionPicker)regionPicker.disabled=working||s.busy||regionPending;
     objects.element.inert=working;
   }
   tools.addEventListener('click',e=>{const b=e.target.closest('button');if(b?.dataset.studioTool)show(b.dataset.studioTool);if(b?.matches('[data-studio-undo]'))undoCurrent();});
@@ -143,7 +187,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
     const b=e.target.closest('button');if(!b)return;
     if(b.matches('[data-multi-select]')){multiple=!multiple;sync();}
     if(b.dataset.swatch){settings.querySelector('[data-paint-colour]').value=b.dataset.swatch;preview();}
-    if(b.dataset.regionColourButton){settings.querySelector('[data-region-colour]').value=b.dataset.regionColourButton;preview();}
+    if(b.dataset.regionColourButton){settings.querySelector('[data-region-colour]').value=b.dataset.regionColourButton;loadRegions();preview();}
     if(b.matches('[data-open-colour-split]'))show('split');
     if(b.dataset.findColour){const s=state(),ids=new Set(s.objects.filter(o=>(s.quantities[o.objectId]??1)*s.copies>0&&!o.undecodable&&o.colours?.length===1&&Number(o.colours[0].extruder)===Number(b.dataset.findColour)).map(o=>String(o.objectId))),p=s.preview;
       if(p?.pickRanges.length){p.selectedRanges.clear();for(let i=0;i<p.pickRanges.length;i++)if(ids.has(String(p.pickRanges[i].objectId)))p.selectedRanges.add(i);p.selectedRange=[...p.selectedRanges][0]??null;p.onSelectionChange?.();p.requestDraw();objects.sync();sync();message.textContent=p.selectedRanges.size===1?'One single-colour object selected. Remove one deletes this whole object.':`${p.selectedRanges.size} single-colour copies selected. Remove selected deletes these whole objects.`;}
@@ -153,6 +197,6 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
     if(b.matches('[data-edit-apply]'))apply();
     if(b.dataset.sceneObject){const p=state().preview;if(p?.pickRanges.length){p.selectRange(p.pickRanges.findIndex(r=>String(r.objectId)===b.dataset.sceneObject),e);objects.sync();}else{objects.element.querySelector('select').value=b.dataset.sceneObject;objects.element.querySelector('select').dispatchEvent(new Event('change'));}sync();}
   });
-  settings.addEventListener('input',preview);settings.addEventListener('change',preview);
+  settings.addEventListener('input',preview);settings.addEventListener('change',e=>{if(e.target.matches('[data-region-colour]'))loadRegions();if(e.target.matches('[data-region-piece]'))regionFeedback();preview();});
   return {sync,show,get busy(){return working;},get pending(){return ['colour','split'].includes(mode)&&selected().length>0;},leavePanel(){if(!working&&['colour','split'].includes(mode)){restorePreview();mode='select';}},key(e){if(e.target?.closest?.('input,select,textarea,[contenteditable=true]'))return false;if(working){if(['Delete','Escape','z'].includes(e.key)){e.preventDefault();return true;}return false;}if(e.key==='Delete'&&['colour','split'].includes(mode)){e.preventDefault();message.textContent=mode==='split'?'To remove only a colour, choose “Remove this coloured part”. Cancel to delete whole objects.':'Apply or cancel the colour edit before deleting whole objects.';return true;}if(e.key==='Escape'){show('select');return true;}if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='z'){e.preventDefault();undoCurrent();return true;}return false;}};
 }

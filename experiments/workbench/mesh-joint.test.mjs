@@ -40,6 +40,12 @@ test('already separate colour objects can be extracted but cannot receive an inv
   const result=separateColour(faces,2);assert.equal(result.parts.length,1);manifold(result.parts[0]);manifold(result.remaining);
   assert.throws(()=>separateColour(faces,2,{connector:{}}),/already a disconnected part/);
 });
+test('targeting one region keeps the other regions of the same colour unchanged',()=>{
+  const a=painted(),b=a.map(f=>({...f,points:f.points.map(p=>[p[0]+25,p[1],p[2]])})),source=[...a,...b],before=JSON.stringify(source);
+  const split=separateColour(source,2,{region:0,connector:{diameter:3,length:2,clearance:.2}});
+  assert.equal(split.parts.length,1);assert(split.remaining.some(f=>f.colour===2));split.parts.forEach(manifold);manifold(split.remaining);
+  assert.equal(JSON.stringify(source),before);assert.throws(()=>separateColour(source,2,{region:2}),/no longer available/);
+});
 test('a curved paint seam has identical mating cap triangles outside the socket',()=>{
   const cut=cutMesh(cube,2,5),bend=p=>[p[0],p[1],p[2]+(Math.abs(p[2]-5)<1e-6?.18*Math.cos(p[0]*.8)*Math.sin(p[1]*.7):0)];
   const open=cut.openHalves.map(faces=>faces.map(f=>({...f,points:f.points.map(bend)}))),loops=cut.loops.map(l=>l.map(bend));

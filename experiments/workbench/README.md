@@ -1,6 +1,6 @@
 # YAB3D Workbench test
 
-An isolated alternative interface, v2.6.31-test. It does not replace `web/index.html`, the production build or the PETG review deployment.
+An isolated alternative interface, v2.6.32-test. It does not replace `web/index.html`, the production build or the PETG review deployment.
 
 ```powershell
 cd experiments/workbench
@@ -62,3 +62,11 @@ Choose a model, open **Split → By painted colour**, and select the source-colo
 **Add locating pin & socket** makes an integral cylindrical pin on either part and a matching blind socket in the other. Diameter, length and fit clearance are configurable. Clearance is added to the socket diameter, with 0.2 mm extra depth. Placement is automatic and conservatively checked against available material. Both parts use the same mating surface, including a slightly curved seam. Plane cuts can use the same joint. This is a locating/glue joint, not a tested snap fit; print a small fit test for your material and printer.
 
 In **Select**, colour buttons select all single-colour objects using that original filament; Remove or Delete then removes the selected copies. Unknown paint is excluded. Attached coloured regions use Split instead. The same tools work in Convert and Full Spectrum, share model Undo, and keep Apply and Cancel visible while the settings scroll. The empty canvas includes **Try separating a green stalk** for a generated example.
+
+## 2.6.32 orientation, regions and plate preparation
+
+**Orient pins upwards** is on by default when adding a connector. It rotates the part carrying the pin and places it on the bed; turn it off to retain its original rotation. This is pin orientation, not a general stability or support optimiser. Check the contact area and generated supports in the slicer.
+
+After choosing a painted colour, choose its **Painted region**. Disconnected areas of the same colour are listed separately, so an arm does not automatically select the eyes. The preview highlight is approximate; the edit uses the exact connected painted faces. Invalid boundaries are explained and cannot be applied. For the local pumpkin fixture, the green stalk separates, but the black regions wrap around the surface and the two main white hands have inconsistent paint edges. They still require editing in a slicer; this release does not claim automatic separation of those parts. Choosing black never includes white by default.
+
+In **Arrange → Print layout**, choose **Separate plates by colour** for one 3MF per single-colour group, with multicoloured or PETG-interface objects on another by-layer plate. **Sequential colour groups** puts each single-colour group into one logical slicer object and prepares a separate by-layer plate for multicoloured objects. Quantities, individual meshes and compatible settings are retained. Download jobs individually or together. All jobs initially use the chosen printer setup; change the printer in the destination slicer when sending a job to another machine. Sequential spacing is a planning allowance, and the slicer must validate head and gantry clearance. There is no guaranteed time saving.

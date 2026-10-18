@@ -1,3 +1,15 @@
+## 2.6.32 pin orientation and colour plate jobs (18 October 2026)
+
+- 37 affected Node tests pass. New checks cover rigid pin-up rotation (including downward and tilted axes), source immutability, bed placement, opt-out, conflicting pin directions, one-region selection leaving other same-colour areas unchanged, and exported colour jobs preserving geometry, counts, painting and sequence.
+- Chrome with WebGL: the generated green-stalk sample was separated with a connector and the default pin-up orientation. Convert and Full Spectrum both prepared two separate colour jobs and one sequential colour-group job. Full Spectrum retains its colour-review requirement before preparing exports. Switching modes retained the edited source.
+- Desktop 1440 × 1000 and mobile 390 × 844 captures show the actual split model and individual plate downloads. The inspector contains the print-layout choice and the primary download remains reachable. The single detector pass found no primary findings and one inherited border/shadow advisory.
+- The real local Flippin Pumpkin source still separates its green stalk and converts to Snapmaker without export problems. The diagnostic identified six black regions and fourteen white regions, including tiny paint patches. All six black regions wrap beyond the supported joining-surface geometry; the main white hands have inconsistent or mismatched paint edges. These are labelled as requiring slicer editing and cannot be applied. This release does not claim automatic separation of those arms or hands. Private source and output files are not deployed.
+- Pin-up orientation does not establish bed stability, support requirements or connector fit. Sequential grouping uses the existing planning allowance and requires slicer clearance validation. Colour jobs initially share the selected destination setup; another printer must be chosen in the slicer for jobs printed elsewhere. No printer commands or physical-print validation were performed.
+
+Published test deploy: `6ad4ee89b9db3ccf5a187199` at https://workbench-test--yab3u1.netlify.app/. All 32 asset hashes and four entry points match the build; the established production and PETG sites remain outside this deployment.
+
+The independent substitute finish reviewer returned **ship** for this extension. The fresh substitute documenter confirmed the existing design system still applies and made no system changes. Both used generic agents because the named skill roles were unavailable. Seven affected tests were rerun after the final copy/build updates and passed.
+
 # Workbench validation
 
 ## 2.6.31 colour separation and joints (18 October 2026)
