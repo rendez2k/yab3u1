@@ -15,14 +15,14 @@ function showReport(r){if(r.kind!==active)return;$('project-title').textContent=
 function ensure(kind){
   if(frames.has(kind))return frames.get(kind).promise;
   let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});
-  const frame=document.createElement('iframe');frame.title=kind==='converter'?'Conversion workspace':'Full Spectrum workspace';frame.src=`${kind}-view.html`;frame.hidden=true;
+  const frame=document.createElement('iframe');frame.title=kind==='converter'?'Conversion workspace':'Full Spectrum workspace';frame.src=`${kind}-view.html`;frame.dataset.mounting='true';
   if(kind==='spectrum'&&new URLSearchParams(location.search).get('interface')==='petg')frame.src+='?interface=petg';
   const timer=setTimeout(()=>reject(Error('The workspace took too long to open. Reload the page to retry.')),30000);
   frames.set(kind,{frame,promise,resolve,reject,timer,api:null,file:null,report:null});$('engines').append(frame);return promise;
 }
 async function guard(task){try{await task();}catch(error){$('workspace-status').textContent=error.message;$('primary').disabled=true;}}
 window.workbench={
-  ready(kind,api){const record=frames.get(kind);if(!record)return;clearTimeout(record.timer);record.api=api;api.theme(theme);api.setPanel(panel);record.frame.hidden=kind!==active;record.resolve(api);$('engines').querySelector('.boot')?.remove();},
+  ready(kind,api){const record=frames.get(kind);if(!record)return;clearTimeout(record.timer);record.api=api;api.theme(theme);api.setPanel(panel);record.frame.hidden=kind!==active;delete record.frame.dataset.mounting;record.resolve(api);$('engines').querySelector('.boot')?.remove();},
   failed(kind,message){const record=frames.get(kind);if(record){clearTimeout(record.timer);record.reject(Error(message));}},
   panelChanged(kind,value){if(kind===active)nav(value);},
   report(r){const record=frames.get(r.kind);if(record)record.report=r;showReport(r);},
