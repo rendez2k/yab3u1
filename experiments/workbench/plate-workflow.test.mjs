@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {preparePlateJobs,mountSequential} from './plate-workflow.js';
+import {preparePlateJobs,mountSequential,prepareWorkbenchPlates} from './plate-workflow.js';
 import {parseHTML} from 'linkedom';
 import {targetLayout} from '../../web/shared/layout.js';
 import {exportComparisonJob} from '../../web/shared/comparisonExport.js';
@@ -10,6 +10,21 @@ import {jointSampleFile} from './joint-sample.js';
 import {editProject} from './model-edit.js';
 const rows=[{objectId:'green',name:'Stalk',bounds:{min:[0,0,0],max:[10,10,20]},colours:[{extruder:2}]},{objectId:'body',name:'Body',bounds:{min:[20,0,0],max:[60,40,40]},colours:[{extruder:1},{extruder:3}]}];
 const context={objects:rows,quantities:{green:3,body:1},mapping:{},recipes:[],layout:targetLayout('snapmaker',{copies:2,spacing:5,tower:true}),options:{target:'snapmaker',physical:[{color:'#F58231'},{color:'#22864C'},{color:'#000000'}]}};
+
+test('automatic sequential fill survives a colour-review retry and produces matching quantities',async()=>{
+  const {document,window}=parseHTML('<html><body><main></main></body></html>'),previous=globalThis.document,previousEvent=globalThis.Event;
+  globalThis.document=document;globalThis.Event=window.Event;
+  try{
+    const host=document.querySelector('main');let ready=false;const exported=[];
+    mountSequential(host,()=>{if(!ready)throw Error('Apply and review the palette and export settings before comparing.');return {...context,signature:'same',quantities:{},layout:{...context.layout,copies:1},worker:{async request(type,{job}){exported.push(job);return {bytes:new Uint8Array([1])};}}};});
+    Object.defineProperty(host.querySelector('[data-print-mode]'),'value',{value:'together',writable:true});
+    const first=await prepareWorkbenchPlates(host,{mode:'sequential',fillIds:['green','body']});assert.equal(first.ok,false);assert.match(host.querySelector('[data-status]').textContent,/confirm the colour mapping/);
+    ready=true;host.querySelector('[data-prepare]').dispatchEvent(new window.Event('click',{bubbles:true}));
+    for(let i=0;i<200&&host.querySelector('[data-status]').dataset.busy==='true';i++)await new Promise(resolve=>setTimeout(resolve,5));
+    assert.equal(host.querySelector('[data-status]').dataset.state,'success');assert.match(host.querySelector('[data-status]').textContent,/complete sets fitted/);
+    assert.equal(exported.length,2);assert(exported[0].count>1);assert.equal(exported[0].count,exported[1].count);
+  }finally{if(previous===undefined)delete globalThis.document;else globalThis.document=previous;globalThis.Event=previousEvent;}
+});
 test('colour plates preserve exact counts and mapped physical colours; PETG and unknown paint stay by layer',()=>{
   const jobs=preparePlateJobs(context,'colours');assert.equal(jobs.length,2);assert.deepEqual(jobs.map(j=>j.count),[6,2]);assert(jobs.every(j=>j.sequence==='by layer'&&!j.mergeGroups));assert.equal(jobs[0].filament,2);
   const mapped=preparePlateJobs({...context,mapping:{1:2,3:2}},'colours');assert.equal(mapped.length,1);assert.equal(mapped[0].count,8);

@@ -4,6 +4,27 @@ import {readFile} from 'node:fs/promises';
 import {parseHTML} from 'linkedom';
 import {composeView} from './view-layout.js';
 import {mountStudio} from './studio-tools.js';
+
+test('automatic split controls and finish choices work without a WebGL preview',()=>{
+  const {document,window}=parseHTML('<html><body><main></main><aside></aside><section></section></body></html>');
+  const option=globalThis.Option,descriptor=Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype,'value');
+  globalThis.Option=function(text,value){const n=document.createElement('option');n.value=value;n.textContent=text;return n;};
+  Object.defineProperty(window.HTMLSelectElement.prototype,'value',{configurable:true,get(){return this.querySelector('option[selected]')?.value||this.querySelector('option')?.value;},set(v){for(const o of this.querySelectorAll('option'))o.toggleAttribute('selected',o.value===v);}});
+  try{
+    const make=(tag,attrs={},html='')=>{const n=document.createElement(tag);for(const [k,v]of Object.entries(attrs))n.setAttribute(k,v);n.innerHTML=html;return n;};
+    const view={stage:document.querySelector('main'),inspector:document.querySelector('aside'),panels:{},make};
+    const state={key:'model',objects:[{objectId:'1',name:'Body',colours:[{extruder:1}]}],quantities:{},copies:1,busy:false};
+    const studio=mountStudio({view,kind:'converter',engine:{session:{state:{colours:[]}},workbenchObjects:()=>state},api:{source:()=>null},objects:{selected:()=>['1'],element:document.querySelector('section')},setPanel(){}});
+    studio.show('split');
+    assert.equal(view.inspector.querySelector('[data-split-method]').value,'auto-separate');
+    assert(view.inspector.querySelector('[data-region-settings]').hidden);assert(!view.inspector.querySelector('[data-auto-settings]').hidden);
+    assert.equal(view.inspector.querySelector('[data-edit-apply]').textContent,'Separate automatically');
+    const finish=view.inspector.querySelector('[data-auto-finish]');finish.value='fill';finish.dispatchEvent(new window.Event('change',{bubbles:true}));
+    assert.equal(view.inspector.querySelector('[data-edit-apply]').textContent,'Separate & fill plate');assert.match(view.inspector.querySelector('[data-auto-fill-help]').textContent,/64 per part/);
+    finish.value='sequential';finish.dispatchEvent(new window.Event('change',{bubbles:true}));
+    assert.equal(view.inspector.querySelector('[data-edit-apply]').textContent,'Separate & prepare plates');
+  }finally{if(option===undefined)delete globalThis.Option;else globalThis.Option=option;Object.defineProperty(window.HTMLSelectElement.prototype,'value',descriptor);}
+});
 for(const [kind,file,features]of [
   ['converter','index.html',{project:['convertfile','converttarget','convertplate','bambumodel','printerinputs','importtools'],colours:['convertmap','convertpetg','mergefrom','mergeto','mergeundo','unusedfilaments'],layout:['quantityfields','layoutfill','fillundo','printoptimiser'],output:['settingsbox','printersetup','convertgo','convertout']}],
   ['spectrum','recolour.html',{project:['file','target','plate','spectrumnozzle'],colours:['reels','paletteslots','reservepetg','blendcalibration','spoolimport','mappingdetails','strategy'],layout:['spectrumquantities','spectrumfill','spectrumfillundo','printoptimiser'],output:['export','printersetup','plannercard','subdividemix','spectrumlayermode']}],
@@ -23,7 +44,7 @@ for(const [kind,file,features]of [
 }
 test('test build does not replace the production entry or publish private models',async()=>{
   const shell=await readFile(new URL('./index.html',import.meta.url),'utf8');
-  assert.match(shell,/2\.6\.33-test/);assert.match(shell,/data-panel="layout"/);
+  assert.match(shell,/2\.6\.34-test/);assert.match(shell,/data-panel="layout"/);
   const builder=await readFile(new URL('./build.mjs',import.meta.url),'utf8');
   assert.match(builder,/dist-workbench/);assert.doesNotMatch(builder,/Desktop|Stabby|Flippin/);
 });

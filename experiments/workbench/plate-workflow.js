@@ -2,6 +2,9 @@ import {sequentialPlates,outputTools} from '../../web/shared/printOptimiser.js';
 import {emptyBox,addBox,planLayout} from '../../web/shared/layout.js';
 import {writeZip} from '../../web/zip.js';
 import {BambuProfiles} from '../../web/shared/bambuProfiles.js';
+import {fitCompleteSets} from './auto-layout.js';
+const controllers=new WeakMap();
+export function prepareWorkbenchPlates(host,options){const controller=controllers.get(host);if(!controller)throw Error('The plate tools are still loading. Try Prepare plates in Arrange.');return controller.prepare(options);}
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 export function preparePlateJobs(context,mode='sequential'){
@@ -36,7 +39,7 @@ export function mountSequential(host,getContext) {
     <div data-plates></div><button type="button" data-pack hidden>Download all plates</button></div></section>`;
   const $=selector=>host.querySelector(selector),profiles=new BambuProfiles();
   const mode=()=>$('[data-print-mode]').value;
-  let context=null,jobs=[],generation=0,busy=false;
+  let context=null,jobs=[],generation=0,busy=false,pendingFill=[];
   const status=(text,state='progress')=>{const node=$('[data-status]');node.textContent=text;node.dataset.state=state;};
   const lock=value=>{busy=value;$('[data-status]').dataset.busy=String(value);host.querySelector('section').setAttribute('aria-busy',String(value));$('[data-prepare]').textContent=value?'Preparing plates…':'Prepare plates';host.querySelectorAll('button,select').forEach(b=>b.disabled=value);};
   const reset=()=>{generation++;context=null;jobs=[];$('[data-plates]').replaceChildren();$('[data-pack]').hidden=true;status('');};
@@ -51,15 +54,17 @@ export function mountSequential(host,getContext) {
     return new Uint8Array(result.bytes);
   }
   $('[data-print-mode]').addEventListener('change',()=>{
+    pendingFill=[];
     reset();$('[data-options]').hidden=mode()==='together';
     $('[data-mode-help]').textContent=mode()==='colours'?'Each single-colour group gets its own plate. Multicoloured parts stay together on a separate plate. Colours and quantities are kept.':'Same-colour parts share one slicer group. Each group finishes before the next. Multicoloured parts go on a separate by-layer plate.';
     $('[data-mode-check]').textContent=mode()==='colours'?'Downloads one 3MF per plate, using the selected printer. Open each in your slicer; change its printer there if needed. Support and interface filaments are retained.':'The 25 mm planning gap is not a clearance guarantee. Arrange and Slice in your slicer to check head and gantry clearance. Use separate colour plates if the groups cannot fit safely.';
   });
   $('[data-printer]').addEventListener('change',reset);
-  host.addEventListener('click',async event=>{
-    const button=event.target.closest('button');if(!button||busy)return;
+  async function act(button,request={}){
+    if(!button||busy)return {ok:false};
     try{
       if(button.hasAttribute('data-prepare')){
+        if(request.fillIds)pendingFill=[...request.fillIds];
         reset();lock(true);status('Grouping your objects…');
         const stamp=generation,ctx=getContext();context={...ctx,options:structuredClone(ctx.options),layout:{...ctx.layout}};
         $('[data-printer-row]').hidden=context.options.target!=='bambu'||Boolean(context.options.bambuSetup);
@@ -68,21 +73,26 @@ export function mountSequential(host,getContext) {
           if(!$('[data-printer]').value){
             const list=await profiles.catalogue();if(stamp!==generation)return;
             $('[data-printer]').innerHTML='<option value="">Choose your printer</option>'+list.map(p=>`<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('');
-            $('[data-printer-row]').hidden=false;status('Choose the Bambu printer and nozzle, then prepare the plates.');return;
+            $('[data-printer-row]').hidden=false;status(`Choose the Bambu printer and nozzle, then prepare the plates.${pendingFill.length?' Filling with complete sets is selected.':''}`);return {ok:false};
           }
           context.options.bambuSetup=await profiles.setup($('[data-printer]').value,(ctx.options.physical||ctx.options.reels).map(r=>r.type));
         }
         if(stamp!==generation)return;current();
         const setup=context.options.bambuSetup;
         if(setup)Object.assign(context.layout,setup.bed,{centre:[setup.bed.width/2,setup.bed.depth/2]});
-        jobs=preparePlateJobs(context,mode());
+        let sets=0;
+        if(pendingFill.length){
+          status('Finding how many complete sets fit…');
+          const filled=await fitCompleteSets(context,pendingFill,ctx=>preparePlateJobs(ctx,mode()),async()=>{current();await new Promise(resolve=>setTimeout(resolve,0));});
+          current();jobs=filled.result;sets=filled.sets;
+        }else jobs=preparePlateJobs(context,mode());
         // Validate the actual archives now, so a prepared plate is downloadable
         // and incompatibilities are explained before the user commits to it.
         let preparedBytes=0;
         for(const job of jobs){status(`Preparing ${job.label.toLowerCase()}…`);job.bytes=await bytes(job);preparedBytes+=job.bytes.length;if(preparedBytes>256*1024*1024)throw Error('These plates are too large to prepare together. Reduce the quantities and try again.');}
         $('[data-plates]').innerHTML='<ol class="sequential-plates">'+jobs.map(job=>`<li>${/^#[0-9a-f]{6}$/i.test(job.colour||'')?`<i class="plate-colour" style="background:${job.colour}" aria-hidden="true"></i>`:''}<strong>${esc(job.label)}</strong> · ${job.count} object${job.count===1?'':'s'} · ${job.sequence==='by object'?'Sequential':'By layer'}<p class="hint">${job.names.map(esc).join(', ')}${job.extraSupport?' · Extra support material retained; this plate stays by layer.':''}</p><button type="button" data-download="${job.id}">Download this plate</button></li>`).join('')+'</ol>';
         $('[data-pack]').hidden=false;
-        status(`${jobs.length} plate${jobs.length===1?'':'s'} ready to download below. Object counts and colours are preserved.`,'success');return;
+        status(`${jobs.length} plate${jobs.length===1?'':'s'} ready to download below. ${sets?`${sets} complete set${sets===1?'':'s'} fitted across these jobs; the workspace shows the original quantities.`:'Object counts and colours are preserved.'}`,'success');return {ok:true,sets,jobs:jobs.length};
       }
       if(button.dataset.download){current();const job=jobs.find(j=>j.id===button.dataset.download);download(filename(job),job.bytes);status('Plate downloaded. Arrange and check it in the slicer.');return;}
       if(button.hasAttribute('data-pack')){
@@ -91,8 +101,15 @@ export function mountSequential(host,getContext) {
         files.push({name:'Read me.txt',data:new TextEncoder().encode(mode()==='colours'?'Each single-colour group has its own 3MF. Multicoloured and PETG-interface parts stay on a separate by-layer plate. Filament assignments, quantities and compatible settings are retained. Open each project in the selected slicer, or change its printer there if using another printer. Check supports and slice before printing.\n':'Same-colour parts share one logical slicer object per filament, preserving individual meshes. Groups share a sequential plate; multicoloured and PETG-interface parts print by layer separately. The 25 mm group gap is a planning allowance only. Arrange and Slice in the destination slicer to validate head and gantry clearance. Use separate colour plates if clearance fails. No print time is certified.\n')});
         const packed=await writeZip(files);current();if(stamp!==generation)return;download(mode()==='colours'?'colour-plates.zip':'sequential-plates.zip',packed);status('Plates downloaded. Each 3MF is a separate print job.');
       }
-    }catch(error){jobs=[];$('[data-plates]').replaceChildren();$('[data-pack]').hidden=true;status(`Could not prepare plates. ${error.message==='Apply and review the palette and export settings before comparing.'?'Open Output and confirm the colour mapping, then return here to prepare plates.':error.message}`,'error');}finally{lock(false);}
-  });
+    }catch(error){jobs=[];$('[data-plates]').replaceChildren();$('[data-pack]').hidden=true;status(`Could not prepare plates. ${error.message==='Apply and review the palette and export settings before comparing.'?'Open Output and confirm the colour mapping, then return here to prepare plates.':error.message}`,'error');return {ok:false,error:error.message};}finally{lock(false);}
+  }
+  host.addEventListener('click',event=>act(event.target.closest('button')));
   for(const type of ['input','change'])document.addEventListener(type,event=>{if(!host.contains(event.target))check();});
-  return {invalidate:reset,check};
+  const controller={invalidate(){pendingFill=[];reset();},check,async prepare({mode:chosen='sequential',fillIds=[]}={}){
+    if(busy)return {ok:false};
+    if(!['colours','sequential'].includes(chosen))throw Error('Choose separate colour plates or sequential groups.');
+    $('[data-print-mode]').value=chosen;$('[data-print-mode]').dispatchEvent(new Event('change',{bubbles:true}));
+    return act($('[data-prepare]'),{fillIds});
+  }};
+  controllers.set(host,controller);return controller;
 }

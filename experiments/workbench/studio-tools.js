@@ -1,5 +1,6 @@
 const icons={select:'<path d="m5 3 14 9-7 1-3 7z"/>',colour:'<path d="m14 3 7 7-10 10H4v-7zM11 6l7 7M3 21h18"/>',split:'<path d="M3 4h7v6H3zM14 14h7v6h-7zM18 3 6 21"/>',arrange:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>'};
 const svg=name=>`<svg viewBox="0 0 24 24" aria-hidden="true">${icons[name]}</svg>`;
+import {fitCompleteSets,fitOnOnePlate,waitForMeasuredState} from './auto-layout.js';
 export function mountStudio({view,engine,kind,api,objects,setPanel}){
   const doc=view.stage.ownerDocument,make=view.make;
   let multiple=false,preferredColour='';
@@ -12,6 +13,17 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
   panel.querySelector('[data-selection-controls]').append(objects.element);
   const oldUndo=objects.element.querySelector('[data-object-edit=undo]');if(oldUndo)oldUndo.hidden=true;
   const settings=panel.querySelector('[data-tool-settings]'),message=panel.querySelector('.studio-message'),actions=panel.querySelector('.studio-apply');
+  const autoResult=make('details',{class:'studio-auto-result',hidden:''},'<summary></summary><p class="hint"></p><ul></ul>');message.after(autoResult);
+  function showAutoReport(reports,container=panel){
+    const separated=reports.reduce((n,r)=>n+r.separated.length,0),existing=reports.reduce((n,r)=>n+(r.disconnected||0),0),retained=reports.flatMap(r=>r.retained.map(p=>({...p,name:r.name})));
+    autoResult.hidden=false;
+    autoResult.querySelector('summary').textContent=separated?`${separated} coloured part${separated===1?'':'s'} separated`:existing?`${existing} existing pieces separated`:'No safe automatic colour split found';
+    autoResult.querySelector('p').textContent=`${reports.flatMap(r=>r.separated).filter(p=>p.pin).length} locating pins added. ${retained.length?'Some regions stayed attached; details below.':'The main body and its remaining paint are preserved.'}`;
+    const list=autoResult.querySelector('ul');list.replaceChildren();const grouped=new Map();
+    for(const row of retained){const key=`${row.name}: ${row.colour?`colour ${row.colour} — `:''}${row.reason}`,count=grouped.get(key)||0;grouped.set(key,count+row.count);}
+    for(const [reason,count]of grouped){const item=make('li');item.textContent=`${reason}${count>1?` (${count} regions)`:''}`;list.append(item);}
+    if(container===panel)message.after(autoResult);else container.querySelector('.task-heading').after(autoResult);
+  }
   const palette=()=>kind==='converter'?engine.session.state?.colours||[]:engine.state.project?.colors||[];
   const state=()=>engine.workbenchObjects();
   const selected=()=>objects.selected();
@@ -20,7 +32,8 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
   const commonColours=()=>{const s=state(),ids=selected();return palette().map((colour,i)=>({colour,index:i+1})).filter(c=>ids.every(id=>{const o=s.objects.find(o=>String(o.objectId)===id);return !o?.colours?.length||o.colours.some(v=>Number(v.extruder)===c.index);}));};
   const splitMethod=()=>settings.querySelector('[data-split-method]')?.value||'cut';
   const splitOperation=()=>splitMethod()==='by-colour'?settings.querySelector('[data-colour-action]').value:splitMethod();
-  const applyLabel=()=>mode==='colour'?'Apply colour':splitOperation()==='remove-colour'?'Remove coloured part':splitMethod()==='by-colour'?'Separate colour':'Split objects';
+  const autoFinish=()=>settings.querySelector('[data-auto-finish]')?.value||'once';
+  const applyLabel=()=>mode==='colour'?'Apply colour':splitMethod()==='auto-separate'?({once:'Separate automatically',fill:'Separate & fill plate',sequential:'Separate & prepare plates'}[autoFinish()]):splitOperation()==='remove-colour'?'Remove coloured part':splitMethod()==='by-colour'?'Separate colour':'Split objects';
   const chosenRegion=()=>regions.find(r=>r.id===settings.querySelector('[data-region-piece]')?.value);
   function stopRegions(){regionRequest++;regionWorker?.terminate();regionWorker=null;regionPending=false;regionKey='';regions=[];}
   function regionFeedback(){const selected=chosenRegion();message.textContent=selected?.error?`${selected.error} This region has not been changed.`:regions.length>1?'Choose one region. Other areas using this colour stay on the model. The highlight is a simplified preview.':'';}
@@ -85,19 +98,22 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
     }else if(mode==='split'){
       settings.innerHTML='<label class="studio-field">Split method<select data-split-method><option value="by-colour">By painted colour</option><option value="cut">Plane cut</option><option value="separate">Disconnected parts</option></select></label><div data-region-settings><label class="studio-field">Colour to separate<select data-region-colour aria-label="Colour to separate"><option value="">Choose a source colour</option></select></label><div class="studio-region-swatches" data-region-swatches aria-label="Choose a source colour"></div><label class="studio-field">Painted region<select data-region-piece aria-label="Painted region"><option value="">Choose a colour first</option></select></label><label class="studio-field">What to do<select data-colour-action><option value="separate-colour">Keep both parts</option><option value="remove-colour">Remove this coloured part</option></select></label></div><div data-plane-settings hidden><label class="studio-field">Direction<select data-cut-axis><option value="2">Horizontal · Z</option><option value="0">Left / right · X</option><option value="1">Front / back · Y</option></select></label><label class="studio-field">Cut position <output data-cut-label>50%</output><input type="range" min="1" max="99" step="0.5" value="50" data-cut-position></label></div><div data-joint-settings><label class="studio-check"><input type="checkbox" data-add-pin> Add locating pin &amp; socket</label><div data-pin-settings hidden><div class="studio-dimensions"><label>Diameter (mm)<input type="number" min="1" max="20" step="0.1" value="3" data-pin-diameter></label><label>Length (mm)<input type="number" min="1" max="20" step="0.1" value="3" data-pin-length></label><label>Fit clearance (mm)<input type="number" min="0.05" max="1" step="0.05" value="0.3" data-pin-clearance></label></div><label class="studio-field">Pin on<select data-pin-side><option value="selected">Separated colour / upper half</option><option value="base">Remaining model / lower half</option></select></label><label class="studio-check"><input type="checkbox" data-orient-pins checked> Orient pins upwards</label><p class="hint">The pin-bearing part is turned and placed on the bed. Check its contact area and supports in the slicer. Pin position is fitted automatically. Clearance is added to the socket diameter; its depth is 0.2 mm longer than the pin. Check the fit with a small test print.</p></div></div><p class="hint" data-split-hint></p>';
       const area=settings.querySelector('[data-region-colour]');
+      const method=settings.querySelector('[data-split-method]');method.prepend(new Option('Automatic · find detachable parts','auto-separate'));method.value=preferredColour?'by-colour':'auto-separate';
+      const automatic=make('div',{'data-auto-settings':''},'<p class="hint">Checks disconnected pieces and each painted region. Separates what can be closed safely; the main body and unsuitable paint patches stay intact.</p><label class="studio-field">After separating<select data-auto-finish><option value="once">Keep one set of parts</option><option value="fill">Fill one plate with complete sets</option><option value="sequential">Fill sequential colour-group plates</option></select></label><p class="hint" data-auto-fill-help>All colours are checked in one pass. Undo restores the complete model.</p>');area.closest('[data-region-settings]').before(automatic);
+      settings.querySelector('[data-add-pin]').checked=!preferredColour;
       for(const {colour,index} of commonColours()){area.add(new Option(sourceName(colour,index-1),String(index)));const b=make('button',{'data-region-colour-button':String(index),'aria-label':sourceName(colour,index-1),'aria-pressed':'false'},`<i aria-hidden="true"></i><span>${index}</span>`);b.style.setProperty('--swatch',colour);settings.querySelector('[data-region-swatches]').append(b);}
       if(preferredColour&&commonColours().some(c=>String(c.index)===preferredColour))area.value=preferredColour;
-      preferredColour='';loadSourcePreview();
+      preferredColour='';if(splitMethod()!=='auto-separate')loadSourcePreview();
       panel.querySelector('[data-edit-apply]').textContent='Split objects';
     }
     preview();
   }
   function preview(){
     if(!['colour','split'].includes(mode)||working)return;
-    const p=state().preview;if(!p?.lastPositions)return;
-    if(!baseColours)baseColours=p.lastColors?.slice();if(!baseColours)return;
-    const source=sourceColours?.length===baseColours.length?sourceColours:baseColours;
-    const colours=source.slice(),ranges=[...p.selectedRanges].map(i=>p.pickRanges[i]).filter(Boolean);
+    const p=state().preview;
+    if(!baseColours)baseColours=p?.lastColors?.slice();
+    const source=sourceColours?.length===baseColours?.length?sourceColours:baseColours;
+    const colours=source?.slice(),ranges=p?.lastPositions&&colours?[...p.selectedRanges].map(i=>p.pickRanges[i]).filter(Boolean):[];
     if(mode==='colour'){
       const hex=settings.querySelector('[data-paint-colour]').value,from=settings.querySelector('[data-paint-area]').value;
       settings.querySelector('[data-hex]').textContent=hex.toUpperCase();
@@ -108,9 +124,13 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
       const method=splitMethod(),axis=Number(settings.querySelector('[data-cut-axis]').value),position=Number(settings.querySelector('[data-cut-position]').value),removing=splitOperation()==='remove-colour';
       settings.querySelector('[data-plane-settings]').hidden=method!=='cut';settings.querySelector('[data-cut-label]').textContent=`${position}%`;
       settings.querySelector('[data-region-settings]').hidden=method!=='by-colour';settings.querySelector('[data-joint-settings]').hidden=method==='separate'||removing;
+      settings.querySelector('[data-auto-settings]').hidden=method!=='auto-separate';
+      settings.querySelector('[data-pin-side]').closest('label').hidden=method==='auto-separate';
+      settings.querySelector('[data-auto-fill-help]').textContent=autoFinish()==='once'?'All colours are checked in one pass. Undo restores the complete model.':autoFinish()==='fill'?'Adds matching quantities of every piece, up to 64 per part. Other objects keep their quantities. The fit uses your printer, spacing and reserved areas.':'Fits complete sets, up to 64 per part: single-colour pieces share sequential groups; multicoloured bodies get a separate by-layer job. Check head clearance in your slicer.';
       settings.querySelector('[data-pin-settings]').hidden=!settings.querySelector('[data-add-pin]').checked;
       settings.querySelector('[data-pin-side]').options[0].textContent=method==='by-colour'?'Separated colour':'Upper / positive half';settings.querySelector('[data-pin-side]').options[1].textContent=method==='by-colour'?'Remaining model':'Lower / negative half';
       settings.querySelector('[data-split-hint]').textContent=method==='cut'?'Cuts through the object and closes both faces. Both parts stay on this plate.':method==='by-colour'?(removing?'Removes the highlighted coloured region and closes the remaining model. Undo brings it back.':'Follows the original paint boundary and closes both parts. Best for protruding parts such as a stalk; flat paint patches cannot be detached.'):'Separates existing disconnected pieces without changing their painting. Turn to By painted colour for a part joined to the model.';
+      if(method==='auto-separate')settings.querySelector('[data-split-hint]').textContent='Pins go on the detached pieces. If a join cannot hold the chosen pin, that region stays attached. Turn pins off to try separation without connectors.';
       if(method==='cut')for(const r of ranges){let lo=Infinity,hi=-Infinity;for(let i=r.start*3+axis;i<(r.start+r.count)*3;i+=3){lo=Math.min(lo,p.lastPositions[i]);hi=Math.max(hi,p.lastPositions[i]);}const cut=lo+(hi-lo)*position/100;for(let i=r.start*3;i<(r.start+r.count)*3;i+=9){const side=(p.lastPositions[i+axis]+p.lastPositions[i+3+axis]+p.lastPositions[i+6+axis])/3>cut,rgb=side?[.34,.64,.85]:[.94,.57,.28];for(let k=0;k<9;k++)colours[i+k]=.45*colours[i+k]+.55*rgb[k%3];}}
       if(method==='by-colour'){
         const from=settings.querySelector('[data-region-colour]').value,hex=palette()[Number(from)-1],match=hex?[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255):null,region=chosenRegion();
@@ -126,17 +146,18 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
         }
       }
     }
-    p.suppressSelection=true;p.setColors(colours);sync();
+    if(p&&colours){p.suppressSelection=true;p.setColors(colours);}sync();
   }
   async function loadSnapshot(saved){if(!await api.load(saved.file,{...saved.context,edit:true}))throw Error('The edited model could not be opened.');await engine.workbenchRestoreSettings?.(saved.settings);objects.history.reset();knownSource=api.source();setPanel('edit');}
   async function apply(){
     if(working||previewPending||regionPending||!['colour','split'].includes(mode))return;
-    const s=state(),ids=selected(),before=snapshot();if(!ids.length||!before.file)return;
+    const s=state(),ids=selected(),before=snapshot(),finish=autoFinish();if(!ids.length||!before.file)return;
     if(mode==='split'&&splitMethod()==='by-colour'&&!settings.querySelector('[data-region-colour]').value){message.textContent='Choose the source colour to separate.';return;}
     const options={objectIds:ids,plateId:before.context.plateId,operation:mode==='colour'?'colour':splitOperation(),from:mode==='colour'?settings.querySelector('[data-paint-area]')?.value||'all':settings.querySelector('[data-region-colour]')?.value,colour:settings.querySelector('[data-paint-colour]')?.value,axis:Number(settings.querySelector('[data-cut-axis]')?.value||2),position:Number(settings.querySelector('[data-cut-position]')?.value||50)};
     if(mode==='split'&&splitMethod()==='by-colour'){const region=chosenRegion();if(!region||region.error){message.textContent=region?.error||'Choose one colour region first.';return;}options.region=region.id;}
     if(mode==='split')options.orientPins=settings.querySelector('[data-orient-pins]')?.checked!==false;
-    if(mode==='split'&&settings.querySelector('[data-add-pin]').checked&&['cut','separate-colour'].includes(options.operation))options.connector={diameter:Number(settings.querySelector('[data-pin-diameter]').value),length:Number(settings.querySelector('[data-pin-length]').value),clearance:Number(settings.querySelector('[data-pin-clearance]').value),side:settings.querySelector('[data-pin-side]').value};
+    if(mode==='split'&&settings.querySelector('[data-add-pin]').checked&&['cut','separate-colour','auto-separate'].includes(options.operation))options.connector={diameter:Number(settings.querySelector('[data-pin-diameter]').value),length:Number(settings.querySelector('[data-pin-length]').value),clearance:Number(settings.querySelector('[data-pin-clearance]').value),side:options.operation==='auto-separate'?'selected':settings.querySelector('[data-pin-side]').value};
+    autoResult.hidden=true;
     const stamp=++request;working=true;restorePreview();message.textContent='Preparing your edit…';sync();
     try{
       const bytes=await before.file.arrayBuffer();
@@ -148,17 +169,36 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
         worker.postMessage({bytes,options},[bytes]);
       });
       if(stamp!==request)return;
+      if(!result.changes.length&&finish==='once'){showAutoReport(result.reports||[]);message.textContent='No parts were changed. Try without pins, or use a manual split for the regions listed below.';return;}
       const quantities=Object.fromEntries(s.objects.map(o=>[o.objectId,(s.quantities[o.objectId]??1)*s.copies]));
       for(const c of result.changes){quantities[c.oldId]=Math.max(0,(quantities[c.oldId]??1)-1);for(const n of c.created)quantities[n.id]=1;}
-      const file=new File([result.bytes],before.file.name,{type:before.file.type});
+      const file=result.changes.length?new File([result.bytes],before.file.name,{type:before.file.type}):before.file;
       const next={...before,file,context:{...before.context,layout:{...before.context.layout,copies:1,quantities,arrangement:'objects'}}};
       committing=true;sync();
       try{await loadSnapshot(next);}catch(error){await loadSnapshot(before);throw error;}
       undo.push(before);if(undo.length>6)undo.shift();
+      if(options.operation==='auto-separate'){
+        const changed=new Set(result.changes.map(c=>c.oldId)),fillIds=[...result.changes.flatMap(c=>c.created.map(n=>n.id)),...ids.filter(id=>!changed.has(id))];
+        mode='select';selectionKey='';render();showAutoReport(result.reports||[]);
+        message.textContent=result.changes.length?'Automatic separation complete. Undo restores the original model.':'No detachable regions found; using the unchanged model for filling.';
+        if(finish!=='once'){message.textContent='Measuring the separated parts before filling…';await waitForMeasuredState(state);}
+        if(finish==='fill'){
+          try{
+            const current=state(),filled=await fitCompleteSets(current,fillIds,fitOnOnePlate,async()=>{message.textContent='Finding how many complete sets fit…';await new Promise(resolve=>setTimeout(resolve,0));});
+            current.apply({quantities:filled.quantities,copies:1,arrangement:'objects'});
+            objects.history.reset();
+            message.textContent=`${filled.sets} complete set${filled.sets===1?'':'s'} fitted on the plate. Other object quantities are unchanged. Undo restores the original model.`;
+          }catch(error){message.textContent=`Separation kept; the plate was not filled. ${error.message}`;}
+        }else if(finish==='sequential'){
+          mode='arrange';setPanel('layout');showAutoReport(result.reports||[],view.panels.layout);
+          await api.preparePlates({mode:'sequential',fillIds});
+        }
+        return;
+      }
       mode='select';selectionKey='';message.textContent=options.operation==='colour'?'Colour applied to the selected copies.':options.operation==='remove-colour'?'Coloured part removed; the remaining surface is closed. Undo restores it.':options.connector?`Parts separated with a locating pin and matching socket.${options.orientPins?' Pins face upwards.':''} Use Arrange to prepare colour plates or sequential groups; Undo restores the original.`:'Parts separated. Use Arrange to prepare colour plates or sequential groups.';render();
     }catch(error){if(stamp===request)message.textContent=error.message;}finally{worker?.terminate();worker=null;rejectPending=null;working=false;committing=false;sync();}
   }
-  async function undoEdit(){if(working||!undo.length)return;working=true;restorePreview();message.textContent='Restoring your previous model…';try{await loadSnapshot(undo.at(-1));undo.pop();mode='select';selectionKey='';render();message.textContent='Model edit undone.';}catch(e){message.textContent=e.message;}finally{working=false;sync();}}
+  async function undoEdit(){if(working||!undo.length)return;working=true;restorePreview();message.textContent='Restoring your previous model…';try{await loadSnapshot(undo.at(-1));undo.pop();autoResult.hidden=true;mode='select';selectionKey='';render();message.textContent='Model edit undone.';}catch(e){message.textContent=e.message;}finally{working=false;sync();}}
   const undoKind=()=>objects.history?.canUndo?'plate':undo.length?'model':null;
   async function undoCurrent(){if(working||state().busy)return;if(undoKind()==='plate')await objects.act('undo');else await undoEdit();sync();}
   let listStamp='';
@@ -166,7 +206,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
     const s=state();tools.hidden=!s.objects.length;if(s.preview)s.preview.selectionToggle=multiple;
     panel.querySelector('[data-multi-select]').setAttribute('aria-pressed',String(multiple));panel.querySelector('[data-multi-hint]').hidden=!multiple;
     const guide=objects.element.querySelector('[data-object-message]');if(guide&&/Shift-click/.test(guide.textContent))guide.textContent='Use Select multiple to pick several copies. Keyboard: Shift adds, Ctrl/Cmd toggles; Delete removes; Ctrl/Cmd+Z undoes.';
-    const currentSource=api.source();if(!working&&currentSource!==knownSource){knownSource=currentSource;undo=[];baseColours=null;message.textContent='';}
+    const currentSource=api.source();if(!working&&currentSource!==knownSource){knownSource=currentSource;undo=[];baseColours=null;message.textContent='';autoResult.hidden=true;}
     const ids=selected(),key=JSON.stringify([s.key,ids]);
     if(!working&&key!==selectionKey){restorePreview();selectionKey=key;if(mode!=='arrange'){if(ids.length)setPanel('edit');render();}}
     const catalogue=JSON.stringify([s.key,s.objects.map(o=>[o.objectId,o.name]),s.quantities,s.copies,ids]);
@@ -197,6 +237,6 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
     if(b.matches('[data-edit-apply]'))apply();
     if(b.dataset.sceneObject){const p=state().preview;if(p?.pickRanges.length){p.selectRange(p.pickRanges.findIndex(r=>String(r.objectId)===b.dataset.sceneObject),e);objects.sync();}else{objects.element.querySelector('select').value=b.dataset.sceneObject;objects.element.querySelector('select').dispatchEvent(new Event('change'));}sync();}
   });
-  settings.addEventListener('input',preview);settings.addEventListener('change',e=>{if(e.target.matches('[data-region-colour]'))loadRegions();if(e.target.matches('[data-region-piece]'))regionFeedback();preview();});
+  settings.addEventListener('input',preview);settings.addEventListener('change',e=>{if(e.target.matches('[data-split-method]')){stopRegions();if(splitMethod()!=='auto-separate')loadSourcePreview();}if(e.target.matches('[data-region-colour]'))loadRegions();if(e.target.matches('[data-region-piece]'))regionFeedback();preview();});
   return {sync,show,get busy(){return working;},get pending(){return ['colour','split'].includes(mode)&&selected().length>0;},leavePanel(){if(!working&&['colour','split'].includes(mode)){restorePreview();mode='select';}},key(e){if(e.target?.closest?.('input,select,textarea,[contenteditable=true]'))return false;if(working){if(['Delete','Escape','z'].includes(e.key)){e.preventDefault();return true;}return false;}if(e.key==='Delete'&&['colour','split'].includes(mode)){e.preventDefault();message.textContent=mode==='split'?'To remove only a colour, choose “Remove this coloured part”. Cancel to delete whole objects.':'Apply or cancel the colour edit before deleting whole objects.';return true;}if(e.key==='Escape'){show('select');return true;}if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='z'){e.preventDefault();undoCurrent();return true;}return false;}};
 }

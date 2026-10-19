@@ -17,8 +17,8 @@ for(const [source,controller,kind] of [['index.html','convert-page.js','converte
   await writeFile(path.join(out,`${kind}-view.html`),html);
 }
 for(const name of ['workbench.css','workbench.js','engine-view.css','engine-view.js','view-layout.js','object-edits.js','object-tools.js','plate-history.js','filament-tools.js','studio.css','studio-tools.js','mesh-cut.js','mesh-joint.js','orientation.js'])await cp(path.join(here,name),path.join(out,name));
-for(const name of ['model-edit.js','model-edit-worker.js','joint-sample.js'])await writeFile(path.join(out,name),(await readFile(path.join(here,name),'utf8')).replaceAll('../../web/','./'));
-await writeFile(path.join(out,'shared/sequentialPanel.js'),(await readFile(path.join(here,'plate-workflow.js'),'utf8')).replaceAll('../../web/shared/','./').replaceAll('../../web/','../'));
+for(const name of ['model-edit.js','model-edit-worker.js','joint-sample.js','auto-split.js','auto-layout.js'])await writeFile(path.join(out,name),(await readFile(path.join(here,name),'utf8')).replaceAll('../../web/','./'));
+await writeFile(path.join(out,'shared/sequentialPanel.js'),(await readFile(path.join(here,'plate-workflow.js'),'utf8')).replaceAll('../../web/shared/','./').replaceAll('../../web/','../').replaceAll("'./auto-layout.js'","'../auto-layout.js'"));
 await cp(path.join(here,'vendor'),path.join(out,'vendor'),{recursive:true});
 await mkdir(path.join(out,'fonts'),{recursive:true});
 await cp(path.join(here,'node_modules/@fontsource-variable/ibm-plex-sans/files/ibm-plex-sans-latin-wght-normal.woff2'),path.join(out,'fonts/plex-sans.woff2'));
@@ -26,4 +26,4 @@ await cp(path.join(here,'node_modules/@fontsource-variable/ibm-plex-sans/LICENSE
 const shell=await readFile(path.join(here,'index.html'),'utf8');
 await writeFile(path.join(out,'index.html'),shell);
 await writeFile(path.join(out,'recolour.html'),shell.replace('data-initial="converter"','data-initial="spectrum"'));
-console.log(`Workbench 2.6.33-test: ${out}`);
+console.log(`Workbench 2.6.34-test: ${out}`);

@@ -135,9 +135,12 @@ export function separateColour(faces,colour,{connector=null,capAttributes=c=>` p
     for(const f of remaining)for(let i=0;i<3;i++){const a=f.points[i],b=f.points[(i+1)%3],k=edgeKey(a,b),e=expected.get(k);if(!e)continue;if(key(a)!==key(e.b))throw Error('The painted boundary has inconsistent winding. Repair the mesh in your slicer first.');matches.set(k,(matches.get(k)||0)+1);adjacent.set(f.colour,(adjacent.get(f.colour)||0)+Math.hypot(...sub(a,b)));}
     if([...expected.keys()].some(k=>matches.get(k)!==1))throw Error('The paint boundary has mismatched triangle edges. Use a plane cut or repair the painting in your slicer first.');
     const other=[...adjacent].sort((a,b)=>b[1]-a[1])[0]?.[0]||1;
-    const result=closeInterface(remaining,group,loops,{attrsA:capAttributes(other),attrsB:capAttributes(colour),connector});
+    const surface={attrsA:capAttributes(other),attrsB:capAttributes(colour)};
+    const plain=closeInterface(remaining,group,loops,surface);
     // A flat painted patch encloses no solid volume and is not a detachable object.
-    if(signedVolume(result.halves[1])<.01||signedVolume(result.halves[0])<.01)throw Error('This colour is a surface patch rather than a solid protruding part. Use a plane cut to give it thickness.');
+    // Validate before adding a pin: its volume must not make a flat patch pass.
+    if(signedVolume(plain.halves[1])<.01||signedVolume(plain.halves[0])<.01)throw Error('This colour is a surface patch rather than a solid protruding part. Use a plane cut to give it thickness.');
+    const result=connector?closeInterface(remaining,group,loops,{...surface,connector}):plain;
     remaining=result.halves[0];parts.push(result.halves[1]);joints.push(result.joint);
   }
   return {remaining,parts,joints};

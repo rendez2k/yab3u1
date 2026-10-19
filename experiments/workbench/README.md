@@ -1,6 +1,6 @@
 # YAB3D Workbench test
 
-An isolated alternative interface, v2.6.33-test. It does not replace `web/index.html`, the production build or the PETG review deployment.
+An isolated alternative interface, v2.6.34-test. It does not replace `web/index.html`, the production build or the PETG review deployment.
 
 ```powershell
 cd experiments/workbench
@@ -22,6 +22,10 @@ The build writes `dist-workbench/`. Deploy that directory to the `workbench-test
 The original controllers expose narrow exports for this adapter. Their established entry points do not opt into the alternative layout or static preview.
 
 ## Behaviour
+
+**Split → Automatic** checks disconnected solids and individual painted regions in one pass. It keeps the largest painted region as the body and detaches only regions the geometry checks can close. Optional locating pins face upwards. A result summary lists retained regions and their reasons; a failed candidate does not remove its geometry.
+
+Choose **Keep one set of parts**, **Fill one plate with complete sets**, or **Fill sequential colour-group plates**. Filling keeps matching quantities of every selected model's separated pieces, retains unrelated quantities and searches up to 64 copies per part. It uses the current printer and layout allowances; it is a bounded packing estimate. Sequential preparation fits the same number of sets across the single-colour sequential job and the multicolour by-layer job, then provides validated 3MF downloads. The workspace keeps its original quantities for this export-only option. Slicer head-clearance checks still apply. Split-and-fill shares one model Undo.
 
 Select an object on the model or by name, enter the number of **new copies**, then choose **Add copies**. **Fill with this object** searches for room for that object without changing sibling quantities; it repacks objects using the current bed, tower, support and spacing allowances. This is a conservative fit, bounded to 64 copies per object, not a certified maximum. Undo restores the prior counts. **Fill with whole sets** remains in Layout and repeats the entire current parts list.
 

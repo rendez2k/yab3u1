@@ -2,6 +2,7 @@ import {composeView} from './view-layout.js';
 import {mountWorkbenchObjects} from './object-tools.js';
 import {mountFilamentTools} from './filament-tools.js';
 import {mountStudio} from './studio-tools.js';
+import {prepareWorkbenchPlates} from './shared/sequentialPanel.js';
 const kind=document.body.dataset.engine,$=id=>document.getElementById(id);
 const view=composeView(document,kind);
 let engine, currentPanel='project', lastReport='', source=null;
@@ -45,6 +46,7 @@ function context() {
   const s=engine.state;return {target:s.target,plateId:String(s.plateId??''),supportInterface:s.supportInterface,interfaceSlot:s.interfacePosition+1,interfaceColor:s.reels[s.interfacePosition]?.color,layout:{quantities:{...s.quantities},copies:Number($('spectrumcopies').value),spacing:Number($('spectrumgap').value),width:Number($('spectrumwidth').value),depth:Number($('spectrumdepth').value),tower:$('spectrumtower').checked,arrangement:$('spectrumarrangement').value},u1Nozzle:s.u1Nozzle};
 }
 const api={kind,setPanel,context,
+  preparePlates:options=>{setPanel('layout');return prepareWorkbenchPlates($('printoptimiser'),options);},
   key:event=>{if(!studio?.key(event))objectTools?.key(event);},
   captureView:()=>({panel:currentPanel,scroll:view.inspector.scrollTop}),
   restoreView(saved){if(saved){setPanel(saved.panel);view.inspector.scrollTop=saved.scroll;}},
@@ -95,6 +97,7 @@ function tick() {
   const batch=kind==='converter'&&!$('batchpanel').classList.contains('hidden');
   const button=sequentialAction()||$(kind==='converter'?'converterprimary':'mainaction');
   let status=kind==='converter'?$('convertstatus').textContent:$('loadstatus').textContent||$('actionstatus').textContent;
+  if(studio?.busy)status=document.querySelector('.studio-message')?.textContent||status;
   if(kind==='converter'&&loaded&&!busy&&status.includes('Nothing has been uploaded'))status=`${s.state.displayName}: ${s.capacityStatus().needed} filament${s.capacityStatus().needed===1?'':'s'} used on this plate. Files stay in your browser.`;
   const plateStatus=currentPanel==='layout'?document.querySelector('#printoptimiser [data-status]'):null,plateBusy=plateStatus?.dataset.busy==='true';
   if(plateStatus?.textContent)status=plateStatus.textContent;

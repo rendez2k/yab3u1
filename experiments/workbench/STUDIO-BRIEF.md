@@ -8,6 +8,8 @@ Use neutral white and cool grey, dark ink, and restrained green for selection an
 
 Motion: a short, gentle context-panel arrival and tactile button press. No motion delays a result, and reduced-motion disables it. Busy work always has a visible progress message.
 
+Automatic separation is the first Split choice. Its single “After separating” control offers one set, a filled plate of complete sets, or filled sequential jobs. Reuse the same primary action and Undo; do not add another toolbar. Show scan progress and a collapsible account of regions retained on the body. Automatic filling must keep matching quantities, preserve other objects and make the difference between workspace quantities and prepared jobs explicit.
+
 Geometry changes must reach the downloaded 3MF, preserve unrelated objects, paint and settings, and be undoable. Colour replacement affects selected copies only. Separate existing parts and planar cuts are explicit operations; never label an open colour surface as a printable solid. Reject unsupported cuts before replacing the current model.
 
 The colour-separation extension stays inside Split: highlight an original painted region, keep both resulting parts or remove that region, and optionally add a locating pin with a matching socket. Use the actual region boundary, including shallow curved seams where both caps can share a mating surface. Reject flat paint patches, invalid boundaries and insufficient material. Single-colour whole-object selection remains in Select, with wording that distinguishes it from removing paint regions. Keep Apply and Cancel visible while dimension settings scroll, on desktop and mobile. This extends the incumbent design rather than establishing a new visual system.

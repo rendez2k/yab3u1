@@ -6,6 +6,7 @@ import {leafTriangles} from '../../web/shared/standard.js';
 import {cutMesh,connectedParts} from './mesh-cut.js';
 import {closeInterface,separateColour} from './mesh-joint.js';
 import {orientPinUp} from './orientation.js';
+import {autoSeparate} from './auto-split.js';
 const decoder=new TextDecoder(),encoder=new TextEncoder();
 const text=(entries,name)=>decoder.decode(entries.get(name)||new Uint8Array());
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
@@ -102,10 +103,11 @@ function meshXml(part,id){
 }
 const settingsXml=settings=>Object.entries(settings||{}).map(([k,v])=>`<metadata key="${esc(k)}" value="${esc(v)}"/>`).join('');
 
-export function editProject(input,{plateId=1,objectIds=[],operation,from='all',colour,axis=2,position=50,connector=null,region=null,orientPins=true}={}){
+export function editProject(input,{plateId=1,objectIds=[],operation,from='all',colour,axis=2,position=50,connector=null,region=null,orientPins=true}={},progress=()=>{}){
   const entries=new Map(input),project=readProject(entries,{allowNegative:true});
   if(!objectIds.length)throw Error('Select an object first.');
-  if(!['colour','cut','separate','separate-colour','remove-colour'].includes(operation))throw Error('Choose Colour or Split.');
+  if(!['colour','cut','separate','separate-colour','remove-colour','auto-separate'].includes(operation))throw Error('Choose Colour or Split.');
+  if(operation==='auto-separate'&&connector&&connector.side==='base')throw Error('Automatic separation places pins on the detached pieces.');
   if(operation.endsWith('-colour')&&(!Number.isInteger(Number(from))||Number(from)<1||Number(from)>project.colors.length))throw Error('Choose a source colour to separate.');
   const colours=project.colors.slice();let target=0;
   if(operation==='colour'){
@@ -114,13 +116,23 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
     if(!target){if(colours.length>=16)throw Error('This file already contains 16 colours. Choose an existing filament.');colours.push(colour.toUpperCase());target=colours.length;}
   }
   let next=Math.max(1,...[...project.objects.keys()].map(Number))+1;
-  const resources=[],newItems=[],newMeta=[],changes=[];
+  const resources=[],newItems=[],newMeta=[],changes=[],reports=[];
   for(const oldId of objectIds){
     const {parts,meta}=sourceParts(project,plateId,oldId);let groups=[],names=[];
     if(operation==='colour')groups=[parts.map(p=>recolour(p,from,target))];
     else {
-      if(parts.some(p=>isHiddenPart(p.subtype)))throw Error('This object contains a negative or modifier volume. Split it in your slicer so its cutouts stay correct.');
-      if(operation.endsWith('-colour')){
+      if(parts.some(p=>isHiddenPart(p.subtype))){
+        if(operation==='auto-separate'){reports.push({objectId:String(oldId),name:meta.name,parts:1,separated:[],retained:[{count:1,reason:'Contains modifier or negative volumes. Use your slicer to preserve their roles.'}]});continue;}
+        throw Error('This object contains a negative or modifier volume. Split it in your slicer so its cutouts stay correct.');
+      }
+      if(operation==='auto-separate'){
+        let result;
+        try{result=autoSeparate(parts.map(p=>({...p,faces:colourFaces(p)})),{connector,progress});}
+        catch(error){reports.push({objectId:String(oldId),name:meta.name,parts:1,separated:[],retained:[{count:1,reason:error.message}]});continue;}
+        reports.push({objectId:String(oldId),name:meta.name,...result.report});
+        if(result.groups.length<2)continue;
+        groups=result.groups;names=result.names;
+      }else if(operation.endsWith('-colour')){
         const rest=[],detached=[];let found=false;
         for(const [partIndex,part] of parts.entries()){
           const faces=colourFaces(part);
@@ -163,6 +175,7 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
     }
     changes.push({oldId:String(oldId),created});
   }
+  if(!changes.length)return {entries,changes,colours,reports};
   const root=text(entries,MODEL_FILE).replace('</resources>',resources.join('')+'</resources>').replace('</build>',newItems.join('')+'</build>');
   entries.set(MODEL_FILE,encoder.encode(root));
   let config=text(entries,SRC_BBL_MODEL);
@@ -173,5 +186,5 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
   const cfg={...project.sourceSettings,...JSON.parse(text(entries,SRC_BBL_PROJECT)||'{}')};cfg.filament_colour=colours;cfg.filament_type=colours.map((_,i)=>project.types[i]||'PLA');entries.set(SRC_BBL_PROJECT,encoder.encode(JSON.stringify(cfg)));
   // Generated source is re-read before it can replace the live workspace.
   const checked=readProject(entries,{allowNegative:true});for(const c of changes)for(const n of c.created)if(!checked.objects.has(n.id))throw Error('The edit could not be validated.');
-  return {entries,changes,colours};
+  return {entries,changes,colours,reports};
 }
