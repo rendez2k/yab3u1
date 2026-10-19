@@ -1,6 +1,14 @@
 # YAB3D Workbench test
 
-An isolated alternative interface, v2.6.34-test. It does not replace `web/index.html`, the production build or the PETG review deployment.
+An isolated alternative interface, v2.6.35-test. It does not replace `web/index.html`, the production build or the PETG review deployment.
+
+## 2.6.35 prepared plate previews
+
+Preparing separate colour or sequential plates opens their actual placement plans in the 3D canvas. The plate picker and inspector rows switch between jobs, showing the full copy count and output colours. The by-layer body plate opens first when present. Edit model returns to the source quantities; it never reloads an exported job into the editable session. Model edits invalidate prepared jobs, and Undo still restores the original split. Preview loading and failures are visible, stale replies are discarded, and browsers without WebGL receive a labelled static preview.
+
+Automatic split results now state which colours still have attached regions before their detailed reasons. The supplied flat-bottom pumpkin separates only its green stalk; its black and white paint boundaries are not supported by the conservative automatic splitter. Filling duplicates that retained multicoloured body.
+
+The engine frame stays hidden until its workbench UI is mounted. A stable loading surface covers intermediate geometry, and model-edit reloads keep the current inspector instead of visiting Project.
 
 ```powershell
 cd experiments/workbench

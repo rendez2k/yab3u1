@@ -2,12 +2,13 @@ import {composeView} from './view-layout.js';
 import {mountWorkbenchObjects} from './object-tools.js';
 import {mountFilamentTools} from './filament-tools.js';
 import {mountStudio} from './studio-tools.js';
-import {prepareWorkbenchPlates} from './shared/sequentialPanel.js';
+import {prepareWorkbenchPlates,connectPlatePreview} from './shared/sequentialPanel.js';
+import {mountPreparedPreview} from './prepared-preview.js';
 const kind=document.body.dataset.engine,$=id=>document.getElementById(id);
 const view=composeView(document,kind);
 let engine, currentPanel='project', lastReport='', source=null;
 let fallbackKey='',fallbackPending=false,fallbackUrl=null;
-let objectTools, filamentTools, studio, busySince=0;
+let objectTools, filamentTools, studio, prepared, loading=false, busySince=0,previewSettledAt=0;
 const progress=view.make('div',{class:'workbench-progress',hidden:'',role:'status','aria-live':'polite'},'<span class="working-orb" aria-hidden="true"></span><div><strong>Preparing your model…</strong><p></p></div>');
 view.stage.append(progress);
 const fallback=view.make('div',{class:'software-preview',hidden:''},'<div><img alt="Static preview of the current model and colours"></div><p>Static preview · 3D acceleration is unavailable in this browser. Use Layout to edit objects.</p>');
@@ -16,6 +17,9 @@ const parentHost=window.parent!==window ? window.parent : null;
 const reportError=error=>{const p=document.createElement('p');p.setAttribute('role','alert');p.textContent=`The workspace could not complete that action: ${error.message}`;view.feedback.append(p);};
 function setPanel(panel) {
   if(!view.panels[panel])return;
+  if(panel===currentPanel&&!view.panels[panel].hidden)return;
+  if(panel!=='layout')prepared?.close();
+  else prepared?.resume();
   if(panel!=='edit')studio?.leavePanel();
   currentPanel=panel;
   for(const [key,node]of Object.entries(view.panels))node.hidden=key!==panel;
@@ -46,17 +50,19 @@ function context() {
   const s=engine.state;return {target:s.target,plateId:String(s.plateId??''),supportInterface:s.supportInterface,interfaceSlot:s.interfacePosition+1,interfaceColor:s.reels[s.interfacePosition]?.color,layout:{quantities:{...s.quantities},copies:Number($('spectrumcopies').value),spacing:Number($('spectrumgap').value),width:Number($('spectrumwidth').value),depth:Number($('spectrumdepth').value),tower:$('spectrumtower').checked,arrangement:$('spectrumarrangement').value},u1Nozzle:s.u1Nozzle};
 }
 const api={kind,setPanel,context,
+  get loading(){return loading;},
   preparePlates:options=>{setPanel('layout');return prepareWorkbenchPlates($('printoptimiser'),options);},
-  key:event=>{if(!studio?.key(event))objectTools?.key(event);},
+  key:event=>{if(!prepared?.key(event)&&!studio?.key(event))objectTools?.key(event);},
   captureView:()=>({panel:currentPanel,scroll:view.inspector.scrollTop}),
   restoreView(saved){if(saved){setPanel(saved.panel);view.inspector.scrollTop=saved.scroll;}},
   source:()=>kind==='converter'?engine.session.sourceFile:engine.workbenchSource(),
-  theme:value=>{document.documentElement.dataset.theme=value;const p=engine?.workbenchObjects()?.preview;if(p){p.plateKey='';p.requestDraw();engine.refreshPreview?.();}},
+  theme:value=>{document.documentElement.dataset.theme=value;prepared?.theme();const p=engine?.workbenchObjects()?.preview;if(p){p.plateKey='';p.requestDraw();engine.refreshPreview?.();}},
   open:()=>{if(studio?.busy)throw Error('Finish or cancel the current model edit first.');if(kind==='converter')$('mode-single').click();const input=$(kind==='converter'?'convertfile':'file');input.value='';input.click();},
   batch:()=>{if(studio?.busy)throw Error('Finish or cancel the current model edit first.');if(kind==='converter')$('mode-bulk').click();},
   async load(file,options={}) {
     if(studio?.busy&&!options.edit)throw Error('Finish or cancel the current model edit first.');
-    setPanel('project');
+    loading=true;prepared?.reset();if(!options.edit)setPanel('project');tick();
+    try{
     if(kind==='converter') {
       if(/\.(glb|zip)$/i.test(file.name)){engine.textureImporter.open(file);return;}
       if(options.target)engine.session.setTarget(options.target);
@@ -80,8 +86,8 @@ const api={kind,setPanel,context,
     }
     setPanel(options.edit?'edit':options.purpose==='reel-changes'?'output':options.fromMode?'colours':'project');
     if(options.purpose==='reel-changes')$('plannercard').open=true;
-    tick();
     return kind==='converter'?Boolean(engine.session.state):Boolean(engine.state.project);
+    }finally{loading=false;tick();}
   },
   primary(){if(kind==='converter'&&!$('batchpanel').classList.contains('hidden'))return;const sequential=sequentialAction();if(sequential){sequential.click();return;}setPanel(kind==='spectrum'&&$('mainaction').dataset.action==='apply'?'colours':'output');$(kind==='converter'?'converterprimary':'mainaction').click();},
 };
@@ -89,7 +95,7 @@ function sequentialAction(){const mode=document.querySelector('[data-print-mode]
 function tick() {
   if(!engine)return;
   const s=kind==='converter'?engine.session:engine.state;
-  const loaded=kind==='converter'?Boolean(s.state):Boolean(s.project),busy=Boolean(studio?.busy||(kind==='converter'?s.busy:s.loading||s.exporting));
+  const loaded=kind==='converter'?Boolean(s.state):Boolean(s.project),busy=Boolean(loading||studio?.busy||(kind==='converter'?s.busy:s.loading||s.exporting));
   const ready=String(loaded);if(document.body.dataset.ready!==ready)document.body.dataset.ready=ready;
   const file=api.source();
   if(file&&file!==source){source=file;parentHost?.workbench?.sourceChanged(kind,file);}
@@ -118,12 +124,14 @@ function tick() {
   if(!loaded){fallback.hidden=true;document.body.classList.remove('software-mode');fallbackKey='';}
   const previewNote=$('previewnote');
   const preparing=busy||fallbackPending||(kind==='converter'?s.boundsPending||/^Preparing 3D preview/.test(previewNote?.textContent||''):previewNote?.dataset.busy==='true'||Boolean(loaded&&!s.assessed));
-  progress.hidden=!preparing;view.stage.setAttribute('aria-busy',String(Boolean(preparing)));
+  if(preparing)previewSettledAt=0;else if(!previewSettledAt)previewSettledAt=performance.now();
+  const showingProgress=Boolean(preparing||busySince&&performance.now()-previewSettledAt<250);
+  progress.hidden=!showingProgress;view.stage.dataset.loading=String(showingProgress);view.stage.setAttribute('aria-busy',String(showingProgress));
   if(preparing){
     if(!busySince)busySince=performance.now();
     progress.querySelector('strong').textContent=studio?.busy?'Applying your model edit…':busy?'Reading your model…':fallbackPending?'Drawing the plate preview…':'Preparing the plate preview…';
     progress.querySelector('p').textContent=`${((performance.now()-busySince)/1000).toFixed(1)}s · ${busy?(status||'Reading the file in your browser.'): 'Measuring objects and building the preview. Large models can take longer.'}`;
-  }else busySince=0;
+  }else if(!showingProgress)busySince=0;
   try{objectTools?.sync();}catch{}
   try{filamentTools?.sync();}catch{}
   try{studio?.sync();}catch{}
@@ -159,7 +167,13 @@ try {
   if(kind==='converter'){engine.session.selectionAware=true;filamentTools=mountFilamentTools(view.panels.colours.querySelector('[data-requires-model]'),engine.session);}
   objectTools=mountWorkbenchObjects($('platecontrols'),()=>engine.workbenchObjects());
   studio=mountStudio({view,engine,kind,api,objects:objectTools,setPanel});
-  document.addEventListener('keydown',e=>{if(studio.key(e))e.stopImmediatePropagation();},true);
+  prepared=mountPreparedPreview(view,{edit:()=>studio.show('select'),onSelect:id=>{
+    document.querySelectorAll('[data-preview-plate]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.previewPlate===id)));
+    const heading=view.panels.layout.querySelector('.task-heading');heading.querySelector('h1').textContent=id?'Prepared plates':'Arrange your plate';heading.querySelector('p').textContent=id?'Choose a plate to inspect the copies. Edit model returns to your original quantities.':'Click an object in the preview to duplicate or remove it.';
+  }});
+  connectPlatePreview($('printoptimiser'),prepared);
+  document.addEventListener('keydown',e=>{if(prepared.key(e)||studio.key(e))e.stopImmediatePropagation();},true);
+  document.body.dataset.mounted='true';
   window.workbenchEngine=api;
   parentHost?.workbench?.ready(kind,api);
   tick();setInterval(tick,250);

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {preparePlateJobs,mountSequential,prepareWorkbenchPlates} from './plate-workflow.js';
+import {preparePlateJobs,mountSequential,prepareWorkbenchPlates,connectPlatePreview} from './plate-workflow.js';
 import {parseHTML} from 'linkedom';
 import {targetLayout} from '../../web/shared/layout.js';
 import {exportComparisonJob} from '../../web/shared/comparisonExport.js';
@@ -24,6 +24,19 @@ test('automatic sequential fill survives a colour-review retry and produces matc
     assert.equal(host.querySelector('[data-status]').dataset.state,'success');assert.match(host.querySelector('[data-status]').textContent,/complete sets fitted/);
     assert.equal(exported.length,2);assert(exported[0].count>1);assert.equal(exported[0].count,exported[1].count);
   }finally{if(previous===undefined)delete globalThis.document;else globalThis.document=previous;globalThis.Event=previousEvent;}
+});
+test('prepared viewer receives the validated download jobs and is cleared on source changes',async()=>{
+  const {document,window}=parseHTML('<html><body><main></main></body></html>'),previous=globalThis.document,previousEvent=globalThis.Event;
+  globalThis.document=document;globalThis.Event=window.Event;
+  try{
+    const host=document.querySelector('main'),exports=[];let signature='one',bundle=null,resets=0;
+    const controller=mountSequential(host,()=>({...context,signature,worker:{async request(type,{job}){exports.push(job);return {bytes:new Uint8Array([7,9])};}}}));
+    connectPlatePreview(host,{reset(){resets++;bundle=null;},present(next){bundle=next;}});
+    Object.defineProperty(host.querySelector('[data-print-mode]'),'value',{value:'together',writable:true});
+    const result=await prepareWorkbenchPlates(host,{mode:'sequential'});assert(result.ok);assert.deepEqual(bundle.jobs,exports);assert(bundle.jobs.every(j=>j.bytes.length===2));
+    assert.equal(host.querySelectorAll('[data-preview-plate]').length,exports.length);assert.doesNotMatch(host.textContent,/workspace shows the original/);
+    const before=resets;signature='two';controller.check();assert.equal(bundle,null);assert(resets>before);assert(host.querySelector('[data-pack]').hidden);
+  }finally{globalThis.document=previous;globalThis.Event=previousEvent;}
 });
 test('colour plates preserve exact counts and mapped physical colours; PETG and unknown paint stay by layer',()=>{
   const jobs=preparePlateJobs(context,'colours');assert.equal(jobs.length,2);assert.deepEqual(jobs.map(j=>j.count),[6,2]);assert(jobs.every(j=>j.sequence==='by layer'&&!j.mergeGroups));assert.equal(jobs[0].filament,2);

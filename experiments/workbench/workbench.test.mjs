@@ -44,7 +44,7 @@ for(const [kind,file,features]of [
 }
 test('test build does not replace the production entry or publish private models',async()=>{
   const shell=await readFile(new URL('./index.html',import.meta.url),'utf8');
-  assert.match(shell,/2\.6\.34-test/);assert.match(shell,/data-panel="layout"/);
+  assert.match(shell,/2\.6\.35-test/);assert.match(shell,/data-panel="layout"/);
   const builder=await readFile(new URL('./build.mjs',import.meta.url),'utf8');
   assert.match(builder,/dist-workbench/);assert.doesNotMatch(builder,/Desktop|Stabby|Flippin/);
 });
@@ -59,6 +59,15 @@ test('undo reload repopulates the scene list when geometry arrives after the rev
   state.objects=[{objectId:'10',name:'Support arch'}];state.busy=false;
   studio.sync();assert.equal(view.inspector.querySelector('[data-scene-count]').textContent,'1');
   assert.match(view.inspector.querySelector('[data-scene-list]').textContent,/Support arch.*×1/);
+});
+test('selection arriving during a model load cannot change the inspector panel',()=>{
+  const {document}=parseHTML('<html><body><main></main><aside></aside><section></section></body></html>');
+  const make=(tag,attrs={},html='')=>{const n=document.createElement(tag);for(const [k,v]of Object.entries(attrs))n.setAttribute(k,v);n.innerHTML=html;return n;};
+  const view={stage:document.querySelector('main'),inspector:document.querySelector('aside'),panels:{},make},panels=[];
+  const state={key:'loading',objects:[{objectId:'1',name:'Body'}],quantities:{},copies:1,busy:true};
+  const api={loading:true,source:()=>null},studio=mountStudio({view,kind:'spectrum',engine:{state:{project:null},workbenchObjects:()=>state},api,objects:{selected:()=>['1'],element:document.querySelector('section')},setPanel:p=>panels.push(p)});
+  studio.sync();state.busy=false;studio.sync();assert.deepEqual(panels,[]);
+  api.loading=false;studio.sync();assert.deepEqual(panels,['edit']);
 });
 test('quick colour selection follows removal and undo; Delete cannot remove whole objects during a split preview',()=>{
   const {document}=parseHTML('<html><body><main></main><aside></aside><section></section></body></html>');

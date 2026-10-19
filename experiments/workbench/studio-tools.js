@@ -1,6 +1,7 @@
 const icons={select:'<path d="m5 3 14 9-7 1-3 7z"/>',colour:'<path d="m14 3 7 7-10 10H4v-7zM11 6l7 7M3 21h18"/>',split:'<path d="M3 4h7v6H3zM14 14h7v6h-7zM18 3 6 21"/>',arrange:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>'};
 const svg=name=>`<svg viewBox="0 0 24 24" aria-hidden="true">${icons[name]}</svg>`;
 import {fitCompleteSets,fitOnOnePlate,waitForMeasuredState} from './auto-layout.js';
+import {colourName} from '../../web/shared/assignment.js';
 export function mountStudio({view,engine,kind,api,objects,setPanel}){
   const doc=view.stage.ownerDocument,make=view.make;
   let multiple=false,preferredColour='';
@@ -13,14 +14,16 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
   panel.querySelector('[data-selection-controls]').append(objects.element);
   const oldUndo=objects.element.querySelector('[data-object-edit=undo]');if(oldUndo)oldUndo.hidden=true;
   const settings=panel.querySelector('[data-tool-settings]'),message=panel.querySelector('.studio-message'),actions=panel.querySelector('.studio-apply');
-  const autoResult=make('details',{class:'studio-auto-result',hidden:''},'<summary></summary><p class="hint"></p><ul></ul>');message.after(autoResult);
+  const autoResult=make('section',{class:'studio-auto-result',hidden:'','aria-label':'Automatic separation result'},'<strong data-auto-summary></strong><p class="hint"></p><details><summary>Why some parts stayed attached</summary><ul></ul></details>');message.after(autoResult);
   function showAutoReport(reports,container=panel){
     const separated=reports.reduce((n,r)=>n+r.separated.length,0),existing=reports.reduce((n,r)=>n+(r.disconnected||0),0),retained=reports.flatMap(r=>r.retained.map(p=>({...p,name:r.name})));
     autoResult.hidden=false;
-    autoResult.querySelector('summary').textContent=separated?`${separated} coloured part${separated===1?'':'s'} separated`:existing?`${existing} existing pieces separated`:'No safe automatic colour split found';
-    autoResult.querySelector('p').textContent=`${reports.flatMap(r=>r.separated).filter(p=>p.pin).length} locating pins added. ${retained.length?'Some regions stayed attached; details below.':'The main body and its remaining paint are preserved.'}`;
+    autoResult.querySelector('[data-auto-summary]').textContent=separated?`${separated} coloured part${separated===1?'':'s'} separated`:existing?`${existing} existing pieces separated`:'No safe automatic colour split found';
+    const kept=[...new Set(retained.map(r=>r.colour).filter(Boolean))].map(n=>colourName(palette()[n-1]||'#FFFFFF'));
+    autoResult.querySelector('p').textContent=retained.length?`${kept.length?`${kept.join(' and ')} regions remain attached.`:'Some regions stayed attached.'} Automatic separation could not close these parts safely. They stay on the body when it is duplicated.`:'The main body and its remaining paint are preserved.';
+    autoResult.querySelector('details').hidden=!retained.length;
     const list=autoResult.querySelector('ul');list.replaceChildren();const grouped=new Map();
-    for(const row of retained){const key=`${row.name}: ${row.colour?`colour ${row.colour} — `:''}${row.reason}`,count=grouped.get(key)||0;grouped.set(key,count+row.count);}
+    for(const row of retained){const key=`${row.colour?`${colourName(palette()[row.colour-1]||'#FFFFFF')} — `:''}${row.reason}`,count=grouped.get(key)||0;grouped.set(key,count+row.count);}
     for(const [reason,count]of grouped){const item=make('li');item.textContent=`${reason}${count>1?` (${count} regions)`:''}`;list.append(item);}
     if(container===panel)message.after(autoResult);else container.querySelector('.task-heading').after(autoResult);
   }
@@ -208,7 +211,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
     const guide=objects.element.querySelector('[data-object-message]');if(guide&&/Shift-click/.test(guide.textContent))guide.textContent='Use Select multiple to pick several copies. Keyboard: Shift adds, Ctrl/Cmd toggles; Delete removes; Ctrl/Cmd+Z undoes.';
     const currentSource=api.source();if(!working&&currentSource!==knownSource){knownSource=currentSource;undo=[];baseColours=null;message.textContent='';autoResult.hidden=true;}
     const ids=selected(),key=JSON.stringify([s.key,ids]);
-    if(!working&&key!==selectionKey){restorePreview();selectionKey=key;if(mode!=='arrange'){if(ids.length)setPanel('edit');render();}}
+    if(!working&&!s.busy&&!api.loading&&key!==selectionKey){restorePreview();selectionKey=key;if(mode!=='arrange'){if(ids.length)setPanel('edit');render();}}
     const catalogue=JSON.stringify([s.key,s.objects.map(o=>[o.objectId,o.name]),s.quantities,s.copies,ids]);
     if(catalogue!==listStamp){listStamp=catalogue;if(mode==='select'&&!working)render();const list=panel.querySelector('[data-scene-list]');list.replaceChildren();let total=0;
       for(const o of s.objects){const count=(s.quantities[o.objectId]??1)*s.copies;if(!count)continue;total+=count;const b=make('button',{'data-scene-object':o.objectId,'aria-pressed':String(ids.includes(String(o.objectId)))});b.append(make('span',{},''),make('span',{},''));b.children[0].textContent=o.name||`Object ${o.objectId}`;b.children[1].textContent=`×${count}`;list.append(b);}

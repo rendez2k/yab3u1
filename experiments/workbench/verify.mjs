@@ -7,6 +7,7 @@ assets.push('filament-tools.js','plate-history.js','shared/selectionUsage.js','s
 assets.push('studio.css','studio-tools.js','model-edit.js','model-edit-worker.js','mesh-cut.js','mesh-joint.js','joint-sample.js','vendor/earcut.js','vendor/EARCUT-LICENSE');
 assets.push('orientation.js','shared/sequentialPanel.js');
 assets.push('auto-split.js','auto-layout.js');
+assets.push('prepared-preview.js');
 await Promise.all(assets.map(async name=>{
   const response=await fetch(`${base}/${name}`);
   if(!response.ok)throw Error(`${name}: HTTP ${response.status}`);
