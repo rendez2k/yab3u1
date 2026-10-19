@@ -20,7 +20,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
     autoResult.hidden=false;
     autoResult.querySelector('[data-auto-summary]').textContent=separated?`${separated} coloured part${separated===1?'':'s'} separated`:existing?`${existing} existing pieces separated`:'No safe automatic colour split found';
     const kept=[...new Set(retained.map(r=>r.colour).filter(Boolean))].map(n=>colourName(palette()[n-1]||'#FFFFFF'));
-    autoResult.querySelector('p').textContent=retained.length?`${kept.length?`${kept.join(' and ')} regions remain attached.`:'Some regions stayed attached.'} Automatic separation could not close these parts safely. They stay on the body when it is duplicated.`:'The main body and its remaining paint are preserved.';
+    autoResult.querySelector('p').textContent=retained.length?`${kept.length?`${kept.join(' and ')} regions remain attached.`:'Some regions stayed attached.'} See the reasons below.${separated||existing?' They stay on the body when it is duplicated.':' Your model and quantities are unchanged.'}`:'The main body and its remaining paint are preserved.';
     autoResult.querySelector('details').hidden=!retained.length;
     const list=autoResult.querySelector('ul');list.replaceChildren();const grouped=new Map();
     for(const row of retained){const key=`${row.colour?`${colourName(palette()[row.colour-1]||'#FFFFFF')} — `:''}${row.reason}`,count=grouped.get(key)||0;grouped.set(key,count+row.count);}
@@ -172,7 +172,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
         worker.postMessage({bytes,options},[bytes]);
       });
       if(stamp!==request)return;
-      if(!result.changes.length&&finish==='once'){showAutoReport(result.reports||[]);message.textContent='No parts were changed. Try without pins, or use a manual split for the regions listed below.';return;}
+      if(!result.changes.length){showAutoReport(result.reports||[]);message.textContent=`No parts were separated.${finish==='once'?'':' Filling was not started.'} Review the reasons below; adjust the pin settings or use a manual split.`;return;}
       const quantities=Object.fromEntries(s.objects.map(o=>[o.objectId,(s.quantities[o.objectId]??1)*s.copies]));
       for(const c of result.changes){quantities[c.oldId]=Math.max(0,(quantities[c.oldId]??1)-1);for(const n of c.created)quantities[n.id]=1;}
       const file=result.changes.length?new File([result.bytes],before.file.name,{type:before.file.type}):before.file;
@@ -183,7 +183,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
       if(options.operation==='auto-separate'){
         const changed=new Set(result.changes.map(c=>c.oldId)),fillIds=[...result.changes.flatMap(c=>c.created.map(n=>n.id)),...ids.filter(id=>!changed.has(id))];
         mode='select';selectionKey='';render();showAutoReport(result.reports||[]);
-        message.textContent=result.changes.length?'Automatic separation complete. Undo restores the original model.':'No detachable regions found; using the unchanged model for filling.';
+        message.textContent='Automatic separation complete. Undo restores the original model.';
         if(finish!=='once'){message.textContent='Measuring the separated parts before filling…';await waitForMeasuredState(state);}
         if(finish==='fill'){
           try{

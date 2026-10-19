@@ -25,6 +25,45 @@ test('automatic split controls and finish choices work without a WebGL preview',
     assert.equal(view.inspector.querySelector('[data-edit-apply]').textContent,'Separate & prepare plates');
   }finally{if(option===undefined)delete globalThis.Option;else globalThis.Option=option;Object.defineProperty(window.HTMLSelectElement.prototype,'value',descriptor);}
 });
+test('an unsuccessful automatic split never reloads, fills or prepares the unchanged model',async()=>{
+  const {document,window}=parseHTML('<html><body></body></html>');
+  const originalOption=globalThis.Option,originalWorker=globalThis.Worker,originalAdd=window.HTMLSelectElement.prototype.add,descriptor=Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype,'value');
+  globalThis.Option=function(text,value){const n=document.createElement('option');n.value=value;n.textContent=text;return n;};
+  Object.defineProperty(window.HTMLSelectElement.prototype,'value',{configurable:true,get(){return this.querySelector('option[selected]')?.value||this.querySelector('option')?.value;},set(v){for(const o of this.querySelectorAll('option'))o.toggleAttribute('selected',o.value===v);}});
+  window.HTMLSelectElement.prototype.add=function(option){this.append(option);};
+  globalThis.Worker=class {
+    postMessage(){queueMicrotask(()=>this.onmessage({data:{changes:[],reports:[{name:'Snowman',separated:[],retained:[{colour:2,count:1,reason:'The pin is too wide for this join.'}]}]}}));}
+    terminate(){}
+  };
+  try{
+    for(const kind of ['converter','spectrum'])for(const finish of ['once','fill','sequential']){
+      const make=(tag,attrs={},html='')=>{const n=document.createElement(tag);for(const [k,v]of Object.entries(attrs))n.setAttribute(k,v);n.innerHTML=html;return n;};
+      const view={stage:make('main'),inspector:make('aside'),panels:{},make},calls=[];
+      const file=new File(['source'],'snowman.3mf'),context={plateId:1,layout:{copies:2,quantities:{1:3}}};
+      const state={key:'source',objects:[{objectId:'1',name:'Snowman',colours:[{extruder:1},{extruder:2}]}],quantities:{1:3},copies:2,busy:false,apply:()=>calls.push('fill')};
+      const engine={session:{state:{colours:['#FFFFFF','#000000']}},state:{project:{colors:['#FFFFFF','#000000']}},workbenchObjects:()=>state};
+      const api={source:()=>file,context:()=>context,load:async()=>{calls.push('reload');return true;},preparePlates:async()=>calls.push('prepare')};
+      const studio=mountStudio({view,kind,engine,api,objects:{selected:()=>['1'],element:make('section'),history:{canUndo:false,reset:()=>calls.push('reset history')}},setPanel:p=>calls.push(`panel:${p}`)});
+      studio.sync();studio.show('split');calls.length=0;
+      view.inspector.querySelector('[data-auto-finish]').value=finish;
+      view.inspector.querySelector('[data-edit-apply]').click();
+      while(studio.busy)await new Promise(resolve=>setImmediate(resolve));
+      assert.deepEqual(calls,[],`${kind}/${finish} must not reload or leave the split workflow`);
+      assert.deepEqual(state.quantities,{1:3});assert.equal(state.copies,2);assert.equal(api.source(),file);
+      assert.match(view.inspector.querySelector('[data-auto-summary]').textContent,/No safe automatic/);
+      assert.match(view.inspector.querySelector('.studio-auto-result').textContent,/quantities are unchanged.*pin is too wide/s);
+      assert.equal(view.inspector.querySelector('.studio-auto-result').hidden,false);
+      if(finish!=='once')assert.match(view.inspector.querySelector('.studio-message').textContent,/Filling was not started/);
+      assert.equal(view.inspector.querySelector('[data-edit-apply]').disabled,false);
+      assert.equal(view.stage.querySelector('[data-studio-undo]').disabled,true);
+    }
+  }finally{
+    if(originalOption===undefined)delete globalThis.Option;else globalThis.Option=originalOption;
+    if(originalWorker===undefined)delete globalThis.Worker;else globalThis.Worker=originalWorker;
+    if(originalAdd===undefined)delete window.HTMLSelectElement.prototype.add;else window.HTMLSelectElement.prototype.add=originalAdd;
+    Object.defineProperty(window.HTMLSelectElement.prototype,'value',descriptor);
+  }
+});
 for(const [kind,file,features]of [
   ['converter','index.html',{project:['convertfile','converttarget','convertplate','bambumodel','printerinputs','importtools'],colours:['convertmap','convertpetg','mergefrom','mergeto','mergeundo','unusedfilaments'],layout:['quantityfields','layoutfill','fillundo','printoptimiser'],output:['settingsbox','printersetup','convertgo','convertout']}],
   ['spectrum','recolour.html',{project:['file','target','plate','spectrumnozzle'],colours:['reels','paletteslots','reservepetg','blendcalibration','spoolimport','mappingdetails','strategy'],layout:['spectrumquantities','spectrumfill','spectrumfillundo','printoptimiser'],output:['export','printersetup','plannercard','subdividemix','spectrumlayermode']}],
@@ -44,7 +83,7 @@ for(const [kind,file,features]of [
 }
 test('test build does not replace the production entry or publish private models',async()=>{
   const shell=await readFile(new URL('./index.html',import.meta.url),'utf8');
-  assert.match(shell,/2\.6\.35-test/);assert.match(shell,/data-panel="layout"/);
+  assert.match(shell,/2\.6\.36-test/);assert.match(shell,/data-panel="layout"/);
   const builder=await readFile(new URL('./build.mjs',import.meta.url),'utf8');
   assert.match(builder,/dist-workbench/);assert.doesNotMatch(builder,/Desktop|Stabby|Flippin/);
 });

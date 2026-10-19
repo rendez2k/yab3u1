@@ -1,6 +1,14 @@
 # YAB3D Workbench test
 
-An isolated alternative interface, v2.6.35-test. It does not replace `web/index.html`, the production build or the PETG review deployment.
+An isolated alternative interface, v2.6.36-test. It does not replace `web/index.html`, the production build or the PETG review deployment.
+
+## 2.6.36 unsuccessful splits and paint patches
+
+If automatic separation finds no detachable parts, all finish modes leave the source and quantities unchanged. No reload, fill, prepared plates or Undo entry is created. The split controls remain available with the actual rejection reasons.
+
+Colours with many disconnected paint patches now have their 32 largest regions checked, instead of skipping that colour entirely. Smaller patches remain attached and are reported. Malformed boundaries are rejected before scanning the whole mesh again. Geometry and connector safety checks are unchanged.
+
+The real snowman fixtures are not complete colour-splitting examples. The green snowman remains intact. With 1.5 mm diameter/length pins and 0.2 mm clearance, the Elegant snowman detaches its orange nose and one black detail; its hat and bow tie remain on the body. This is a limited geometry test, not evidence of connector fit or sequential head clearance.
 
 ## 2.6.35 prepared plate previews
 

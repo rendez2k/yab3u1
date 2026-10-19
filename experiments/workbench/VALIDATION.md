@@ -1,3 +1,14 @@
+## 2.6.36 unsuccessful split handling (19 October 2026)
+
+- Reproduced the user's two original snowman 3MFs locally. The previous scan skipped every black/red/green colour with more than 32 connected patches; the Elegant snowman's orange nose also rejected the default 3 mm connector.
+- A no-change automatic result now returns before source loading, history creation, filling or plate preparation. Regression checks cover all three finish choices in Convert and Full Spectrum, preserving the exact source, copies, quantities and available controls.
+- Colours with more than 32 regions now check their largest 32 by surface area. The remaining patches are explicitly reported. Existing boundary, cap-volume and connector checks stay enforced. A synthetic closed-solid regression verifies both protrusions still detach amid 33 flat patches, with manifold output, conserved volume and unchanged input.
+- Chrome/WebGL with the real green snowman and sequential filling selected: the scan returns no detachable parts, retains one snowman, keeps the Split inspector and reports “Filling was not started.” No prepared view or Undo entry is created. Screenshot: local ignored `docs/agent-work/snowman-no-split-2.6.36.png`.
+- Direct processing of the real Elegant snowman with 1.5 mm pin diameter/length and 0.2 mm clearance separates the orange nose and one black detail, leaving the hat/bow tie and other paint on the body. The planner can create balanced sequential detail groups and a by-layer body job. This remains a partial example, not a full colour split or a physical fit/clearance claim. The green snowman's boundaries remain unsupported even after checking its larger regions.
+- 37 affected tests passed. After tightening the progress text to show the bounded scan count, all 21 directly affected tests passed again. The build succeeds with the existing Python packaging step. User models and diagnostic files remain local and excluded from the static build.
+
+Published test deploy: `6ad65b83c4475e4fe75f49ae` at https://workbench-test--yab3u1.netlify.app/. The four checked application scripts and both shell entry points match the build byte-for-byte. Both embedded entry pages match after Netlify's observed anchor-link formatting/pretty-URL rewrites. The live 2.6.36 workspace mounts successfully. `git diff --check` passed.
+
 ## 2.6.35 prepared plate previews (19 October 2026)
 
 - Prepared jobs now have a separate 3D view using the actual exported object selection, placement plan and output palette. The plate picker and inspector agree on the selected job; Edit model preserves the editable source quantities and Undo. Preview loading, retry, stale replies and source invalidation are handled without replacing the source file.

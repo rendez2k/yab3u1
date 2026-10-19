@@ -1,5 +1,5 @@
 import {connectedParts,signedVolume} from './mesh-cut.js';
-import {separateColour} from './mesh-joint.js';
+import {separateColour,colourBoundary} from './mesh-joint.js';
 import {decode,encode} from '../../web/shared/paint.js';
 
 const paint=c=>` paint_color="${encode({kind:'leaf',state:c})}"`;
@@ -34,19 +34,26 @@ export function autoSeparate(parts,{connector=null,progress=()=>{}}={}){
     for(const colour of candidates){
       // Keep stable references to each original region as the body changes.
       const regions=connectedParts(remaining.filter(f=>f.colour===colour));
-      if(regions.length>32){report.retained.push({colour,count:regions.length,reason:'More than 32 paint patches; use manual separation.'});continue;}
-      for(const [index,region]of regions.entries()){
+      const candidates=regions.length>32?regions.map(region=>({region,area:region.reduce((sum,f)=>sum+area(f),0)})).sort((a,b)=>b.area-a.area).slice(0,32).map(r=>r.region):regions;
+      if(regions.length>32)report.retained.push({colour,count:regions.length-32,reason:'Automatic separation checks up to 32 large regions per colour; these smaller patches stayed attached.'});
+      let current=regions;
+      for(const [checked,region]of candidates.entries()){
+        const index=regions.indexOf(region);
         if(detached.length>=60){report.retained.push({colour,count:1,reason:'Automatic separation is limited to 60 detached pieces per object.'});continue;}
-        progress(`Checking colour ${colour}, region ${index+1} of ${regions.length}…`);
-        const current=connectedParts(remaining.filter(f=>f.colour===colour)),at=current.findIndex(group=>group.includes(region[0]));
+        progress(`Checking colour ${colour}, region ${checked+1} of ${candidates.length}…`);
+        current??=connectedParts(remaining.filter(f=>f.colour===colour));
+        const at=current.findIndex(group=>group.includes(region[0]));
         if(at<0)continue;
         try{
+          // Reject malformed small patches before scanning the full model again.
+          colourBoundary(current[at]);
           const alreadySeparate=closed(region);
           const result=separateColour(remaining,colour,{region:at,connector:alreadySeparate?null:connector,capAttributes:paint});
           if(!result.remaining.length)continue;
           const piece=result.parts[0],joint=result.joints[0];
           detached.push([{...part,base:colour,faces:piece,pinDirections:joint?[joint.normal.map(v=>-v)]:[]}]);
           remaining=resolvedCaps(result.remaining,part.base);
+          current=null;
           report.separated.push({colour,part:partIndex,region:index,pin:Boolean(joint)});
         }catch(error){report.retained.push({colour,count:1,reason:error.message.includes('already a disconnected part')?'This small or reversed shell stays with the body to preserve its shape.':error.message});}
       }

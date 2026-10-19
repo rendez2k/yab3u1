@@ -20,11 +20,11 @@ test('automatic filling waits for the current revision measurements and rejects 
   await assert.rejects(waitForMeasuredState(()=>state,{timeout:0}),/could not be measured/);
 });
 
-function stalks(sameColour=false){
-  const cells=new Map();for(let x=0;x<4;x++)for(let y=0;y<2;y++)for(let z=0;z<2;z++)cells.set([x,y,z].join(','),1);
+function stalks(sameColour=false,patches=0){
+  const cells=new Map();for(let x=0;x<(patches?patches*2+6:4);x++)for(let y=0;y<2;y++)for(let z=0;z<2;z++)cells.set([x,y,z].join(','),1);
   for(const [x,y,c]of [[0,0,2],[3,1,sameColour?2:3]])for(let z=2;z<4;z++)cells.set([x,y,z].join(','),c);
   const faces=[],corners=[[0,0,0],[1,0,0],[1,1,0],[0,1,0],[0,0,1],[1,0,1],[1,1,1],[0,1,1]],sides=[[[0,0,-1],[0,3,2,1]],[[0,0,1],[4,5,6,7]],[[0,-1,0],[0,1,5,4]],[[1,0,0],[1,2,6,5]],[[0,1,0],[2,3,7,6]],[[-1,0,0],[3,0,4,7]]];
-  for(const [key,colour]of cells){const p=key.split(',').map(Number);for(const [d,ids]of sides){if(cells.has(p.map((v,i)=>v+d[i]).join(',')))continue;const c=colour===1&&p[0]===1&&p[1]===0&&p[2]===0&&d[1]===-1?4:colour;for(const tri of [[ids[0],ids[1],ids[2]],[ids[0],ids[2],ids[3]]])faces.push({points:tri.map(n=>corners[n].map((v,i)=>(v+p[i])*10)),colour:c,attrs:` paint_color="${encode({kind:'leaf',state:c})}"`});}}
+  for(const [key,colour]of cells){const p=key.split(',').map(Number);for(const [d,ids]of sides){if(cells.has(p.map((v,i)=>v+d[i]).join(',')))continue;const patch=patches&&p[0]>=5&&p[0]<patches*2+5&&p[0]%2===1&&p[1]===0&&p[2]===0&&d[1]===-1;const c=patch?2:colour===1&&p[0]===1&&p[1]===0&&p[2]===0&&d[1]===-1?4:colour;for(const tri of [[ids[0],ids[1],ids[2]],[ids[0],ids[2],ids[3]]])faces.push({points:tri.map(n=>corners[n].map((v,i)=>(v+p[i])*10)),colour:c,attrs:` paint_color="${encode({kind:'leaf',state:c})}"`});}}
   return {name:'Two stalks and a flat paint patch',base:1,subtype:'normal_part',settings:{layer_height:'0.16'},faces};
 }
 function manifold(faces){const edges=new Map(),key=p=>p.map(n=>n.toFixed(5)).join(',');for(const f of faces)for(let i=0;i<3;i++){const a=key(f.points[i]),b=key(f.points[(i+1)%3]),k=[a,b].sort().join('|'),e=edges.get(k)||[0,0];e[0]++;e[1]+=a<b?1:-1;edges.set(k,e);}return [...edges.values()].every(([n,s])=>n===2&&s===0);}
@@ -41,6 +41,17 @@ test('automatic connectors are closed; oversized pins retain the affected region
   const part=stalks(),good=autoSeparate([part],{connector:{diameter:3,length:3,clearance:.3}});
   assert.equal(good.report.separated.length,2);assert(good.report.separated.every(r=>r.pin));assert(good.groups.every(g=>manifold(g[0].faces)));assert(good.groups.slice(1).every(g=>g[0].pinDirections.length===1));
   const bad=autoSeparate([part],{connector:{diameter:20,length:3,clearance:.3}});assert.equal(bad.groups.length,1);assert(bad.report.retained.some(r=>/too wide/.test(r.reason)));assert.deepEqual(bad.groups[0][0].faces,part.faces);
+});
+test('many small paint patches do not prevent larger detachable regions being checked',()=>{
+  const part=stalks(false,33),before=JSON.stringify(part),messages=[],result=autoSeparate([part],{progress:m=>messages.push(m)});
+  assert.deepEqual(result.report.separated.map(r=>r.colour),[2,3]);
+  assert.equal(result.groups.length,3);assert(result.groups.every(g=>manifold(g[0].faces)));
+  assert(result.report.retained.some(r=>r.colour===2&&r.count===2&&/32 large regions/.test(r.reason)));
+  assert.equal(result.report.retained.filter(r=>r.colour===2).reduce((sum,r)=>sum+r.count,0),33);
+  assert(Math.abs(result.groups.reduce((sum,g)=>sum+signedVolume(g[0].faces),0)-signedVolume(part.faces))<1e-6);
+  assert.equal(JSON.stringify(part),before);
+  assert.equal(messages.filter(m=>m.startsWith('Checking colour 2,')).length,32);
+  assert(messages.includes('Checking colour 2, region 32 of 32…'));
 });
 test('inner cavity shells are kept with the body, not converted into solid separate pieces',()=>{
   const outer=stalks().faces.map(f=>({...f,colour:1})),inner=outer.map(f=>({...f,points:[...f.points].reverse().map(p=>p.map((v,i)=>v*.1+[10,5,5][i]))}));

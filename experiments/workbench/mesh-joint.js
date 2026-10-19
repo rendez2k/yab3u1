@@ -14,7 +14,7 @@ const mean=points=>points.reduce((a,p)=>a.map((v,i)=>v+p[i]/points.length),[0,0,
 
 function inside(p,ring){let yes=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const a=ring[i],b=ring[j];if((a[1]>p[1])!==(b[1]>p[1])&&p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])yes=!yes;}return yes;}
 function distance(p,a,b){const d=sub(b,a),t=Math.max(0,Math.min(1,dot(sub(p,a),d)/(dot(d,d)||1)));return Math.hypot(...p.map((v,i)=>v-a[i]-d[i]*t));}
-function boundary(faces){
+export function colourBoundary(faces){
   const edges=new Map();
   for(const f of faces)for(let i=0;i<3;i++){
     const a=f.points[i],b=f.points[(i+1)%3],k=edgeKey(a,b),existing=edges.get(k);
@@ -128,7 +128,7 @@ export function separateColour(faces,colour,{connector=null,capAttributes=c=>` p
   const groups=region===null?allGroups:[selected];if(groups.length>32)throw Error('This colour has too many separate patches. Select one region or use a plane cut.');
   let remaining=rest;const parts=[],joints=[];
   for(const group of groups){
-    const {loops,rim}=boundary(group);
+    const {loops,rim}=colourBoundary(group);
     if(!loops.length){if(connector)throw Error('This colour is already a disconnected part. Turn off the locating pin to separate it.');parts.push(group);joints.push(null);continue;}
     // Verify both surfaces really share this boundary; never cap an unrelated hole.
     const expected=new Map(rim.map(e=>[edgeKey(e.a,e.b),e])),matches=new Map(),adjacent=new Map();
