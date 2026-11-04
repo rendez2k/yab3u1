@@ -1,12 +1,18 @@
-import {readFile, writeFile, mkdir, cp} from 'node:fs/promises';
+import {readFile, writeFile, mkdir, cp, rm, lstat} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 const here=path.dirname(fileURLToPath(import.meta.url)), root=path.resolve(here,'../..');
-execFileSync('python',['tools/build_site.py'],{cwd:root,stdio:'pipe'});
+execFileSync(process.platform==='win32'?'python':'python3',['tools/build_site.py'],{cwd:root,stdio:'inherit'});
 const out=path.join(root,'dist-workbench');
+// Clean only this fixed generated folder so removed assets cannot be published.
+if ((await lstat(out).catch(error=>{if(error.code!=='ENOENT')throw error;}))?.isSymbolicLink())throw Error('Workbench output must not be a symbolic link.');
+if(path.dirname(out)!==root||path.basename(out)!=='dist-workbench')throw Error('Unexpected Workbench output path.');
+await rm(out,{recursive:true,force:true});
 await mkdir(out,{recursive:true});
 await cp(path.join(root,'dist'),out,{recursive:true});
+await cp(path.join(root,'web/extension-privacy.html'),path.join(out,'extension-privacy.html'));
+await cp(path.join(root,'web/downloads/makerworld-yab3d-1.5.3.7.zip'),path.join(out,'downloads/makerworld-yab3d-1.5.3.7.zip'));
 for(const [source,controller,kind] of [['index.html','convert-page.js','converter'],['recolour.html','recolour.js','spectrum']]) {
   let html=await readFile(path.join(root,'dist',source),'utf8');
   const script=new RegExp(`<script type="module" src="(?:\\./)?${controller.replace('.','\\.')}"></script>`);
@@ -28,4 +34,4 @@ await cp(path.join(here,'node_modules/@fontsource-variable/ibm-plex-sans/LICENSE
 const shell=await readFile(path.join(here,'index.html'),'utf8');
 await writeFile(path.join(out,'index.html'),shell);
 await writeFile(path.join(out,'recolour.html'),shell.replace('data-initial="converter"','data-initial="spectrum"'));
-console.log(`Workbench 2.6.36-test: ${out}`);
+console.log(`Workbench 2.6.37: ${out}`);

@@ -1,3 +1,12 @@
+## v2.6.37 — production Workbench, H3C and 24-colour Bambu export (4 November 2026)
+
+- Full automated suite: 163 passed before the final picker-display fix. The final affected suite (handoff, capacity, 24-colour native archive and Workbench) passed all 32 tests after that fix and extension packaging changes.
+- Official Bambu Studio 2.9.1 H3C profiles are pinned by commit. Native 0.2/0.4/0.6/0.8 mm exports of a local five-colour fixture read back all five colours; A1 and H2C 0.4 mm regression exports also passed. New tests cover all 24 Bambu paint IDs and retained support assignments.
+- Live Chrome: H3C defaults to nine inputs, selecting 24 persists after changing from 0.4 to 0.6 mm, and the 330 × 320 × 325 mm build volume and native-profile confirmation agree. The tested sample is the public four-colour arch.
+- Extension 1.5.3.7 has versioned source, a reproducible package, unchanged host permissions, a production-only YAB3D handoff and an updated public privacy page. Sender tests reject wrong origins, source windows and tokens, and retain the original model bytes. All extension JavaScript parses. Store submission evidence is recorded in CHROMEWEBSTORE.md.
+- Builds publish only the generated Workbench assets plus the explicitly named privacy page and extension ZIP. Private models, local exports and docs/agent-work are excluded.
+- These checks validate application behaviour and exported archives. They do not establish physical colour accuracy, mechanical connector fit or sliced collision clearance. The Full Spectrum research document proposes later work; its experimental algorithms are not part of this release.
+
 ## 2.6.36 unsuccessful split handling (19 October 2026)
 
 - Reproduced the user's two original snowman 3MFs locally. The previous scan skipped every black/red/green colour with more than 32 connected patches; the Elegant snowman's orange nose also rejected the default 3 mm connector.

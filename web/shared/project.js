@@ -27,7 +27,7 @@ import {
   APPLICATION, BAMBU_ONLY_KEYS, MACHINE_KEYS, PAINT_ATTR, PRUSA_MODEL_CONFIG,
   PRUSA_SPECTRUM_JSON, SEAM_ATTR, SUPPORT_ATTR, TargetError,
   bambuConfig, check as checkRecipes, checkTypes, normalise as normaliseTarget,
-  palette, prusaSpectrumJson, snapmakerConfig, virtualId,
+  palette, prusaSpectrumJson, snapmakerConfig, virtualId, colourLimit,
 } from "./targets.js";
 import { readFilamentProfiles, applyFilamentProfiles, prusaFilamentConfig } from './filamentProfiles.js';
 import { buildU1Profile, conservativeSpeeds, constrainLayers, resolveLayerHeight } from './u1Profiles.js';
@@ -52,9 +52,8 @@ export const SRC_BBL_MODEL = "Metadata/model_settings.config";
 
 export const MAX_SOURCE_BYTES = 96 * 1024 * 1024;
 export const PREVIEW_TRIANGLE_CAP = 200000;
-// Paint states are serialised with a two-bit escape; 16 is the highest id this
-// writer can name without changing the encoding (see paint.js).
-export const MAX_SOURCE_COLOURS = 16;
+// Extended paint is readable up to 24; output limits remain target-specific.
+export const MAX_SOURCE_COLOURS = paint.BAMBU_STATE_MAX;
 
 export class ProjectError extends Error {}
 
@@ -426,7 +425,7 @@ function readStandardColours(entries, project) {
   }
   if (palette.length > MAX_SOURCE_COLOURS) {
     throw new ProjectError(`these documents declare ${palette.length} colours, and `
-      + `this tool carries at most ${MAX_SOURCE_COLOURS} across its export formats`);
+      + `this tool reads at most ${MAX_SOURCE_COLOURS} source colours`);
   }
   for (const member of documents.keys()) {
     const blob = text(entries, member);
@@ -972,7 +971,7 @@ export function scanMember(entries, member, wanted) {
         continue;
       }
       const states = paint.walkStates(node);
-      if (states.some((state) => state > paint.SUPPORTED_STATE_MAX)) entry.unknown += 1;
+      if (states.some((state) => state > MAX_SOURCE_COLOURS)) entry.unknown += 1;
       if (node.kind === "leaf") {
         entry.states.set(node.state, (entry.states.get(node.state) || 0) + 1);
       } else {
@@ -2012,8 +2011,8 @@ export function exportProject(project, plateId, objectIds, options) {
   const reels = options.physical || options.reels || [];
   if (convert) {
     refuseMixtures(project, "convert");
-    if (reels.length < 1 || reels.length > MAX_SOURCE_COLOURS) {
-      throw new ProjectError(`this conversion writes 1..${MAX_SOURCE_COLOURS} `
+    if (reels.length < 1 || reels.length > colourLimit(target)) {
+      throw new ProjectError(`this ${target} conversion writes 1..${colourLimit(target)} `
         + "logical filaments; this file has " + reels.length);
     }
   } else if (reels.length !== 4) {
@@ -2029,7 +2028,7 @@ export function exportProject(project, plateId, objectIds, options) {
   else if(reels.some(r=>r.role==='support-interface')) throw new ProjectError('Reserved support filament requires PETG interface mode.');
   if (!convert) {
     try {
-      checkRecipes(4, recipes);
+      checkRecipes(4, recipes, colourLimit(target));
       checkTypes(reelTypes, recipes);
     } catch (error) {
       throw new ProjectError(error.message);

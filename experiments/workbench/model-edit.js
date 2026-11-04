@@ -1,6 +1,6 @@
 // Workbench-only editing. Source objects and archive members remain intact.
 // Each edited copy gets new resources so shared meshes cannot repaint siblings.
-import {readProject,selectionInstances,matrixFromText,matmul,applyMatrix,isHiddenPart,isPrintablePart,MODEL_FILE,SRC_BBL_MODEL,SRC_BBL_PROJECT} from '../../web/shared/project.js';
+import {readProject,selectionInstances,matrixFromText,matmul,applyMatrix,isHiddenPart,isPrintablePart,MODEL_FILE,SRC_BBL_MODEL,SRC_BBL_PROJECT,MAX_SOURCE_COLOURS} from '../../web/shared/project.js';
 import {decode,encode} from '../../web/shared/paint.js';
 import {leafTriangles} from '../../web/shared/standard.js';
 import {cutMesh,connectedParts} from './mesh-cut.js';
@@ -113,7 +113,7 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
   if(operation==='colour'){
     if(!/^#[0-9a-f]{6}$/i.test(colour||''))throw Error('Choose a valid filament colour.');
     target=colours.findIndex(c=>c.toUpperCase()===colour.toUpperCase())+1;
-    if(!target){if(colours.length>=16)throw Error('This file already contains 16 colours. Choose an existing filament.');colours.push(colour.toUpperCase());target=colours.length;}
+    if(!target){if(colours.length>=MAX_SOURCE_COLOURS)throw Error(`This file already contains ${MAX_SOURCE_COLOURS} colours. Choose an existing filament.`);colours.push(colour.toUpperCase());target=colours.length;}
   }
   let next=Math.max(1,...[...project.objects.keys()].map(Number))+1;
   const resources=[],newItems=[],newMeta=[],changes=[],reports=[];

@@ -43,7 +43,7 @@ export function composeView(doc,kind) {
     $('previewheading').textContent='Model & plate';
   }
   move('#chrome-extension',panels.help);
-  panels.help.prepend(make('p',{class:'hint'},'The extension download opens the established YAB3D review site. To try its file here, download the original 3MF and use Open model.'));
+  panels.help.prepend(make('p',{class:'hint'},'The Chrome extension opens original MakerWorld projects in YAB3D. Choose Analyse & convert or Full Spectrum beside Open in YAB3D on the model page.'));
   const footer=doc.querySelector('#compatibility footer');if(footer)panels.help.append(footer);
   panels.help.append(make('p',{},'This workbench keeps the existing model-processing engines. Generated previews are simplified; slice and inspect the exported project before printing.'));
   for(const key of ['colours','layout','output']) {

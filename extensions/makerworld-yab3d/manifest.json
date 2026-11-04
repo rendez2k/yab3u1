@@ -1,0 +1,87 @@
+{
+  "manifest_version": 3,
+  "name": "YAB3D for MakerWorld",
+  "version": "1.5.3.7",
+  "version_name": "1.5.3.7",
+  "description": "Open MakerWorld projects in YAB3D to prepare colours and plates, or convert them to Snapmaker U1 files in your browser.",
+  "homepage_url": "https://yab3d.uk/",
+  "icons": {
+    "16": "assets/icons/icon16.png",
+    "32": "assets/icons/icon32.png",
+    "48": "assets/icons/icon48.png",
+    "128": "assets/icons/icon128.png"
+  },
+  "action": {
+    "default_icon": {
+      "16": "assets/icons/icon16.png",
+      "32": "assets/icons/icon32.png"
+    }
+  },
+  "permissions": [
+    "downloads",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://makerworld.com/*",
+    "https://makerworld.com.cn/*"
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://makerworld.com/*",
+        "https://makerworld.com.cn/*"
+      ],
+      "js": [
+        "injected.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://makerworld.com/*",
+        "https://makerworld.com.cn/*"
+      ],
+      "js": [
+        "lib/jszip.min.js",
+        "u1_custom_printer_profiles.js",
+        "u1_filament_merge.js",
+        "u1_project_merge.js",
+        "u1_profile_resolver.js",
+        "u1_compatibility.js",
+        "u1_model_parser.js",
+        "u1_bambu_parser.js",
+        "u1_project_parser.js",
+        "u1_project_builder.js",
+        "u1_3mf_metadata.js",
+        "u1_project_report.js",
+        "converter.js",
+        "u1_error_report.js",
+        "yab3d-handoff.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "assets/*",
+        "assets/profiles/*",
+        "injected.js"
+      ],
+      "matches": [
+        "https://makerworld.com/*",
+        "https://makerworld.com.cn/*"
+      ]
+    }
+  ],
+  "minimum_chrome_version": "111"
+}

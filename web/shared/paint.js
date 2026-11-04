@@ -8,13 +8,14 @@
 // and copies the split metadata through bit for bit.
 //
 // A state of 0 means "no override" (the object's own filament) and is never
-// remapped. States above SUPPORTED_STATE_MAX are refused rather than rewritten:
-// newer Prusa-format files reuse the escape marker for a longer encoding, so a
-// value in that range means different things to different readers.
+// remapped. The legacy cross-slicer limit remains 16. Bambu Studio 2.9.1 uses
+// repeated 0xF escape nibbles (TriangleSelector::serialize/deserialize); the
+// extended range through 24 is verified separately against that representation.
 
 const HEX_RE = /^[0-9A-Fa-f]*$/;
 
 export const SUPPORTED_STATE_MAX = 16;
+export const BAMBU_STATE_MAX = 24;
 
 export class PaintError extends Error {}
 

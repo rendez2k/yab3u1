@@ -1,0 +1,10 @@
+YAB3D review handoff — extension 1.5.3.6
+
+Reload this extension in chrome://extensions, then refresh the MakerWorld model page.
+Choose Analyse & convert or Full Spectrum beside Open in YAB3D.
+The original project opens directly in the YAB3D review site.
+Complete any MakerWorld login/verification and allow the new tab.
+
+Review: https://u1-reel-changes--yab3u1.netlify.app/
+Normal U1 conversion and the IDM filename repair are retained.
+No new permissions. No printer operation is performed by this handoff.

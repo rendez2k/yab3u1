@@ -81,11 +81,13 @@ for(const [kind,file,features]of [
     if(kind==='spectrum')assert.equal(document.getElementById('recommendheading').tagName,'H2');
   });
 }
-test('test build does not replace the production entry or publish private models',async()=>{
+test('production build serves the Workbench without publishing private models',async()=>{
   const shell=await readFile(new URL('./index.html',import.meta.url),'utf8');
-  assert.match(shell,/2\.6\.36-test/);assert.match(shell,/data-panel="layout"/);
+  assert.match(shell,/2\.6\.37/);assert.doesNotMatch(shell,/Test version|2\.6\.37-test/);assert.match(shell,/data-panel="layout"/);
   const builder=await readFile(new URL('./build.mjs',import.meta.url),'utf8');
   assert.match(builder,/dist-workbench/);assert.doesNotMatch(builder,/Desktop|Stabby|Flippin/);
+  const config=await readFile(new URL('../../netlify.toml',import.meta.url),'utf8');
+  assert.match(config,/publish = "dist-workbench"/);assert.match(config,/npm run build --prefix experiments\/workbench/);
 });
 
 test('undo reload repopulates the scene list when geometry arrives after the revision changes',()=>{

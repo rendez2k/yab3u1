@@ -84,3 +84,17 @@ test('native archive has project config and paint; default fallback remains colo
   assert.equal(fallback.settings.format,'standard-colour');
   assert.equal(fallback.entries.has('Metadata/project_settings.config'),false);
 });
+
+test('H3C exports nine project colours with extruder variants, not nine invented printer nozzles',()=>{
+  for (const nozzle of ['0.2','0.4','0.6','0.8']) {
+    const s=structuredClone(setup),name=`Bambu Lab H3C ${nozzle} nozzle`;
+    Object.assign(s.machine,{name,printer_model:'Bambu Lab H3C',printer_variant:nozzle,nozzle_diameter:[nozzle],extruder_max_nozzle_count:['9'],printable_area:['0x0','330x0','330x320','0x320'],printable_height:'325'});
+    Object.assign(s.materials.PLA,{compatible_printers:[name],filament_extruder_variant:['Direct Drive Standard','Direct Drive High Flow'],nozzle_temperature:['220','225']});
+    const colours=Array.from({length:9},(_,i)=>'#'+(i+1).toString(16).repeat(6));
+    const cfg=nativeBambuConfig(s,colours,Array(9).fill('PLA'));
+    assert.deepEqual(cfg.filament_colour,colours.map(c=>c+'FF'));
+    assert.deepEqual(cfg.nozzle_diameter,[nozzle]);assert.equal(cfg.filament_settings_id.length,9);
+    assert.equal(cfg.filament_self_index.length,18);assert.equal(cfg.inherits_group.length,11);
+    assert.equal(cfg.printer_settings_id,name);assert.equal(cfg.printable_height,'325');
+  }
+});

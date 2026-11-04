@@ -25,7 +25,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.26-review";
+const VERSION = "2.6.37";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -58,7 +58,7 @@ const CHANGES = [
   "Full Spectrum: direct U1 filament setup, copy layout, clearer apply action and equal mode buttons.",
   "Full Spectrum: larger original-to-result swatches and physical slot ordering for suggested palettes, with blend recipes preserved.",
   "Bulk U1 layer heights: preserve each designer’s settings, use a standard nozzle preset or choose a custom height. Review source-to-output heights before conversion; incompatible custom heights are blocked.",
-  "Import textured GLB, OBJ/MTL texture ZIPs and dense vertex-colour 3MFs. Compare a reduced 2–16 colour palette, edit swatches, confirm size and orientation, then convert or use Full Spectrum.",
+  "Import textured GLB, OBJ/MTL texture ZIPs and dense vertex-colour 3MFs. Compare a reduced 2–24 colour palette, edit swatches, confirm size and orientation, then convert or use Full Spectrum.",
   "ZIP bundles: find the 3MF projects inside, list skipped STL and other files, and analyse source formats, materials, nozzle sizes and plate fit before converting.",
   "U1 profiles now match 0.2, 0.4, 0.6 and 0.8 mm nozzles and material-specific presets. Lower source speeds are retained; higher values are capped to the selected U1 process.",
   "Optional filament presets: choose from the source project or import resolved brand JSON presets. U1 exports also offer bundled Snapmaker profiles. Reviewed material properties transfer across all four output formats.",
@@ -712,23 +712,29 @@ function syncCapacity() {
   const check = session.capacityStatus(), select = $('printerinputs');
   const u1 = session.target === 'snapmaker';
   const changedTarget = select.dataset.target !== session.target;
+  const changedPrinter = select.dataset.printer !== session.bambuCapacityModel;
   select.dataset.target = session.target;
+  select.dataset.printer = session.bambuCapacityModel;
   select.disabled = u1;
-  if (changedTarget || select.value !== 'custom') {
-    select.value = check.capacity == null ? 'unknown' : [4,8,16].includes(check.capacity) ? String(check.capacity) : 'custom';
+  if (changedTarget || changedPrinter || select.value !== 'custom') {
+    select.value = check.capacity == null ? 'unknown' : [4,8,9,16,24].includes(check.capacity) ? String(check.capacity) : 'custom';
     if (select.value === 'custom') $('custominputs').value = check.capacity;
   }
   $('custominputfield').hidden = select.value !== 'custom';
+  const h3c = session.target === 'bambu' && session.bambuCapacityModel === 'Bambu Lab H3C';
+  for (const value of ['9','24']) select.querySelector(`option[value="${value}"]`).hidden = !h3c && select.value !== value;
+  $('custominputs').max = session.target === 'bambu' ? session.bambuCapacityLimit : 64;
   $('custominputs').setAttribute('aria-invalid', String(Boolean(session.capacityError)));
   $('capacitystatus').textContent = check.problem || session.capacityError || `${check.needed} project filaments · `
-    + (check.capacity == null ? 'printer capacity not specified' : `${check.capacity} physical inputs`)
+    + (check.capacity == null ? 'printer capacity not specified' : `${check.capacity} available filament inputs`)
     + (check.excess ? ` · ${check.excess} extra need a solution` : check.outsideSlots ? ' · move colours into slots 1–4' : '');
   $('capacitystatus').classList.toggle('err', Boolean(session.capacityError));
   $('capacitynote').textContent = 'Checked across the whole project, including retained support and infill references. '
     + (check.capacity == null ? 'All selected colours are preserved; configure your printer and its input count in the slicer.'
       : check.unresolved ? 'Choose a colour solution below, or explicitly keep the project for further setup.'
       : 'The filament count fits. This checks input capacity; it does not validate a sliced print.')
-    + (check.reserved ? ` ${check.reserved} numbered entries are retained for source settings.` : '');
+    + (check.reserved ? ` ${check.reserved} numbered entries are retained for source settings.` : '')
+    + (h3c ? ' H3C has nine PrintTools; external AMS can extend the filament count to 24. Bambu exports support up to 24 colour IDs. Assign AMS filaments to PrintTool 1 in Bambu Studio.' : '');
   $('capacityoptions').hidden = !check.unresolved || session.supportInterface;
   if (check.unresolved && !session._capacityWasUnresolved) $('capacityoptions').open = true;
   session._capacityWasUnresolved = check.unresolved;
@@ -1074,7 +1080,10 @@ $('fillundo').addEventListener('click',()=>{
   session.setLayout(fillFeedback.previous);
   fillFeedback={epoch:session.epoch,revision:session.revision,message:'Restored the arrangement from before Fill plate.'};syncLayout();
 });
-bambuPicker = mountBambuPrinterPicker($('bambuprinter'), session, () => syncSettings());
+bambuPicker = mountBambuPrinterPicker($('bambuprinter'), session, () => {
+  syncCapacity();
+  syncSettings();
+});
 
 $("converttarget").addEventListener("change", () => {
   // A different target writes different bytes (and a different layout origin);

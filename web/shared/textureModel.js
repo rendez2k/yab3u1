@@ -41,7 +41,7 @@ export function histogram(model){
 }
 const sq=(a,b)=>a.reduce((s,v,i)=>s+(v-b[i])**2,0);
 export function reducePalette(rows,count){
-  if(!Number.isInteger(count)||count<2||count>16)throw Error('Choose 2–16 colours.');
+  if(!Number.isInteger(count)||count<2||count>24)throw Error('Choose 2–24 colours.');
   if(!rows.length)throw Error('The model has no non-degenerate coloured surface.');
   count=Math.min(count,rows.length);
   // Weighted farthest seeds retain distinct small accents; k-means then fits

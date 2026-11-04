@@ -11,7 +11,7 @@ export function createTextureImport({onAccept,buttonHost}){
     <p class="texture-status" role="status" aria-live="polite"></p>
     <section class="texture-ready" hidden>
       <p class="texture-facts"></p>
-      <div class="texture-options"><label>Palette size <select class="texture-count">${Array.from({length:15},(_,i)=>i+2).map(n=>`<option value="${n}" ${n===5?'selected':''}>${n} colours</option>`).join('')}</select></label>
+      <div class="texture-options"><label>Palette size <select class="texture-count">${Array.from({length:23},(_,i)=>i+2).map(n=>`<option value="${n}" ${n===5?'selected':''}>${n} colours</option>`).join('')}</select></label>
       <label>Model height (mm) <input class="texture-height" type="number" value="150" min="0.1" max="1000" step="0.1"></label>
       <label>Source up axis <select class="texture-axis"><option value="y">Y up (typical GLB/OBJ)</option><option value="z">Z up (typical 3MF)</option></select></label></div>
       <div class="texture-views"><button type="button" data-view="original" aria-pressed="false">Sampled source</button><button type="button" data-view="reduced" aria-pressed="true">Filament palette</button><button type="button" class="texture-reset">Reset view</button></div>

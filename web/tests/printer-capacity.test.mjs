@@ -38,6 +38,22 @@ test('generic capacity can be unspecified, 8, 16 or custom without discarding co
   s.setTarget('snapmaker');assert.equal(s.inputCapacity(),4);assert.equal(s.setInputCapacity(8),false);
 });
 
+test('H3C defaults to nine inputs and retains its AMS choice across nozzle and printer changes',async()=>{
+  const {session:s}=await fixture({count:9});s.setTarget('bambu');
+  const setup=nozzle=>({machine:{name:`Bambu Lab H3C ${nozzle} nozzle`,printer_model:'Bambu Lab H3C'},bed:{width:330,depth:320,maxHeight:325}});
+  s.setBambuSetup(setup('0.4'));
+  assert.equal(s.inputCapacity(),9);assert.equal(s.capacityStatus().blocked,false);
+  assert.equal(s.layout.width,330);assert.equal(s.layout.depth,320);assert.equal(s.layout.maxHeight,325);
+  s.setInputCapacity(24);s.setBambuSetup(null,true);s.setBambuSetup(setup('0.2'));
+  assert.equal(s.inputCapacity(),24);
+  assert.equal(s.setInputCapacity(25),false);assert.match(s.capacityError,/1 to 24/);
+  s.setInputCapacity(24);
+  s.setBambuSetup({machine:{name:'Bambu Lab A1 0.4 nozzle',printer_model:'Bambu Lab A1'},bed:{width:256,depth:256,maxHeight:256}});
+  assert.equal(s.inputCapacity(),null);s.setInputCapacity(4);assert(s.capacityStatus().blocked);
+  s.setBambuSetup(setup('0.6'));assert.equal(s.inputCapacity(),24);
+  s.setBambuSetup(null,false);assert.equal(s.inputCapacity(),null);assert.equal(s.bambuCapacityLimit,64);
+});
+
 test('invalid custom capacities block export even after keep-all acknowledgement',async()=>{
   const {session:s,calls}=await fixture();s.setTarget('orca');
   for (const invalid of [0,-1,1.5,65,NaN,Infinity,'']) {

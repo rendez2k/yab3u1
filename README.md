@@ -135,31 +135,34 @@ web/
 ```
 
 The pages report their own version (`VERSION` in `web/convert-page.js` and
-`web/recolour.js`); the live deployment is **v2.6.0**.
+`web/recolour.js`); the Workbench release is **v2.6.37**.
 
 **Deploying.** The Python UI cannot go on a static host — it needs your Orca
 install and the slicer — but the browser converter can, and that is what
-<https://yab3u1.netlify.app> serves. `tools/build_site.py` builds the publishable
-site into `dist/`: the two pages, the modules and the worker they load, the icon,
+<https://yab3u1.netlify.app> serves. `experiments/workbench/build.mjs` packages the
+Workbench into `dist-workbench/`, using `tools/build_site.py` for its engines:
+the pages, modules and workers they load, the icon,
 `LICENSE` and `THIRD_PARTY_NOTICES.txt`, and nothing else. The tests, the
 fixtures, the Python applications, the private models and the planning notes are
 never copied. Nothing you drop on either page is uploaded anywhere — the
 conversion and downloaded files stay on your machine.
 
 ```
-python tools/build_site.py     # writes dist/ from web/
-python serve.py                # http://127.0.0.1:8231 serves web/ for local checks
-npx netlify deploy --prod --dir dist --site 9a37f1d8-ee76-4b19-ab7d-382277fb7850
+npm ci --prefix experiments/workbench --include=dev
+npm run build --prefix experiments/workbench
+python -m http.server 8231 --bind 127.0.0.1 --directory dist-workbench
+npx netlify deploy --prod --no-build --dir dist-workbench --site 9a37f1d8-ee76-4b19-ab7d-382277fb7850
 ```
 
 `Deploy U1 site.bat` runs the build and then that deploy. `netlify.toml` runs the
-same script on Netlify with `dist` as the publish directory, so a Git-connected
-build produces the same site as a local one. `dist/` is generated and is not
+same build on Netlify with `dist-workbench` as the publish directory, so a Git-connected
+build produces the same site as a local one. Both output folders are generated and are not
 committed.
 
-`web/` is the site's source; `dist/` is only ever a copy of the parts of it that
-belong online. Being a static folder, the build also drops straight onto
-**Netlify Drop** (drag `dist/` onto the page) or **GitHub Pages** — neither needs
+`web/` contains the processing engines; `experiments/workbench/` contains the
+production interface. See its README for the H3C printer and nozzle options.
+Being a static folder, the build also drops straight onto
+**Netlify Drop** (drag `dist-workbench/` onto the page) or **GitHub Pages** — neither needs
 a CLI login. (`vercel.json` at the root still points a Vercel import at `web/`;
 Netlify is what this project actually deploys to.)
 

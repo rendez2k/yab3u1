@@ -22,6 +22,8 @@ import { planLayout, targetLayout } from "./layout.js";
 import { REPAINT, SLOTS, identityRule, normaliseMode, conversionPalette } from "./assignment.js";
 import { planningAllowance } from "./printSettings.js";
 import {selectionUsage} from './selectionUsage.js';
+import {bambuDefaultInputs,bambuInputLimit} from './bambuProfiles.js';
+import {colourLimit} from './targets.js';
 export const TYPED_3MF = "application/vnd.ms-package.3dmanufacturing-3dmodel+xml";
 
 export { identityRule };
@@ -51,6 +53,9 @@ export class ConvertSession {
     this.revision = 0;
     this.target = "snapmaker";
     this.inputCapacities = { bambu: null, orca: null, prusa: null };
+    this.bambuInputCapacities = {};
+    this.bambuCapacityModel = '';
+    this.bambuCapacityLimit = 64;
     this.capacityError = "";
     this.keepAllSignature = null;
     this.sourceFile = null;
@@ -204,17 +209,23 @@ export class ConvertSession {
     const excess = capacity == null ? 0 : Math.max(0, needed - capacity);
     const outsideSlots = this.physicalSlots() && Math.max(0, ...destinations) > 4;
     const unresolved = excess > 0 || outsideSlots;
+    const problem = needed > colourLimit(this.target)
+      ? `${needed} project filaments exceed the ${colourLimit(this.target)}-colour export limit for this format. Merge colours or choose another output.` : '';
     const acknowledged = unresolved && this.keepAllSignature === this.capacitySignature();
-    return { needed, capacity, excess, outsideSlots, unresolved, acknowledged, reserved,
-      blocked: Boolean(this.capacityError) || (unresolved && !acknowledged) };
+    return { needed, capacity, excess, outsideSlots, unresolved, acknowledged, reserved, problem,
+      blocked: Boolean(problem || this.capacityError) || (unresolved && !acknowledged) };
   }
 
   setInputCapacity(value) {
     if (this.target === "snapmaker") return false;
     const next = value === null ? null : Number(value);
-    this.capacityError = next !== null && (!Number.isInteger(next) || next < 1 || next > 64)
-      ? "Enter a whole number of printer inputs from 1 to 64." : "";
-    if (!this.capacityError) this.inputCapacities[this.target] = next;
+    const limit = this.target === 'bambu' ? this.bambuCapacityLimit : 64;
+    this.capacityError = next !== null && (!Number.isInteger(next) || next < 1 || next > limit)
+      ? `Enter a whole number of printer inputs from 1 to ${limit}.` : "";
+    if (!this.capacityError) {
+      this.inputCapacities[this.target] = next;
+      if (this.target === 'bambu' && this.bambuCapacityModel) this.bambuInputCapacities[this.bambuCapacityModel] = next;
+    }
     this.keepAllSignature = null;
     this.invalidate();
     this.hooks.rule?.(this.rule);
@@ -253,8 +264,22 @@ export class ConvertSession {
     this.bambuRequired = required;
     this.bambuError = error;
     if (setup && this.target === 'bambu') {
+      const model = setup.machine.printer_model || setup.machine.name;
+      if (model !== this.bambuCapacityModel) {
+        this.bambuCapacityModel = model;
+        this.bambuCapacityLimit = bambuInputLimit(setup.machine);
+        this.inputCapacities.bambu = Object.hasOwn(this.bambuInputCapacities,model)
+          ? this.bambuInputCapacities[model] : bambuDefaultInputs(setup.machine);
+        this.capacityError = '';
+        this.keepAllSignature = null;
+      }
       this.layout = {...this.layout, ...setup.bed};
       this.layoutProblem = '';
+    } else if (!setup && !required && !error) {
+      this.bambuCapacityModel = '';
+      this.bambuCapacityLimit = 64;
+      this.inputCapacities.bambu = null;
+      this.capacityError = '';
     }
     this.invalidate();
     this.hooks.layout?.(this.layout);

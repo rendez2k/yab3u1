@@ -53,17 +53,29 @@ test('MakerWorld cannot override the workflow through local handoff parameters',
  await f.emit();assert.equal(f.imports,1);
 });
 
-function sender(){
+function sender(script='integrations/makerworld/yab3d-handoff.js'){
  const listeners=new Map(),timers=new Map(),posts=[],statuses=[];let id=0,url;
  const popup={closed:false,postMessage:d=>posts.push(d)};
  const host={open:u=>(url=u,popup),addEventListener:(k,v)=>listeners.set(k,v),removeEventListener:k=>listeners.delete(k)};
  const scope=vm.createContext({window:host,location:{origin:'https://makerworld.com'},AbortController,URL,URLSearchParams,crypto:globalThis.crypto,Uint8Array,console,setTimeout:fn=>(timers.set(++id,fn),id),setInterval:fn=>(timers.set(++id,fn),id),clearTimeout:i=>timers.delete(i),clearInterval:i=>timers.delete(i)});
- vm.runInContext(fs.readFileSync('integrations/makerworld/yab3d-handoff.js','utf8'),scope);
+ vm.runInContext(fs.readFileSync(script,'utf8'),scope);
  const transfer=scope.YAB3DModelHandoff.open('recolour.html',s=>statuses.push(s));
  const token=new URL(url).hash.match(/yab3d-model=([^&]+)/)[1];
- const emit=(type,event={})=>listeners.get('message')?.({origin:'https://u1-reel-changes--yab3u1.netlify.app',source:popup,data:{type:'yab3d-model:'+type,token,version:1},...event});
- return {transfer,emit,posts,timers,listeners,statuses,popup};
+ const emit=(type,event={})=>listeners.get('message')?.({origin:new URL(url).origin,source:popup,data:{type:'yab3d-model:'+type,token,version:1},...event});
+ return {transfer,emit,posts,timers,listeners,statuses,popup,url};
 }
+test('store extension sends unchanged bytes only to the production window after its handshake',async()=>{
+ const f=sender('extensions/makerworld-yab3d/yab3d-handoff.js'),bytes=new Uint8Array([80,75,3,4,5]);
+ assert.equal(new URL(f.url).origin,'https://yab3d.uk');
+ assert.equal(new URL(f.url).pathname,'/recolour.html');
+ const pending=f.transfer.send(bytes,'original.3mf');
+ f.emit('ready',{origin:'https://u1-reel-changes--yab3u1.netlify.app'});
+ f.emit('ready',{source:{}});
+ f.emit('ready',{data:{type:'yab3d-model:ready',version:1,token:'wrong'}});
+ assert.equal(f.posts.length,0);
+ f.emit('ready'); assert.deepEqual([...new Uint8Array(f.posts[0].bytes)],[...bytes]);
+ f.emit('opened');await pending;assert.equal(f.listeners.size,0);assert.equal(f.timers.size,0);
+});
 test('sender waits for authenticated ready, keeps original buffer and distinguishes receipt from opened',async()=>{
  const f=sender(),bytes=new Uint8Array([80,75,3,4,5]);let done=false;
  const pending=f.transfer.send(bytes,'test.3mf').then(()=>done=true);

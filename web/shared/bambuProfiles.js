@@ -3,8 +3,12 @@ import {transferSettings} from './printSettings.js';
 import {applyFilamentProfiles, FILAMENT_FIELDS} from './filamentProfiles.js';
 
 // Public profiles only. No model, filename or printer address is sent to GitHub.
-export const BAMBU_REVISION = 'da8b44ee34dd349f2ae0df3f1cbae366df482354';
+// Bambu Studio 2.9.1: includes the H3C and its four nozzle presets.
+export const BAMBU_REVISION = '56a57d00a591360cf41bf21383915ee5bf357be5';
 export const BAMBU_PROFILE_URL = `https://raw.githubusercontent.com/bambulab/BambuStudio/${BAMBU_REVISION}/resources/profiles/`;
+export const isH3C = machine => machine?.printer_model === 'Bambu Lab H3C';
+export const bambuInputLimit = machine => isH3C(machine) ? 24 : 64;
+export const bambuDefaultInputs = machine => isH3C(machine) ? 9 : null;
 const metadata = new Set(['type','name','inherits','include','from','setting_id','filament_id',
   'instantiation','version','description','compatible_printers','compatible_printers_condition',
   'compatible_prints','compatible_prints_condition','renamed_from','alias']);
@@ -97,6 +101,7 @@ export function nativeBambuConfig(setup, colours, types, source = {}, carry = tr
   }
   const carried = carry ? transferSettings(source, 'bambu', {baseline:cfg}).values : {};
   Object.assign(cfg, carried, bambuConfig(colours, types, []), {
+    version:'2.9.1.70',
     printer_settings_id:machine.name, print_settings_id:process.name,
     filament_settings_id:materials.map(p=>p.name), filament_ids:materials.map(p=>p.filament_id || ''),
     printer_model:machine.printer_model, printer_variant:machine.printer_variant,

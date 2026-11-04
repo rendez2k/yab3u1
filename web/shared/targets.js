@@ -24,6 +24,8 @@ export const TARGETS = ["snapmaker", "bambu", "orca", "prusa"];
 // deliberately absent here -- keep the two lists apart.
 export const RECOLOUR_TARGETS = ["snapmaker", "bambu", "prusa"];
 export const MAX_VISIBLE = 16;
+export const MAX_BAMBU_VISIBLE = 24;
+export const colourLimit = target => target === 'bambu' ? MAX_BAMBU_VISIBLE : MAX_VISIBLE;
 export const MAX_RECIPES = MAX_VISIBLE - 4;
 
 export const LABELS = {
@@ -35,9 +37,8 @@ export const LABELS = {
 
 export const APPLICATION = {
   snapmaker: "Snapmaker Orca",
-  // The version the documented mixed-filament schema ships in; do not bump it to
-  // a newer build than the format notes describe.
-  bambu: "BambuStudio-02.07.01.62",
+  // Matches the pinned official profiles, including the H3C presets.
+  bambu: "BambuStudio-02.09.01.70",
   // OrcaSlicer shares Bambu Studio's project schema but has its own identity; the
   // app name is written without inventing a build number.
   orca: "OrcaSlicer",
@@ -93,18 +94,19 @@ export function virtualId(physical, index) {
   return physical + index + 1;
 }
 
-export function check(physical, recipes) {
+export function check(physical, recipes, maxVisible = MAX_VISIBLE) {
   if (physical < 1) {
     throw new TargetError("a Full Spectrum project needs at least one physical reel");
   }
-  if (recipes.length > MAX_RECIPES) {
+  const maxRecipes = maxVisible - 4;
+  if (recipes.length > maxRecipes) {
     throw new TargetError(`${recipes.length} recipes would need `
       + `${physical + recipes.length} filament ids and this writer stops at `
-      + `${MAX_VISIBLE}; keep at most ${MAX_RECIPES}`);
+      + `${maxVisible}; keep at most ${maxRecipes}`);
   }
-  if (physical + recipes.length > MAX_VISIBLE) {
+  if (physical + recipes.length > maxVisible) {
     throw new TargetError(`${physical} reels plus ${recipes.length} recipes exceed `
-      + `the ${MAX_VISIBLE} ids this writer can serialise without ambiguity`);
+      + `the ${maxVisible} ids supported for this output`);
   }
   recipes.forEach((recipe, index) => {
     const { a, b, percent } = recipe;
@@ -218,7 +220,7 @@ export const BAMBU_ONLY_KEYS = [
  * their own profile in the destination slicer.
  */
 export function bambuConfig(physicalColors, physicalTypes, recipes) {
-  check(physicalColors.length, recipes);
+  check(physicalColors.length, recipes, MAX_BAMBU_VISIBLE);
   checkTypes(physicalTypes, recipes);
   const table = palette(physicalColors, physicalTypes, recipes);
   const colours = table.physical.concat(table.virtual.map((v) => v.color));
@@ -294,7 +296,7 @@ export function validate(target, cfg, physical, recipes, members = {}) {
   const problems = [];
   const name = normalise(target);
   const total = physical + recipes.length;
-  check(physical, recipes);
+  check(physical, recipes, colourLimit(name));
   if (name !== "prusa" && !(members instanceof Object)) problems.push("bad members");
   const leaked = MACHINE_KEYS.filter((key) => key in cfg);
   if (leaked.length) {

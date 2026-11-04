@@ -9,8 +9,11 @@ if not exist "web\index.html" (
 )
 
 echo.
-echo Building the publishable site into dist\ ...
-python tools\build_site.py
+echo Installing Workbench dependencies ...
+call npm ci --prefix experiments\workbench --include=dev
+if errorlevel 1 exit /b 1
+echo Building the publishable Workbench into dist-workbench\ ...
+call npm run build --prefix experiments\workbench
 if errorlevel 1 (
   echo.
   echo Build failed - see the message above. Nothing was deployed.
@@ -19,11 +22,11 @@ if errorlevel 1 (
 )
 
 echo.
-echo Deploying dist\ to the yab3u1 site on Netlify.
+echo Deploying dist-workbench\ to the yab3u1 site on Netlify.
 echo The first run asks you to log in; after that it just deploys.
 echo.
 
-call npx --yes netlify deploy --prod --no-build --dir dist --site 9a37f1d8-ee76-4b19-ab7d-382277fb7850
+call npx --yes netlify deploy --prod --no-build --dir dist-workbench --site 9a37f1d8-ee76-4b19-ab7d-382277fb7850
 if errorlevel 1 (
   echo.
   echo Deploy failed - see the message above.

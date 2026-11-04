@@ -1,0 +1,72 @@
+**YAB3D Full Spectrum: takeaways and proposed next steps**
+
+Research checked on 4 November 2026. This is a development proposal, not a claim that the experimental methods below have been implemented or physically validated in YAB3D.
+
+My recommendation is to make reliable colour reproduction and a continuous editing workflow the next release. Add more advanced wall and top-surface techniques as separately tested experiments. YAB3D already has useful foundations; several improvements should extend those rather than add another separate screen.
+
+**What the sources actually add**
+
+| Source checked | Finding | Relevance to YAB3D |
+| --- | --- | --- |
+| [ChromaMatter / Sorca CM 1.1, 3 November](https://github.com/Ponkichi0718/ChromaMatter/releases/tag/sorca-cm-v1.1) | Repeated cuts, bed placement, colour transfer onto compatible cut parts, improved surface painting, and a fix for a false fifth material. It is a development prerelease; physical printing and connector fit remain unverified. | Closely matches the failures you reported: preserve painting through edits and count materials actually used. |
+| [Current ChromaMatter README](https://github.com/Ponkichi0718/ChromaMatter/blob/main/README.md) | Sorca CM combines colour editing, cutting and slicing. It also offers Core/Shell and material-layer construction. Its source archive for each release matters: the older standalone repository is historical. | Useful interaction and geometry ideas; a much bigger change than replacing our colour predictor. |
+| [iDither](https://idither.com/) and your supplied screenshots | Brand-specific palette choices, translucent/opaque workflows, predicted appearance, comparison scores and relative time indicators. Its site also demonstrates different outer/inner wall materials. | Better comparison and material identification are immediately useful. The appearance and timing numbers still need validation against actual prints. |
+| [iDither technical wiki](https://idither.com/wiki.php) | Recipe order, wall construction and backing affect results. Match percentages are analytical rankings. Wall response and top-surface response are different measurements. Some documented feature combinations are restricted. | Save the whole print context with a recipe and distinguish prediction from measured evidence. |
+| [Bambu Studio 2.9.1, 3 November](https://github.com/bambulab/BambuStudio/releases/tag/v02.09.01.70) | Colour matching and manual mixing now share one page. Selected H3C 0.4 mm presets at 0.20/0.24 mm enable mixing sublayers by default. Virtual mixtures no longer consume its 32-filament project limit. | Printer-specific export rules and understandable physical/virtual colour counts matter more than a single universal limit. |
+| [Snapmaker Orca 2.4.1, 28 October](https://github.com/Snapmaker/OrcaSlicer/releases/tag/v2.4.1) | Fixes include first-layer subdivision, missing tree supports, interface behaviour, filament deletion/mapping and colours above ID 16. It adds top/bottom paint penetration and further PLA/PETG support checks. | Re-test the problem models on the current slicer. These fixes identify plausible failure areas, but do not establish the cause of your earlier print failure. |
+| [FullSpectrum fork 0.9.14, 27 September](https://github.com/ratdoux/OrcaSlicer-FullSpectrum/releases/tag/v0.9.14) | Fixes copied objects losing their local subdivision plan, improves gradient transitions and preview continuity. | Duplication with subdivision needs an explicit export → slice → print regression case. This fork and official Snapmaker Orca have different version histories. |
+| [Prusa FDM Mixer](https://github.com/prusa3d/prusa-fdm-mixer) | Measured-print prediction, held-out validation and filament libraries. Recent commits include library refreshes; a newer commit does not necessarily mean a newer mixing model. | YAB3D already uses its v7 predictor. Benchmark a proposed replacement before changing it. |
+| [iDither author's Top Surface Mixing announcement](https://www.reddit.com/r/snapmaker/comments/1xmiipl/top_surface_mixing_beta_is_now_open_free/) | A beta image/depth-map workflow using translucent CMYK, with a published coaster example. | A separate future opportunity for signs, reliefs and coasters; not evidence that arbitrary figurine surfaces are solved. |
+
+The initial cached ChromaMatter README pointed at October's R8 release. I checked GitHub's current files and release records and used **Sorca CM 1.1** for this review. iDither's wiki also contains older capability statements, so its current homepage, the dated release evidence and your screenshots should not be treated as interchangeable specifications.
+
+**What YAB3D already has**
+
+The local code already includes optical prediction, exact-colour preferences, loaded/owned reel choices, surface-area-aware ranking, approximate-palette review, background calculation, PETG slot reservation and imported printed measurements. The practical gaps are narrower than a complete Full Spectrum rewrite:
+
+- The main optimiser still chooses four physical reels, or three PLA reels when PETG occupies the fourth slot. The prepared 24-colour Bambu export work does not turn that optimiser into a 24-reel search.
+- Its active blend planner uses two-reel recipes at 25/50/75% and a six-recipe planning cap. A predictor capable of calculating more complex mixtures does not establish that the exported slicer instructions reproduce them.
+- Calibration is currently a named four-reel U1 setup, with measured replacements for individual recipes. Unmeasured recipes retain the standard estimate.
+- The existing calibration UI asks users to measure flat tile tops. That needs review before using those values to predict figurine side walls: the measured surface must represent the intended optical construction.
+
+Local references: [predictor](C:/Users/rende/U1/untitled-project/web/shared/fdmMix.js), [palette search](C:/Users/rende/U1/untitled-project/web/shared/recommend.js), [blend planning](C:/Users/rende/U1/untitled-project/web/shared/mix.js), [calibration controls](C:/Users/rende/U1/untitled-project/web/shared/calibrationPanel.js), [calibration geometry](C:/Users/rende/U1/untitled-project/web/shared/calibrationSwatches.js).
+
+**Recommended build order**
+
+1. **First: prove that preview, export and slicer agree.** Record the target printer, slicer family/version, physical assignments, virtual recipes, layer settings and support material in one export plan. Reopen exported projects and compare those values, including copied objects and colours 17–24. Preserve source support settings and distinguish object overrides from global defaults. A successful ZIP check alone is insufficient. Acceptance: the same small reference plate retains its paint, material count, support interface and subdivision in both the export and the sliced toolpaths.
+
+2. **Make filament identity and calibration the largest colour-quality improvement.** Extend the existing measurement system with stable brand/product identifiers, opaque/translucent classification, nozzle/layer/wall settings and measurement provenance. Add vertical-wall samples and separate roof samples; validate against samples excluded from fitting. Keep measured, estimated and unsupported recipes visibly distinct. Acceptance: fewer measured colour errors on held-out samples from the actual U1 and Bambu setups, with no automatic application of a profile to different reels or construction settings.
+
+3. **Offer three clear colour choices in the same workspace.** “Keep original colours”, “Replace colours to fit my printer” and “Blend extra shades”. Permit exact colours and blends together. Keep PETG support as a slot reservation, and show the resulting available model inputs immediately. A suggested palette should preview reversibly without discarding the selected objects, camera, cuts, layout or Undo history. Acceptance: switching strategies repeatedly preserves the workspace and makes every changed source colour inspectable.
+
+4. **Expand physical-input support without confusing it with shade count.** Show available inputs, currently used materials and generated shades separately. Count each prepared plate from its actual remaining objects and recipe components, then remove genuinely unused entries. Extend the optimiser to five-colour CMYKW and configurable reel counts after the four-reel route passes. The [H3C announcement](https://forum.bambulab.com/t/bambu-lab-h3c-our-full-reveal/261955) distinguishes nine dedicated PrintTools from up to 24 spools using external AMS through PrintTool 1. Those routes need different switching-cost assumptions; 24 spools are not 24 independently ready nozzles. Acceptance: deleting the final user of a colour updates counts, assignments and export consistently, including support usage.
+
+5. **Give the user a small, useful choice of results.** Present up to three candidates: best predicted colour, fewer changes, and use my loaded reels. Each should show a before/after model, the colours that change, and an explanation of the trade-off. Offer a simple priority control for a face, logo or selected part, extending the existing exact-colour preferences. Keep analytical colour error separate from confidence in the calibration. Show estimated hours and waste only after a compatible slicing calculation; before that, label switching complexity as an estimate. Acceptance: a user can explain why the selected option is preferable without decoding a percentage score.
+
+6. **Use printer-specific layer guidance.** Display the main layer height separately from mixed-region subdivision, and preserve an explicit user override. U1 and H3C should have independently verified defaults. Bambu's new preset behaviour makes a blanket “Full Spectrum must use 0.10 mm” rule inappropriate. Test subdivision on/off with copies, small details and PETG interfaces, changing one variable at a time. Acceptance: the exported effective settings match the user's choice, and the test plate produces the expected first layer, brim and supports.
+
+7. **Connect colouring, splitting and plate preparation.** A colour selection should reveal the affected geometry before offering repaint, remove, or separate. Mark regions that cannot become closed printable pieces. After a valid separation, retain the source-paint relationship, orient the mating feature appropriately, and preview the actual prepared plates. Recompute colour use after every edit. Sequential grouping must preserve part-specific settings or place incompatible parts on another plate. Acceptance: separate a stalk, undo it, repeat on another valid region, fill the relevant plates, and inspect exactly what will be downloaded without a workflow reset.
+
+8. **Then prototype outer/inner-wall and Core/Shell colour construction.** The opportunity is finer control of shading, light colours and translucency. It changes geometry/toolpaths and the calibration context, so it is a substantial project. Start with one supported printer and a small opaque/translucent comparison object, including thin fingers and narrow walls. Require matching slicer output before exposing it as an ordinary colour option. Acceptance: the preview's ordered wall construction survives slicing and produces repeatable measured improvements without missing or intersecting material.
+
+9. **Keep top-surface mixing and variable optical schedules in an experimental track.** Top-surface interweave on models, image-based Top Surface Mixing, and variable layer schedules are separate techniques. Begin with a flat coupon or coaster, then sloped and curved roofs. Measure their response independently from wall colours. Offer an explicit experiment with a reference print; do not silently combine every option. Acceptance: the selected colour pattern, solid backing and dimensions are present in the sliced paths and the physical sample.
+
+**A concrete comparison using your Grinch**
+
+I inspected your original file locally: one object, 40,056 source triangles and five used PLA colours—black `#000000`, red `#F72323`, yellow `#FFF144`, white `#FFFFFF` and green `#61C680`. No model was uploaded for this inspection.
+
+For a sufficiently equipped H3C, the first candidate should retain those five physical colours. For U1, compare the best four-reel reduction with a calibrated blend option; let you protect the face green and other details you care about. With PETG reserved, clearly show that only three model reels remain. The 17–19% iDither scores in your screenshots are not comparable to a YAB3D score without matching the metric, profile and print settings, and do not establish that either system's physical result is better.
+
+The print comparison should use the same scale and orientation, alongside a wall/roof colour coupon and a small supported-detail coupon. Record slicer version, actual spool products, process settings, sliced time, material usage and photographs under consistent lighting. Judge print time and colour quality separately. The historical missing-support example belongs in this regression set, but the original G-code and exact old settings would be needed to attribute its failure.
+
+**Suggested delivery batches**
+
+| Batch | Deliverable | Evidence needed before release |
+| --- | --- | --- |
+| A — dependable workflow | Export plan, used-material recounting, persistent colour choices, version-specific layer guidance, support/duplicate checks | Reopened native projects and sliced reference cases on current Snapmaker Orca and Bambu Studio |
+| B — better colour decisions | Named filament profiles, improved calibration pieces, three comparison options, detail priorities, five-plus-reel planning | Held-out measurements and paired Grinch prints with recorded time/material |
+| C — new optical methods | Outer/inner-wall prototype, then separate top-surface experiments | Geometry checks, sliced-path inspection and physical results for each technique |
+
+Prusa's mixer is MIT-licensed and already present in YAB3D. iDither identifies itself as proprietary. Sorca CM points to release-specific source and its own licensing. This proposal uses their documented ideas and evidence; it does not assume their implementations or calibration datasets can simply be copied into YAB3D.
+
+The immediate next step I recommend is **Batch A plus the calibration sample redesign**, followed by a small controlled Grinch comparison. That gives the later visual improvements a dependable base and avoids another collection of disconnected controls.

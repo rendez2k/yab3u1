@@ -1,6 +1,14 @@
-# YAB3D Workbench test
+# YAB3D Workbench
 
-An isolated alternative interface, v2.6.36-test. It does not replace `web/index.html`, the production build or the PETG review deployment.
+The production interface, v2.6.37. The original converter and Full Spectrum controllers remain its processing engines; the Workbench shell is now the published entry point.
+
+## 2.6.37 production release and H3C
+
+The Bambu printer selector uses official Bambu Studio 2.9.1 profiles pinned to commit `56a57d00a591360cf41bf21383915ee5bf357be5`. H3C offers 0.2, 0.4, 0.6 and 0.8 mm nozzle presets and a 330 × 320 × 325 mm build volume for preview, filling and export. These are uniform-nozzle presets; mixed nozzle sizes are configured in Bambu Studio.
+
+H3C starts with nine filament inputs. External AMS capacity can be selected up to 24, with each printer's choice retained when changing nozzles or printers. Bambu exports now support up to 24 colour IDs, including extended paint states 17–24. Import, preview, colour editing, slot rearrangement and duplication retain these colours; other slicer outputs keep their existing 16-ID limit. Full Spectrum still explores four base reels; nine-colour models can retain their original painting in Convert.
+
+Native H3C projects require Bambu Studio 2.9.1 or later. Official profile source: [Bambu Studio 2.9.1](https://github.com/bambulab/BambuStudio/releases/tag/v02.09.01.70). Hardware capacity: [Bambu H3C announcement](https://forum.bambulab.com/t/bambu-lab-h3c-our-full-reveal/261955).
 
 ## 2.6.36 unsuccessful splits and paint patches
 
@@ -25,7 +33,7 @@ npm test
 npm run build
 ```
 
-The build writes `dist-workbench/`. Deploy that directory to the `workbench-test` Netlify alias. `tools/build_site.py` and the established deploy remain unchanged.
+The build writes a clean `dist-workbench/`. Netlify and `Deploy U1 site.bat` publish that directory. The `workbench-test` alias remains available for review builds. `tools/build_site.py` builds the underlying browser engines into `dist/` first; its fixtures and private-model exclusions are preserved.
 
 ## Structure
 
