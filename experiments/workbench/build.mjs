@@ -36,4 +36,4 @@ await cp(path.join(here,'node_modules/@fontsource-variable/ibm-plex-sans/LICENSE
 const shell=(await readFile(path.join(here,'index.html'),'utf8')).replace('href="studio.css"',`href="${studioStyle}"`);
 await writeFile(path.join(out,'index.html'),shell);
 await writeFile(path.join(out,'recolour.html'),shell.replace('data-initial="converter"','data-initial="spectrum"'));
-console.log(`Workbench 2.6.39: ${out}`);
+console.log(`Workbench 2.6.40: ${out}`);

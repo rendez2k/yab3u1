@@ -34,7 +34,7 @@ export function composeView(doc,kind) {
     move('#filamentbundles',panels.colours);
     move('#reelscard',panels.colours);move('#colouroutcome',panels.colours);
     // Suggestions are the main colour task; library/calibration are secondary.
-    $('supportinterface').after($('recommendation'));
+    $('supportinterface').after($('colourpriorities'),$('recommendation'));
     const oldHeading=$('recommendheading'),heading=make('h2',{id:'recommendheading'});
     heading.textContent=oldHeading.textContent;oldHeading.replaceWith(heading);
     move('#copyoptions',panels.layout);$('copyoptions').open=true;
@@ -65,11 +65,6 @@ export function composeView(doc,kind) {
   const explanation=panels.colours.querySelector('.workflow-explanation');
   const help=make('details',{class:'workflow-explanation'},'<summary>How colour replacement works</summary>');help.append(...explanation.childNodes);explanation.replaceWith(help);
   panels.colours.querySelector('.task-heading').after(make('div',{class:'colour-workflow'},`<div role="group" aria-label="Colour workflow"><button data-colour-workflow="converter" aria-pressed="${kind==='converter'}">Convert</button><button data-colour-workflow="spectrum" aria-pressed="${kind==='spectrum'}">Full Spectrum</button></div><p>Convert keeps or replaces solid colours. Full Spectrum explores blends. Each workspace keeps its own edits when you switch back.</p></div>`));
-  if(kind==='spectrum') {
-    // The current printer inputs and chosen set are the first colour decision.
-    const workflow=panels.colours.querySelector('.colour-workflow');
-    $('filamentbundles').after(workflow,help);
-  }
   // Contextual help remains available without consuming the main viewport.
   stage.append(make('div',{class:'stage-caption'},'Drag to orbit · Right-drag to pan · Shift/Ctrl/Cmd-click to select several · Delete to remove · Ctrl/Cmd+Z to undo'));
   return {workspace,stage,inspector,panels,move,make,feedback,empty,parking};

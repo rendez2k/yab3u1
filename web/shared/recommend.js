@@ -6,6 +6,7 @@ import { describeColourMapping, mappingFromPlan, planBlends, RATIOS, MIN_IMPROVE
 import { mixFdmHex, approximateDistance } from './fdmMix.js';
 import { interfacePalette, validateInterfaceExport } from './supportInterface.js';
 import {reelIdentity} from './filamentIdentity.js';
+import {scoreColourOutcome} from './colourPriorities.js';
 
 const BASICS=['#FFFFFF','#000000','#808080','#FF0000','#0080C0','#0000FF',
   '#008000','#00FF00','#FFFF00','#FF9500','#00FFFF','#FF00FF','#800080','#8B4513','#FFC0CB'];
@@ -160,8 +161,8 @@ export function recommendPalette({sources,loaded,stock=null,locked=[],blends=tru
   return {...ranked[0],found:true,rough,loadedScore,alternatives:ranked.slice(1),approximateOptions,search};
 }
 
-/** Two explicit workflows. Model-first does not use the saved printer palette. */
-export function recommendWorkflow({mode='model', sources, loaded=[], stock=null, type='PLA', keepExact=[], weights={}, blends=true, calibration=null, supportInterface=false, capacity=4, visibleLimit=16, bundles=null, priority='colour', onProgress=()=>{}}) {
+/** Model-first does not use the saved printer palette. Pack previews keep product identities. */
+export function recommendWorkflow({mode='model', sources, loaded=[], stock=null, type='PLA', keepExact=[], weights={}, importantColours=[], blends=true, calibration=null, supportInterface=false, capacity=4, visibleLimit=16, bundles=null, priority='colour', onProgress=()=>{}}) {
   if(!Number.isInteger(capacity)||capacity<1||capacity>24)throw Error('Choose 1–24 physical inputs.');
   const colours=[...new Set(Object.values(sources || {}).map(norm).filter(Boolean))];
   if(!colours.length) throw Error('Select a model with readable colours.');
@@ -188,17 +189,9 @@ export function recommendWorkflow({mode='model', sources, loaded=[], stock=null,
     let result=outcomeFor(sources,reels,blends,false,calibration,budget);
     if(result.unresolved && blends) result=outcomeFor(sources,reels,true,true,calibration,budget);
     if(result.unresolved) return;
-    const rows=result.outcome.rows;
-    let total=0,error=0;
-    for(const row of rows) {
-      const supplied=Number(weights[norm(row.original)]);
-      const weight=Number.isFinite(supplied) && supplied>0 ? supplied : 1;
-      total+=weight; error+=weight*distance(row.original,row.result);
-    }
-    // Surface-area mean plus a worst-colour penalty protects small accents.
-    result.score=error/total + .15*Math.max(...rows.map(r=>distance(r.original,r.result)));
-    const option={reels:reels.map(r=>({...r})),type:reels.find(r=>r.role!=='support-interface').type,...result,usesLoaded:mode==='loaded',
-      ...(bundle?{bundleId:bundle.id,bundleName:bundle.name,bundleNote:bundle.note}:{}),
+    result.score=scoreColourOutcome(result.outcome.rows,weights,importantColours);
+    const option={reels:reels.map(r=>({...r})),type:reels.find(r=>r.role!=='support-interface').type,...result,usesLoaded:mode==='loaded'&&!bundle,
+      ...(bundle?{bundleId:bundle.id,bundleName:bundle.name,bundleNote:bundle.note,omittedReels:bundle.omittedReels||[]}:{}),
       owned:reels.filter(r=>stock?.some(s=>reelIdentity(r)===reelIdentity(s))).length};
     (result.approximate ? approximateOptions : options).push(option);
   }
@@ -235,7 +228,7 @@ export function recommendWorkflow({mode='model', sources, loaded=[], stock=null,
     }
   }
   const rank=(a,b)=>(priority==='changes'?a.outcome.blendCount-b.outcome.blendCount:priority==='owned'?b.owned-a.owned:0)
-    || b.outcome.counts.preserved-a.outcome.counts.preserved || a.score-b.score;
+    || a.score-b.score || b.outcome.counts.preserved-a.outcome.counts.preserved;
   options.sort(rank); approximateOptions.sort(rank);
   const rough=mode==='model' && stock===null && !bundles;
   const common={rough,search,loadedScore:0,alternatives:options.slice(1,6),approximateOptions:approximateOptions.slice(0,6),

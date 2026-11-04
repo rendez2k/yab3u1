@@ -4,6 +4,8 @@ Checked 4 November 2026 against the three supplied videos, the current wiki, the
 
 The useful direction is one workflow with three starting choices: **keep the model's solid colours**, **use my existing reels**, or **use a named mixing pack**. Each should lead to the same reversible preview, editing tools and native project export. CMYK/CMYKW deserves a prominent route without removing exact solid-colour printing.
 
+Implementation update: [2.6.40](full-spectrum-release-2.6.40.md) delivers the verified catalogue update and the first reversible pack-comparison improvements below. Its optional importance control weights whole source colours; it is not the regional brush proposed in priority 3. Physical optical validation remains outstanding.
+
 **What the videos demonstrate**
 
 | Source and evidence | Takeaway for YAB3D |

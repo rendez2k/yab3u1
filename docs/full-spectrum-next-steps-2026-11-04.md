@@ -4,6 +4,8 @@ Research checked on 4 November 2026. This is a development proposal, not a claim
 
 Implementation status: [2.6.38 release scope](full-spectrum-release-2.6.38.md) records the delivered bundle, capacity, native export and calibration foundations and the optical methods still open. This proposal remains the full roadmap; its acceptance criteria are not all satisfied by that release.
 
+Update: [2.6.40 release scope](full-spectrum-release-2.6.40.md) adds the verified Bambu CMYKW pack, reversible reel/subset comparisons, clearer starting choices and source-colour ranking priorities. A spatial brush and physically validated optical methods remain open.
+
 Follow-up: [the supplied iDither videos, coaster and exact Bambu pack](idither-feature-review-2026-11-04.md) add a prioritised feature comparison, inspection of the demo's actual project settings, and verified PLA Palette swatches. That review distinguishes the features already delivered from remaining optical experiments.
 
 My recommendation is to make reliable colour reproduction and a continuous editing workflow the next release. Add more advanced wall and top-surface techniques as separately tested experiments. YAB3D already has useful foundations; several improvements should extend those rather than add another separate screen.

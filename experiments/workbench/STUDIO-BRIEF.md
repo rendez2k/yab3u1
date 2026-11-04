@@ -21,3 +21,17 @@ References inspected: the user's two videos and four UI images; Shapr3D's adapti
 Validate desktop and mobile together, including a loaded project, selected-object controls, colour preview/cancel, split/export round trips, undo and reduced motion. Build and deploy only the workbench-test alias.
 
 Additional research: Refero's Spline editor (https://refero.design/pages/58c29774-a6e3-4de2-a899-5dd25b79d815) and Womp examples, and Mobbin's Figma web collection (https://mobbin.com/apps/figma-web-1f89f45c-7564-44a0-9696-31df9b6310f8/10aa7650-e5d6-498b-9b34-3af156c8ed89/screens). Observed patterns: a compact tool island over the canvas, stable object list, and precise contextual properties. These inform hierarchy; no third-party screenshots or assets ship in the app. Open Design was not available through the connected tools.
+
+## Direction contract — filament comparison, 4 November 2026
+
+THESIS: Make choosing actual reels and judging their colour trade-offs one reversible decision beside the model. The user has authorised this extension for the full release and main.
+
+OWN-WORLD: Preserve the implemented Plex typography, neutral studio surfaces, green actions, native fields and flat inspector groups. No replacement design system or new raster assets.
+
+STORY: Choose model colours, loaded reels or a named pack; include or omit its reels; compare a few predicted results; explicitly apply one. Capacity and PETG remain visible. Important source colours can receive extra ranking weight without changing their paint.
+
+FIRST VIEWPORT: Keep the model canvas and floating tools intact. Put the starting choice, input count and contextual pack controls at the top of Colours. Use the existing Apply action. Additional product and calibration details remain in disclosures.
+
+FORM: Ordinary extension of the existing inspector; no concept seed applies. Previewing a smaller set updates the model while keeping applied reels and plate edits intact. Reuse existing button motion and reduced-motion rules.
+
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance

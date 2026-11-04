@@ -1,9 +1,10 @@
 import {norm} from './colour.js';
 import {filamentIdentity,reelIdentity} from './filamentIdentity.js';
 
-export const CATALOGUE_REVISION='2026-11-04.1';
+export const CATALOGUE_REVISION='2026-11-04.2';
 const snap='https://www.snapmaker.com/blog/which-cmyk-filament-should-i-choose/';
-const bambu='https://forum.bambulab.com/t/bambu-lab-h3c-our-full-reveal/261955';
+const bambu='https://uk.store.bambulab.com/products/pla-palette-cmykw';
+export const BAMBU_PALETTE_SWATCH_SOURCE='https://store.bblcdn.com/s7/default/8a89cc11c9ce4421a9593f9ee9580982/Bambu_PLA_Palette_Hex_Code.pdf';
 const poly='https://shop.polymaker.com/products/translucent-pla';
 const elegoo='https://eu.elegoo.com/products/pla-cmyk';
 // These are display swatches, not measurements of printed mixtures. Missing
@@ -15,9 +16,12 @@ const make=(brand,family,edition,names,colours,source,opticalClass='unknown',pub
 }));
 const cm=['Cyan','Magenta','Yellow'], nominal=['#00FFFF','#FF00FF','#FFFF00'];
 const bundle=(id,name,brand,edition,kind,reels,source,note,application='model')=>({id,name,brand,edition,kind,reels:reels.map(r=>({...r,bundleId:id})),source,note,application,checked:'2026-11-04',calibration:'unmeasured'});
+const bambuReels=make('Bambu Lab','PLA Palette','2026',[...cm,'Key','White'],['#0090DA','#E24585','#FCE300','#000000','#FFFFFF'],bambu,'opaque',true)
+  .map(r=>({...r,opticalClass:r.name==='Bambu Lab Key'?'translucent':'opaque'}));
 export const FILAMENT_BUNDLES=Object.freeze([
-  bundle('bambu-palette-cmyw','PLA Palette · CMY + White','Bambu Lab','PLA Palette','curated',make('Bambu Lab','PLA Palette','2026', [...cm,'White'],[...nominal,'#FFFFFF'],bambu),bambu,'PLA Palette is supported by Bambu Studio 2.9.1. Select its official material preset in the slicer. Display colours are nominal; no measured YAB3D profile yet.'),
-  bundle('bambu-palette-cmykw','PLA Palette · CMY + Key + White','Bambu Lab','PLA Palette','curated',make('Bambu Lab','PLA Palette','2026',[...cm,'Key','White'],[...nominal,'#000000','#FFFFFF'],bambu),bambu,'Five physical reels required. Key and White are separate products. This is a selected combination, not a claim about a retail pack.'),
+  bundle('bambu-palette-cmykw','PLA Palette · CMYKW','Bambu Lab','PLA Palette','retail',bambuReels,bambu,'Five 1 kg reels in the official pack. CMYW is opaque; Key (black) is translucent. Official display swatches; YAB3D blends are unmeasured.'),
+  bundle('bambu-palette-cmyw','PLA Palette · CMY + White','Bambu Lab','PLA Palette','curated',bambuReels.filter(r=>r.name!=='Bambu Lab Key'),bambu,'Four-reel subset of the five-reel CMYKW pack. Leaves out Key (black). Official display swatches; YAB3D blends are unmeasured.'),
+  bundle('bambu-palette-cmyk','PLA Palette · CMY + Key','Bambu Lab','PLA Palette','curated',bambuReels.filter(r=>r.name!=='Bambu Lab White'),bambu,'Four-reel subset of the five-reel CMYKW pack. Leaves out White. Key (black) is translucent. Official display swatches; YAB3D blends are unmeasured.'),
   bundle('snapmaker-white','Full Spectrum · White Edition','Snapmaker','White Edition','retail',make('Snapmaker','PLA Full Spectrum','White Edition',[...cm,'White'],[...nominal,'#FFFFFF'],snap,'semi-translucent'),snap,'White Edition has reformulated CMY. Swapping the grey reel in Gray Edition does not recreate it. Manufacturer guidance: 0.4 mm nozzle or smaller, layers of 0.10 mm or less.'),
   bundle('snapmaker-gray','Full Spectrum · Gray Edition','Snapmaker','Gray Edition','retail',make('Snapmaker','PLA Full Spectrum','Gray Edition',[...cm,'Gray'],[...nominal,'#808080'],snap,'semi-translucent'),snap,'For muted colours. Its CMY formulation is distinct from White Edition. Nominal display swatches need printed calibration.'),
   bundle('polymaker-cmyg','Panchroma Translucent · CMY + Grey','Polymaker','Translucent','curated',make('Polymaker','Panchroma','Translucent',[...cm,'Grey'],['#08ABFB','#D93B90','#F9ED3D','#9199A4'],poly,'translucent',true),poly,'A combination of individual Panchroma Translucent products. Manufacturer display colours are not measured blends.'),
@@ -42,4 +46,44 @@ export function bundleReels(bundle,capacity,interfaceReel=null) {
 }
 export function bundleOwned(bundle,stock=[]) {
   return bundle.reels.filter(r=>stock.some(s=>reelIdentity(r)===reelIdentity(s))).length;
+}
+
+/** A draft subset never mutates the retail pack or the applied reel assignment. */
+export function selectBundleReels(bundle,indices) {
+  if(!bundle?.reels?.length || !Array.isArray(indices) || !indices.length || indices.some(i=>!Number.isInteger(i)||i<0||i>=bundle.reels.length) || new Set(indices).size!==indices.length)
+    throw Error('Select at least one reel from this set.');
+  const selected=new Set(indices), omitted=bundle.reels.filter((_,i)=>!selected.has(i));
+  const reels=bundle.reels.filter((_,i)=>selected.has(i)).map(r=>({...r}));
+  const short=r=>r.brand&&r.name.startsWith(r.brand+' ')?r.name.slice(r.brand.length+1):r.name;
+  return {...bundle,reels,parentBundleId:bundle.parentBundleId||bundle.id,
+    id:omitted.length?`${bundle.id}:reels:${[...indices].sort((a,b)=>a-b).join('-')}`:bundle.id,
+    name:omitted.length?`${bundle.name} · without ${omitted.map(short).join(', ')}`:bundle.name,
+    omittedReels:[...(bundle.omittedReels||[]),...omitted].map(r=>({...r})),
+    kind:omitted.length?'subset':bundle.kind};
+}
+
+/** Exhaustive only for small sets. Large collections need an explicit selection. */
+export function smallerBundleOptions(bundle,count) {
+  if(!Number.isInteger(count)||count<1||count>bundle.reels.length)throw Error('Choose a valid number of model inputs.');
+  if(count===bundle.reels.length)return [selectBundleReels(bundle,bundle.reels.map((_,i)=>i))];
+  let combinations=1;
+  for(let i=1;i<=Math.min(count,bundle.reels.length-count);i++)combinations=combinations*(bundle.reels.length-i+1)/i;
+  if(combinations>64)throw Error('Too many combinations. Select fewer reels first, then compare again.');
+  const result=[],chosen=[];
+  const visit=start=>{
+    if(chosen.length===count){result.push(selectBundleReels(bundle,chosen));return;}
+    for(let i=start;i<=bundle.reels.length-(count-chosen.length);i++){chosen.push(i);visit(i+1);chosen.pop();}
+  };
+  visit(0);return result;
+}
+
+export function compatibleBundleOptions(bundles,capacity,supportInterface=false) {
+  const count=capacity-(supportInterface?1:0), unique=new Map();
+  if(count<1)return [];
+  for(const b of bundles.filter(b=>b.application!=='backlit')) {
+    let candidates=[];
+    try{candidates=smallerBundleOptions(b,Math.min(count,b.reels.length));}catch{continue;}
+    for(const candidate of candidates){const key=candidate.reels.map(reelIdentity).sort().join(';');if(!unique.has(key))unique.set(key,candidate);}
+  }
+  return [...unique.values()];
 }

@@ -162,6 +162,14 @@
   #bundlepanel [hidden] { display:none; }
   #bundlepanel select, #bundlepanel input:not([type=checkbox]), #spectrumbambu select { width:100%; }
   #bundlepanel a { color:inherit; text-underline-offset:3px; }
+  #bundlepanel [data-pack-controls]:not([hidden]), #bundlepanel .bundle-compare[open] { display:grid; gap:12px; }
+  #bundlepanel .bundle-reel-options { display:grid; gap:4px; }
+  #bundlepanel .bundle-reel { display:grid; grid-template-columns:18px 24px minmax(0,1fr); align-items:center; gap:8px; min-height:44px; cursor:pointer; }
+  #bundlepanel .bundle-reel span { min-width:0; overflow-wrap:anywhere; }
+  #bundlepanel .bundle-reel small { display:block; color:var(--muted); font-size:11px; }
+  #bundlepanel .bundle-actions { display:flex; flex-wrap:wrap; gap:8px; }
+  #importantcolours { display:grid; gap:6px; }
+  #importantcolours .check { min-height:36px; }
   .bundle-swatches { display:flex; flex-wrap:wrap; gap:8px 12px; font-size:13px; }
   .bundle-swatches span { display:flex; align-items:center; }
   #reels { align-items: stretch; }
@@ -567,17 +575,14 @@
   <div class="palettecolumn">
   <div class="card hidden" id="reelscard">
     <div class="sectionhead"><h2>Your palette</h2><span class="hint" id="physicalslotcount">4 physical inputs</span></div>
-    <details id="filamentbundles" class="compact-options" open><summary>Filament sets &amp; printer capacity</summary><div id="bundlepanel"></div></details>
-    <div class="segs workflowmodes" role="group" aria-label="Filament starting point">
-      <button type="button" data-workflow="model" aria-pressed="true">Best colours for this model</button>
-      <button type="button" data-workflow="loaded" aria-pressed="false">Use my loaded filaments</button>
-    </div>
+    <details id="filamentbundles" class="compact-options" open><summary>Palette &amp; printer inputs</summary><div id="bundlepanel"></div></details>
     <p class="hint" id="workflowhint"></p>
     <section id="supportinterface" aria-label="PETG support interface demo">
       <label class="check"><input type="checkbox" id="reservepetg">Three PLA colours + PETG interface · demo</label>
       <p class="hint" id="interfacehint" role="status">Reserve one slot for PETG; use the other three for model colours and blends.</p>
       <details id="interfacesettings" hidden><summary>Interface settings for this demo</summary><p class="hint">PLA support structure from slot 1, PETG contact layers from slot 4. Three dense interface layers, 0 mm top/bottom Z gap. Supports are enabled; source support style and painted areas are retained. The prime-tower shell uses PLA slot 1. These are starting settings: check the sliced interfaces and try a small print first.</p></details>
     </section>
+    <details id="colourpriorities" class="compact-options"><summary id="prioritysummary">Important colours</summary><p class="hint">Give these colours more weight when comparing palettes, even on small details. This affects every region painted that colour; it does not change the model or guarantee an exact match.</p><div id="importantcolours"></div></details>
     <details id="modelchoices" class="compact-options"><summary id="modelchoicessummary">Colour preferences · PLA</summary>
       <label class="field">Filament material <select id="modelmaterial"><option>PLA</option><option>PETG</option><option>ABS</option><option>TPU</option><option>ASA</option><option>PA</option></select></label>
       <p class="hint" id="exacthint">Keep essential colours exact (up to four), especially small eyes, lettering, skin tones or logos. Surface percentages measure the original mesh before preview simplification; they do not account for visibility or cutouts.</p>
