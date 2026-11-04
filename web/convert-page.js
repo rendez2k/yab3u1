@@ -25,7 +25,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.38";
+const VERSION = "2.6.39";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -847,6 +847,11 @@ function note(text) {
   if (node) node.textContent = text || "";
 }
 
+function previewWarning(message = '') {
+  $('previewwarning').textContent = message;
+  $('previewwarning').hidden = !message;
+}
+
 async function refreshPreview() {
   if (!previewShown || !session.state) return;
   const token = (previewToken += 1);
@@ -869,6 +874,7 @@ async function refreshPreview() {
   }
   if (!preview.ok) {
     note(preview.error);
+    previewWarning(preview.error);
     window.__convertPreview = { mode: previewMode, triangles: 0,
                                 render: token, error: preview.error };
     return;
@@ -891,6 +897,7 @@ async function refreshPreview() {
     if (token !== previewToken) return;
     preview.setSoup(new Float32Array(0), new Float32Array(0));
     note(`the preview could not be drawn: ${error.message}`);
+    previewWarning(`Preview unavailable: ${error.message}`);
     window.__convertPreview = { mode: previewMode, triangles: 0,
                                 render: token, error: error.message };
     return;
@@ -913,6 +920,7 @@ async function refreshPreview() {
   preview.setSoup(positions, soup.colors, { fit });
   preview.setPickRanges(soup.pickRanges);
   preview.resize();
+  previewWarning(soup.layoutWarning);
   note(`${soup.triangles.toLocaleString()} facets drawn`
     + (soup.subdivided ? ` · ${soup.subdivided.toLocaleString()} sub-divided facets `
        + "are shown in their dominant colour; the exported paint still keeps every leaf"
@@ -928,6 +936,7 @@ async function refreshPreview() {
 }
 
 function resetPreview() {
+  previewWarning();
   previewToken += 1;
   previewShown = false;
   previewKey = null;

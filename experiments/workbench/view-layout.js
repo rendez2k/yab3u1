@@ -43,6 +43,7 @@ export function composeView(doc,kind) {
     move('#cutoutnote',panels.project);move('.previewdetails',panels.project);
     $('previewheading').textContent='Model & plate';
   }
+  move('#previewwarning',feedback);
   move('#chrome-extension',panels.help);
   panels.help.prepend(make('p',{class:'hint'},'The Chrome extension opens original MakerWorld projects in YAB3D. Choose Analyse & convert or Full Spectrum beside Open in YAB3D on the model page.'));
   const footer=doc.querySelector('#compatibility footer');if(footer)panels.help.append(footer);

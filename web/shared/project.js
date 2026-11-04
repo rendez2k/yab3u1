@@ -919,9 +919,11 @@ export function layoutInstances(project, plateId, objectIds, layout) {
   const plan = planLayout(bounds, layout.arrangement === 'objects'
     ? {...layout,footprints:selectionFootprints(project,plateId,objectIds)} : layout);
   if (plan.blocked) {
-    throw new ProjectError(`a ${plan.size[0].toFixed(1)} × ${plan.size[1].toFixed(1)} mm `
+    const error = new ProjectError(`a ${plan.size[0].toFixed(1)} × ${plan.size[1].toFixed(1)} mm `
       + `model does not fit the ${plan.width} × ${plan.depth} mm layout box, so there `
       + "is nothing to write; widen the box or reduce the spacing");
+    error.code = 'LAYOUT_DOES_NOT_FIT';
+    throw error;
   }
   const offsets = plan.placements ? null : layoutOffsets(bounds, plan, layout.centre || [0, 0]);
   const instances = [];

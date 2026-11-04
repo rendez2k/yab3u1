@@ -37,7 +37,7 @@ import { mountCalibration } from './shared/calibrationPanel.js';
 import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } from './shared/supportInterface.js';
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 
-const VERSION = "2.6.38";
+const VERSION = "2.6.39";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -1159,6 +1159,11 @@ document.querySelectorAll("[data-preview]").forEach((button) => {
 
 let previewToken = 0;
 
+function previewWarning(message = '') {
+  $('previewwarning').textContent = message;
+  $('previewwarning').hidden = !message;
+}
+
 async function refreshPreview() {
   const token = (previewToken += 1);
   $('previewnote').dataset.busy='false';
@@ -1185,9 +1190,11 @@ async function refreshPreview() {
   }
   if (!state.preview.ok) {
     $("previewnote").textContent = state.preview.error;
+    previewWarning(state.preview.error);
     return;
   }
   if (!state.objects.length || !state.assessed) {
+    previewWarning(state.previewFailed ? `Preview unavailable: ${state.previewFailed}` : '');
     state.preview.setSoup(new Float32Array(0), new Float32Array(0));
     $("previewnote").textContent = state.previewFailed
       ? ` the preview could not be drawn: ${state.previewFailed}`
@@ -1224,6 +1231,7 @@ async function refreshPreview() {
     state.previewFailed = error.message;
     state.preview.setSoup(new Float32Array(0), new Float32Array(0));
     $("previewnote").innerHTML = ` the preview could not be drawn: ${esc(error.message)}`;
+    previewWarning(`Preview unavailable: ${error.message}`);
     window.__preview = { mode: state.previewMode, triangles: 0, error: error.message };
     return;
   } finally {
@@ -1255,6 +1263,8 @@ function applyPreview(soup, fit) {
   state.preview.setSoup(positions, soup.colors, { fit });
   state.preview.setPickRanges(soup.pickRanges);
   state.preview.resize();
+  previewWarning(soup.layoutWarning || (state.layoutError
+    ? 'Layout needs attention. Showing source positions; extra copies are not arranged. Adjust Layout before exporting.' : ''));
   window.__preview = { mode: state.previewMode, triangles: soup.triangles,
                        floats: positions.length, colors: soup.colors.length,
                        strategy: state.strategy, truncated: soup.simplified,

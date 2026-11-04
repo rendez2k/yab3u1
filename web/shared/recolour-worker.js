@@ -128,8 +128,22 @@ function colourFacets(states, colours, mapping) {
 function preparePreview(plateId, objectIds, mode, colors, mapping, haveGeometry,
                         estimate, layout) {
   const original = mode === "original";
-  const current = instanceView(plateId, objectIds,
-                               layout ? { ...layout, estimate } : null);
+  let current, layoutWarning = '';
+  try {
+    current = instanceView(plateId, objectIds,
+                           layout ? { ...layout, estimate } : null);
+  } catch (error) {
+    if (error.code !== 'LAYOUT_DOES_NOT_FIT') throw error;
+    // A rejected print arrangement must not hide the source model. This is
+    // deliberately only an interactive preview: export and saved thumbnails
+    // still call the strict layout path. Do not restore removed objects.
+    const visible = project.selectionFootprints(loaded.project, plateId, objectIds)
+      .filter(part => (layout?.quantities?.[part.objectId] ?? 1) > 0)
+      .map(part => part.objectId);
+    if (!visible.length) throw error;
+    current = instanceView(plateId, visible, null);
+    layoutWarning = 'Layout does not fit this plate. Showing the remaining source objects in their original positions; extra copies are not arranged. Choose a different printer or adjust Layout before exporting.';
+  }
   const had = current.reused;
   // One colour lookup per facet: a palette, recipe, layout or Original/Result
   // change is a pass over the view's facets, never another parse.
@@ -145,6 +159,7 @@ function preparePreview(plateId, objectIds, mode, colors, mapping, haveGeometry,
   const sendPositions = haveGeometry !== current.id;
   return {
     geometryId: current.id,
+    layoutWarning,
     pickRanges: current.pickRanges || [],
     positions: sendPositions ? current.positions.slice() : null,
     colors: colours,
