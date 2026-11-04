@@ -72,7 +72,9 @@ function rebuild(positions, colors, states, facets, welded) {
   const outPositions = [];
   const outColors = [];
   const outStates = [];
+  const sourceFaces = [];
   for (const f of kept.values()) {
+    sourceFaces.push(f);
     for (let corner = 0; corner < 3; corner += 1) {
       const cell = tripleOf[f * 3 + corner];
       outPositions.push(welded.welded[cell * 3], welded.welded[cell * 3 + 1],
@@ -81,7 +83,7 @@ function rebuild(positions, colors, states, facets, welded) {
     for (let i = 0; i < 9; i += 1) outColors.push(colors[f * 9 + i]);
     if (states) outStates.push(states[f]);
   }
-  return { positions: outPositions, colors: outColors, states: outStates,
+  return { positions: outPositions, colors: outColors, states: outStates, sourceFaces,
            collapsed, weldedFacets: kept.size };
 }
 
@@ -166,7 +168,7 @@ export function clusterWithinBudget(positions, states, target) {
     const count = mesh.positions.length / 9;
     if (count > 0 && count <= target) {
       return { positions: Float32Array.from(mesh.positions),
-               states: Int32Array.from(mesh.states) };
+               states: Int32Array.from(mesh.states), sourceFaces: Uint32Array.from(mesh.sourceFaces) };
     }
   }
   throw new Error("There are too many copies to render a complete thumbnail. Reduce the copy count.");

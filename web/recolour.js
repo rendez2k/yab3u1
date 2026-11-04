@@ -1,4 +1,6 @@
 import {mountBundlePanel} from './shared/bundlePanel.js';
+import {mountFocusBrush} from './shared/focusBrush.js';
+import {focusWeights} from './shared/focusRegions.js';
 import {FILAMENT_BUNDLES} from './shared/filamentBundles.js';
 import {substituteReel} from './shared/filamentIdentity.js';
 import {mountBambuPrinterPicker} from './shared/bambuPrinterPicker.js';
@@ -37,7 +39,7 @@ import { mountCalibration } from './shared/calibrationPanel.js';
 import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } from './shared/supportInterface.js';
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 
-const VERSION = "2.6.40";
+const VERSION = "2.6.41";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -46,7 +48,7 @@ const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
 
 const state = {
   supportInterface:false, savedInterfaceReels:null, interfacePosition:3,
-  capacity:4, priority:"colour", paletteSource:"model", importantColours:[], compareBundles:null, bundleStock:[], bambuSetup:null, bambuRequired:false, bambuError:"",
+  capacity:4, priority:"colour", paletteSource:"model", importantColours:[], focusMarks:[], compareBundles:null, bundleStock:[], bambuSetup:null, bambuRequired:false, bambuError:"",
   entries: null, project: null, plateId: null, objects: [], reels: [], target: "snapmaker", u1Nozzle: "auto",
   mix: null, mapping: {}, recipes: [], ticked: new Set(),
   previewMode: "original", preview: null, previewGeometry: "", previewFailed: "",
@@ -64,6 +66,7 @@ const state = {
 window.__recolour = state;                    // the QA harness and the console
 
 let printerPanel=null, calibrationPanel=null, printOptimiser=null, bundlePanel=null, bambuPicker=null;
+let focusBrush=null,focusGeometry=null;
 function layerChoice() {
   const mode=$('spectrumlayermode').value;
   return ['snapmaker','bambu'].includes(state.target) ? (mode.startsWith('height:') ? {mode:'custom',value:mode.slice(7)} : {mode,value:$('spectrumlayerheight').value}) : null;
@@ -371,7 +374,7 @@ function requestRecommendation() {
     supportInterface:state.supportInterface,capacity:state.capacity,visibleLimit:colourLimit(state.target),priority:state.priority,bundles:state.compareBundles,
     stock:state.workflow==='model' && state.useOwned ? [...(state.stock||[]),...state.bundleStock] : null,
     type:state.modelType,keepExact:state.workflow==='model'&&!state.compareBundles ? state.keepExact : [],
-    weights,importantColours:state.importantColours,blends:state.strategy!=='solid',calibration:calibrationPanel?.active() || null};
+    weights,importantColours:state.importantColours,focusWeights:focusWeights(state.focusMarks,focusGeometry?.ranges),blends:state.strategy!=='solid',calibration:calibrationPanel?.active() || null};
   // Model colours and slot arrangement do not alter the palette search. Applying
   // or moving a suggestion must not discard the palette the user just chose.
   const keyReels=compareModel && state.supportInterface
@@ -461,7 +464,7 @@ function renderWorkflow() {
   const areas=colourWeights(state.assessed?.sourceColors || {},state.assessed?.surfaceAreas);
   const totalArea=Object.values(areas).reduce((a,b)=>a+b,0);
   state.importantColours=state.importantColours.filter(c=>colours.includes(c));
-  $('prioritysummary').textContent=`Important colours${state.importantColours.length?' · '+state.importantColours.length+' prioritised':''}`;
+  $('prioritysummary').textContent=`Important details & colours${state.focusMarks.length?' · details marked':state.importantColours.length?' · '+state.importantColours.length+' prioritised':''}`;
   const prioritySignature=JSON.stringify([colours,state.importantColours]);
   if($('importantcolours').dataset.signature!==prioritySignature){
     $('importantcolours').dataset.signature=prioritySignature;
@@ -677,7 +680,8 @@ function setLoading(active) {
 }
 
 function resetForUpload() {
-  state.modelApplied=false;state.importantColours=[];
+  focusBrush?.reset();focusGeometry=null;
+  state.modelApplied=false;state.importantColours=[];state.focusMarks=[];
   state.quantities={};state.footprints=[];state.bounds=null;state.boundsKey='';state.measuredKey='';
   $('spectrumcopies').value=1;$('spectrumarrangement').value='auto';clearFill();
   $('subdividemix').checked=true;
@@ -1277,6 +1281,10 @@ function applyPreview(soup, fit) {
   try { state.preview.setPlate(layoutSettings()); } catch { state.preview.setPlate(null); }
   state.preview.setSoup(positions, soup.colors, { fit });
   state.preview.setPickRanges(soup.pickRanges);
+  const previousFocus=JSON.stringify(focusWeights(state.focusMarks,focusGeometry?.ranges));
+  focusGeometry={positions,ranges:soup.pickRanges,faces:soup.sourceFaces||focusGeometry?.faces,states:soup.sourceStates||focusGeometry?.states};
+  if(focusGeometry.faces&&focusGeometry.states)focusBrush?.sync(state.preview,focusGeometry);
+  if(state.focusMarks.length&&previousFocus!==JSON.stringify(focusWeights(state.focusMarks,focusGeometry.ranges))){invalidateRecommendation();requestRecommendation();}
   state.preview.resize();
   previewWarning(soup.layoutWarning || (state.layoutError
     ? 'Layout needs attention. Showing source positions; extra copies are not arranged. Adjust Layout before exporting.' : ''));
@@ -1758,8 +1766,10 @@ receiveModel({mount: $("drop").parentElement, canReceive:()=>!state.project&&!st
   return Boolean(state.project);
 }});
 
+focusBrush=mountFocusBrush($('focusbrush'),{read:()=>state.focusMarks,write:marks=>{state.focusMarks=marks;renderWorkflow();},compare:()=>{invalidateRecommendation();refresh();},sources:()=>state.assessed?.sourceColors||{}});
+export const workbenchFocus={stop:()=>focusBrush?.stop(),key:event=>focusBrush?.key(event)};
 export {state, load, refresh, renderObjects, renderQuantityFields, layoutChanged, textureImporter};
-const workbenchSettingKeys=['capacity','capacityChosen','priority','paletteSource','importantColours','compareBundles','bambuSetup','bambuRequired','bambuError','target','u1Nozzle','supportInterface','interfacePosition','reels','strategy','overrides','workflow','modelType','keepExact','useOwned','modelApplied','modeReels','locked','appliedSlotOrder','loadedTuning','reelView'];
+const workbenchSettingKeys=['capacity','capacityChosen','priority','paletteSource','importantColours','focusMarks','compareBundles','bambuSetup','bambuRequired','bambuError','target','u1Nozzle','supportInterface','interfacePosition','reels','strategy','overrides','workflow','modelType','keepExact','useOwned','modelApplied','modeReels','locked','appliedSlotOrder','loadedTuning','reelView'];
 export function workbenchCaptureSettings(){return {state:structuredClone(Object.fromEntries(workbenchSettingKeys.filter(k=>state[k]!==undefined).map(k=>[k,state[k]]))),controls:Object.fromEntries(['spectrumlayermode','spectrumlayerheight','subdividemix'].map(id=>[id,$(id).type==='checkbox'?$(id).checked:$(id).value]))};}
 export function workbenchRestoreSettings(saved){if(!saved||!state.project)return;Object.assign(state,saved.state);state.reviewed=false;for(const [id,value]of Object.entries(saved.controls))if($(id).type==='checkbox')$(id).checked=value;else $(id).value=value;renderReels();renderWorkflow();return refresh();}
 export async function workbenchSourceColours(){if(!state.project)return null;return (await background().preview(state.plateId,state.objects,'original',paletteOf(null,'original'),null,state.geometryId,state.assessed?.counts.triangles||0,state.layout)).colors;}

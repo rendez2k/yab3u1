@@ -162,7 +162,7 @@ export function recommendPalette({sources,loaded,stock=null,locked=[],blends=tru
 }
 
 /** Model-first does not use the saved printer palette. Pack previews keep product identities. */
-export function recommendWorkflow({mode='model', sources, loaded=[], stock=null, type='PLA', keepExact=[], weights={}, importantColours=[], blends=true, calibration=null, supportInterface=false, capacity=4, visibleLimit=16, bundles=null, priority='colour', onProgress=()=>{}}) {
+export function recommendWorkflow({mode='model', sources, loaded=[], stock=null, type='PLA', keepExact=[], weights={}, importantColours=[], focusWeights={}, blends=true, calibration=null, supportInterface=false, capacity=4, visibleLimit=16, bundles=null, priority='colour', onProgress=()=>{}}) {
   if(!Number.isInteger(capacity)||capacity<1||capacity>24)throw Error('Choose 1–24 physical inputs.');
   const colours=[...new Set(Object.values(sources || {}).map(norm).filter(Boolean))];
   if(!colours.length) throw Error('Select a model with readable colours.');
@@ -189,7 +189,7 @@ export function recommendWorkflow({mode='model', sources, loaded=[], stock=null,
     let result=outcomeFor(sources,reels,blends,false,calibration,budget);
     if(result.unresolved && blends) result=outcomeFor(sources,reels,true,true,calibration,budget);
     if(result.unresolved) return;
-    result.score=scoreColourOutcome(result.outcome.rows,weights,importantColours);
+    result.score=scoreColourOutcome(result.outcome.rows,weights,importantColours,focusWeights);
     const option={reels:reels.map(r=>({...r})),type:reels.find(r=>r.role!=='support-interface').type,...result,usesLoaded:mode==='loaded'&&!bundle,
       ...(bundle?{bundleId:bundle.id,bundleName:bundle.name,bundleNote:bundle.note,omittedReels:bundle.omittedReels||[]}:{}),
       owned:reels.filter(r=>stock?.some(s=>reelIdentity(r)===reelIdentity(s))).length};

@@ -17,6 +17,7 @@ import { downscale, renderIso } from "./raster.js";
 import { layoutOffsets, planLayout } from "./layout.js";
 import { surfaceAreas } from './surfaceWeights.js';
 import {exportComparisonJob} from './comparisonExport.js';
+import {focusFingerprint} from './focusRegions.js';
 
 // Preview detail level, in triangles: a small fixture is drawn verbatim, a big
 // model is clustered down to this so the picture stays a recognisable surface
@@ -162,6 +163,8 @@ function preparePreview(plateId, objectIds, mode, colors, mapping, haveGeometry,
     layoutWarning,
     pickRanges: current.pickRanges || [],
     positions: sendPositions ? current.positions.slice() : null,
+    sourceFaces: sendPositions ? current.sourceFaces.slice() : null,
+    sourceStates: sendPositions ? current.states.slice() : null,
     colors: colours,
     triangles: current.triangles,
     subdivided: current.subdivided,
@@ -186,15 +189,16 @@ function buildGeometry(key, plateId, objectIds, estimate) {
   const soup = project.previewSoup(loaded.project, plateId, objectIds, {}, null,
                                    Infinity, { full: true, estimate });
   const simple = cluster(soup.positions, soup.colors, soup.states, PREVIEW_TARGET);
+  const positions=floatsOf(simple.positions),states=Int32Array.from(simple.states || []);
   return {
     id: (geometrySeq += 1),
     surfaceAreas: surfaceAreas(soup.positions, soup.states),
     key,
-    positions: floatsOf(simple.positions),
+    positions,focusKey:`${key}|${focusFingerprint(positions,states)}`,
     // The buffer is detached the moment it is transferred, so the count has to
     // be remembered here rather than read back from the array later.
     triangleCount: simple.positions.length / 9,
-    states: Int32Array.from(simple.states || []),
+    states,
     simplified: simple.simplified,
     subdivided: soup.subdivided,
     unknown: soup.unknown,
@@ -248,15 +252,16 @@ function objectView(plateId, objectIds, layout) {
     p.mesh = meshes.get(id);
   }
   const length = parts.reduce((n,p)=>n+p.mesh.positions.length,0);
-  const positions = new Float32Array(length), states = new Int32Array(length/9);
+  const positions = new Float32Array(length), states = new Int32Array(length/9), sourceFaces=new Uint32Array(length/9);
   let at = 0;
   const pickRanges=[];
-  for (const {mesh,offset,objectId} of parts) {
-    pickRanges.push({objectId,start:at/3,count:mesh.positions.length/3});
+  for (const {mesh,offset,objectId,base} of parts) {
+    pickRanges.push({objectId,focusKey:base.focusKey,start:at/3,count:mesh.positions.length/3});
     for(let i=0;i<mesh.positions.length;i++) positions[at+i] = mesh.positions[i]+offset[i%3];
+    for(let f=0;f<mesh.states.length;f++)sourceFaces[at/9+f]=mesh.sourceFaces?.[f]??f;
     states.set(mesh.states,at/9); at+=mesh.positions.length;
   }
-  const view = {id:++geometrySeq,positions,states,pickRanges,triangles:length/9,simplified:true,
+  const view = {id:++geometrySeq,positions,states,sourceFaces,pickRanges,triangles:length/9,simplified:true,
     subdivided:parts.reduce((n,p)=>n+p.base.subdivided,0),unknown:parts.reduce((n,p)=>n+p.base.unknown,0),
     total:parts.reduce((n,p)=>n+p.base.total,0),soupTriangles:length/9,ms:0,reused:false,
     copies:plan?.copies || 1,capacity:plan?.capacity,planCopies:plan?.copies || 1};
@@ -300,6 +305,8 @@ function transferOf(preview) {
   const out = [];
   if (preview.positions) out.push(preview.positions.buffer);
   if (preview.colors) out.push(preview.colors.buffer);
+  if (preview.sourceFaces) out.push(preview.sourceFaces.buffer);
+  if (preview.sourceStates) out.push(preview.sourceStates.buffer);
   return out;
 }
 

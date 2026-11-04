@@ -19,13 +19,26 @@ test('worker labels every visible copy and keeps ranges on colour-only refreshes
   assert.equal(first.preview.pickRanges.length,objects.length*2);
   assert.equal(first.preview.pickRanges.reduce((n,r)=>n+r.count,0),first.preview.positions.length/3);
   assert.equal(first.preview.pickRanges[0].start,0);
+  assert.equal(first.preview.sourceFaces.length,first.preview.positions.length/9);
+  assert.equal(first.preview.sourceStates.length,first.preview.positions.length/9);
+  for(const object of objects){
+    const ranges=first.preview.pickRanges.filter(r=>r.objectId===object.objectId);
+    assert.equal(ranges[0].focusKey,ranges[1].focusKey,'copies share their source surface');
+    const ids=r=>first.preview.sourceFaces.slice(r.start/3,(r.start+r.count)/3);
+    assert.deepEqual(ids(ranges[0]),ids(ranges[1]));
+  }
   for(let i=1;i<first.preview.pickRanges.length;i++)assert.equal(first.preview.pickRanges[i].start,first.preview.pickRanges[i-1].start+first.preview.pickRanges[i-1].count);
   const builds=self.__geometryBuilds;
   await self.onmessage({data:{type:'preview',id:3,plateId,objects:null,mode:'result',colors:{1:'#00FF00'},haveGeometry:first.preview.geometryId,layout}});
   const second=replies.find(r=>r.id===3).preview;
   assert.equal(second.positions,null);assert.deepEqual(second.pickRanges,first.preview.pickRanges);assert.equal(self.__geometryBuilds,builds);
+  assert.equal(second.sourceFaces,null);assert.equal(second.sourceStates,null);
   const omit=objects[0].objectId;
   await self.onmessage({data:{type:'preview',id:4,plateId,objects:null,mode:'original',layout:{...layout,quantities:{[omit]:0}}}});
   const third=replies.find(r=>r.id===4).preview;
   assert.equal(third.pickRanges.length,(objects.length-1)*2);assert.ok(third.pickRanges.every(r=>r.objectId!==omit));
+  for(const r of third.pickRanges)assert.equal(r.focusKey,first.preview.pickRanges.find(old=>old.objectId===r.objectId).focusKey,'removing another object keeps source references');
+  await self.onmessage({data:{type:'load',id:5,bytes,light:true}});
+  await self.onmessage({data:{type:'preview',id:6,plateId,objects:null,mode:'original',layout}});
+  assert.deepEqual(replies.find(r=>r.id===6).preview.pickRanges,first.preview.pickRanges,'undo reloads retain source references');
 });

@@ -35,3 +35,9 @@ FIRST VIEWPORT: Keep the model canvas and floating tools intact. Put the startin
 FORM: Ordinary extension of the existing inspector; no concept seed applies. Previewing a smaller set updates the model while keeping applied reels and plate edits intact. Reuse existing button motion and reduced-motion rules.
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+
+## Direction contract — important model details, 4 November 2026
+
+Extend the existing Colours inspector with a regional priority brush. Keep the pale canvas, Plex type, compact green actions and current floating model tools. No new visual system or raster assets. “Important details & colours” contains one entry action, Add/Erase/Orbit, brush size, Undo/Clear and Done & compare. Existing whole-colour priorities remain available in a nested disclosure. Marks are a reversible green overlay, never a paint edit; they influence candidate ranking using original source colours. Only visible surfaces are marked, and copies share their source part's priorities. Palette previews, applied reels, camera and export geometry remain intact. Changed or removed source surfaces do not receive stale marks. Explain approximate preview boundaries and global palette effects beside the controls. Preserve the existing keyboard conventions and reduced motion. Validate loaded desktop and mobile, brush/occlusion, Undo, copies, palette ranking and exports. This is an ordinary extension authorised for main and the full release.
+
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance

@@ -18,6 +18,7 @@ const reportError=error=>{const p=document.createElement('p');p.setAttribute('ro
 function setPanel(panel) {
   if(!view.panels[panel])return;
   if(panel===currentPanel&&!view.panels[panel].hidden)return;
+  if(panel!=='colours')engine?.workbenchFocus?.stop();
   if(panel!=='layout')prepared?.close();
   else prepared?.resume();
   if(panel!=='edit')studio?.leavePanel();
@@ -52,7 +53,7 @@ function context() {
 const api={kind,setPanel,context,
   get loading(){return loading;},
   preparePlates:options=>{setPanel('layout');return prepareWorkbenchPlates($('printoptimiser'),options);},
-  key:event=>{if(!prepared?.key(event)&&!studio?.key(event))objectTools?.key(event);},
+  key:event=>{if(!engine?.workbenchFocus?.key(event)&&!prepared?.key(event)&&!studio?.key(event))objectTools?.key(event);},
   captureView:()=>({panel:currentPanel,scroll:view.inspector.scrollTop}),
   restoreView(saved){if(saved){setPanel(saved.panel);view.inspector.scrollTop=saved.scroll;}},
   source:()=>kind==='converter'?engine.session.sourceFile:engine.workbenchSource(),
@@ -174,7 +175,7 @@ try {
     const heading=view.panels.layout.querySelector('.task-heading');heading.querySelector('h1').textContent=id?'Prepared plates':'Arrange your plate';heading.querySelector('p').textContent=id?'Choose a plate to inspect the copies. Edit model returns to your original quantities.':'Click an object in the preview to duplicate or remove it.';
   }});
   connectPlatePreview($('printoptimiser'),prepared);
-  document.addEventListener('keydown',e=>{if(prepared.key(e)||studio.key(e))e.stopImmediatePropagation();},true);
+  document.addEventListener('keydown',e=>{if(engine.workbenchFocus?.key(e)||prepared.key(e)||studio.key(e))e.stopImmediatePropagation();},true);
   document.body.dataset.mounted='true';
   window.workbenchEngine=api;
   parentHost?.workbench?.ready(kind,api);

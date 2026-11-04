@@ -170,6 +170,16 @@
   #bundlepanel .bundle-actions { display:flex; flex-wrap:wrap; gap:8px; }
   #importantcolours { display:grid; gap:6px; }
   #importantcolours .check { min-height:36px; }
+  .focus-actions { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:10px 0; }
+  .focus-actions button { flex:0 1 auto; min-height:36px; }
+  .focus-size { display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; margin:12px 0; }
+  .focus-size input { grid-column:1 / -1; width:100%; accent-color:var(--accent,#246b50); }
+  .focus-size output { font-variant-numeric:tabular-nums; }
+  .focus-brush-ring { position:fixed; z-index:100; pointer-events:none; border:2px solid #13694e; border-radius:50%; transform:translate(-50%,-50%); background:#399f7820; box-shadow:0 1px 3px #ffffffcc; }
+  .focus-brush-ring[data-mode="erase"] { border-style:dashed; }
+  canvas.focus-marking { cursor:crosshair; }
+  #focusbrush[data-active="true"] [data-focus-explanation],#focusbrush[data-active="true"] [data-focus-visibility] { display:none; }
+  @media(max-width:760px) { #focusbrush button { min-height:44px; } #stage[data-focus-brush]>.studio-toolstrip { visibility:hidden;pointer-events:none; } }
   .bundle-swatches { display:flex; flex-wrap:wrap; gap:8px 12px; font-size:13px; }
   .bundle-swatches span { display:flex; align-items:center; }
   #reels { align-items: stretch; }
@@ -582,7 +592,23 @@
       <p class="hint" id="interfacehint" role="status">Reserve one slot for PETG; use the other three for model colours and blends.</p>
       <details id="interfacesettings" hidden><summary>Interface settings for this demo</summary><p class="hint">PLA support structure from slot 1, PETG contact layers from slot 4. Three dense interface layers, 0 mm top/bottom Z gap. Supports are enabled; source support style and painted areas are retained. The prime-tower shell uses PLA slot 1. These are starting settings: check the sliced interfaces and try a small print first.</p></details>
     </section>
-    <details id="colourpriorities" class="compact-options"><summary id="prioritysummary">Important colours</summary><p class="hint">Give these colours more weight when comparing palettes, even on small details. This affects every region painted that colour; it does not change the model or guarantee an exact match.</p><div id="importantcolours"></div></details>
+    <details id="colourpriorities" class="compact-options"><summary id="prioritysummary">Important details &amp; colours</summary>
+      <div id="focusbrush">
+        <p class="hint" data-focus-explanation>Mark important details on the model to give their colours more weight when comparing palettes. This guides the whole palette; it does not repaint the marked area or guarantee an exact match.</p>
+        <button type="button" data-focus-start disabled>Mark details on model</button>
+        <div data-focus-tools hidden>
+          <div class="focus-actions" role="group" aria-label="Detail brush mode"><button type="button" data-focus-mode="add" aria-pressed="true">Add</button><button type="button" data-focus-mode="erase" aria-pressed="false">Erase</button><button type="button" data-focus-mode="orbit" aria-pressed="false">Orbit</button></div>
+          <label class="focus-size">Brush size <output data-focus-size-value>40 px</output><input type="range" min="12" max="100" step="2" value="40" data-focus-size aria-label="Detail brush size"></label>
+          <p class="hint">Drag to mark. Orbit or Alt-drag turns the model. Ctrl/Cmd+Z undoes a stroke.</p>
+          <button type="button" data-focus-done>Done &amp; compare palettes</button>
+        </div>
+        <div class="focus-actions"><button type="button" data-focus-undo disabled>Undo mark</button><button type="button" data-focus-clear disabled>Clear marks</button></div>
+        <label class="check" data-focus-visibility><input type="checkbox" data-focus-show disabled>Show marked details</label>
+        <p class="hint" data-focus-status role="status" aria-live="polite"></p>
+        <p class="hint" data-focus-explanation>Marks follow copies of the same part. They use the preview surface, so fine boundaries are approximate. Changed or removed parts do not use their old marks.</p>
+      </div>
+      <details><summary>Prioritise a whole colour</summary><p class="hint">Give every region painted one of these colours extra weight.</p><div id="importantcolours"></div></details>
+    </details>
     <details id="modelchoices" class="compact-options"><summary id="modelchoicessummary">Colour preferences · PLA</summary>
       <label class="field">Filament material <select id="modelmaterial"><option>PLA</option><option>PETG</option><option>ABS</option><option>TPU</option><option>ASA</option><option>PA</option></select></label>
       <p class="hint" id="exacthint">Keep essential colours exact (up to four), especially small eyes, lettering, skin tones or logos. Surface percentages measure the original mesh before preview simplification; they do not account for visibility or cutouts.</p>

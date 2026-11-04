@@ -147,12 +147,14 @@ export class Preview {
   bindEvents() {
     const canvas = this.canvas;
     canvas.addEventListener("pointerdown", (event) => {
+      if(this.pointerTool?.down(event))return;
       this.dragging = event.button === 2 || (event.shiftKey&&!this.multiSelect) ? "pan" : "orbit";
       this.last = [event.clientX, event.clientY];
       this.pointerStart=[event.clientX,event.clientY];this.pointerMoved=false;
       canvas.setPointerCapture(event.pointerId);
     });
     canvas.addEventListener("pointermove", (event) => {
+      if(this.pointerTool?.move(event))return;
       if (!this.dragging) return;
       if(Math.hypot(event.clientX-this.pointerStart[0],event.clientY-this.pointerStart[1])>5)this.pointerMoved=true;
       const dx = event.clientX - this.last[0];
@@ -168,6 +170,7 @@ export class Preview {
       this.requestDraw();
     });
     const stop = (event) => {
+      if(this.pointerTool?.up(event))return;
       const click=event.type==='pointerup' && this.dragging==='orbit' && !this.pointerMoved;
       this.dragging = null;
       if (event.pointerId !== undefined) {
@@ -178,8 +181,10 @@ export class Preview {
         const rect=canvas.getBoundingClientRect();
         const triangle=pickTriangle(this.lastPositions,this.viewProjection,
           2*(event.clientX-rect.left)/rect.width-1,1-2*(event.clientY-rect.top)/rect.height);
-        this.selectRange(this.pickRanges.findIndex(r=>triangle>=r.start/3&&triangle<(r.start+r.count)/3),event);
-        this.onPick?.({triangle,event});
+        if(!this.pointerTool?.active){
+          this.selectRange(this.pickRanges.findIndex(r=>triangle>=r.start/3&&triangle<(r.start+r.count)/3),event);
+          this.onPick?.({triangle,event});
+        }
       }
     };
     canvas.addEventListener("pointerup", stop);
@@ -187,6 +192,7 @@ export class Preview {
     canvas.addEventListener("contextmenu", (event) => event.preventDefault());
     canvas.addEventListener("wheel", (event) => {
       event.preventDefault();
+      if(this.pointerTool?.drawing)return;
       this.distance *= event.deltaY > 0 ? 1.12 : 0.89;
       this.clampDistance();
       this.requestDraw();
@@ -430,6 +436,7 @@ export class Preview {
       gl.depthFunc(gl.LESS);gl.uniform1i(this.uniforms.selected,0);
     }
     }
+    this.onDraw?.();
   }
 }
 
