@@ -44,7 +44,7 @@ Independent community extension. Not affiliated with or endorsed by MakerWorld, 
 
 Version 1.5.3.7 opens the production YAB3D Workbench and updates the privacy information.
 
-**Category:** Productivity (use the equivalent Workflow & Planning category if offered).
+**Category:** Workflow and planning.
 
 **Single purpose:** Prepare user-selected MakerWorld 3MF projects for printing by opening them in YAB3D or converting them locally for Snapmaker U1.
 
@@ -54,8 +54,10 @@ Version 1.5.3.7 opens the production YAB3D Workbench and updates the privacy inf
 
 | Asset | Dimensions | Status | File |
 | --- | --- | --- | --- |
-| Store icon | 128 × 128 | Ready; inherited U1 converter icon | extensions/makerworld-yab3d/assets/icons/icon128.png |
-| Screenshot | 1280 × 800 | Pending live extension capture | — |
+| Store icon | 128 × 128 | Uploaded; inherited U1 converter icon | extensions/makerworld-yab3d/assets/icons/icon128.png |
+| Screenshot | 1280 × 800 JPEG | Uploaded and accepted; production Workbench 2.6.38 with the built-in four-colour support arch | docs/store-assets/workbench-2.6.38-1280x800.jpg |
+
+The screenshot demonstrates the destination web workspace. It uses the public built-in sample, not a user's private model. Optional promotional tiles were not supplied.
 
 ## Permissions justification
 
@@ -80,14 +82,30 @@ Dashboard disclosure: website content handled for the core purpose; disclose no 
 
 Public; all supported regions; free.
 
+Automatic publication after review is enabled.
+
 Publisher: r2k. Contact: hello@productkit.digital (already published on the YAB3D site). Homepage: https://yab3d.uk/. Support: https://github.com/rendez2k/yab3u1/issues.
 
 ## Version history and review
 
 | Version | Date | Changes | Status |
 | --- | --- | --- | --- |
-| 1.5.3.7 | 2026-11-04 | Production Workbench handoff, clear fork name and updated privacy policy | Prepared locally; not uploaded |
+| 1.5.3.7 | 2026-11-04 | Production Workbench handoff, clear fork name and updated privacy policy | Submitted; dashboard shows Pending review |
 
 Package: web/downloads/makerworld-yab3d-1.5.3.7.zip. Rebuild with `node tools/build_chrome_extension.mjs`.
+
+Store item ID: `cbgaablimljekipakmeflccalaodkfcf`.
+
+Dashboard: https://chrome.google.com/webstore/devconsole/cd9f36a0-cb33-4e30-9299-ff472ec72a44/cbgaablimljekipakmeflccalaodkfcf/edit
+
+Submission verified in the signed-in dashboard on 4 November 2026: the confirmation read "Your extension was submitted for review" and the item status changed to "Pending review". This is not an approval or confirmation that the public listing is live. The uploaded package was verified as 1.5.3.7 with downloads, storage and host permissions.
+
+Saved disclosures: single purpose and all permission explanations; no remote code; website content only; all three limited-use certifications; live privacy policy URL. Distribution was verified as free, public and all regions.
+
+### Reviewer instructions
+
+Saved in the dashboard (464 characters; no account credentials supplied):
+
+> No YAB3D account is required. Open a MakerWorld model with a print profile. Use the workspace selector beside Open in YAB3D, then that button; allow the new tab. MakerWorld may require its own sign-in or verification to download. Alternatively use Convert to Snapmaker U1. Conversion and tab transfer are local; nothing is sent to a printer. Settings are available through the extension Options page. Public sample projects are also available at https://yab3d.uk/.
 
 Limitations: MakerWorld sign-in/verification remains under the user's control; popup permission may be needed; YAB3D handoff accepts projects up to 96 MiB. A live authenticated MakerWorld download and store review remain to be checked. No printer actions are triggered by this extension. Upstream MIT and derived PolyForm Noncommercial notices remain included; this package is distributed free and does not remove those conditions.
