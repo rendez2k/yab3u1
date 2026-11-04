@@ -1,12 +1,24 @@
 # YAB3D Workbench
 
-The production interface, v2.6.37. The original converter and Full Spectrum controllers remain its processing engines; the Workbench shell is now the published entry point.
+The production interface, v2.6.38. The original converter and Full Spectrum controllers remain its processing engines; the Workbench shell is now the published entry point.
+
+## 2.6.38 Full Spectrum and filament sets
+
+Colours now includes a versioned catalogue of Bambu PLA Palette, Snapmaker Full Spectrum White/Gray editions, Polymaker Panchroma Translucent and ELEGOO Rilievo combinations. Retail packs and curated combinations are labelled separately. Exact product/edition identity survives slot changes and export; a manual colour substitution clears that identity. Display swatches and unmeasured predictions are explicitly labelled, and backlit Rilievo is excluded from automatic reflected-light model comparisons.
+
+Choose a set, compare compatible sets, mark sets as owned, or save/import a custom combination. Full Spectrum supports configurable physical inputs (U1: four, Bambu: up to 24, Prusa: up to 16). Physical plus virtual entries must still fit the exporter limit: 24 Bambu or 16 elsewhere. Reserving PETG consumes one U1 input and never silently truncates a four-reel pack. Five-colour sets no longer assume a four-reel base when creating blend IDs.
+
+Bambu Full Spectrum uses the native printer/nozzle selector, preserves its material/extruder variant arrays, and applies the chosen regular layer height independently of sublayers. The Workbench retains printer context and input capacity between modes. The archive records a bounded, data-only `Metadata/YAB3D_colour_plan.json` with products, recipes, mapping, layer choice and calibration provenance. Reopened files can load those reel products explicitly; suggestions are recalculated, not a restoration of an entire editing session.
+
+Calibration distinguishes vertical walls from top faces, generates appropriate coupons centred on the destination bed, and ties measurements to exact products, printer, nozzle, regular layer and subdivision settings. Only confirmed compatible wall measurements can affect model predictions. One profile is stored locally at a time; JSON backups retain other profiles. No newly supplied manufacturer bundle has been physically calibrated by this release.
+
+See [the release scope and remaining research](../../docs/full-spectrum-release-2.6.38.md). Core/Shell construction, general top-surface dithering, measured brand rankings and slicer-derived time/waste estimates are not implemented by this release.
 
 ## 2.6.37 production release and H3C
 
 The Bambu printer selector uses official Bambu Studio 2.9.1 profiles pinned to commit `56a57d00a591360cf41bf21383915ee5bf357be5`. H3C offers 0.2, 0.4, 0.6 and 0.8 mm nozzle presets and a 330 × 320 × 325 mm build volume for preview, filling and export. These are uniform-nozzle presets; mixed nozzle sizes are configured in Bambu Studio.
 
-H3C starts with nine filament inputs. External AMS capacity can be selected up to 24, with each printer's choice retained when changing nozzles or printers. Bambu exports now support up to 24 colour IDs, including extended paint states 17–24. Import, preview, colour editing, slot rearrangement and duplication retain these colours; other slicer outputs keep their existing 16-ID limit. Full Spectrum still explores four base reels; nine-colour models can retain their original painting in Convert.
+H3C starts with nine filament inputs. External AMS capacity can be selected up to 24, with each printer's choice retained when changing nozzles or printers. Bambu exports now support up to 24 colour IDs, including extended paint states 17–24. Import, preview, colour editing, slot rearrangement and duplication retain these colours; other slicer outputs keep their existing 16-ID limit. This release originally explored four base reels in Full Spectrum; 2.6.38 extends that limit as described above.
 
 Native H3C projects require Bambu Studio 2.9.1 or later. Official profile source: [Bambu Studio 2.9.1](https://github.com/bambulab/BambuStudio/releases/tag/v02.09.01.70). Hardware capacity: [Bambu H3C announcement](https://forum.bambulab.com/t/bambu-lab-h3c-our-full-reveal/261955).
 

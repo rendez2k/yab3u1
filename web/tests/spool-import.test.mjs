@@ -5,7 +5,7 @@ const pack = items => JSON.stringify({format:'spool-studio-account-export-v1', a
 const parsed = parseSpoolStock(pack([item, {...item}, {...item, used:true}, {...item, spools:0}, {...item, hex:'invalid'}, {...item, material:'PLA-CF'}, {...item, colour:'Rainbow'}]));
 assert.equal(parsed.rows.length,1);
 assert.equal(parsed.omitted,5);
-assert.deepEqual(parsed.rows[0], {color:'#3F8E43',type:'PLA',name:'Maker · Basic · Green · PLA'});
+assert.deepEqual(parsed.rows[0], {color:'#3F8E43',type:'PLA',name:'Maker · Basic · Green · PLA',brand:'Maker',family:'Basic',productId:'spool-studio/'+JSON.stringify(['Maker','Basic','Green','PLA','#3F8E43',''])});
 assert.ok(!JSON.stringify(parsed).includes('private'));
 assert.throws(()=>parseSpoolStock('{}'),/Spool Studio/);
 assert.throws(()=>parseSpoolStock('not json'),/valid JSON/);

@@ -156,6 +156,14 @@
   #recommendation { border-top: 1px solid var(--line); padding-top: 18px; margin-top: 18px; }
   #recommendation h3 { font-size: 16px; margin: 0 0 10px; }
   #reels > .field { flex: 1 1 150px; max-width: 220px; }
+  #bundlepanel { display:grid; gap:12px; padding-block:12px; }
+  #bundlepanel p { margin:0; }
+  #bundlepanel [data-set] { display:grid; gap:10px; }
+  #bundlepanel [hidden] { display:none; }
+  #bundlepanel select, #bundlepanel input:not([type=checkbox]), #spectrumbambu select { width:100%; }
+  #bundlepanel a { color:inherit; text-underline-offset:3px; }
+  .bundle-swatches { display:flex; flex-wrap:wrap; gap:8px 12px; font-size:13px; }
+  .bundle-swatches span { display:flex; align-items:center; }
   #reels { align-items: stretch; }
   #reels .reelname { flex: 1; max-width: 24ch; overflow-wrap: anywhere; }
   #exportcard .check { align-items: start; margin: 16px 0; }
@@ -495,6 +503,11 @@
       </div>
     </div>
     <p class="hint" id="destinationnote" role="status"></p>
+    <div id="spectrumbambu" hidden>
+      <label class="field">Bambu printer<select data-model><option value="">Choose your Bambu printer…</option></select></label>
+      <label class="field">Nozzle<select data-nozzle disabled></select></label>
+      <p class="hint" role="status"></p><button type="button" hidden>Retry loading profiles</button>
+    </div>
     </details>
   <div id="drop" role="button" tabindex="0" aria-label="Choose a 3MF file to open">
     <strong>Drop a .3mf, GLB or OBJ ZIP here</strong>
@@ -552,7 +565,8 @@
   </section>
   <div class="palettecolumn">
   <div class="card hidden" id="reelscard">
-    <div class="sectionhead"><h2>Your palette</h2><span class="hint">4 physical slots</span></div>
+    <div class="sectionhead"><h2>Your palette</h2><span class="hint" id="physicalslotcount">4 physical inputs</span></div>
+    <details id="filamentbundles" class="compact-options" open><summary>Filament sets &amp; printer capacity</summary><div id="bundlepanel"></div></details>
     <div class="segs workflowmodes" role="group" aria-label="Filament starting point">
       <button type="button" data-workflow="model" aria-pressed="true">Best colours for this model</button>
       <button type="button" data-workflow="loaded" aria-pressed="false">Use my loaded filaments</button>
@@ -573,6 +587,7 @@
     <div id="loadedcontrols" hidden>
     <h3 class="paletteheading" id="reelheading">Loaded filaments</h3>
     <div class="row" id="reels"></div>
+    <button type="button" id="addphysicalreel">Add physical reel</button>
     <p class="hint" id="reelnote" style="margin-top:12px"></p>
     </div>
     <details id="spoolimport">
@@ -600,6 +615,7 @@
     <section id="recommendation" aria-labelledby="recommendheading">
       <h3 id="recommendheading">Palette suggestions</h3>
       <p class="hint" id="recommendstatus" role="status">Load a model to suggest colours.</p>
+      <button type="button" id="cancelrecommendation" hidden>Cancel comparison</button>
       <details id="slotoptions" class="compact-options" hidden><summary>Arrange printer slots</summary><section id="paletteslots" aria-label="Arrange selected palette" hidden></section></details>
       <div id="palettechoices" role="group" aria-label="Suggested palettes"></div>
       <button type="button" id="morepalettes" aria-expanded="false" aria-controls="palettechoices" hidden>More palettes</button>

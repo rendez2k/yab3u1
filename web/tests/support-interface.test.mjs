@@ -37,7 +37,7 @@ test('white PETG can never match a white model region; keep-exact excludes PETG'
   assert.notEqual(p.rows[0].solid.slot,4);
   assert(p.recipes.every(r=>r.a<4&&r.b<4));
   assert.equal(all(recommendWorkflow({mode:'loaded',sources:{1:'#FFFFFF'},loaded:reels,supportInterface:true,keepExact:['#FFFFFF']})).length,0);
-  assert.throws(()=>recommendWorkflow({sources,loaded:[],supportInterface:true,keepExact:Object.values(sources)}),/at most three/);
+  assert.throws(()=>recommendWorkflow({sources,loaded:[],supportInterface:true,keepExact:Object.values(sources)}),/at most 3/);
 });
 test('swapping model slots preserves blends',()=>{
   const p=swapPaletteSlots(chosen,0,2);
@@ -167,7 +167,7 @@ test('subdividing a U1 blend is explicit and preserves PETG, layer height and re
   assert.equal(b.support_interface_filament,a.support_interface_filament);
   assert.deepEqual(b.filament_type,a.filament_type);
   assert.equal(on.settings.subdivideMixLayer,true);
-  assert.throws(()=>exportProject(project,plate,null,{...base,target:'bambu',subdivideMixLayer:true}),/Subdivide Mix Layer requires/);
+  assert.throws(()=>exportProject(project,plate,null,{...base,target:'bambu',subdivideMixLayer:true}),/PETG interface demo requires/);
   assert.throws(()=>exportProject(project,plate,null,{...base,recipes:[],subdivideMixLayer:true}),/Subdivide Mix Layer requires/);
 });
 test('session blocks unresolved PETG exports, snapshots the role and clears it on new files',async()=>{

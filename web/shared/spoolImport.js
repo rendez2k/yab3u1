@@ -87,7 +87,7 @@ export function parseSpoolStock(text) {
     const key = JSON.stringify([brand, product, name, material, color, finish]);
     if (seen.has(key)) continue;
     seen.add(key);
-    rows.push({ color, type: material, name: [brand, product, name || color, finish === 'unknown' ? '' : finish, material].filter(Boolean).join(" · ") });
+    rows.push({ color, type: material, productId:'spool-studio/'+key, brand, family:product, name: [brand, product, name || color, finish === 'unknown' ? '' : finish, material].filter(Boolean).join(" · ") });
   }
   rows.sort((a,b) => a.name.localeCompare(b.name));
   return { rows, omitted };
@@ -160,7 +160,7 @@ export function mountSpoolImport({ host, getReels, apply, onStock = () => {} }) 
   applyButton.onclick = () => {
     const next = getReels().map((reel, slot) => {
       const row = rows[chosen.get(slot)];
-      return row ? { color: row.color, type: row.type, name:row.name } : { ...reel };
+      return row ? { ...row } : { ...reel };
     });
     apply(next);
     status.textContent = `${chosen.size} slot${chosen.size === 1 ? '' : 's'} updated. Check the recolouring result below. Slicer filament profiles are chosen separately.`;

@@ -30,6 +30,7 @@ export function mountBambuPrinterPicker(root, session, changed) {
       status.textContent = 'Colour model only: choose the printer in Bambu. Its colour dialogue may append filaments; review the import guide after exporting.';
       session.setBambuSetup(null,false); changed(); return;
     }
+    const preferredSetup=session.bambuSetup;
     session.setBambuSetup(null,true);
     status.textContent = catalogue ? 'Choose your Bambu printer and fitted nozzle.' : 'Loading official Bambu printer choices… Your model stays on this device.';
     changed();
@@ -41,7 +42,9 @@ export function mountBambuPrinterPicker(root, session, changed) {
         model.replaceChildren(option('Choose your Bambu printer…',''),
           ...[...new Set(entries.map(p=>p.model))].map(name=>option(name,name)),
           option('Colour model only · set up in Bambu','portable'));
+        if(preferredSetup?.machine?.printer_model)model.value=preferredSetup.machine.printer_model;
         nozzles();
+        if(preferredSetup?.machine?.name)nozzle.value=preferredSetup.machine.name;
       }
       if (!model.value) { status.textContent = 'Select a printer to export its native project with the exact filament list.'; return; }
       status.textContent = 'Loading official printer, process and material profiles…';

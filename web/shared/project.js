@@ -11,7 +11,8 @@
 // remapped, exactly as the Python exporter streams them, so the triangles in the
 // output are the source's own.
 
-import {nativeBambuConfig, validateBambuLayers, applyNativeBambuFilaments} from './bambuProfiles.js';
+import {nativeBambuConfig, validateBambuLayers, applyNativeBambuFilaments,resolveBambuLayerHeight} from './bambuProfiles.js';
+import {colourExportPlan,readColourExportPlan,EXPORT_PLAN_PATH} from './exportPlan.js';
 import { norm } from "./colour.js";
 import * as paint from "./paint.js";
 import { SLOTS, arrange, bijectionProblem, completeRule, isIdentity, conversionPalette }
@@ -155,6 +156,8 @@ export function readProject(entries, options = {}) {
   guessKind(project);
   if (project.kind === "prusa") refusePrusaVolumeRanges(project);
   refuseHiddenRoles(project, options.allowNegative === true);
+  project.colourPlan=readColourExportPlan(entries.get(EXPORT_PLAN_PATH));
+  if(project.colourPlan && project.colourPlan.reels.some((r,i)=>norm(project.colors[i])!==r.color))project.colourPlan=null;
   return project;
 }
 
@@ -1799,7 +1802,10 @@ function sourceSettingMetadata(project, objectId, target = "bambu", options = {}
     return `<metadata key="layer_height" value="${resolveLayerHeight(source,options.u1Profile.match,options.layerHeight).height}"/>`;
   }
   const report = transferSettings(source, target, { object: true, baseline: options.u1Profile?.cfg });
-  if (target === 'bambu' && options.bambuSetup) validateBambuLayers(report.values, options.bambuSetup);
+  if (target === 'bambu' && options.bambuSetup) {
+    if(options.layerHeight)report.values.layer_height=String(resolveBambuLayerHeight(source,options.bambuSetup,options.layerHeight));
+    validateBambuLayers(report.values, options.bambuSetup);
+  }
   if (target === 'snapmaker' && options.u1Profile) constrainLayers(report.values, options.u1Profile.match);
   if (target==='snapmaker' && options.layerHeight) report.values.layer_height=String(resolveLayerHeight(source,options.u1Profile.match,options.layerHeight).height);
   if (target === "snapmaker" && painted && options.supportMode !== "off"
@@ -2015,20 +2021,19 @@ export function exportProject(project, plateId, objectIds, options) {
       throw new ProjectError(`this ${target} conversion writes 1..${colourLimit(target)} `
         + "logical filaments; this file has " + reels.length);
     }
-  } else if (reels.length !== 4) {
-    throw new ProjectError("this tool writes four reels: four colours and four "
-      + "materials, no more and no fewer");
+  } else if (reels.length < 1 || reels.length > (target==='snapmaker'?4:colourLimit(target))) {
+    throw new ProjectError(`Choose 1–${target==='snapmaker'?4:colourLimit(target)} physical reels for ${target}.`);
   }
   const reelColours = reels.map((reel) => norm(reel.color) || "#FFFFFF");
   const reelTypes = reels.map((reel) => reel.type || "PLA");
   const recipes = options.recipes || [];
-  if(options.subdivideMixLayer && (target!=='snapmaker' || !recipes.length))
-    throw new ProjectError('Subdivide Mix Layer requires a Snapmaker Orca project with blend recipes.');
+  if(options.subdivideMixLayer && (!['snapmaker','bambu'].includes(target) || !recipes.length))
+    throw new ProjectError('Subdivide Mix Layer requires a Snapmaker Orca or Bambu project with blend recipes.');
   if(options.supportInterface) validateInterfaceExport({target,reels,mapping:options.mapping,recipes,supportMode:options.supportMode});
   else if(reels.some(r=>r.role==='support-interface')) throw new ProjectError('Reserved support filament requires PETG interface mode.');
   if (!convert) {
     try {
-      checkRecipes(4, recipes, colourLimit(target));
+      checkRecipes(reels.length, recipes, colourLimit(target));
       checkTypes(reelTypes, recipes);
     } catch (error) {
       throw new ProjectError(error.message);
@@ -2527,14 +2532,21 @@ export function exportProject(project, plateId, objectIds, options) {
       // OrcaSlicer reads Bambu Studio's project schema; only the application name
       // and the label differ.
       const cfg = target === 'bambu' && options.bambuSetup
-        ? nativeBambuConfig(options.bambuSetup, table.physical, reelTypes, project.sourceSettings, options.preserveSourceSettings)
+        ? nativeBambuConfig(options.bambuSetup, table.physical, reelTypes, {...project.sourceSettings,...(options.layerHeight?{layer_height:String(resolveBambuLayerHeight(project.sourceSettings,options.bambuSetup,options.layerHeight))}:{})}, options.preserveSourceSettings, recipes)
         : bambuConfig(table.physical, reelTypes, recipes);
       const filamentReport=target === 'bambu' && options.bambuSetup
-        ? applyNativeBambuFilaments(cfg,reels) : applyFilamentProfiles(cfg,reels);
+        ? applyNativeBambuFilaments(cfg,[...reels,...recipes.map(r=>reels[r.a-1])]) : applyFilamentProfiles(cfg,reels);
       for(const key of filamentReport.keys) if(recipes.length && cfg[key].length===reels.length)
         cfg[key]=cfg[key].concat(recipes.map(r=>cfg[key][r.a-1]));
+      if(target==='bambu' && recipes.length)cfg.enable_mixed_color_sublayer=options.subdivideMixLayer?'1':'0';
+      if(target==='bambu' && options.bambuSetup && options.layerHeight)
+        cfg.layer_height=String(resolveBambuLayerHeight(project.sourceSettings,options.bambuSetup,options.layerHeight));
       settingNotes={materials:cfg.filament_settings_id.slice(),notes:filamentReport.notes};
       if(target === 'bambu' && options.bambuSetup) {
+        cfg.different_settings_to_system[0]=[...new Set([
+          ...cfg.different_settings_to_system[0].split(';').filter(Boolean),
+          ...(options.layerHeight?['layer_height']:[]),...(recipes.length?['enable_mixed_color_sublayer']:[]),
+        ])].join(';');
         settingNotes = {...settingNotes, format:'native-project', printer:cfg.printer_settings_id,
           profile:cfg.print_settings_id, objects:exportedObjectSettings};
         filamentReport.keys.forEach(key => {
@@ -2607,6 +2619,7 @@ export function exportProject(project, plateId, objectIds, options) {
     + "\n</Relationships>\n"));
 
   const problemsOut = [...problems];
+  members.set(EXPORT_PLAN_PATH,encoder.encode(JSON.stringify(colourExportPlan({...options,target,reels,recipes,mapping}))));
   if (standard) {
     // The agnostic colour model must not smuggle a project in with it.
     if (members.has(SRC_BBL_PROJECT)) {

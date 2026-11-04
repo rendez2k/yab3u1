@@ -2,6 +2,8 @@
 
 Research checked on 4 November 2026. This is a development proposal, not a claim that the experimental methods below have been implemented or physically validated in YAB3D.
 
+Implementation status: [2.6.38 release scope](full-spectrum-release-2.6.38.md) records the delivered bundle, capacity, native export and calibration foundations and the optical methods still open. This proposal remains the full roadmap; its acceptance criteria are not all satisfied by that release.
+
 My recommendation is to make reliable colour reproduction and a continuous editing workflow the next release. Add more advanced wall and top-surface techniques as separately tested experiments. YAB3D already has useful foundations; several improvements should extend those rather than add another separate screen.
 
 **What the sources actually add**
@@ -35,7 +37,7 @@ Local references: [predictor](C:/Users/rende/U1/untitled-project/web/shared/fdmM
 
 1. **First: prove that preview, export and slicer agree.** Record the target printer, slicer family/version, physical assignments, virtual recipes, layer settings and support material in one export plan. Reopen exported projects and compare those values, including copied objects and colours 17–24. Preserve source support settings and distinguish object overrides from global defaults. A successful ZIP check alone is insufficient. Acceptance: the same small reference plate retains its paint, material count, support interface and subdivision in both the export and the sliced toolpaths.
 
-2. **Make filament identity and calibration the largest colour-quality improvement.** Extend the existing measurement system with stable brand/product identifiers, opaque/translucent classification, nozzle/layer/wall settings and measurement provenance. Add vertical-wall samples and separate roof samples; validate against samples excluded from fitting. Keep measured, estimated and unsupported recipes visibly distinct. Acceptance: fewer measured colour errors on held-out samples from the actual U1 and Bambu setups, with no automatic application of a profile to different reels or construction settings.
+2. **Make real filament bundles and calibration the largest colour-quality improvement.** Let users choose a named commercial bundle, compare suitable bundles for their model, or use their own reels. Maintain the catalogue separately from the optimiser so new products and editions can be added without changing the search algorithm. Extend the existing measurement system with stable brand/product identifiers, opaque/translucent classification, nozzle/layer/wall settings and measurement provenance. Add vertical-wall samples and separate roof samples; validate against samples excluded from fitting. Keep measured, estimated and unsupported recipes visibly distinct. Acceptance: fewer measured colour errors on held-out samples from the actual U1 and Bambu setups, with no automatic application of a profile to different reels or construction settings.
 
 3. **Offer three clear colour choices in the same workspace.** “Keep original colours”, “Replace colours to fit my printer” and “Blend extra shades”. Permit exact colours and blends together. Keep PETG support as a slot reservation, and show the resulting available model inputs immediately. A suggested palette should preview reversibly without discarding the selected objects, camera, cuts, layout or Undo history. Acceptance: switching strategies repeatedly preserves the workspace and makes every changed source colour inspectable.
 
@@ -51,6 +53,26 @@ Local references: [predictor](C:/Users/rende/U1/untitled-project/web/shared/fdmM
 
 9. **Keep top-surface mixing and variable optical schedules in an experimental track.** Top-surface interweave on models, image-based Top Surface Mixing, and variable layer schedules are separate techniques. Begin with a flat coupon or coaster, then sloped and curved roofs. Measure their response independently from wall colours. Offer an explicit experiment with a reference print; do not silently combine every option. Acceptance: the selected colour pattern, solid backing and dimensions are present in the sliced paths and the physical sample.
 
+**Real filament bundles: an explicit product priority**
+
+Your follow-up makes this a central feature: choose the actual pack you own, then see what that pack can reproduce on the current model. Your Bambu bundle is on order; record its exact product and edition when available rather than assuming its contents from the brand name.
+
+There is direct manufacturer support for this approach. [Bambu Studio 2.9.1](https://github.com/bambulab/BambuStudio/releases/tag/v02.09.01.70) adds Bambu PLA Palette and a control that loads the official mixing kit. [Snapmaker's bundle guide](https://www.snapmaker.com/blog/which-cmyk-filament-should-i-choose/) distinguishes Full Spectrum White Edition, Gray Edition and its separate lithophane kit. White Edition changes the CMY formulations as well as the neutral spool; swapping grey for white does not recreate that edition.
+
+The proposed workflow stays inside Colours:
+
+- **Use my bundle:** choose brand and exact pack/edition, mark reels as owned or loaded, and map them to the available printer inputs.
+- **Find a bundle for this model:** compare a few compatible packs using the same model preview and colour-error method. Show the precise reel names, altered colours, required inputs, missing reels and an official product link. Ranking depends on the model and available evidence, not a preferred brand.
+- **Use my own combination:** retain custom reels and allow substitutions. Recalculate the prediction and calibration status when any constituent changes.
+
+Seed research should cover Bambu PLA Palette, Snapmaker Full Spectrum White/Gray editions, and the Polymaker Panchroma Translucent and Elegoo Rilievo CMYK choices shown in your iDither screenshot. Verify exact constituent products and editions before publishing entries. Clearly identify whether an option is an official retail bundle or a curated combination of separately sold reels, which may include more than one brand.
+
+Keep a versioned data catalogue with stable product and bundle IDs, constituent spool IDs, edition/formulation, material, translucency/TD where published, official links, source/check date and calibration references. New and discontinued entries can then be maintained independently of the colour engine. Saved projects pin the selected catalogue and calibration revisions so an update cannot silently change their predicted result. A known product can be listed before YAB3D has measured it, with its prediction labelled accordingly.
+
+The current search deduplicates stock by colour and material. That must change for bundle matching: two cyan products with the same display hex can have different optical behaviour. Likewise, an imported slicer temperature preset is not a measured colour-mixing profile. Preserve actual product identity through recommendation, slot rearrangement, preview and export; a display swatch or TD value alone does not validate a recipe.
+
+Acceptance: select a supported bundle, rearrange its slots, save/reopen and export without losing product identity; add a new catalogue bundle without editing the optimiser; keep two similarly coloured products distinct; and show when a four-reel U1 bundle cannot remain intact alongside PETG support. Use the exact Bambu pack you receive for the first recorded bundle-versus-print comparison, alongside the Grinch and wall/roof coupons.
+
 **A concrete comparison using your Grinch**
 
 I inspected your original file locally: one object, 40,056 source triangles and five used PLA colours—black `#000000`, red `#F72323`, yellow `#FFF144`, white `#FFFFFF` and green `#61C680`. No model was uploaded for this inspection.
@@ -64,9 +86,9 @@ The print comparison should use the same scale and orientation, alongside a wall
 | Batch | Deliverable | Evidence needed before release |
 | --- | --- | --- |
 | A — dependable workflow | Export plan, used-material recounting, persistent colour choices, version-specific layer guidance, support/duplicate checks | Reopened native projects and sliced reference cases on current Snapmaker Orca and Bambu Studio |
-| B — better colour decisions | Named filament profiles, improved calibration pieces, three comparison options, detail priorities, five-plus-reel planning | Held-out measurements and paired Grinch prints with recorded time/material |
+| B — better colour decisions | Maintained bundle catalogue, exact product profiles, improved calibration pieces, three comparison options, detail priorities, five-plus-reel planning | Product identity retained through export, held-out measurements and paired Grinch prints with recorded time/material |
 | C — new optical methods | Outer/inner-wall prototype, then separate top-surface experiments | Geometry checks, sliced-path inspection and physical results for each technique |
 
 Prusa's mixer is MIT-licensed and already present in YAB3D. iDither identifies itself as proprietary. Sorca CM points to release-specific source and its own licensing. This proposal uses their documented ideas and evidence; it does not assume their implementations or calibration datasets can simply be copied into YAB3D.
 
-The immediate next step I recommend is **Batch A plus the calibration sample redesign**, followed by a small controlled Grinch comparison. That gives the later visual improvements a dependable base and avoids another collection of disconnected controls.
+The immediate next step I recommend is **Batch A plus the bundle catalogue foundation and calibration sample redesign**, followed by a small controlled Grinch comparison using a named, recorded set of reels. That gives the later visual improvements a dependable base and avoids another collection of disconnected controls.

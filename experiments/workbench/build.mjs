@@ -2,7 +2,9 @@ import {readFile, writeFile, mkdir, cp, rm, lstat} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 const here=path.dirname(fileURLToPath(import.meta.url)), root=path.resolve(here,'../..');
+const studioStyle='studio.css?v='+createHash('sha256').update(await readFile(path.join(here,'studio.css'))).digest('hex').slice(0,12);
 execFileSync(process.platform==='win32'?'python':'python3',['tools/build_site.py'],{cwd:root,stdio:'inherit'});
 const out=path.join(root,'dist-workbench');
 // Clean only this fixed generated folder so removed assets cannot be published.
@@ -18,7 +20,7 @@ for(const [source,controller,kind] of [['index.html','convert-page.js','converte
   const script=new RegExp(`<script type="module" src="(?:\\./)?${controller.replace('.','\\.')}"></script>`);
   if(!script.test(html))throw Error(`Missing engine entry: ${controller}`);
   html=html.replace(script,'<script type="module" src="./engine-view.js"></script>')
-    .replace('</head>','<link rel="stylesheet" href="engine-view.css"><link rel="stylesheet" href="studio.css"><style>body[data-engine]:not([data-mounted]){visibility:hidden}</style></head>')
+    .replace('</head>',`<link rel="stylesheet" href="engine-view.css"><link rel="stylesheet" href="${studioStyle}"><style>body[data-engine]:not([data-mounted]){visibility:hidden}</style></head>`)
     .replace('<body',`<body data-engine="${kind}"`);
   await writeFile(path.join(out,`${kind}-view.html`),html);
 }
@@ -31,7 +33,7 @@ await cp(path.join(here,'vendor'),path.join(out,'vendor'),{recursive:true});
 await mkdir(path.join(out,'fonts'),{recursive:true});
 await cp(path.join(here,'node_modules/@fontsource-variable/ibm-plex-sans/files/ibm-plex-sans-latin-wght-normal.woff2'),path.join(out,'fonts/plex-sans.woff2'));
 await cp(path.join(here,'node_modules/@fontsource-variable/ibm-plex-sans/LICENSE'),path.join(out,'fonts/OFL.txt'));
-const shell=await readFile(path.join(here,'index.html'),'utf8');
+const shell=(await readFile(path.join(here,'index.html'),'utf8')).replace('href="studio.css"',`href="${studioStyle}"`);
 await writeFile(path.join(out,'index.html'),shell);
 await writeFile(path.join(out,'recolour.html'),shell.replace('data-initial="converter"','data-initial="spectrum"'));
-console.log(`Workbench 2.6.37: ${out}`);
+console.log(`Workbench 2.6.38: ${out}`);

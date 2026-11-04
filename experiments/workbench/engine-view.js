@@ -46,8 +46,8 @@ document.addEventListener('click',event=>{
   if(b.id==='capacityrepaint')setPanel('colours');
 },true);
 function context() {
-  if(kind==='converter')return {target:engine.session.target,plateId:String(engine.session.state?.plateId??''),supportInterface:engine.session.supportInterface,interfaceSlot:engine.session.interfaceSlot,interfaceColor:engine.session.interfaceColor,layout:{...engine.session.layout},u1Nozzle:engine.session.u1Nozzle};
-  const s=engine.state;return {target:s.target,plateId:String(s.plateId??''),supportInterface:s.supportInterface,interfaceSlot:s.interfacePosition+1,interfaceColor:s.reels[s.interfacePosition]?.color,layout:{quantities:{...s.quantities},copies:Number($('spectrumcopies').value),spacing:Number($('spectrumgap').value),width:Number($('spectrumwidth').value),depth:Number($('spectrumdepth').value),tower:$('spectrumtower').checked,arrangement:$('spectrumarrangement').value},u1Nozzle:s.u1Nozzle};
+  if(kind==='converter')return {capacity:engine.session.inputCapacity(),bambuSetup:engine.session.bambuSetup,target:engine.session.target,plateId:String(engine.session.state?.plateId??''),supportInterface:engine.session.supportInterface,interfaceSlot:engine.session.interfaceSlot,interfaceColor:engine.session.interfaceColor,layout:{...engine.session.layout},u1Nozzle:engine.session.u1Nozzle};
+  const s=engine.state;return {capacity:s.capacity,bambuSetup:s.bambuSetup,target:s.target,plateId:String(s.plateId??''),supportInterface:s.supportInterface,interfaceSlot:s.interfacePosition+1,interfaceColor:s.reels[s.interfacePosition]?.color,layout:{quantities:{...s.quantities},copies:Number($('spectrumcopies').value),spacing:Number($('spectrumgap').value),width:Number($('spectrumwidth').value),depth:Number($('spectrumdepth').value),tower:$('spectrumtower').checked,arrangement:$('spectrumarrangement').value},u1Nozzle:s.u1Nozzle};
 }
 const api={kind,setPanel,context,
   get loading(){return loading;},
@@ -68,6 +68,8 @@ const api={kind,setPanel,context,
       if(options.target)engine.session.setTarget(options.target);
       await engine.session.load(file);
       if(options.u1Nozzle)engine.session.setU1Nozzle(options.u1Nozzle);
+      if(options.bambuSetup)engine.session.setBambuSetup(options.bambuSetup);
+      if(options.capacity)engine.session.setInputCapacity(options.capacity);
       if(options.plateId)engine.session.setPlate(options.plateId);
       if(options.layout)engine.session.setLayout(options.layout);
       if(options.supportInterface)engine.session.setInterface(true,options.interfaceSlot,options.interfaceColor);

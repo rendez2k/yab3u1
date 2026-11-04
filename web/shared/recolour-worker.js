@@ -48,6 +48,7 @@ function metaOf(parsed) {
     // source states nothing.
     sourceSettings: parsed.sourceSettings || null,
     filamentProfiles: parsed.filamentProfiles || [],
+    colourPlan:parsed.colourPlan || null,
     // Per-object intent, for files whose settings live on the objects (our own
     // standard output does this): the opt-in must stay usable on reimport.
     objectSettings: [...parsed.meta.values()]

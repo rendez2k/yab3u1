@@ -98,7 +98,7 @@ export function check(physical, recipes, maxVisible = MAX_VISIBLE) {
   if (physical < 1) {
     throw new TargetError("a Full Spectrum project needs at least one physical reel");
   }
-  const maxRecipes = maxVisible - 4;
+  const maxRecipes = Math.max(0,maxVisible - physical);
   if (recipes.length > maxRecipes) {
     throw new TargetError(`${recipes.length} recipes would need `
       + `${physical + recipes.length} filament ids and this writer stops at `

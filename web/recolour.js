@@ -1,3 +1,8 @@
+import {mountBundlePanel} from './shared/bundlePanel.js';
+import {FILAMENT_BUNDLES} from './shared/filamentBundles.js';
+import {substituteReel} from './shared/filamentIdentity.js';
+import {mountBambuPrinterPicker} from './shared/bambuPrinterPicker.js';
+import {resolveBambuLayerHeight} from './shared/bambuProfiles.js';
 import {receiveModel} from './shared/modelHandoff.js';
 import {mountSequential} from './shared/sequentialPanel.js';
 import {mountObjectActions} from './shared/objectActions.js';
@@ -11,7 +16,7 @@ import {mountObjectActions} from './shared/objectActions.js';
 import { comparison, distance, norm, suggestMapping } from "./shared/colour.js";
 import { describeColourMapping, mappingFromPlan, planBlends, plausibleBlend, swapPaletteSlots } from "./shared/mix.js";
 import { Preview, mountPlateControls } from "./shared/preview.js";
-import { LABELS, RECOLOUR_TARGETS } from "./shared/targets.js";
+import { LABELS, RECOLOUR_TARGETS, colourLimit } from "./shared/targets.js";
 import { thumbnailSizes } from "./shared/thumbnail.js";
 import { RecolourWorker, loadModelWithRecovery } from "./shared/workerClient.js";
 import { readZip } from "./zip.js";
@@ -32,7 +37,7 @@ import { mountCalibration } from './shared/calibrationPanel.js';
 import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } from './shared/supportInterface.js';
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 
-const VERSION = "2.6.37";
+const VERSION = "2.6.38";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -41,6 +46,7 @@ const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
 
 const state = {
   supportInterface:false, savedInterfaceReels:null, interfacePosition:3,
+  capacity:4, priority:"colour", compareBundles:null, bundleStock:[], bambuSetup:null, bambuRequired:false, bambuError:"",
   entries: null, project: null, plateId: null, objects: [], reels: [], target: "snapmaker", u1Nozzle: "auto",
   mix: null, mapping: {}, recipes: [], ticked: new Set(),
   previewMode: "original", preview: null, previewGeometry: "", previewFailed: "",
@@ -57,15 +63,15 @@ const state = {
 
 window.__recolour = state;                    // the QA harness and the console
 
-let printerPanel=null, calibrationPanel=null, printOptimiser=null;
+let printerPanel=null, calibrationPanel=null, printOptimiser=null, bundlePanel=null, bambuPicker=null;
 function layerChoice() {
   const mode=$('spectrumlayermode').value;
-  return state.target==='snapmaker' ? (mode.startsWith('height:') ? {mode:'custom',value:mode.slice(7)} : {mode,value:$('spectrumlayerheight').value}) : null;
+  return ['snapmaker','bambu'].includes(state.target) ? (mode.startsWith('height:') ? {mode:'custom',value:mode.slice(7)} : {mode,value:$('spectrumlayerheight').value}) : null;
 }
 $('useblendlayer').addEventListener('click',()=>{$('spectrumlayermode').value='height:0.10';clearReview();refresh();});
-$('subdividemix').addEventListener('change',()=>{clearReview();renderExport();});
+$('subdividemix').addEventListener('change',()=>{clearReview();invalidateRecommendation();refresh();});
 function subdivideChoice() {
-  return state.target==='snapmaker' && $('subdividemix').checked && Boolean(resultPlan().recipes.length);
+  return ['snapmaker','bambu'].includes(state.target) && $('subdividemix').checked && Boolean(resultPlan().recipes.length);
 }
 ['spectrumlayermode','spectrumlayerheight'].forEach(id=>$(id).addEventListener('input',()=>{clearReview();refresh();}));
 let fillPrevious = null;
@@ -176,7 +182,7 @@ printerPanel=mountPrinter($("printersetup"),()=>state.project && state.target===
 function defaultReels() {
   try {
     const saved = JSON.parse(localStorage.getItem(REEL_KEY) || "null");
-    if (Array.isArray(saved) && saved.length === 4) return saved;
+    if (Array.isArray(saved) && saved.length >= 1 && saved.length <= 24) return saved;
   } catch (error) { /* fall through to the default */ }
   return [{ color: "#FFFFFF", type: "PLA" }, { color: "#000000", type: "PLA" },
           { color: "#3D9140", type: "PLA" }, { color: "#FF9500", type: "PLA" }];
@@ -188,7 +194,7 @@ state.reels = state.modeReels.model.map(r=>({...r}));
 
 function saveReels() {
   if(state.workflow!=="loaded" || state.supportInterface) return;
-  try { localStorage.setItem(REEL_KEY, JSON.stringify(state.reels.map(({color,type})=>({color,type})))); } catch (e) { /* fine */ }
+  try { localStorage.setItem(REEL_KEY, JSON.stringify(state.reels)); } catch (e) { /* fine */ }
 }
 
 const spoolImport = mountSpoolImport({ host: $("spoolimport"), getReels: () => state.reels, apply: (reels) => {
@@ -204,7 +210,9 @@ function activeReels() {
 }
 function setInterface(enabled) {
   if(enabled) {
+    state.capacity=4;
     state.savedInterfaceReels={...state.modeReels,[state.workflow]:state.reels.map(r=>({...r}))};
+    while(state.reels.length<4)state.reels.push({...state.reels[0]});
     state.reels=interfacePalette(state.reels,true);
     state.interfacePosition=interfaceSlot(state.reels)-1;
     state.modelType='PLA'; $('modelmaterial').value='PLA';
@@ -246,6 +254,7 @@ function activeApproximation() {
   return state.reelView==='recommended' ? Boolean(state.recommendation?.approximate) : state.approximate;
 }
 function paletteTitle(option,index) {
+  if(option.bundleName)return option.bundleName;
   return option.approximate ? (option.usesLoaded ? 'Approximation with loaded reels' : 'Approximate blend palette')
     : index ? `Close-match alternative ${index}` : 'Closest reproduction';
 }
@@ -298,13 +307,14 @@ function renderRecommendation(message) {
   renderWorkflow();
   renderPaletteSlots();
   $("recommendstatus").dataset.busy=String(Boolean(recommendationWorker));
+  $('cancelrecommendation').hidden=!recommendationWorker;
   const result=state.recommendation;
   const focusedPalette=document.activeElement?.dataset?.palette;
   const choices=state.recommendationOptions.map((option,index)=>({option,index}))
     .filter(({option,index})=>state.showMorePalettes || index<3 || option.usesLoaded || (option.approximate && state.recommendationOptions.findIndex(p=>p.approximate)===index) || (state.reelView==='recommended' && index===state.recommendationIndex));
   $("palettechoices").innerHTML=choices.map(({option,index})=>
     `<button type="button" class="palettechoice${option.approximate?' approximate':''}" data-palette="${index}" aria-pressed="${state.reelView==='recommended' && state.recommendationIndex===index && state.previewMode==='result'}">
-      <span class="palettetitle"><strong>${paletteTitle(option,index)}</strong><small>${esc(option.type)}${state.reelView==='recommended' && state.recommendationIndex===index?' · Selected':''}</small></span>
+      <span class="palettetitle"><strong>${esc(paletteTitle(option,index))}</strong><small>${esc(option.type)}${state.reelView==='recommended' && state.recommendationIndex===index?' · Selected':''}</small></span>
       <span class="palettechips">${option.reels.map((r,i)=>`<span class="palettechip"><i style="background:${esc(r.color)}"></i>${i+1} · ${esc(r.name || colourName(r.color))}</span>`).join('')}</span>
       ${paletteCoverage(option)}
     </button>`).join('');
@@ -320,12 +330,13 @@ function renderRecommendation(message) {
   $("morepalettes").textContent=state.showMorePalettes ? 'Fewer palettes' : 'More palettes';
   $("morepalettes").setAttribute('aria-expanded',String(state.showMorePalettes));
   if(message) $("recommendstatus").textContent=message;
-  else if(state.recommendationSearch?.found===false && result) $("recommendstatus").textContent=(state.workflow==='model' ? 'Load one of these sets of original colours and blend the remainder. ' : `These recipes use only your ${state.supportInterface?'three PLA':'four loaded'} filaments. `) + 'No close reproduction found: compare the original and predicted shades before accepting changes.';
+  else if(state.compareBundles && result) $("recommendstatus").textContent=`Comparing ${state.recommendationOptions.length} compatible filament sets. Each result uses the products shown on its card. These unmeasured estimates do not compare the brands' real optical performance. Apply a result to change your reels.`;
+  else if(state.recommendationSearch?.found===false && result) $("recommendstatus").textContent=(state.workflow==='model' ? 'Load one of these sets of original colours and blend the remainder. ' : `These recipes use only your ${state.supportInterface?'three PLA':state.reels.length+' loaded'} filaments. `) + 'No close reproduction found: compare the original and predicted shades before accepting changes.';
   else if(state.recommendationSearch?.found===false) $("recommendstatus").textContent=state.recommendationSearch.reason
     + ' This is a search result, not proof that no palette could work.';
   else if(result) $("recommendstatus").textContent=state.workflow==='model'
     ? `${result.rough ? 'Original model colours to load.' : 'Closest options from your Spool Studio collection.'} Keep as many originals as possible and blend the rest. Ranking uses original surface area and colour error, with a penalty for the worst colour change. Keep exact protects essential accents.`
-    : `Using only your ${state.supportInterface?'three PLA':'four loaded'} filaments. Matching colours stay exact; remaining regions use the blend recipes below.`;
+    : `Using only your ${state.supportInterface?'three PLA':state.reels.length+' loaded'} filaments. Matching colours stay exact; remaining regions use the blend recipes below.`;
   document.querySelectorAll('[data-reel-view]').forEach(button=>{
     button.setAttribute('aria-pressed',String(button.dataset.reelView===state.reelView && state.previewMode==='result'));
     const unavailable=button.dataset.reelView==='recommended' ? !result
@@ -337,7 +348,7 @@ function renderRecommendation(message) {
   $("userecommended").disabled=!result;
   $("userecommended").hidden=!result;
   $("applypalettehint").hidden=!result;
-  $("userecommended").textContent=state.workflow==='loaded' ? 'Use these blend settings' : result?.approximate ? 'Use this palette and approximate blends' : 'Use this palette';
+  $("userecommended").textContent=state.compareBundles ? 'Use this filament set and blends' : state.workflow==='loaded' ? 'Use these blend settings' : result?.approximate ? 'Use this palette and approximate blends' : 'Use this palette';
   $("applypalettehint").textContent='Choose a palette to preview it. Apply when you want to use it in your export. Blend shades are estimates, not guaranteed print colours.';
   document.querySelectorAll('[data-preview]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.preview===state.previewMode)));
   $("reelviewnote").textContent=state.strategy==='source' ? "Showing the file's original colours; loaded and recommended reels are not used."
@@ -353,15 +364,15 @@ function requestRecommendation() {
   const input={mode:state.workflow,sources:state.assessed.sourceColors,
     loaded:state.workflow==='loaded' ? state.reels : state.supportInterface
       ? Array.from({length:4},(_,i)=>i===state.interfacePosition ? state.reels[interfaceSlot(state.reels)-1] : {}) : [],
-    supportInterface:state.supportInterface,
-    stock:state.workflow==='model' && state.useOwned ? state.stock : null,
+    supportInterface:state.supportInterface,capacity:state.capacity,visibleLimit:colourLimit(state.target),priority:state.priority,bundles:state.compareBundles,
+    stock:state.workflow==='model' && state.useOwned ? [...(state.stock||[]),...state.bundleStock] : null,
     type:state.modelType,keepExact:state.workflow==='model' ? state.keepExact : [],
     weights,blends:state.strategy!=='solid',calibration:calibrationPanel?.active() || null};
   // Model colours and slot arrangement do not alter the palette search. Applying
   // or moving a suggestion must not discard the palette the user just chose.
   const keyReels=state.workflow==='model' && state.supportInterface
     ? input.loaded.filter(r=>r.role==='support-interface') : input.loaded;
-  const key=JSON.stringify({...input,loaded:keyReels.map(({color,type,role})=>({color,type,role}))});
+  const key=JSON.stringify({...input,loaded:keyReels});
   if(key===recommendationKey) { renderRecommendation(); return; }
   invalidateRecommendation(); recommendationKey=key;
   renderRecommendation(state.workflow==='model' ? 'Comparing sets of original model colours…' : 'Calculating blends from your loaded filaments…');
@@ -378,7 +389,7 @@ function requestRecommendation() {
     renderRecommendation(error);
     if(state.recommendation && !error && state.strategy!=="source") showReelView("recommended");
   }
-  worker.onmessage=({data})=>finish(data.result,data.error);
+  worker.onmessage=({data})=>{if(data.progress){if(recommendationWorker===worker)renderRecommendation(`Compared ${data.progress.evaluated} palettes…`);return;}finish(data.result,data.error);};
   worker.onerror=()=>finish(null,'Colour suggestions could not be calculated. Change a slot or reconnect your library to try again.');
   worker.postMessage(input);
 }
@@ -426,7 +437,7 @@ function renderWorkflow() {
   const reserved=interfaceSlot(activeReels()), base=modelSlots(activeReels())[0];
   $('interfacehint').textContent=state.supportInterface ? `Slot ${reserved}: PETG support interface only. The other three slots are PLA model colours. Move PETG under Arrange printer slots; colour suggestions never use it. Supports appear after slicing.` : 'Reserve one slot for PETG; use the other three for model colours and blends.';
   $('interfacesettings').querySelector('p').textContent=`PLA support structure from slot ${base}, PETG contact layers from slot ${reserved}. Three dense interface layers, 0 mm top/bottom Z gap. Supports are enabled; source support style and painted areas are retained. The prime-tower shell uses PLA slot ${base}. These are starting settings: check the sliced interfaces and try a small print first.`;
-  $('exacthint').textContent=`Keep essential colours exact (up to ${state.supportInterface?'three':'four'}). Extra colours need blends.${state.supportInterface?' PETG is never a model colour.':''} Surface percentages measure the original mesh.`;
+  $('exacthint').textContent=`Keep essential colours exact (up to ${state.supportInterface?3:state.capacity}). Extra colours need blends.${state.supportInterface?' PETG is never a model colour.':''} Surface percentages measure the original mesh.`;
   const model=state.workflow==='model';
   document.querySelectorAll('[data-workflow]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.workflow===state.workflow)));
   $("modelchoices").hidden=!model;
@@ -435,13 +446,13 @@ function renderWorkflow() {
   $("reelheading").textContent=model ? 'Palette selected for export' : 'Loaded filaments';
   $("workflowhint").textContent=model
     ? "Which filaments should I load? Start with the model’s original colours, keep as many exact as possible and make the others with blends."
-    : `What can I make with these filaments? Keep the ${state.supportInterface?'three PLA':'four loaded'} reels fixed and find their closest achievable blends.`;
-  $("recommendheading").textContent=model ? 'Colours to load + colours to blend' : 'Blends from your loaded filaments';
+    : `What can I make with these filaments? Keep the ${state.supportInterface?'three PLA':state.reels.length+' loaded'} reels fixed and find their closest achievable blends.`;
+  $("recommendheading").textContent=state.compareBundles ? 'Compare filament sets' : model ? 'Colours to load + colours to blend' : 'Blends from your loaded filaments';
   document.querySelector('[data-reel-view="loaded"]').textContent=model ? 'Applied' : 'Loaded';
   document.querySelector('[data-reel-view="recommended"]').textContent=model ? 'Suggested' : 'Blend result';
-  $("useowned").disabled=state.stock===null;
+  $("useowned").disabled=state.stock===null && !state.bundleStock.length;
   $("useowned").checked=state.useOwned;
-  $("ownedhint").textContent=state.stock===null ? 'Connect Spool Studio below to limit suggestions to filaments you own.' : `${state.stock.length} available filaments in your connected collection.`;
+  $("ownedhint").textContent=state.stock===null && !state.bundleStock.length ? 'Mark a filament set as owned or connect Spool Studio below.' : `${(state.stock?.length||0)+state.bundleStock.length} available products in your collection.`;
   const colours=[...new Set(Object.values(state.assessed?.sourceColors || {}).map(norm))];
   const areas=colourWeights(state.assessed?.sourceColors || {},state.assessed?.surfaceAreas);
   const totalArea=Object.values(areas).reduce((a,b)=>a+b,0);
@@ -459,6 +470,7 @@ function switchWorkflow(mode) {
   if(mode===state.workflow) return;
   state.modeReels[state.workflow]=state.reels.map(r=>({...r}));
   state.workflow=mode;
+  state.compareBundles=null;
   state.appliedSlotOrder=null;
   state.reels=state.modeReels[mode].map(r=>({...r}));
   invalidateRecommendation();
@@ -539,7 +551,7 @@ function restartWorker(fresh = false) {
 /** Rebuild the light structures the page renders from, out of worker metadata. */
 function applyMeta(meta, assessed) {
   state.project = {
-    kind: meta.kind, sourceSettings:meta.sourceSettings, filamentProfiles:meta.filamentProfiles || [],
+    kind: meta.kind, sourceSettings:meta.sourceSettings, filamentProfiles:meta.filamentProfiles || [],colourPlan:meta.colourPlan,
     title: meta.title,
     colors: meta.colors,
     types: meta.types,
@@ -572,6 +584,8 @@ async function load(file, context={}) {
     $('target').value = context.target;
     syncDestination();
   }
+  if(context.capacity){state.capacity=Math.min(context.capacity,state.target==='bambu'?24:state.target==='snapmaker'?4:16);state.capacityChosen=true;}
+  if(context.bambuSetup)state.bambuSetup=context.bambuSetup;
   if(context.supportInterface && state.target==='snapmaker') {
     if(!state.supportInterface)setInterface(true);
     const wanted=context.interfaceSlot-1, current=interfaceSlot(state.reels)-1;
@@ -774,17 +788,25 @@ function selectedObjects() {
 }
 
 function renderReels() {
+  bundlePanel?.render();
+  $("physicalslotcount").textContent=`${state.reels.length} loaded · ${state.capacity} inputs available`;
   state.reels=interfacePalette(state.reels,state.supportInterface);
+  $('addphysicalreel').disabled=state.reels.length>=state.capacity || state.supportInterface;
+  const products=[...new Map(FILAMENT_BUNDLES.flatMap(b=>b.reels).map(r=>[r.productId,r])).values()];
   $("reels").innerHTML = state.reels.map((reel, index) =>
     `<div class="field"><label for="reel${index}">Slot ${index + 1}</label>`
+    + `<select data-product="${index}" aria-label="Slot ${index+1} filament product"${state.supportInterface?' disabled':''}><option value="">Custom reel</option>${products.map((p,i)=>`<option value="${i}"${reel.productId===p.productId?' selected':''}>${esc(p.name)} · ${esc(p.edition)}</option>`).join('')}</select>`
     + `<input type="color" id="reel${index}" value="${esc(reel.color)}">`
     + `<span class="hint reelname" id="reelname${index}">${esc(reel.name || colourName(reel.color))}</span>`
     + `<select aria-label="Slot ${index+1} material" data-type="${index}"${state.supportInterface && reel.role==='support-interface'?' disabled':''}>${["PLA", "PETG", "ABS", "TPU", "ASA", "PA"]
       .map((type) => `<option${type === reel.type ? " selected" : ""}>${type}</option>`)
-      .join("")}</select></div>`).join("");
+      .join("")}</select><button type="button" data-remove-reel="${index}"${state.supportInterface||state.reels.length===1?' disabled':''}>Remove input ${index+1}</button></div>`).join("");
+  $('reels').querySelectorAll('[data-product]').forEach(select=>select.onchange=()=>{const index=Number(select.dataset.product);state.reels[index]=select.value===''?substituteReel(state.reels[index],{}):{...products[Number(select.value)]};applyFilamentSet(state.reels);});
+  $('reels').querySelectorAll('[data-remove-reel]').forEach(button=>button.onclick=()=>applyFilamentSet(state.reels.filter((_,i)=>i!==Number(button.dataset.removeReel))));
   state.reels.forEach((reel, index) => {
     $(`reel${index}`).addEventListener("input", (event) => {
-      state.reels[index].color = event.target.value.toUpperCase();
+      state.reels[index] = substituteReel(state.reels[index],{color:event.target.value.toUpperCase()});
+      state.compareBundles=null;
       delete state.reels[index].name;
       $(`reelname${index}`).textContent=colourName(state.reels[index].color);
       saveReels();
@@ -794,7 +816,8 @@ function renderReels() {
   });
   $("reels").querySelectorAll("select[data-type]").forEach((select) => {
     select.addEventListener("change", () => {
-      state.reels[Number(select.getAttribute("data-type"))].type = select.value;
+      state.reels[Number(select.dataset.type)] = substituteReel(state.reels[Number(select.dataset.type)],{type:select.value});
+      state.compareBundles=null;
       delete state.reels[Number(select.dataset.type)].name;
       delete state.reels[Number(select.dataset.type)].profile;
       $(`reelname${select.dataset.type}`).textContent=colourName(state.reels[Number(select.dataset.type)].color);
@@ -806,7 +829,7 @@ function renderReels() {
   $("reels").querySelectorAll('[data-lock]').forEach(box=>box.addEventListener('change',()=>{
     state.locked[Number(box.dataset.lock)]=box.checked; refresh();
   }));
-  $("reelnote").textContent = state.workflow==="loaded" ? "Set exactly what is loaded, including CMYK if that is your set. We keep these reels fixed and calculate their blends." : "These are the four reels selected for export. Load them in this order before printing.";
+  $("reelnote").textContent = state.workflow==="loaded" ? "Set exactly what is loaded, including CMYK if that is your set. We keep these reels fixed and calculate their blends." : "These are the physical reels selected for export. Load them in this order before printing.";
   if(state.supportInterface) $('reelnote').textContent=`Slot ${interfaceSlot(state.reels)} is reserved for PETG interfaces; the other slots are PLA model colours. The PETG swatch records your reel colour and does not affect the model.`;
   spoolImport.refresh();
 }
@@ -885,7 +908,7 @@ function useAssessed(assessed) {
     ? `${surfaceColours} colours found on the selected model; ${extraColours} other palette entries are not used on its surface. The sliced-file check can confirm which can be left out of the reel load, including support and purge use.`
     : "";
   state.mix = planBlends(assessed.sourceColors, activeReels(),activeApproximation(),
-    state.reelView==='recommended' ? state.recommendation?.slotOrder : state.appliedSlotOrder,calibrationPanel?.active() || null);
+    state.reelView==='recommended' ? state.recommendation?.slotOrder : state.appliedSlotOrder,calibrationPanel?.active() || null,Math.max(0,Math.min(6,colourLimit(state.target)-activeReels().length)));
   state.recipes = state.mix.recipes.filter(recipe=>plausibleBlend(
     activeReels()[recipe.a-1].color,activeReels()[recipe.b-1].color,recipe.color));
   /* Ticking belongs to one recipe set. A new set starts fully ticked; an empty set
@@ -935,13 +958,13 @@ function resultPlan() {
     blocked:"choose and apply a suggested palette"};
   if (state.strategy === "source") {
     const used = assessed.used;
-    if (used.length > 4) {
+    if (used.length > state.capacity) {
       return { mapping: {}, recipes: [], kept: [], physical: reels,
                blocked: `this selection uses ${used.length} colours, so the file's own `
-                 + "colours cannot all fit in four slots" };
+                 + `colours cannot all fit in ${state.capacity} inputs` };
     }
     const mapping = {};
-    used.forEach((source) => { mapping[source] = source; });
+    used.forEach((source,index) => { mapping[source] = index+1; });
     return {
       mapping, recipes: [], kept: [], source: true,
       physical: used.map((source) => ({
@@ -960,13 +983,13 @@ function resultPlan() {
     return { mapping, recipes: [], kept: [], physical: reels };
   }
   const kept = state.recipes.filter((recipe) => state.ticked.has(recipe.id));
-  const ids = new Map(kept.map((recipe, index) => [recipe.id, 5 + index]));
+  const ids = new Map(kept.map((recipe, index) => [recipe.id, reels.length + 1 + index]));
   const byRow = new Map((state.mix.rows || []).map((row) => [row.source, row]));
   const suggested = mappingFromPlan(state.mix);
   const mapping = {};
   for (const [source, want] of Object.entries(suggested)) {
     const id = Number(want);
-    if (id <= 4) { mapping[source] = id; continue; }
+    if (id <= reels.length) { mapping[source] = id; continue; }
     if (ids.has(id)) { mapping[source] = ids.get(id); continue; }
     const row = byRow.get(Number(source));
     mapping[source] = (row && row.solid.slot) || 1;
@@ -1011,7 +1034,7 @@ function renderMix(assessed) {
   const rows = comparison(assessed.sourceColors, payload.mapping, [...slots,...payload.kept.map(r=>r.color)]);
   const blendMode = state.strategy === "blend";
   $("strategyhint").textContent = state.strategy === "source"
-    ? "Keep the model's original filament colours. This choice does not use your loaded reel colours; this page can keep up to four original colours."
+    ? `Keep the model's original filament colours. This choice does not use your loaded reel colours; your current setup allows ${state.capacity} physical colours.`
     : blendMode
       ? "Approximate the model's colours using the selected set and suggested blends. Matching reel colours stay unchanged; extra colours need an enabled blend. Unresolved colours block export. Recorded samples are labelled; other shades are estimates."
       : "Use only the selected reel colours, with no blends. Each source colour goes to its closest reel unless you change its mapping below.";
@@ -1026,8 +1049,8 @@ function renderMix(assessed) {
         : "none improves";
       const unresolved=payload.outcome?.rows.some(r=>r.source===row.source && r.kind==='unresolved');
       const chosen = state.strategy === "source" ? row.original
-        : (payload.mapping[row.source] > 4
-          ? (payload.kept[payload.mapping[row.source] - 5] || {}).color || row.result
+        : (payload.mapping[row.source] > slots.length
+          ? (payload.kept[payload.mapping[row.source] - slots.length - 1] || {}).color || row.result
           : slots[(payload.mapping[row.source] || 1) - 1]);
       const options = ["<option value=\"0\">"
         + (blendMode ? "matching reel / blend" : "nearest") + "</option>"]
@@ -1082,9 +1105,9 @@ function renderMix(assessed) {
         + `${assessed.used.length}; no substitution and no mixture.`
       : blendMode
         ? ` ${state.ticked.size} of ${state.recipes.length} recipe(s) ticked; the `
-          + "export writes them after your four reels. Unrecorded blends are "
+          + `export writes them after your ${slots.length} physical reels. Unrecorded blends are `
           + "estimates."
-        : " Substituting every source colour onto one of your four reels; use the "
+        : ` Substituting every source colour onto one of your ${slots.length} reels; use the `
           + "dropdowns to change any of them.");
 }
 
@@ -1269,7 +1292,7 @@ function paletteOf(payload, mode) {
   const reels=activeReels();
   reels.forEach((reel, index) => { table[index + 1] = norm(reel.color); });
   payload.kept.forEach((recipe, index) => {
-    table[5 + index] = recipe.color;
+    table[reels.length + 1 + index] = recipe.color;
   });
   return table;
 }
@@ -1313,10 +1336,12 @@ function renderExport() {
   printOptimiser?.check();
   $('printeroptionssummary').textContent=`Printer settings · ${LABELS[state.target] || state.target}`;
   printerPanel?.refresh();
+  bambuPicker?.refresh();
+  bundlePanel?.render();
   $("printersetup").hidden=state.target!=="snapmaker";
   $("applyforexport").hidden=state.reelView!=="recommended" || !state.recommendation;
   $('spectrumprofile').classList.toggle('hidden',state.target!=='snapmaker');
-  $('layeroptions').hidden=state.target!=='snapmaker';
+  $('layeroptions').hidden=state.target!=='snapmaker' && !state.bambuSetup;
   $('blendlayerhint').hidden=true;
   $('subdivideoptions').hidden=true;
   $('subdividelayerhint').hidden=!subdivideChoice();
@@ -1325,6 +1350,12 @@ function renderExport() {
   let profileError='';
   try {
     const payload=resultPlan();
+    if(state.project && state.target==='bambu' && state.bambuSetup) {
+      const height=resolveBambuLayerHeight(state.project.sourceSettings,state.bambuSetup,layerChoice());
+      $('spectrumlayernote').textContent=`${height} mm regular layers. Bambu uses the selected printer and nozzle limits. Sublayers do not change this regular height.`;
+      $('subdivideoptions').hidden=payload.recipes.length===0;
+      $('spectrumlayermode').querySelectorAll('option[value^="height:"]').forEach(option=>{try{resolveBambuLayerHeight({},state.bambuSetup,{mode:'custom',value:option.value.slice(7)});option.disabled=false;}catch{option.disabled=true;}});
+    }
     if(state.project && state.target==='snapmaker') {
       const types=(payload.physical || state.reels).map(r=>r.type || 'PLA');
       const profile=buildU1Profile(state.project.sourceSettings,types,state.u1Nozzle,{blends:payload.recipes.length>0,layerHeight:layerChoice()});
@@ -1354,7 +1385,7 @@ function renderExport() {
   const negative = state.project && [...state.project.meta.values()].some(meta => state.objects.map(String).includes(String(meta.id)) && (meta.parts || []).some(part => part.subtype === 'negative_part'));
   $('cutoutnote').classList.toggle('hidden', !negative);
   const reviewBox = $("review");
-  const blocking = state.layoutError || profileError || (negative && target === 'prusa' ? 'negative cutouts require Snapmaker Orca or Bambu Studio output' : '') || (!state.objects.length ? "tick at least one object"
+  const blocking = (state.reels.length>state.capacity && state.strategy!=="source" ? `Choose at most ${state.capacity} reels or increase capacity` : "") || (state.target==="bambu" && state.bambuRequired && !state.bambuSetup ? state.bambuError || "Choose a Bambu printer and wait for its profiles" : "") || state.layoutError || profileError || (negative && target === 'prusa' ? 'negative cutouts require Snapmaker Orca or Bambu Studio output' : '') || (!state.objects.length ? "tick at least one object"
     : state.strategy!=='source' && state.workflow==='model' && !state.modelApplied && state.reelView!=='recommended' ? "choose and apply a model palette"
     : payload.blocked || (state.reelView==='recommended' ? 'apply the selected palette or blend settings' : null));
   const needsReview = state.strategy !== "source" && !blocking;
@@ -1370,16 +1401,16 @@ function renderExport() {
     ? (blocking==='apply the selected palette or blend settings' ? 'This palette is a preview. Apply it below, then review the colour changes to download.' : `Cannot export yet: ${blocking}.`)
     : mixtures
     ? (target === "snapmaker"
-      ? `Download a Snapmaker Orca project with four physical reels and ${mixtures} blend recipe(s). Check the settings and slice it before printing.`
+      ? `Download a Snapmaker Orca project with ${payload.physical.length} physical reels and ${mixtures} blend recipe(s). Check the settings and slice it before printing.`
       : `Download a ${LABELS[target]} project with your model, colours and ${mixtures} blend recipe(s). Choose your printer and check the print settings in the slicer.`)
     : state.strategy === "source"
       ? `Download a ${LABELS[target]} project keeping each source colour in its own slot. Check the settings and slice it before printing.`
-      : `Download a ${LABELS[target]} project using the four loaded reels and the colour mapping above. Check the settings and slice it before printing.`;
+      : `Download a ${LABELS[target]} project using ${payload.physical.length} physical reels and the colour mapping above. Check the settings and slice it before printing.`;
   if(state.supportInterface && !blocking) $('exportnote').textContent=`Demo export: three PLA model reels, ${mixtures} blend recipe(s), and PETG interfaces in slot ${interfaceSlot(payload.physical)}. Supports enabled; three dense contact layers at 0 mm Z gap; PLA prime-tower shell. Check the sliced result and test a small print first.`;
   if(!blocking && subdivideChoice()) $('exportnote').textContent+=' Subdivide Mix Layer is enabled for this export.';
   if (!blocking && target === "prusa") {
     $("exportnote").textContent += " Open the file as a project in PrusaSlicer with a "
-      + "four-extruder profile: the palette lives in the Full Spectrum description, "
+      + `${payload.physical.length}-extruder profile: the palette lives in the Full Spectrum description, `
       + "and this tool writes no print config that would override your preset.";
   }
 }
@@ -1389,7 +1420,7 @@ function exportRevision() {
   return JSON.stringify({epoch: state.epoch, plate: state.plateId,
     objects: state.objects, layout:state.layout, layoutError:state.layoutError, target: state.target, reels: state.reels, u1Nozzle:state.u1Nozzle,
     physical: payload.physical, mapping: payload.mapping, recipes: payload.recipes,
-    strategy: state.strategy, reviewed: state.reviewed, reelView:state.reelView,layerHeight:layerChoice(),supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice()});
+    bambuSetup:state.bambuSetup,capacity:state.capacity,strategy: state.strategy, reviewed: state.reviewed, reelView:state.reelView,layerHeight:layerChoice(),supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice()});
 }
 
 $("export").addEventListener("click", async () => {
@@ -1431,6 +1462,7 @@ $("export").addEventListener("click", async () => {
       target: state.target, reels: state.reels, physical: payload.physical,
       mapping: payload.mapping, recipes: payload.recipes,
       title: state.project.title, u1Nozzle:state.u1Nozzle, layout:state.layout,
+      bambuSetup:state.bambuSetup,preserveSourceSettings:true,calibration:calibrationPanel?.active() || null,
       layerHeight:layerChoice(),supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice(),
       thumbnails: { main: rendered.main, small: rendered.small || null },
     });
@@ -1626,27 +1658,31 @@ function syncDestination() {
   const u1 = state.target === "snapmaker";
   $("destinationnote").textContent = u1
     ? "Snapmaker U1 has four physical filament slots. Extra source colours need recolouring, supported blends or manual reel changes."
-    : "Choose your printer in the destination slicer. This recolouring page currently compares four loaded reels; that is not a limit on your printer. Use the 3MF converter to keep any number of source colours.";
+    : `Choose your printer setup and physical inputs. ${state.target==='bambu'?'Up to 24 physical colours; physical plus blended entries must fit the 24-colour export.':'Up to 16 physical plus blended entries.'}`;
+  state.capacity=Math.min(state.capacity,u1?4:colourLimit(state.target));
+  bundlePanel?.render();
   $("plannercard").classList.toggle("hidden", !u1);
   $("prepareswaps").disabled = !u1 || !state.project;
 }
-function calibrationSetup() {
+function calibrationSetup(surface='wall') {
   if(!state.project) throw Error('Load a model and select a palette to prepare U1 blend tests.');
-  if(state.target!=='snapmaker') throw Error('Printed blend calibration currently supports Snapmaker U1 output. Other outputs use the standard estimates.');
+  if(!['snapmaker','bambu'].includes(state.target))throw Error('Choose Snapmaker or a native Bambu printer for calibration projects.');
+  if(state.target==='bambu' && !state.bambuSetup)throw Error('Choose a Bambu printer and nozzle first.');
   const reels=activeReels();
   const sourceSettings=state.project.sourceSettings || {};
-  const profile=buildU1Profile(sourceSettings,reels.map(r=>r.type),state.u1Nozzle,{blends:true,layerHeight:layerChoice()});
-  const height=resolveLayerHeight(sourceSettings,profile.match,layerChoice()).height;
+  const profile=state.target==='bambu'?{match:{nozzle:state.bambuSetup.machine.printer_variant}}:buildU1Profile(sourceSettings,reels.map(r=>r.type),state.u1Nozzle,{blends:true,layerHeight:layerChoice()});
+  const resolve=settings=>state.target==='bambu'?resolveBambuLayerHeight(settings,state.bambuSetup,layerChoice()):resolveLayerHeight(settings,profile.match,layerChoice()).height;
+  const height=resolve(sourceSettings);
   for(const id of state.objects) {
     const settings=state.project.meta.get(String(id))?.settings || {};
-    if(resolveLayerHeight({...sourceSettings,...settings},profile.match,layerChoice()).height!==height)
+    if(resolve({...sourceSettings,...settings})!==height)
       throw Error('This selection has different object layer heights. Choose a common custom layer height before calibrating.');
   }
   const nozzle=profile.match.nozzle;
-  const context=JSON.stringify({target:state.target,nozzle,height,
+  const context=JSON.stringify({target:state.target,printer:state.bambuSetup?.machine.name,surface,subdivideMixLayer:subdivideChoice(),nozzle,height,
     sourceSettings:Object.fromEntries(Object.entries(sourceSettings).sort(([a],[b])=>a.localeCompare(b))),
     filamentProfiles:reels.map(r=>JSON.stringify(r.profile || null)).sort()});
-  return {reels,sourceSettings,nozzle,height,context};
+  return {reels,sourceSettings,nozzle,height,context,surface,target:state.target,bambuSetup:state.bambuSetup,subdivideMixLayer:subdivideChoice()};
 }
 calibrationPanel=mountCalibration($('blendcalibration'),{getSetup:calibrationSetup,onChange:()=>{
   clearReview();invalidateRecommendation();refresh();
@@ -1654,6 +1690,29 @@ calibrationPanel=mountCalibration($('blendcalibration'),{getSetup:calibrationSet
 $("target").innerHTML = RECOLOUR_TARGETS.map((id) =>
   `<option value="${id}">${esc(LABELS[id])}</option>`).join("");
 $("target").value = state.target;
+$('addphysicalreel').onclick=()=>{if(state.reels.length<state.capacity)applyFilamentSet([...state.reels,{color:'#FFFFFF',type:'PLA',name:'Custom white'}]);};
+$('cancelrecommendation').onclick=()=>{recommendationWorker?.terminate();recommendationWorker=null;renderRecommendation('Comparison cancelled. Change a colour choice or click Compare filament sets to try again.');};
+function applyFilamentSet(reels) {
+  state.compareBundles=null;state.workflow='loaded';state.reels=reels.map(r=>({...r}));
+  state.modeReels.loaded=state.reels.map(r=>({...r}));state.appliedSlotOrder=null;state.overrides={};state.recipeKey='';
+  saveReels();invalidateRecommendation();renderReels();renderWorkflow();refresh();
+}
+bundlePanel=mountBundlePanel($('bundlepanel'),{
+  getState:()=>state,apply:applyFilamentSet,
+  compare:bundles=>{state.compareBundles=bundles;invalidateRecommendation();refresh();},
+  changeCapacity:count=>{state.capacity=state.supportInterface?4:count;state.capacityChosen=true;state.compareBundles=null;invalidateRecommendation();renderReels();renderWorkflow();refresh();},
+  changePriority:value=>{state.priority=value;invalidateRecommendation();refresh();},
+  ownedChanged:rows=>{state.bundleStock=rows;if(state.project){invalidateRecommendation();renderWorkflow();refresh();}},
+});
+const bambuSession={
+  get target(){return state.target;},get bambuSetup(){return state.bambuSetup;},get epoch(){return state.epoch;},
+  get state(){return {types:activeReels().map(r=>r.type),negativeVolumes:false};},
+  activeColourIds:()=>activeReels().map((_,i)=>i+1),get filamentProfiles(){return activeReels().map(r=>r.profile);},
+  setBambuSetup:(setup,required,error='')=>{state.bambuSetup=setup;state.bambuRequired=required;state.bambuError=error;
+    if(setup){if(!state.capacityChosen)state.capacity=setup.machine.printer_model==='Bambu Lab H3C'?9:4;$('spectrumwidth').value=setup.bed.width;$('spectrumdepth').value=setup.bed.depth;}
+  },
+};
+bambuPicker=mountBambuPrinterPicker($('spectrumbambu'),bambuSession,()=>{clearReview();if(state.project)renderExport();});
 syncDestination();
 if(new URLSearchParams(location.search).get('interface')==='petg') {
   setInterface(true);$('interfacedemoload').hidden=false;
@@ -1674,7 +1733,7 @@ receiveModel({mount: $("drop").parentElement, canReceive:()=>!state.project&&!st
 }});
 
 export {state, load, refresh, renderObjects, renderQuantityFields, layoutChanged, textureImporter};
-const workbenchSettingKeys=['target','u1Nozzle','supportInterface','interfacePosition','reels','strategy','overrides','workflow','modelType','keepExact','useOwned','modelApplied','modeReels','locked','appliedSlotOrder','loadedTuning','reelView'];
+const workbenchSettingKeys=['capacity','capacityChosen','priority','compareBundles','bambuSetup','bambuRequired','bambuError','target','u1Nozzle','supportInterface','interfacePosition','reels','strategy','overrides','workflow','modelType','keepExact','useOwned','modelApplied','modeReels','locked','appliedSlotOrder','loadedTuning','reelView'];
 export function workbenchCaptureSettings(){return {state:structuredClone(Object.fromEntries(workbenchSettingKeys.filter(k=>state[k]!==undefined).map(k=>[k,state[k]]))),controls:Object.fromEntries(['spectrumlayermode','spectrumlayerheight','subdividemix'].map(id=>[id,$(id).type==='checkbox'?$(id).checked:$(id).value]))};}
 export function workbenchRestoreSettings(saved){if(!saved||!state.project)return;Object.assign(state,saved.state);state.reviewed=false;for(const [id,value]of Object.entries(saved.controls))if($(id).type==='checkbox')$(id).checked=value;else $(id).value=value;renderReels();renderWorkflow();return refresh();}
 export async function workbenchSourceColours(){if(!state.project)return null;return (await background().preview(state.plateId,state.objects,'original',paletteOf(null,'original'),null,state.geometryId,state.assessed?.counts.triangles||0,state.layout)).colors;}
@@ -1706,7 +1765,7 @@ printOptimiser=mountSequential($('printoptimiser'),()=>{
   if($('export').disabled)throw Error('Apply and review the palette and export settings before comparing.');
   const options={target:state.target,reels:state.reels,physical:payload.physical,mapping:payload.mapping,
     recipes:payload.recipes,title:state.project.title,u1Nozzle:state.u1Nozzle,layerHeight:layerChoice(),
-    supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice(),preserveSourceSettings:true};
+    supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice(),preserveSourceSettings:true,bambuSetup:state.bambuSetup,calibration:calibrationPanel?.active() || null};
   const hasSupports=[state.project.sourceSettings,...state.objects.map(id=>state.project.meta.get(String(id))?.settings)].some(s=>['1','true'].includes(String(s?.enable_support)));
   return {signature:exportRevision(),worker:background(),plateId:state.plateId,objects:state.footprints,
     quantities:state.quantities,layout:layoutSettings(),mapping:payload.mapping,recipes:payload.recipes,options,

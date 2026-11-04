@@ -236,13 +236,13 @@ export function plausibleBlend(first, second, predicted) {
 
 /** Interactive Full Spectrum planning rejects implausible predictions before
  * choosing a recipe, so a rejected nearest prediction cannot hide a valid one. */
-export function planBlends(sourceColors,reels,approximate=false,slotOrder=null,calibration=null) {
+export function planBlends(sourceColors,reels,approximate=false,slotOrder=null,calibration=null,maxRecipes=6) {
   // Keep the original search order when arranging a chosen palette. Re-running
   // tied candidates in physical-slot order can otherwise change its shades.
   if(slotOrder) {
     validateSlotOrder(slotOrder,reels.length);
     const original=slotOrder.map((_,old)=>reels[slotOrder.indexOf(old)]);
-    const plan=planBlends(sourceColors,original,approximate,null,calibration);
+    const plan=planBlends(sourceColors,original,approximate,null,calibration,maxRecipes);
     const slot=id=>id==null ? id : slotOrder.indexOf(id-1)+1;
     const recipe=r=>r ? {...r,a:slot(r.a),b:slot(r.b)} : r;
     return {...plan,reels:reels.map((r,i)=>({slot:i+1,color:norm(r.color),type:material(r)})),
@@ -250,7 +250,7 @@ export function planBlends(sourceColors,reels,approximate=false,slotOrder=null,c
         solid:{...row.solid,slot:slot(row.solid.slot)},mixture:recipe(row.mixture)}))};
   }
   const predictor=calibratedPredictor(reels,calibration);
-  const plan=planMixtures(sourceColors,reels,RATIOS,6,true,predictor.predict,approximate);
+  const plan=planMixtures(sourceColors,reels,RATIOS,maxRecipes,true,predictor.predict,approximate);
   plan.recipes.forEach(recipe=>{
     recipe.model=FDM_MODEL;
     const measured=predictor.measured(recipe.a,recipe.b,recipe.percent);
@@ -285,7 +285,8 @@ export function swapPaletteSlots(palette,from,to) {
 export function describeColourMapping(sourceColors, payload, strictBlends = false) {
   const rows = Object.entries(sourceColors || {}).map(([source, value]) => {
     const original=norm(value), slot=Number(payload.mapping[source]);
-    const recipe=slot>4 ? payload.kept?.[slot-5] : null;
+    const physicalCount=payload.physical?.length || 4;
+    const recipe=slot>physicalCount ? payload.kept?.[slot-physicalCount-1] : null;
     const result=payload.source ? original : norm(recipe?.color || payload.physical?.[slot-1]?.color);
     const implausible=recipe && !plausibleBlend(payload.physical?.[recipe.a-1]?.color,
       payload.physical?.[recipe.b-1]?.color,result);

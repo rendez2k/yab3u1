@@ -82,7 +82,7 @@ export class BambuProfiles {
   }
 }
 
-export function nativeBambuConfig(setup, colours, types, source = {}, carry = true) {
+export function nativeBambuConfig(setup, colours, types, source = {}, carry = true, recipes = []) {
   if (!setup?.machine?.name || !setup?.process?.name || !setup?.materials) throw new Error('Choose a Bambu printer and nozzle before exporting.');
   const {machine, process} = setup;
   const materials = types.map(t => {
@@ -100,7 +100,7 @@ export function nativeBambuConfig(setup, colours, types, source = {}, carry = tr
     cfg[key] = Array.isArray(values[0]) ? values.flatMap(v => v) : values[0];
   }
   const carried = carry ? transferSettings(source, 'bambu', {baseline:cfg}).values : {};
-  Object.assign(cfg, carried, bambuConfig(colours, types, []), {
+  Object.assign(cfg, carried, bambuConfig(colours, types, recipes), {
     version:'2.9.1.70',
     printer_settings_id:machine.name, print_settings_id:process.name,
     filament_settings_id:materials.map(p=>p.name), filament_ids:materials.map(p=>p.filament_id || ''),
@@ -113,6 +113,21 @@ export function nativeBambuConfig(setup, colours, types, source = {}, carry = tr
   // Nozzle arrays describe the selected hardware, never the number of colours.
   cfg.nozzle_diameter = machine.nozzle_diameter.slice();
   validateBambuLayers(carried, setup);
+  // Native mixed filaments are logical palette entries. They inherit the first
+  // ingredient's material properties, including every H2/H3 extruder variant.
+  if(recipes.length) {
+    const ids=cfg.filament_self_index.map(Number), count=colours.length;
+    const paletteKeys=new Set(Object.keys(bambuConfig(colours,types,recipes)));
+    for(const key of new Set([...Object.keys(materialSettings[0]).filter(k=>!paletteKeys.has(k)),'filament_settings_id','filament_ids'])) {
+      const values=cfg[key];
+      if(!Array.isArray(values))continue;
+      if(values.length===ids.length)cfg[key]=values.concat(recipes.flatMap(r=>values.filter((_,i)=>ids[i]===r.a)));
+      else if(values.length===count)cfg[key]=values.concat(recipes.map(r=>values[r.a-1]));
+    }
+    cfg.filament_self_index=cfg.filament_self_index.concat(recipes.flatMap((r,j)=>ids.filter(id=>id===r.a).map(()=>String(count+j+1))));
+    cfg.inherits_group=[process.name,...cfg.filament_settings_id,machine.name];
+    cfg.different_settings_to_system=[Object.keys(carried).join(';'),...cfg.filament_settings_id.map(()=> 'filament_colour'), ''];
+  }
   return cfg;
 }
 
@@ -126,6 +141,13 @@ export function validateBambuLayers(values, setup) {
       throw new Error(`Source ${key === 'layer_height' ? 'layer height' : 'first layer height'} (${values[key]} mm) is outside ${minimum}–${maximum} mm for ${machine.name}. Choose a suitable nozzle or turn off carrying source settings.`);
     }
   }
+}
+
+export function resolveBambuLayerHeight(source,setup,choice={mode:'preserve'}) {
+  if(!setup?.machine)throw Error('Choose a Bambu printer and nozzle before setting layer height.');
+  const height=Number(choice?.mode==='custom'?choice.value:choice?.mode==='preset'?setup.process.layer_height:source?.layer_height || setup.process.layer_height);
+  if(!Number.isFinite(height)||height<=0)throw Error('Choose a positive layer height.');
+  validateBambuLayers({layer_height:String(height)},setup);return height;
 }
 
 export function applyNativeBambuFilaments(cfg, reels) {

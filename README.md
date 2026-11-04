@@ -135,7 +135,7 @@ web/
 ```
 
 The pages report their own version (`VERSION` in `web/convert-page.js` and
-`web/recolour.js`); the Workbench release is **v2.6.37**.
+`web/recolour.js`); the Workbench release is **v2.6.38**.
 
 **Deploying.** The Python UI cannot go on a static host — it needs your Orca
 install and the slicer — but the browser converter can, and that is what

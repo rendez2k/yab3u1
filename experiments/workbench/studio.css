@@ -59,3 +59,14 @@ dialog{border:0}
 .studio-auto-result>strong{display:block;font-size:13px;margin-bottom:8px}.studio-auto-result>p{margin:0}#inspector .studio-auto-result details{padding-top:0;margin:8px 0 22px}
 @media(max-width:760px){.prepared-preview{padding:40px 0 122px}.prepared-caption{top:14px;left:14px;right:14px;font-size:12px}.prepared-controls{left:12px;right:12px;bottom:12px;max-width:calc(100% - 24px);gap:3px}.prepared-controls label{flex:1 1 100%;padding-left:4px}.prepared-controls select{flex:1;width:auto;min-height:44px}.prepared-controls button{min-height:44px;flex:1}.prepared-progress{top:40%;font-size:12px}.prepared-progress button{min-height:44px}}
 @media(max-width:760px){.studio-toolstrip button,#platecontrols button,#platecontrols select,.tasknav button,#inspector [data-multi-select],[data-scene-list] button{min-height:44px;min-width:44px}.tasknav button{min-width:0}.studio-toolstrip [data-studio-undo]{min-width:44px}#platecontrols .plate-view-switch button{min-height:44px;min-width:44px}.project-menu summary,.topbar>.primary{min-height:44px}.project-menu summary{min-width:44px;display:flex;align-items:center;justify-content:center}}
+/* Keep the first filament decision and preview comparison within reach. */
+body[data-engine=spectrum] [data-task=colours] .task-heading{margin-bottom:12px}
+#inspector #filamentbundles{margin:0 0 18px;padding-top:0}
+#inspector #bundlepanel{gap:10px;padding-top:8px}
+#inspector #bundlepanel .bundle-capacity{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:12px}
+#inspector #bundlepanel [data-capacity]{width:100px;flex:none}
+#inspector #bundlepanel .bundle-details{margin:0;padding:0}
+#inspector .bundle-details[open]{display:grid;gap:10px}
+#inspector #bundlepanel [data-status]:empty{display:none}
+@media(max-width:760px){#platecontrols #convertpreviewtoolbar,#platecontrols .previewtoolbar{display:flex!important}#platecontrols .segs{flex-wrap:nowrap}#inspector #bundlepanel select,#inspector #bundlepanel button{min-height:44px}body[data-engine=spectrum] #inspector [data-task=colours]{padding-top:14px}}
+@media(max-width:560px){body[data-ready=true] #stage:not([data-prepared=true]){padding-bottom:112px}}

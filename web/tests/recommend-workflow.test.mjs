@@ -19,7 +19,7 @@ const different=loaded.map(r=>({...r,color:'#FF00FF'}));
 assert.deepEqual(recommendWorkflow({sources,loaded:different,weights}),model,'model-first is independent of saved reels');
 const locked=recommendWorkflow({sources,loaded,keepExact:['#000000','#FF0000']});
 assert(all(locked).every(p=>['#000000','#FF0000'].every(c=>p.reels.some(r=>r.color===c))));
-assert.throws(()=>recommendWorkflow({sources,loaded,keepExact:Object.values(sources)}),/at most four/);
+assert.throws(()=>recommendWorkflow({sources,loaded,keepExact:Object.values(sources)}),/at most 4/);
 for(const reels of [loaded,['#00FFFF','#FF00FF','#FFFF00','#000000'].map(color=>({color,type:'PLA'}))]) {
  const fixed=recommendWorkflow({mode:'loaded',sources,loaded:reels,stock:[{color:'#123456',type:'PLA'}]});
  assert.equal(fixed.search.evaluated,1);
