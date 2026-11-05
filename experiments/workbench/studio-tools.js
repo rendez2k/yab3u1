@@ -203,8 +203,8 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
     }catch(error){if(stamp===request)message.textContent=error.message;}finally{worker?.terminate();worker=null;rejectPending=null;working=false;committing=false;sync();}
   }
   async function undoEdit(){if(working||!undo.length)return;working=true;restorePreview();message.textContent='Restoring your previous model…';try{await loadSnapshot(undo.at(-1));undo.pop();autoResult.hidden=true;mode='select';selectionKey='';render();message.textContent='Model edit undone.';}catch(e){message.textContent=e.message;}finally{working=false;sync();}}
-  const undoKind=()=>colourDirty?'colour preview':objects.history?.canUndo?'plate':undo.length?'model':null;
-  async function undoCurrent(){if(working||state().busy)return;if(colourDirty){show('select');message.textContent='Colour preview undone. Original paint restored.';}else if(undoKind()==='plate')await objects.act('undo');else await undoEdit();sync();}
+  const undoKind=()=>colourDirty?'colour preview':engine.workbenchBlends?.canUndo?'blend':objects.history?.canUndo?'plate':undo.length?'model':null;
+  async function undoCurrent(){if(working||state().busy)return;if(colourDirty){show('select');message.textContent='Colour preview undone. Original paint restored.';}else if(undoKind()==='blend')engine.workbenchBlends.undo();else if(undoKind()==='plate')await objects.act('undo');else await undoEdit();sync();}
   let listStamp='';
   function sync(){
     const s=state();tools.hidden=!s.objects.length;if(s.preview)s.preview.selectionToggle=multiple;

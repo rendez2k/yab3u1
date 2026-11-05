@@ -288,7 +288,7 @@ export function describeColourMapping(sourceColors, payload, strictBlends = fals
     const physicalCount=payload.physical?.length || 4;
     const recipe=slot>physicalCount ? payload.kept?.[slot-physicalCount-1] : null;
     const result=payload.source ? original : norm(recipe?.color || payload.physical?.[slot-1]?.color);
-    const implausible=recipe && !plausibleBlend(payload.physical?.[recipe.a-1]?.color,
+    const implausible=recipe && !recipe.c && !recipe.gradient && !plausibleBlend(payload.physical?.[recipe.a-1]?.color,
       payload.physical?.[recipe.b-1]?.color,result);
     const kind=payload.source ? 'preserved' : recipe ? (strictBlends && implausible ? 'unresolved' : 'blended')
       : result && distance(original,result)<=.5 ? 'preserved'

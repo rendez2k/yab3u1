@@ -1,6 +1,7 @@
 import {filamentIdentity} from './filamentIdentity.js';
 import {norm} from './colour.js';
 import {validateCalibration} from './blendCalibration.js';
+import {validateRecipe,recipeData} from './blendRecipes.js';
 export const EXPORT_PLAN_PATH='Metadata/YAB3D_colour_plan.json';
 /** Portable provenance, never printer commands. It cannot authorise calibration. */
 export function colourExportPlan({target,reels,recipes=[],mapping={},layerHeight=null,subdivideMixLayer=false,supportInterface=false,calibration=null}) {
@@ -10,8 +11,8 @@ export function colourExportPlan({target,reels,recipes=[],mapping={},layerHeight
     return {...filamentIdentity(r),color:norm(r.color),type:String(r.type||'PLA').slice(0,40),name:String(r.name||'').slice(0,120),...(r.role==='support-interface'?{role:r.role}:{})};
   });
   const blends=recipes.map(r=>{
-    if(!Number.isInteger(r.a)||!Number.isInteger(r.b)||r.a<1||r.b<1||r.a>reels.length||r.b>reels.length||r.a===r.b||!Number.isInteger(r.percent)||r.percent<1||r.percent>99)throw Error('Invalid colour plan blend.');
-    return {a:r.a,b:r.b,percent:r.percent,model:String(r.model||'').slice(0,80),...(norm(r.measuredColor)?{measuredColor:norm(r.measuredColor)}:{})};
+    validateRecipe(r,reels.length,target);
+    return {...recipeData(r),model:String(r.model||'').slice(0,80)};
   });
   const map=Object.fromEntries(Object.entries(mapping).slice(0,256).filter(([k,v])=>/^\d+$/.test(k)&&Number.isInteger(v)&&v>0&&v<=reels.length+blends.length));
   const layer=layerHeight && ['custom','preset','preserve'].includes(layerHeight.mode)?{mode:layerHeight.mode,...(layerHeight.mode==='custom'?{value:String(layerHeight.value).slice(0,12)}:{})}:null;

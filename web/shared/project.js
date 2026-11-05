@@ -14,6 +14,7 @@
 import {nativeBambuConfig, validateBambuLayers, applyNativeBambuFilaments,resolveBambuLayerHeight} from './bambuProfiles.js';
 import {colourExportPlan,readColourExportPlan,EXPORT_PLAN_PATH} from './exportPlan.js';
 import { norm } from "./colour.js";
+import {validateRecipe} from './blendRecipes.js';
 import * as paint from "./paint.js";
 import { SLOTS, arrange, bijectionProblem, completeRule, isIdentity, conversionPalette }
   from "./assignment.js";
@@ -2029,8 +2030,11 @@ export function exportProject(project, plateId, objectIds, options) {
   const reelColours = reels.map((reel) => norm(reel.color) || "#FFFFFF");
   const reelTypes = reels.map((reel) => reel.type || "PLA");
   const recipes = options.recipes || [];
-  if(options.subdivideMixLayer && (!['snapmaker','bambu'].includes(target) || !recipes.length))
-    throw new ProjectError('Subdivide Mix Layer requires a Snapmaker Orca or Bambu project with blend recipes.');
+  if(options.subdivideMixLayer && (!['snapmaker','bambu','orca'].includes(target) || !recipes.length))
+    throw new ProjectError('Subdivide Mix Layer requires a Snapmaker Orca, OrcaSlicer 2.5 or Bambu project with blend recipes.');
+  for(const recipe of recipes)validateRecipe(recipe,reels.length,target);
+  if(recipes.some(r=>r.gradient) && !options.subdivideMixLayer)
+    throw new ProjectError('Gradients require Mixed Colour Sublayer. Enable subdivision before exporting.');
   if(options.supportInterface) validateInterfaceExport({target,reels,mapping:options.mapping,recipes,supportMode:options.supportMode});
   else if(reels.some(r=>r.role==='support-interface')) throw new ProjectError('Reserved support filament requires PETG interface mode.');
   if (!convert) {
@@ -2044,14 +2048,7 @@ export function exportProject(project, plateId, objectIds, options) {
     throw new ProjectError("conversion preserves the source's own filaments; it "
       + "does not create mixtures");
   }
-  // Pure conversion to generic OrcaSlicer is fine; *blends* are not, because
-  // stock OrcaSlicer support for the Bambu mixed-filament arrays is not
-  // established. Adding the conversion target must not advertise that path.
-  if (!convert && recipes.length && target === "orca") {
-    throw new ProjectError("generic OrcaSlicer support for native mixed filaments "
-      + "is not established, so this tool will not write a blend into an OrcaSlicer "
-      + "project; export it to Snapmaker Orca or Bambu Studio instead");
-  }
+  // OrcaSlicer 2.5 RC now reads the Bambu-family native mixture arrays.
   const mapping = {};
   Object.entries(options.mapping || {}).forEach(([source, id]) => {
     mapping[Number(source)] = Number(id);
@@ -2540,7 +2537,8 @@ export function exportProject(project, plateId, objectIds, options) {
         ? applyNativeBambuFilaments(cfg,[...reels,...recipes.map(r=>reels[r.a-1])]) : applyFilamentProfiles(cfg,reels);
       for(const key of filamentReport.keys) if(recipes.length && cfg[key].length===reels.length)
         cfg[key]=cfg[key].concat(recipes.map(r=>cfg[key][r.a-1]));
-      if(target==='bambu' && recipes.length)cfg.enable_mixed_color_sublayer=options.subdivideMixLayer?'1':'0';
+      if(recipes.length)cfg.enable_mixed_color_sublayer=options.subdivideMixLayer?'1':'0';
+      if(target==='orca')cfg.version='2.5.0.0';
       if(target==='bambu' && options.bambuSetup && options.layerHeight)
         cfg.layer_height=String(resolveBambuLayerHeight(project.sourceSettings,options.bambuSetup,options.layerHeight));
       settingNotes={materials:cfg.filament_settings_id.slice(),notes:filamentReport.notes};

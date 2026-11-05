@@ -1,4 +1,5 @@
 import {emptyBox,addBox,fillLayout,planLayout} from './layout.js';
+import {recipeParts} from './blendRecipes.js';
 
 export function outputTools(object, mapping={}, recipes=[]) {
   if(object.undecodable || !object.colours?.length)return null;
@@ -6,7 +7,7 @@ export function outputTools(object, mapping={}, recipes=[]) {
   for(const colour of object.colours) {
     const id=Number(mapping[colour.extruder] ?? colour.extruder);
     const mix=recipes.find(r=>r.id===id);
-    if(mix){tools.add(mix.a);tools.add(mix.b);}else tools.add(id);
+    if(mix){recipeParts(mix).forEach(p=>tools.add(p.slot));}else tools.add(id);
   }
   return [...tools].sort((a,b)=>a-b);
 }

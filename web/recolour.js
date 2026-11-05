@@ -19,6 +19,8 @@ import { comparison, distance, norm, suggestMapping } from "./shared/colour.js";
 import { describeColourMapping, mappingFromPlan, planBlends, plausibleBlend, swapPaletteSlots } from "./shared/mix.js";
 import { Preview, mountPlateControls } from "./shared/preview.js";
 import { LABELS, RECOLOUR_TARGETS, colourLimit } from "./shared/targets.js";
+import {mountBlendEditor} from './shared/blendEditor.js';
+import {applyManualRecipes,recipeData,recipeLabel} from './shared/blendRecipes.js';
 import { thumbnailSizes } from "./shared/thumbnail.js";
 import { RecolourWorker, loadModelWithRecovery } from "./shared/workerClient.js";
 import { readZip } from "./zip.js";
@@ -39,7 +41,7 @@ import { mountCalibration } from './shared/calibrationPanel.js';
 import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } from './shared/supportInterface.js';
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 
-const VERSION = "2.6.44";
+const VERSION = "2.6.45";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -55,6 +57,7 @@ const state = {
   // What the export does with the file's colours: keep them, substitute them onto
   // the reels (with per-colour overrides), or use the blends that are ticked.
   strategy: "blend", overrides: {}, recipeKey: "", reviewed: false, approximate: false,
+  manualBlends:{}, blendHistory:[],
   workflow: "model", modelType: "PLA", keepExact: [], useOwned: false, modelApplied: false, modeReels: {},
   stock: null, locked: [false,false,false,false], recommendation: null, recommendationSearch: null, reelView: "loaded",
   layout: null, layoutError: "", bounds: null, boundsKey: "", appliedSlotOrder: null, loadedTuning: null, recommendationOptions: [], recommendationIndex: 0, showMorePalettes: false,
@@ -67,6 +70,7 @@ window.__recolour = state;                    // the QA harness and the console
 
 let printerPanel=null, calibrationPanel=null, printOptimiser=null, bundlePanel=null, bambuPicker=null;
 let focusBrush=null,focusGeometry=null;
+let blendEditor=null;
 function layerChoice() {
   const mode=$('spectrumlayermode').value;
   return ['snapmaker','bambu'].includes(state.target) ? (mode.startsWith('height:') ? {mode:'custom',value:mode.slice(7)} : {mode,value:$('spectrumlayerheight').value}) : null;
@@ -74,7 +78,7 @@ function layerChoice() {
 $('useblendlayer').addEventListener('click',()=>{$('spectrumlayermode').value='height:0.10';clearReview();refresh();});
 $('subdividemix').addEventListener('change',()=>{clearReview();invalidateRecommendation();refresh();});
 function subdivideChoice() {
-  return ['snapmaker','bambu'].includes(state.target) && $('subdividemix').checked && Boolean(resultPlan().recipes.length);
+  return ['snapmaker','bambu','orca'].includes(state.target) && $('subdividemix').checked && Boolean(resultPlan().recipes.length);
 }
 ['spectrumlayermode','spectrumlayerheight'].forEach(id=>$(id).addEventListener('input',()=>{clearReview();refresh();}));
 let fillPrevious = null;
@@ -268,7 +272,7 @@ function colourChange(row) {
   const unresolved=row.kind==='unresolved';
   const change=unresolved ? '' : distance(row.original,row.result);
   return `<span class="colour-change"><span class="change-pair">${chip(row.original,'Original')}<span class="change-arrow" aria-hidden="true">→</span>${unresolved ? '<span class="change-colour"><span class="change-label">Result</span><strong>No suitable enabled blend</strong></span>' : chip(row.result,row.kind==='blended' ? (row.recipe?.measuredColor ? 'Recorded print sample' : 'Predicted blend') : 'New colour')}</span>
-    ${row.recipe && !unresolved ? `<span class="change-recipe">${100-row.recipe.percent}% slot ${row.recipe.a} + ${row.recipe.percent}% slot ${row.recipe.b}</span>` : ''}
+    ${row.recipe && !unresolved ? `<span class="change-recipe">${esc(recipeLabel(row.recipe))}${row.recipe.gradient?' · model shows midpoint':''}</span>` : ''}
     ${change>12 ? `<span class="change-difference">${change>25?'Large colour change':'Noticeable colour change'}</span>` : ''}</span>`;
 }
 function renderPaletteSlots() {
@@ -706,6 +710,7 @@ function resetForUpload() {
   state.recipes = [];
   state.ticked = new Set();
   state.recipeKey = "";
+  state.manualBlends={};state.blendHistory=[];
   state.mapping = {};
   state.overrides = {};
   state.reviewed = false;
@@ -1023,13 +1028,34 @@ function resultPlan() {
   for (const [source, slot] of Object.entries(state.overrides)) {
     if (Number(slot) > 0) mapping[source] = Number(slot);
   }
-  const payload = { recipes: kept.map((recipe) => ({ a: recipe.a, b: recipe.b,
-                                            percent: recipe.percent, model: recipe.model, ...(recipe.measuredColor ? {measuredColor:recipe.measuredColor} : {}) })),
+  let payload = { recipes: kept.map(recipeData),
            mapping, kept, physical: reels };
+  try{payload=applyManualRecipes(payload,manualRecipes(),reels,state.target,colourLimit(state.target));}
+  catch(e){return {...payload,blocked:e.message};}
   payload.outcome=describeColourMapping(assessed.sourceColors,payload,true);
   if(payload.outcome.counts.unresolved) payload.blocked=`${payload.outcome.counts.unresolved} source colour(s) have no suitable enabled blend. Change reels or explicitly choose Solid colours in Advanced`;
+  if(payload.recipes.some(r=>r.gradient)&&!$('subdividemix').checked)payload.blocked='Enable Mixed Colour Sublayer in Output for the gradient';
   return payload;
 }
+
+function blendContextKey(){return JSON.stringify([state.plateId,activeReels().map(r=>[r.color,r.type,r.name,r.bundleId,r.productId,r.role])]);}
+function manualRecipes(){return state.manualBlends[blendContextKey()]||{};}
+function blendCanUndo(){return state.blendHistory.at(-1)?.key===blendContextKey();}
+function updateBlendView(){clearReview();renderMix(state.assessed);refreshPreview();renderExport();}
+function editBlend(source,recipe){
+  if(state.loading||state.exporting)throw Error('Wait for the current operation to finish.');
+  if(state.strategy!=='blend'||modelPalettePending()||state.reelView==='recommended')throw Error('Apply your filament palette before editing blends.');
+  const key=blendContextKey(),before=structuredClone(manualRecipes()),after={...before};
+  if(recipe)after[source]=recipeData(recipe);else delete after[source];
+  const payload=resultPlan();
+  applyManualRecipes(payload,after,activeReels(),state.target,colourLimit(state.target));
+  state.blendHistory.push({key,before,subdivide:$('subdividemix').checked});if(state.blendHistory.length>30)state.blendHistory.shift();
+  state.manualBlends[key]=after;if(recipe?.gradient)$('subdividemix').checked=true;
+  state.previewMode='result';document.querySelectorAll('[data-preview]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.preview==='result')));
+  updateBlendView();
+}
+function undoBlend(){if(!blendCanUndo()||state.loading||state.exporting)return false;const last=state.blendHistory.pop();state.manualBlends[last.key]=last.before;$('subdividemix').checked=last.subdivide;updateBlendView();return true;}
+export const workbenchBlends={get canUndo(){return blendCanUndo();},undo:undoBlend};
 
 function renderOutcome(payload=resultPlan()) {
   const host=$("colouroutcome");
@@ -1056,6 +1082,7 @@ function renderOutcome(payload=resultPlan()) {
 function renderMix(assessed) {
   const payload = resultPlan();
   renderOutcome(payload);
+  blendEditor?.render();
   const slots = activeReels().map((reel) => norm(reel.color));
   const rows = comparison(assessed.sourceColors, payload.mapping, [...slots,...payload.kept.map(r=>r.color)]);
   const blendMode = state.strategy === "blend";
@@ -1384,6 +1411,9 @@ function renderExport() {
   $('layeroptions').hidden=state.target!=='snapmaker' && !state.bambuSetup;
   $('blendlayerhint').hidden=true;
   $('subdivideoptions').hidden=true;
+  if(state.target==='orca'){$('layeroptions').hidden=false;$('subdivideoptions').hidden=!resultPlan().recipes.length;}
+  $('spectrumlayermode').disabled=state.target==='orca';$('spectrumlayerheight').disabled=state.target==='orca';
+  if(state.target==='orca')$('spectrumlayernote').textContent='Choose your printer, nozzle and regular layer height in OrcaSlicer 2.5. This portable project carries the recipes and subdivision setting.';
   $('subdividelayerhint').hidden=!subdivideChoice();
   $('spectrumcustomlayer').hidden=$('spectrumlayermode').value!=='custom';
   $('layersummary').textContent='Layer height · '+($('spectrumlayermode').value.startsWith('height:') ? $('spectrumlayermode').selectedOptions[0].textContent : ({preserve:'preserve designer settings',preset:'printer preset',custom:`${$('spectrumlayerheight').value || '—'} mm custom`})[$('spectrumlayermode').value]);
@@ -1775,9 +1805,14 @@ receiveModel({mount: $("drop").parentElement, canReceive:()=>!state.project&&!st
 }});
 
 focusBrush=mountFocusBrush($('focusbrush'),{read:()=>state.focusMarks,write:marks=>{state.focusMarks=marks;renderWorkflow();},compare:()=>{invalidateRecommendation();refresh();},sources:()=>state.assessed?.sourceColors||{}});
+blendEditor=mountBlendEditor($('blendeditor'),{read:()=>{
+  const payload=resultPlan();return {key:blendContextKey(),sources:state.assessed?.sourceColors||{},reels:activeReels(),target:state.target,
+    manual:manualRecipes(),current:Object.fromEntries((payload.outcome?.rows||[]).filter(r=>r.recipe).map(r=>[r.source,r.recipe])),canUndo:blendCanUndo(),busy:state.loading||state.exporting,
+    blocked:state.loading||state.exporting?'Wait for the current operation to finish.':state.strategy!=='blend'?'Choose Predicted blends in Advanced to edit recipes.':modelPalettePending()||state.reelView==='recommended'?'Apply your filament palette first, then edit its blends.':''};
+},apply:editBlend,undo:undoBlend});
 export const workbenchFocus={stop:()=>focusBrush?.stop(),key:event=>focusBrush?.key(event)};
 export {state, load, refresh, renderObjects, renderQuantityFields, layoutChanged, textureImporter};
-const workbenchSettingKeys=['capacity','capacityChosen','priority','paletteSource','importantColours','focusMarks','compareBundles','bambuSetup','bambuRequired','bambuError','target','u1Nozzle','supportInterface','interfacePosition','reels','strategy','overrides','workflow','modelType','keepExact','useOwned','modelApplied','modeReels','locked','appliedSlotOrder','loadedTuning','reelView'];
+const workbenchSettingKeys=['capacity','capacityChosen','priority','paletteSource','importantColours','focusMarks','compareBundles','bambuSetup','bambuRequired','bambuError','target','u1Nozzle','supportInterface','interfacePosition','reels','strategy','overrides','manualBlends','workflow','modelType','keepExact','useOwned','modelApplied','modeReels','locked','appliedSlotOrder','loadedTuning','reelView'];
 export function workbenchCaptureSettings(){return {state:structuredClone(Object.fromEntries(workbenchSettingKeys.filter(k=>state[k]!==undefined).map(k=>[k,state[k]]))),controls:Object.fromEntries(['spectrumlayermode','spectrumlayerheight','subdividemix'].map(id=>[id,$(id).type==='checkbox'?$(id).checked:$(id).value]))};}
 export function workbenchRestoreSettings(saved){if(!saved||!state.project)return;Object.assign(state,saved.state);state.reviewed=false;for(const [id,value]of Object.entries(saved.controls))if($(id).type==='checkbox')$(id).checked=value;else $(id).value=value;renderReels();renderWorkflow();return refresh();}
 export async function workbenchSourceColours(){if(!state.project)return null;return (await background().preview(state.plateId,state.objects,'original',paletteOf(null,'original'),null,state.geometryId,state.assessed?.counts.triangles||0,state.layout)).colors;}
@@ -1812,6 +1847,6 @@ printOptimiser=mountSequential($('printoptimiser'),()=>{
     supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice(),preserveSourceSettings:true,bambuSetup:state.bambuSetup,calibration:calibrationPanel?.active() || null};
   const hasSupports=[state.project.sourceSettings,...state.objects.map(id=>state.project.meta.get(String(id))?.settings)].some(s=>['1','true'].includes(String(s?.enable_support)));
   return {signature:exportRevision(),worker:background(),plateId:state.plateId,objects:state.footprints,
-    quantities:state.quantities,layout:layoutSettings(),mapping:payload.mapping,recipes:payload.recipes,options,
+    quantities:state.quantities,layout:layoutSettings(),mapping:payload.mapping,recipes:payload.recipes.map((r,i)=>({...r,id:payload.physical.length+i+1})),options,
     additionalMaterials:state.supportInterface||payload.recipes.length>0||hasSupports||state.supportsPainted};
 });

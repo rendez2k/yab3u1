@@ -16,13 +16,12 @@
 import { norm } from "./colour.js";
 import { mixHex } from "./mix.js";
 import { mixFdmHex, FDM_MODEL } from './fdmMix.js';
+import {validateRecipe, recipeParts, recipeColour, gradientCurve} from './blendRecipes.js';
 
 export const TARGETS = ["snapmaker", "bambu", "orca", "prusa"];
-// The recolour page's blends are only written to the dialects whose native
-// mixture schema this tool has actually verified.  Generic OrcaSlicer is a
-// *conversion* target (Bambu-family paint, no invented blend path), so it is
-// deliberately absent here -- keep the two lists apart.
-export const RECOLOUR_TARGETS = ["snapmaker", "bambu", "prusa"];
+// OrcaSlicer 2.5 uses native Bambu-family mixture arrays. Older Orca versions
+// remain unsuitable for these blends; Snapmaker Orca keeps its own pair schema.
+export const RECOLOUR_TARGETS = ["snapmaker", "bambu", "orca", "prusa"];
 export const MAX_VISIBLE = 16;
 export const MAX_BAMBU_VISIBLE = 24;
 export const colourLimit = target => target === 'bambu' ? MAX_BAMBU_VISIBLE : MAX_VISIBLE;
@@ -31,7 +30,7 @@ export const MAX_RECIPES = MAX_VISIBLE - 4;
 export const LABELS = {
   snapmaker: "Snapmaker Orca (U1 · native Full Spectrum)",
   bambu: "Bambu Studio (colour + native mixed filaments)",
-  orca: "OrcaSlicer (portable colour project)",
+  orca: "OrcaSlicer 2.5 (native colour mixing · RC)",
   prusa: "PrusaSlicer (colour + native Full Spectrum)",
 };
 
@@ -41,7 +40,7 @@ export const APPLICATION = {
   bambu: "BambuStudio-02.09.01.70",
   // OrcaSlicer shares Bambu Studio's project schema but has its own identity; the
   // app name is written without inventing a build number.
-  orca: "OrcaSlicer",
+  orca: "OrcaSlicer-2.5.0",
   prusa: "PrusaSlicer-2.9.6",
 };
 
@@ -108,31 +107,14 @@ export function check(physical, recipes, maxVisible = MAX_VISIBLE) {
     throw new TargetError(`${physical} reels plus ${recipes.length} recipes exceed `
       + `the ${maxVisible} ids supported for this output`);
   }
-  recipes.forEach((recipe, index) => {
-    const { a, b, percent } = recipe;
-    if (!Number.isInteger(a) || !Number.isInteger(b)) {
-      throw new TargetError(`recipe ${index + 1} needs integer reels`);
-    }
-    if (a === b || a < 1 || a > physical || b < 1 || b > physical) {
-      throw new TargetError(`recipe ${index + 1} must name two different reels out `
-        + `of 1-${physical}`);
-    }
-    if (!Number.isInteger(percent) || percent <= 0 || percent >= 100) {
-      throw new TargetError(`recipe ${index + 1} needs a share between 1 and 99 `
-        + "per cent");
-    }
-  });
+  recipes.forEach(recipe=>{try{validateRecipe(recipe,physical);}catch(e){throw new TargetError(e.message);}});
 }
 
 export function checkTypes(physicalTypes, recipes) {
   recipes.forEach((recipe, index) => {
     const first = String(physicalTypes[recipe.a - 1] ?? "").trim().toUpperCase();
-    const second = String(physicalTypes[recipe.b - 1] ?? "").trim().toUpperCase();
-    if (first !== second) {
-      throw new TargetError(`recipe ${index + 1} would blend reel ${recipe.a} `
-        + `(${first || "?"}) with reel ${recipe.b} (${second || "?"}); only two reels `
-        + "of the same material can be mixed");
-    }
+    if (recipeParts(recipe).some(p=>String(physicalTypes[p.slot-1]??'').trim().toUpperCase()!==first))
+      throw new TargetError(`recipe ${index+1}: only filaments of the same material can be mixed`);
   });
 }
 
@@ -143,6 +125,7 @@ export function row(a, b, { enabled, custom, percent, deleted, stableId }) {
 
 export function definitions(physical, recipes) {
   check(physical, recipes);
+  recipes.forEach(r=>validateRecipe(r,physical,'snapmaker'));
   const rows = [];
   let stable = 1;
   for (const recipe of recipes) {
@@ -165,7 +148,7 @@ export function palette(physicalColors, physicalTypes, recipes) {
   const physical = physicalColors.map((c) => norm(c) || "#FFFFFF");
   const virtual = recipes.map((recipe, index) => ({
     id: virtualId(physical.length, index),
-    color: (recipe.model===FDM_MODEL && norm(recipe.measuredColor)) || (recipe.model===FDM_MODEL ? mixFdmHex : mixHex)(physical[recipe.a - 1], physical[recipe.b - 1], recipe.percent),
+    color: recipe.c||recipe.gradient ? recipeColour(recipe,physical) : (recipe.model===FDM_MODEL && norm(recipe.measuredColor)) || (recipe.model===FDM_MODEL ? mixFdmHex : mixHex)(physical[recipe.a - 1], physical[recipe.b - 1], recipe.percent),
     a: recipe.a, b: recipe.b, percent: recipe.percent,
     type: physicalTypes[recipe.a - 1] || "PLA",
   }));
@@ -243,21 +226,21 @@ export function bambuConfig(physicalColors, physicalTypes, recipes) {
       filament_is_mixed: [...new Array(table.physical.length).fill("0"),
                           ...new Array(recipes.length).fill("1")],
       filament_mixed_components: [...new Array(table.physical.length).fill(""),
-                                  ...recipes.map((r) => `${r.a},${r.b}`)],
+                                  ...recipes.map((r) => recipeParts(r).map(p=>p.slot).join(','))],
       filament_mixed_sublayer_ratios: [...new Array(table.physical.length).fill(""),
-        ...recipes.map((r) => `${(Math.round((1 - r.percent / 100) * 1000) / 1000)}`
-          + `,${Math.round((r.percent / 100) * 1000) / 1000}`)],
+        ...recipes.map((r) => recipeParts(r).map(p=>p.percent/100).join(','))],
       filament_multi_colour: colours.slice(),
-      filament_mixed_gradient: new Array(colours.length).fill("0"),
-      filament_mixed_gradient_per_part: new Array(colours.length).fill("0"),
-      filament_mixed_gradient_range: new Array(colours.length).fill(""),
-      filament_mixed_gradient_curve: new Array(colours.length).fill(""),
+      filament_mixed_gradient: [...table.physical.map(()=>"0"),...recipes.map(r=>r.gradient?'1':'0')],
+      filament_mixed_gradient_per_part: [...table.physical.map(()=>"0"),...recipes.map(r=>r.gradient?.perPart?'1':'0')],
+      filament_mixed_gradient_range: [...table.physical.map(()=>""),...recipes.map(r=>r.gradient?`${r.gradient.start/100},${r.gradient.end/100}`:'')],
+      filament_mixed_gradient_curve: [...table.physical.map(()=>""),...recipes.map(gradientCurve)],
     });
   }
   return cfg;
 }
 
 export function prusaSpectrumJson(physicalColors, physicalTypes, recipes) {
+  recipes.forEach(r=>validateRecipe(r,physicalColors.length,'prusa'));
   const table = palette(physicalColors, physicalTypes, recipes);
   return JSON.stringify({
     version: 1,

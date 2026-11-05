@@ -673,15 +673,18 @@ for (const from of ["bambu", "snapmaker", "prusa"]) {
   }
 }
 
-await ok("a blend export to OrcaSlicer is refused with a reason", () => {
+await ok("a blend export uses OrcaSlicer 2.5 native mixture arrays", () => {
   const parsed = project.readProject(source(FIVE));
-  assert.throws(() => project.exportProject(parsed, 1, null, {
+  const result=project.exportProject(parsed, 1, null, {
     target: "orca",
     physical: [{ color: "#FFFFFF", type: "PLA" }, { color: "#000000", type: "PLA" },
                { color: "#FF0000", type: "PLA" }, { color: "#00FF00", type: "PLA" }],
     recipes: [{ a: 1, b: 2, percent: 50 }],
     mapping: {},
-  }), /OrcaSlicer/);
+  });
+  const cfg=configOf(result.entries);
+  assert.equal(cfg.filament_mixed_components.at(-1),'1,2');
+  assert.equal(cfg.filament_mixed_sublayer_ratios.at(-1),'0.5,0.5');
 });
 
 await ok("no portable Bambu-family export claims printer hardware", () => {

@@ -42,7 +42,7 @@ export function validateInterfaceExport({target, reels, mapping={}, recipes=[], 
       || reels.some((r,i)=>String(r.type).toUpperCase()!==(i===reserved-1?'PETG':'PLA')))
     throw Error('Use three PLA model reels and one reserved PETG interface reel.');
   if(supportMode==='off') throw Error('PETG interface mode requires supports to be enabled.');
-  if(Object.values(mapping).some(id=>Number(id)===reserved) || recipes.some(r=>Number(r.a)===reserved || Number(r.b)===reserved))
+  if(Object.values(mapping).some(id=>Number(id)===reserved) || recipes.some(r=>Number(r.a)===reserved || Number(r.b)===reserved || Number(r.c)===reserved))
     throw Error(`Slot ${reserved} is reserved for PETG support interfaces and cannot colour the model or a blend.`);
 }
 

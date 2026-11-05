@@ -31,7 +31,7 @@ export function composeView(doc,kind) {
     move('#printeroptions',panels.project);move('#drop',panels.project);move('#loadedmodel',panels.project);move('#project',panels.project);
     $('printeroptions').open=true;
     move('#loaderror',feedback);move('#loadretry',feedback);move('#loadstatus',feedback);move('#loadcancel',feedback);
-    move('#filamentbundles',panels.colours);
+    move('#filamentbundles',panels.colours);move('#blendeditor',panels.colours);
     move('#reelscard',panels.colours);move('#colouroutcome',panels.colours);
     // Suggestions are the main colour task; library/calibration are secondary.
     $('supportinterface').after($('colourpriorities'),$('recommendation'));
