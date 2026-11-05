@@ -8,7 +8,8 @@ export function mountCalibration(host,{getSetup,onChange}) {
   try { const saved=localStorage.getItem(CALIBRATION_KEY); if(saved) profile=validateCalibration(JSON.parse(saved)); } catch { /* damaged storage is never applied */ }
   host.innerHTML=`<summary>Printed blend samples <span data-count></span></summary>
     <details data-wall-comparison></details>
-    <p class="hint">Calibrate your actual reels, printer and layer settings. Wall samples can improve model predictions; top-face samples are labelled for flat-surface experiments. One profile is saved here at a time; export a backup before replacing it.</p>
+    <h3>Calibrate the current model's palette</h3>
+    <p class="hint">These calibration samples use your model's palette and settings, separately from the comparison above. Wall samples can improve model predictions; top-face samples are for flat-surface experiments. One profile is saved here at a time; export a backup before replacing it.</p>
     <label class="field">Test surface<select data-surface><option value="wall">Vertical walls · model colours</option><option value="top">Top faces · experimental</option></select></label>
     <p class="hint" data-setup></p>
     <details data-setup-editor open><summary>Reel names and print conditions</summary>
@@ -61,7 +62,7 @@ export function mountCalibration(host,{getSetup,onChange}) {
   }
   function render(){
     const current=setup(), valid=compatible();
-    $('[data-setup]').textContent=current.error || `Current setup: ${current.target || 'snapmaker'} · ${current.nozzle} mm nozzle · ${current.height} mm layers · subdivision ${current.subdivideMixLayer?'on':'off'}. Samples are tied to this setup and surface.`;
+    $('[data-setup]').textContent=current.error || `Current model calibration: ${current.target || 'snapmaker'} · ${current.nozzle} mm nozzle · ${current.height} mm layers · subdivision ${current.subdivideMixLayer?'on':'off'}. Separate from the layer / wall comparison above.`;
     $('[data-create]').disabled=busy||Boolean(current.error);
     const next=JSON.stringify(current.reels?.map(reelIdentity) || []);
     if(signature!==next){signature=next;$('[data-reels]').innerHTML=(current.reels||[]).map((r,i)=>`<label class="field"><span><i class="swatch" style="background:${r.color}"></i> Slot ${i+1} · ${esc(r.type)} · ${r.color}</span><input data-reel-name="${i}" maxlength="120" placeholder="Brand and reel / spool name" value="${esc(profile?.reels.find(p=>p.color===r.color&&p.type===r.type)?.name||r.name||'')}"></label>`).join('');}

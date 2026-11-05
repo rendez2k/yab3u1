@@ -46,10 +46,16 @@ test('round-trip native and explicit-wall exports keep 10 independent objects an
     const zip=await readZip(result.bytes),text=n=>new TextDecoder().decode(zip.get(n));
     const cfg=JSON.parse(text('Metadata/project_settings.config'));configs.push(cfg);
     assert.equal(cfg.layer_height,'0.08');assert.equal(cfg.enable_support,'0');assert.equal(cfg.filament_colour.length,4);
+    assert.equal(cfg.print_settings_id,`YAB3D 0.08mm ${mode==='layers'?'Native layer':'Dual-wall'} comparison @Snapmaker U1 (0.4 nozzle)`);
+    assert.equal(cfg.default_print_profile,cfg.print_settings_id);
+    const objectHeights=[...text('Metadata/model_settings.config').matchAll(/<metadata key="layer_height" value="([^"]+)"/g)];
+    assert.equal(objectHeights.length,10);assert(objectHeights.every(m=>m[1]===cfg.layer_height),'all sample overrides agree with Global');
+    assert.equal(cfg.initial_layer_print_height,'0.2');
     assert.equal(cfg.sparse_infill_density,'100%');assert.equal(cfg.sparse_infill_pattern,'rectilinear','solid infill must use a slicer-compatible pattern');
     assert.equal(cfg.dithering_local_z_mode,mode==='layers'?'1':'0');
     const manifest=JSON.parse(text(WALL_TEST_PATH));
     assert.equal(manifest.calibration.status,'unmeasured');assert.equal(manifest.mode,mode);
+    assert.equal(manifest.processName,cfg.print_settings_id);
     assert.deepEqual(manifest.slots,[4,2,1,3]);assert(manifest.reels.every(r=>r.brand==='ELEGOO'));
     assert.equal((text('3D/3dmodel.model').match(/<item /g)||[]).length,10);
     const read=readProject(zip),report=analyse(read,read.plates[0].id,null);
@@ -71,6 +77,9 @@ test('comparison ZIP is repeatable and recipe metadata changes with explicit opt
   assert(new TextDecoder().decode(zip.get('READ-ME-FIRST.txt')).includes('one Grinch'));
   const changed=await wallComparisonProject({subdivideMixLayer:false},'layers');
   assert.equal(changed.manifest.nativeSubdivision,false);
+  const cfg=JSON.parse(new TextDecoder().decode((await readZip(changed.bytes)).get('Metadata/project_settings.config')));
+  assert.equal(cfg.layer_height,'0.1');assert.match(cfg.print_settings_id,/0\.10mm Native layer/);
+  assert.equal(cfg.default_print_profile,cfg.print_settings_id);
   const esun=await wallComparisonProject({bundleId:'esun-pla-plus-cmyk'});
   assert(esun.manifest.reels.every(r=>r.brand==='eSUN'));
   assert.notDeepEqual(a.files[1].data,esun.bytes);
