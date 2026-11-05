@@ -4,13 +4,14 @@ const KEY='yab3d-filament-sets-v1';
 export function mountBundlePanel(host,{getState,compare,chooseSource,changeCapacity,changePriority,ownedChanged}) {
   let custom=[],owned=[],selected=[];
   try{const saved=JSON.parse(localStorage.getItem(KEY)||'{}');custom=(saved.custom||[]).slice(0,40).map(validateBundle);owned=(saved.owned||[]).filter(x=>typeof x==='string').slice(0,100);}catch{/* Damaged saved data never applies. */}
-  host.innerHTML=`<label class="field">Colour starting point<select data-start><option value="model">Model colours</option><option value="loaded">My loaded reels</option><option value="bundle">A filament pack</option></select></label>
+  host.innerHTML=`<div class="palette-source" role="group" aria-label="Choose your filament colours"><button type="button" data-start="model">Suggest colours</button><button type="button" data-start="loaded">Use my colours</button><button type="button" data-start="bundle">Filament packs</button></div>
+    <div data-custom-colours></div>
     <label class="field bundle-capacity">Physical inputs available<select data-capacity></select></label>
     <p class="hint" data-capacity-note></p>
     <div data-pack-controls hidden>
       <label class="field">Filament set<select data-bundle><option value="">Choose a filament set…</option></select></label>
       <div data-set hidden>
-        <p class="hint">Choose the reels to compare. Apply a result to change your palette.</p>
+        <p class="hint" data-pack-purpose>Choose the reels to compare. Apply a result to change your palette.</p>
         <div class="bundle-reel-options" data-swatches role="group" aria-label="Reels to include"></div>
         <p class="hint" data-fit role="status"></p>
         <div class="bundle-actions"><button type="button" data-use>Preview selected reels</button><button type="button" data-smaller></button></div>
@@ -39,13 +40,14 @@ export function mountBundlePanel(host,{getState,compare,chooseSource,changeCapac
   function resetSelection(){selected=currentBundle()?.reels.map((_,i)=>i)||[];render();}
   function render(){
     const s=getState(),max=s.target==='bambu'?24:s.target==='snapmaker'?4:16,source=s.paletteSource||s.workflow||'model';
-    $('[data-start]').value=source;$('[data-pack-controls]').hidden=source!=='bundle';$('[data-collection]').hidden=source==='model';
+    host.querySelectorAll('[data-start]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.start===source)));$('[data-pack-controls]').hidden=source!=='bundle';$('[data-collection]').hidden=source==='model';
     $('[data-capacity]').innerHTML=Array.from({length:max},(_,i)=>`<option value="${i+1}">${i+1} input${i?'s':''}</option>`).join('');
     $('[data-capacity]').value=s.capacity;$('[data-capacity]').disabled=Boolean(s.supportInterface);$('[data-priority]').value=s.priority;
     const saved=s.project?.colourPlan?.reels?.filter(r=>r.role!=='support-interface');
     $('[data-source]').hidden=!saved?.length||source==='model';$('[data-source]').disabled=Boolean(saved&&!bundleFit({reels:saved},s.capacity,s.supportInterface).fits);
     $('[data-capacity-note]').textContent=`${s.capacity-(s.supportInterface?1:0)} inputs for model colours${s.supportInterface?' + 1 for PETG':''}. Blended shades do not need extra inputs.${s.target==='bambu'?' Match the printer and AMS units you have.':''}`;
     const b=currentBundle();$('[data-set]').hidden=!b;if(!b)return;
+    $('[data-pack-purpose]').textContent=b.application==='backlit'?'This pack is made for backlit lithophanes. You can try it on this model, but the preview uses unmeasured blends, not a calibrated prediction for this pack.':'Choose the reels to compare. Apply a result to change your palette.';
     const signature=JSON.stringify([b.id,selected]);
     if($('[data-swatches]').dataset.signature!==signature){
       $('[data-swatches]').dataset.signature=signature;
@@ -61,8 +63,9 @@ export function mountBundlePanel(host,{getState,compare,chooseSource,changeCapac
     if(b.source){const a=document.createElement('a');a.href=b.source;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Product source';$('[data-description]').append(' ',a);}
     if(b.id.startsWith('bambu-palette-')){const a=document.createElement('a');a.href=BAMBU_PALETTE_SWATCH_SOURCE;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Official colour swatches';$('[data-description]').append(' · ',a);}
   }
-  function preview(candidates){if(!candidates.length){status('No matching packs. Choose more inputs, mark a pack as owned, or select reels manually.');return;}compare(candidates);status('Comparing colours on the model. Your applied reels stay unchanged until you apply a result.');render();}
-  $('[data-start]').onchange=()=>{chooseSource($('[data-start]').value);status('');render();};
+  function preview(candidates){if(!candidates.length){status('No matching packs. Choose more inputs, mark a pack as owned, or select reels manually.');return;}compare(candidates.map(b=>b.application==='backlit'?{...b,allowModelPreview:true}:b));status('Comparing colours on the model. Your applied reels stay unchanged until you apply a result.');render();}
+  function selectSource(source){chooseSource(source);status('');render();}
+  host.querySelectorAll('[data-start]').forEach(b=>b.onclick=()=>selectSource(b.dataset.start));
   $('[data-bundle]').onchange=()=>{status('');resetSelection();};$('[data-restore]').onclick=resetSelection;
   $('[data-source]').onclick=()=>{const reels=getState().project?.colourPlan?.reels?.filter(r=>r.role!=='support-interface');if(reels?.length)preview([{id:'saved-project',name:'Saved project reels',reels,application:'model'}]);};
   $('[data-capacity]').onchange=()=>{changeCapacity(Number($('[data-capacity]').value));render();};$('[data-priority]').onchange=()=>changePriority($('[data-priority]').value);
@@ -74,5 +77,6 @@ export function mountBundlePanel(host,{getState,compare,chooseSource,changeCapac
   $('[data-save]').onclick=()=>{try{const b=current();custom=[...custom.filter(x=>x.name!==b.name),b].slice(-40);owned.push(b.id);persist();options();$('[data-bundle]').value=b.id;ownedChanged(ownStock());resetSelection();status('Filament set saved on this device.');}catch(e){status(e.message);}};
   $('[data-backup]').onclick=()=>{try{const value={...current(),catalogueRevision:CATALOGUE_REVISION};const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='yab3d-filament-set.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){status(e.message);}};
   $('[data-import]').onchange=async event=>{try{const file=event.target.files[0];if(!file)return;if(file.size>65536)throw Error('Filament set must be smaller than 64 KB.');const b=validateBundle(JSON.parse(await file.text()));b.id='custom-'+Date.now();custom=[...custom,b].slice(-40);persist();options();$('[data-bundle]').value=b.id;chooseSource('bundle');resetSelection();status('Set imported. Preview its reels before applying.');}catch(e){status(e.message);}finally{event.target.value='';}};
-  options();render();ownedChanged(ownStock());return {render};
+  const customControls=host.ownerDocument.getElementById('loadedcontrols');if(customControls)$('[data-custom-colours]').append(customControls);
+  options();render();ownedChanged(ownStock());return {render,selectSource};
 }

@@ -16,6 +16,14 @@ export function editSelection(state,selection,amount){
   return {quantities,copies:1,arrangement:'objects'};
 }
 
+export function arrangeObjects(state,planLayout) {
+  if(!state.bounds||!state.layout?.footprints?.length)throw Error('Wait for the object sizes to finish loading.');
+  const patch={copies:state.copies,quantities:{...state.quantities},arrangement:'objects'};
+  const plan=planLayout(state.bounds,{...state.layout,...patch,capacityLimit:state.copies});
+  if(plan.blocked||plan.capped)throw Error('These quantities do not fit with the current spacing and reserved areas. Reduce copies or spacing, or choose a larger printer. Nothing has been removed.');
+  return {patch,plan};
+}
+
 export async function fillObject(state,id,planLayout,yieldTurn=()=>Promise.resolve()) {
   const base=editCopies(state,id,0),current=base.quantities[id];
   if(!state.bounds||!state.layout?.footprints?.length)throw Error('Wait for the object sizes to finish loading.');

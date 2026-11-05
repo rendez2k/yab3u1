@@ -9,7 +9,7 @@ const pack=FILAMENT_BUNDLES.find(b=>b.id==='bambu-palette-cmykw');
 const choices=r=>[...(r.found?[r,...r.alternatives]:[]),...r.approximateOptions];
 
 test('verified PLA Palette pack keeps stable product IDs and distinguishes its translucent key',()=>{
-  assert.equal(pack.kind,'retail');assert.equal(CATALOGUE_REVISION,'2026-11-04.2');
+  assert.equal(pack.kind,'retail');assert.equal(CATALOGUE_REVISION,'2026-11-05.1');
   assert.deepEqual(pack.reels.map(r=>r.color),['#0090DA','#E24585','#FCE300','#000000','#FFFFFF']);
   assert.deepEqual(pack.reels.map(r=>r.opticalClass),['opaque','opaque','opaque','translucent','opaque']);
   assert.equal(pack.reels[3].productId,'bambu-lab/pla-palette/2026/key');

@@ -169,6 +169,14 @@ try {
   engine=await import(kind==='converter'?'./convert-page.js':'./recolour.js');
   if(kind==='converter'){engine.session.selectionAware=true;filamentTools=mountFilamentTools(view.panels.colours.querySelector('[data-requires-model]'),engine.session);}
   objectTools=mountWorkbenchObjects($('platecontrols'),()=>engine.workbenchObjects());
+  const arrangeButton=document.querySelector('[data-auto-arrange]'),arrangeStatus=document.querySelector('[data-arrange-status]');
+  arrangeButton.onclick=async()=>{
+    arrangeButton.disabled=true;arrangeStatus.textContent='Finding a layout around the reserved areas…';arrangeButton.setAttribute('aria-busy','true');
+    await new Promise(resolve=>setTimeout(resolve,0));
+    try{prepared?.close();const plan=objectTools.arrange();arrangeStatus.textContent=`Arranged ${plan.placements.length} object placements. Quantities unchanged; spacing and reserved areas respected. Ctrl/Cmd+Z undoes this arrangement.`;}
+    catch(error){arrangeStatus.textContent=error.message;}
+    finally{arrangeButton.disabled=false;arrangeButton.setAttribute('aria-busy','false');}
+  };
   studio=mountStudio({view,engine,kind,api,objects:objectTools,setPanel});
   prepared=mountPreparedPreview(view,{edit:()=>studio.show('select'),onSelect:id=>{
     document.querySelectorAll('[data-preview-plate]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.previewPlate===id)));

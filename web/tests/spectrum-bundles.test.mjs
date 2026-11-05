@@ -13,6 +13,17 @@ import {readZip} from '../zip.js';
 import {FDM_MODEL} from '../shared/fdmMix.js';
 const reels=['#FF0000','#0080C0','#FFFFFF','#000000','#00FF00'].map((color,i)=>({color,type:'PLA',productId:'test/'+i,name:'Test '+i}));
 const sources=Object.fromEntries(reels.map((r,i)=>[i+1,r.color]));
+
+test('purchased CMYK lithophane packs contain white, keep brand identity and respect PETG capacity',()=>{
+  for(const id of ['elegoo-rilievo','esun-pla-plus-cmyk']){
+    const b=FILAMENT_BUNDLES.find(b=>b.id===id);assert.equal(b.kind,'retail');assert.equal(b.application,'backlit');assert.equal(b.calibration,'unmeasured');
+    assert.deepEqual(b.reels.map(r=>r.name.replace(b.brand+' ','')),['Cyan','Magenta','Yellow','White']);
+    assert(b.reels.every(r=>r.swatchSource==='nominal display colour'));assert.equal(bundleFit(b,4).fits,true);assert.equal(bundleFit(b,4,true).fits,false);
+    const sample={1:'#000000',2:'#F72323',3:'#FFF144',4:'#FFFFFF',5:'#61C680'};
+    const excluded=recommendWorkflow({sources:sample,capacity:4,bundles:[b]});assert.equal(excluded.found,false);assert.equal(excluded.approximateOptions.length,0);
+    const explicit=recommendWorkflow({sources:sample,capacity:4,bundles:[{...b,allowModelPreview:true}]});assert(explicit.found||explicit.approximateOptions.length>0,'explicit uncalibrated preview must be usable');
+  }
+});
 const machine={name:'Bambu Lab Test 0.4 nozzle',printer_model:'Bambu Lab Test',printer_variant:'0.4',nozzle_diameter:['0.4','0.4'],min_layer_height:['0.08'],max_layer_height:['0.28']};
 const setup={machine,process:{name:'Test process',layer_height:'0.2'},materials:{PLA:{name:'Generic PLA',filament_type:['PLA'],compatible_printers:[machine.name],filament_extruder_variant:['Standard','High Flow'],nozzle_temperature:['220','225']}},bed:{width:256,depth:256,maxHeight:256}};
 const project=readProject(await readZip(new Uint8Array(readFileSync('web/tests/single-object.3mf'))));

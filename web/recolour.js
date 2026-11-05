@@ -39,7 +39,7 @@ import { mountCalibration } from './shared/calibrationPanel.js';
 import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } from './shared/supportInterface.js';
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 
-const VERSION = "2.6.41";
+const VERSION = "2.6.42";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -296,10 +296,10 @@ function renderPaletteSlots() {
     host.querySelector(`[data-palette-slot="${destination}"]`)?.focus({preventScroll:true});
   }));
 }
-function paletteCoverage(option) {
+function paletteCoverage(option,expanded=true) {
   const {counts,rows,blendCount}=option.outcome;
   const missing=[...new Set(rows.filter(row=>row.kind==='unresolved').map(row=>row.original))];
-  const changed=rows.filter(row=>row.kind!=='preserved').sort((a,b)=>Number(state.importantColours.includes(norm(b.original)))-Number(state.importantColours.includes(norm(a.original)))||distance(b.original,b.result)-distance(a.original,a.result));
+  const changed=expanded?rows.filter(row=>row.kind!=='preserved').sort((a,b)=>Number(state.importantColours.includes(norm(b.original)))-Number(state.importantColours.includes(norm(a.original)))||distance(b.original,b.result)-distance(a.original,a.result)):[];
   const chip=hex=>`<span class="palette-change-colour"><i style="background:${esc(hex)}" aria-hidden="true"></i><span>${esc(colourName(hex))}</span></span>`;
   const detail=missing.length
     ? `<strong>Cannot reproduce all colours</strong><span>No suitable blend for: ${missing.map(color=>`${esc(colourName(color))} (${esc(color)})`).join(', ')}.</span>`
@@ -320,7 +320,7 @@ function renderRecommendation(message) {
     `<button type="button" class="palettechoice${option.approximate?' approximate':''}" data-palette="${index}" aria-pressed="${state.reelView==='recommended' && state.recommendationIndex===index && state.previewMode==='result'}">
       <span class="palettetitle"><strong>${esc(paletteTitle(option,index))}</strong><small>${esc(option.type)}${state.reelView==='recommended' && state.recommendationIndex===index?' · Selected':''}</small></span>
       <span class="palettechips">${option.reels.map((r,i)=>`<span class="palettechip"><i style="background:${esc(r.color)}"></i>${i+1} · ${esc(r.name || colourName(r.color))}</span>`).join('')}</span>
-      ${paletteCoverage(option)}
+      ${paletteCoverage(option,state.recommendationIndex===index)}
     </button>`).join('');
   $("palettechoices").querySelectorAll('[data-palette]').forEach(button=>button.addEventListener('click',()=>{
     state.recommendationIndex=Number(button.dataset.palette);
@@ -449,8 +449,8 @@ function renderWorkflow() {
   document.querySelectorAll('[data-workflow]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.workflow===state.workflow)));
   $("modelchoices").hidden=!model||state.paletteSource==='bundle';
   $("modelchoicessummary").textContent=`Colour preferences · ${state.modelType}${state.keepExact.length ? ` · ${state.keepExact.length} kept exact` : ""}${state.useOwned ? " · owned filaments" : ""}`;
-  $("loadedcontrols").hidden=model && !state.modelApplied;
-  $("reelheading").textContent=model ? 'Palette selected for export' : 'Loaded filaments';
+  $("loadedcontrols").hidden=state.paletteSource!=='loaded';
+  $("reelheading").textContent='Your filament colours';
   $("workflowhint").textContent=state.paletteSource==='bundle'?'Preview a named pack or a smaller subset, then apply the result you prefer.':model
     ? "Which filaments should I load? Start with the model’s original colours, keep as many exact as possible and make the others with blends."
     : `What can I make with these filaments? Keep the ${state.supportInterface?'three PLA':state.reels.length+' loaded'} reels fixed and find their closest achievable blends.`;
@@ -814,24 +814,31 @@ function renderReels() {
   const products=[...new Map(FILAMENT_BUNDLES.flatMap(b=>b.reels).map(r=>[r.productId,r])).values()];
   $("reels").innerHTML = state.reels.map((reel, index) =>
     `<div class="field"><label for="reel${index}">Slot ${index + 1}</label>`
-    + `<select data-product="${index}" aria-label="Slot ${index+1} filament product"${state.supportInterface?' disabled':''}><option value="">Custom reel</option>${products.map((p,i)=>`<option value="${i}"${reel.productId===p.productId?' selected':''}>${esc(p.name)} · ${esc(p.edition)}</option>`).join('')}</select>`
     + `<input type="color" id="reel${index}" value="${esc(reel.color)}">`
+    + `<input type="text" data-reel-hex="${index}" aria-label="Slot ${index+1} hex colour" value="${esc(reel.color)}" pattern="#?[0-9A-Fa-f]{6}" maxlength="7" spellcheck="false">`
     + `<span class="hint reelname" id="reelname${index}">${esc(reel.name || colourName(reel.color))}</span>`
+    + `<details class="reel-details"><summary>Filament details</summary><select data-product="${index}" aria-label="Slot ${index+1} filament product"${reel.role==='support-interface'?' disabled':''}><option value="">Custom reel</option>${products.map((p,i)=>`<option value="${i}"${reel.productId===p.productId?' selected':''}>${esc(p.name)} · ${esc(p.edition)}</option>`).join('')}</select>`
     + `<select aria-label="Slot ${index+1} material" data-type="${index}"${state.supportInterface && reel.role==='support-interface'?' disabled':''}>${["PLA", "PETG", "ABS", "TPU", "ASA", "PA"]
       .map((type) => `<option${type === reel.type ? " selected" : ""}>${type}</option>`)
-      .join("")}</select><button type="button" data-remove-reel="${index}"${state.supportInterface||state.reels.length===1?' disabled':''}>Remove input ${index+1}</button></div>`).join("");
+      .join("")}</select><button type="button" data-remove-reel="${index}"${state.supportInterface||state.reels.length===1?' disabled':''}>Remove input ${index+1}</button></details></div>`).join("");
   $('reels').querySelectorAll('[data-product]').forEach(select=>select.onchange=()=>{const index=Number(select.dataset.product);state.reels[index]=select.value===''?substituteReel(state.reels[index],{}):{...products[Number(select.value)]};applyFilamentSet(state.reels);});
   $('reels').querySelectorAll('[data-remove-reel]').forEach(button=>button.onclick=()=>applyFilamentSet(state.reels.filter((_,i)=>i!==Number(button.dataset.removeReel))));
   state.reels.forEach((reel, index) => {
-    $(`reel${index}`).addEventListener("input", (event) => {
-      state.reels[index] = substituteReel(state.reels[index],{color:event.target.value.toUpperCase()});
+    const hex=$('reels').querySelector(`[data-reel-hex="${index}"]`);
+    const changeColour=value=>{
+      const colour=norm(value);if(!colour)return;
+      state.reels[index] = substituteReel(state.reels[index],{color:colour});
       state.compareBundles=null;
       delete state.reels[index].name;
+      $(`reel${index}`).value=colour;hex.value=colour;hex.setCustomValidity('');
+      $('reels').querySelector(`[data-product="${index}"]`).value='';
       $(`reelname${index}`).textContent=colourName(state.reels[index].color);
       saveReels();
       clearReview();
       refresh();
-    });
+    };
+    $(`reel${index}`).addEventListener('input',event=>changeColour(event.target.value));
+    hex.addEventListener('change',()=>{if(!/^#?[0-9a-f]{6}$/i.test(hex.value)){hex.setCustomValidity('Enter a six-digit colour, for example #3F8E43.');hex.reportValidity();return;}changeColour(hex.value);});
   });
   $("reels").querySelectorAll("select[data-type]").forEach((select) => {
     select.addEventListener("change", () => {
@@ -848,7 +855,7 @@ function renderReels() {
   $("reels").querySelectorAll('[data-lock]').forEach(box=>box.addEventListener('change',()=>{
     state.locked[Number(box.dataset.lock)]=box.checked; refresh();
   }));
-  $("reelnote").textContent = state.workflow==="loaded" ? "Set exactly what is loaded, including CMYK if that is your set. We keep these reels fixed and calculate their blends." : "These are the physical reels selected for export. Load them in this order before printing.";
+  $("reelnote").textContent = state.workflow==="loaded" ? "Click a swatch, enter a hex colour, or choose a named filament. We use your reels to calculate the closest blends." : "These are the physical reels selected for export. Load them in this order before printing.";
   if(state.supportInterface) $('reelnote').textContent=`Slot ${interfaceSlot(state.reels)} is reserved for PETG interfaces; the other slots are PLA model colours. The PETG swatch records your reel colour and does not affect the model.`;
   spoolImport.refresh();
 }
@@ -1439,7 +1446,7 @@ function renderExport() {
     : state.strategy === "source"
       ? `Download a ${LABELS[target]} project keeping each source colour in its own slot. Check the settings and slice it before printing.`
       : `Download a ${LABELS[target]} project using ${payload.physical.length} physical reels and the colour mapping above. Check the settings and slice it before printing.`;
-  if(state.supportInterface && !blocking) $('exportnote').textContent=`Demo export: three PLA model reels, ${mixtures} blend recipe(s), and PETG interfaces in slot ${interfaceSlot(payload.physical)}. Supports enabled; three dense contact layers at 0 mm Z gap; PLA prime-tower shell. Check the sliced result and test a small print first.`;
+  if(state.supportInterface && !blocking) $('exportnote').textContent=`Experimental PETG interface: three PLA model reels, ${mixtures} blend recipe(s), and PETG interfaces in slot ${interfaceSlot(payload.physical)}. Supports enabled; three dense contact layers at 0 mm Z gap; PLA prime-tower shell. Check the sliced result and test a small print first.`;
   if(!blocking && subdivideChoice()) $('exportnote').textContent+=' Subdivide Mix Layer is enabled for this export.';
   if (!blocking && target === "prusa") {
     $("exportnote").textContent += " Open the file as a project in PrusaSlicer with a "

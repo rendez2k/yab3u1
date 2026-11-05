@@ -157,6 +157,8 @@
   #recommendation h3 { font-size: 16px; margin: 0 0 10px; }
   #reels > .field { flex: 1 1 150px; max-width: 220px; }
   #bundlepanel { display:grid; gap:12px; padding-block:12px; }
+  .palette-source { display:flex; gap:6px; flex-wrap:wrap; }
+  .palette-source button[aria-pressed=true] { border-color:var(--focus); background:var(--mint); }
   #bundlepanel p { margin:0; }
   #bundlepanel [data-set] { display:grid; gap:10px; }
   #bundlepanel [hidden] { display:none; }
@@ -587,10 +589,10 @@
     <div class="sectionhead"><h2>Your palette</h2><span class="hint" id="physicalslotcount">4 physical inputs</span></div>
     <details id="filamentbundles" class="compact-options" open><summary>Palette &amp; printer inputs</summary><div id="bundlepanel"></div></details>
     <p class="hint" id="workflowhint"></p>
-    <section id="supportinterface" aria-label="PETG support interface demo">
-      <label class="check"><input type="checkbox" id="reservepetg">Three PLA colours + PETG interface · demo</label>
+    <section id="supportinterface" aria-label="PETG support interface">
+      <label class="check"><input type="checkbox" id="reservepetg">PETG support interface · experimental</label>
       <p class="hint" id="interfacehint" role="status">Reserve one slot for PETG; use the other three for model colours and blends.</p>
-      <details id="interfacesettings" hidden><summary>Interface settings for this demo</summary><p class="hint">PLA support structure from slot 1, PETG contact layers from slot 4. Three dense interface layers, 0 mm top/bottom Z gap. Supports are enabled; source support style and painted areas are retained. The prime-tower shell uses PLA slot 1. These are starting settings: check the sliced interfaces and try a small print first.</p></details>
+      <details id="interfacesettings" hidden><summary>PETG interface settings</summary><p class="hint">PLA support structure from slot 1, PETG contact layers from slot 4. Three dense interface layers, 0 mm top/bottom Z gap. Supports are enabled; source support style and painted areas are retained. The prime-tower shell uses PLA slot 1. These are starting settings: check the sliced interfaces and try a small print first.</p></details>
     </section>
     <details id="colourpriorities" class="compact-options"><summary id="prioritysummary">Important details &amp; colours</summary>
       <div id="focusbrush">

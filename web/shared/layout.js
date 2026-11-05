@@ -293,8 +293,9 @@ function packRectangles(items, options) {
   const placed = [];
   for (const item of items) {
     const w = item.w+gap, h = item.h+gap;
+    const rank=r=>options.packingHeuristic==='bottom' ? r.y+h : options.packingHeuristic==='area' ? r.w*r.h-w*h : options.packingHeuristic==='long' ? Math.max(r.w-w,r.h-h) : Math.min(r.w-w,r.h-h);
     const candidates = free.filter(r=>w <= r.w+1e-7 && h <= r.h+1e-7)
-      .sort((a,b)=>Math.min(a.w-w,a.h-h)-Math.min(b.w-w,b.h-h) || a.y-b.y || a.x-b.x);
+      .sort((a,b)=>rank(a)-rank(b) || a.y-b.y || a.x-b.x);
     if (!candidates.length) return null;
     const r = candidates[0];
     placed.push({...item,x:r.x,y:r.y});
@@ -322,9 +323,12 @@ function planObjects(bounds, options) {
     for (let count=1; count<=(options.capacityLimit || 64) && count*items.length<=512; count++) {
       const all = Array.from({length:count},(_,copy)=>items.map(i=>({...i,copy}))).flat();
       let packed = null;
-      for (const score of [i=>i.w*i.h,i=>Math.max(i.w,i.h),i=>i.h,i=>i.w]) {
-        packed = packRectangles(all.slice().sort((a,b)=>score(b)-score(a)), options);
-        if (packed) break;
+      for (const packingHeuristic of ['short','bottom','area','long']) {
+        for (const score of [i=>i.w*i.h,i=>Math.max(i.w,i.h),i=>i.h,i=>i.w]) {
+          packed = packRectangles(all.slice().sort((a,b)=>score(b)-score(a)), {...options,packingHeuristic});
+          if (packed) break;
+        }
+        if(packed)break;
       }
       if (!packed) break;
       capacity = count;

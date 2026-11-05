@@ -169,7 +169,7 @@ export function recommendWorkflow({mode='model', sources, loaded=[], stock=null,
   const options=[], approximateOptions=[];
   const search={evaluated:0,candidates:0,bounded:false};
   const modelCount=supportInterface ? 3 : capacity;
-  if(supportInterface && type!=='PLA') throw Error('The PETG interface demo uses PLA model filaments.');
+  if(supportInterface && type!=='PLA') throw Error('PETG support interfaces require PLA model filaments.');
   function consider(reels,bundle=null) {
     if(search.evaluated>=2048) {search.bounded=true;return;}
     if(!reels.length||reels.length>capacity)return;
@@ -197,7 +197,7 @@ export function recommendWorkflow({mode='model', sources, loaded=[], stock=null,
   }
   if(bundles) {
     search.candidates=bundles.length;
-    for(const bundle of bundles)if(bundle.application!=='backlit'&&bundle.reels.length<=modelCount)consider(bundle.reels,bundle);
+    for(const bundle of bundles)if((bundle.application!=='backlit'||bundle.allowModelPreview===true)&&bundle.reels.length<=modelCount)consider(bundle.reels,bundle);
   } else if(mode==='loaded') {
     if(!loaded.length||loaded.length>capacity) throw Error(`Set up to ${capacity} loaded filaments.`);
     // Never search replacements in this mode, including when a library is connected.

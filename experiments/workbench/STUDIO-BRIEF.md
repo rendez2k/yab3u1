@@ -1,5 +1,11 @@
 # Workbench studio refinement
 
+## Direction contract — recoverable colour and plate editing, 5 November 2026
+
+Ordinary refinement for the authorised full release. Preserve the light studio, Plex type and restrained green actions. Make Auto arrange a clear action in Layout: repack current quantities using the shared planner, respect printer exclusions and spacing, keep orientation, and provide Undo without silently dropping objects. Colour opens without repainting; an explicit colour preview has Undo before committed model history. Colours gets three visible starting choices: Suggest colours, Use my colours, Filament packs. Custom swatches and hex entry sit immediately below their choice. Widen the inspector within responsive limits, use tactile disclosure rows, and show detailed changes for the selected palette only. Identify the purchased ELEGOO and eSUN CMY+White lithophane packs; distinguish nominal previews from calibrated blends. Replace stale PETG demo wording with experimental interface wording. Validate loaded desktop/mobile, preview/apply/Undo, seven-copy packing, pack capacity with PETG, custom input, and unchanged model/export data. No new raster assets or replacement visual world.
+
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+
 The user's light 3D editor references are the visual authority for this pass. Keep the YAB3D mark and every existing export capability. This is an isolated test release; production is unchanged.
 
 The first viewport is a large, pale model canvas, a small tool island at its top and one quiet inspector. Select, Colour, Split and Arrange operate on the same selection. Project and export settings remain available without interrupting that flow. Selection is visible on the canvas and in the object list. Only the current operation exposes Apply and Cancel.

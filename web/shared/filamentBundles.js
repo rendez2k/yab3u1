@@ -1,12 +1,13 @@
 import {norm} from './colour.js';
 import {filamentIdentity,reelIdentity} from './filamentIdentity.js';
 
-export const CATALOGUE_REVISION='2026-11-04.2';
+export const CATALOGUE_REVISION='2026-11-05.1';
 const snap='https://www.snapmaker.com/blog/which-cmyk-filament-should-i-choose/';
 const bambu='https://uk.store.bambulab.com/products/pla-palette-cmykw';
 export const BAMBU_PALETTE_SWATCH_SOURCE='https://store.bblcdn.com/s7/default/8a89cc11c9ce4421a9593f9ee9580982/Bambu_PLA_Palette_Hex_Code.pdf';
 const poly='https://shop.polymaker.com/products/translucent-pla';
 const elegoo='https://eu.elegoo.com/products/pla-cmyk';
+const esun='https://www.amazon.co.uk/dp/B0CV7GD5YB';
 // These are display swatches, not measurements of printed mixtures. Missing
 // manufacturer RGB values use nominal CMY; that provenance travels with exports.
 const make=(brand,family,edition,names,colours,source,opticalClass='unknown',published=false)=>names.map((name,i)=>({
@@ -25,7 +26,8 @@ export const FILAMENT_BUNDLES=Object.freeze([
   bundle('snapmaker-white','Full Spectrum · White Edition','Snapmaker','White Edition','retail',make('Snapmaker','PLA Full Spectrum','White Edition',[...cm,'White'],[...nominal,'#FFFFFF'],snap,'semi-translucent'),snap,'White Edition has reformulated CMY. Swapping the grey reel in Gray Edition does not recreate it. Manufacturer guidance: 0.4 mm nozzle or smaller, layers of 0.10 mm or less.'),
   bundle('snapmaker-gray','Full Spectrum · Gray Edition','Snapmaker','Gray Edition','retail',make('Snapmaker','PLA Full Spectrum','Gray Edition',[...cm,'Gray'],[...nominal,'#808080'],snap,'semi-translucent'),snap,'For muted colours. Its CMY formulation is distinct from White Edition. Nominal display swatches need printed calibration.'),
   bundle('polymaker-cmyg','Panchroma Translucent · CMY + Grey','Polymaker','Translucent','curated',make('Polymaker','Panchroma','Translucent',[...cm,'Grey'],['#08ABFB','#D93B90','#F9ED3D','#9199A4'],poly,'translucent',true),poly,'A combination of individual Panchroma Translucent products. Manufacturer display colours are not measured blends.'),
-  bundle('elegoo-rilievo','Rilievo · CMY + White','ELEGOO','Rilievo CMYK','curated',make('ELEGOO','PLA CMYK','Rilievo',[...cm,'White'],[...nominal,'#FFFFFF'],elegoo,'translucent'),elegoo,'Marketed for colour lithophanes. Reflected-light model blends are unverified; not included in automatic model recommendations.','backlit'),
+  {...bundle('elegoo-rilievo','Rilievo PLA CMYK · 4 × 1 kg','ELEGOO','Rilievo CMYK','retail',make('ELEGOO','PLA CMYK','Rilievo',[...cm,'White'],[...nominal,'#FFFFFF'],elegoo,'translucent'),'https://www.amazon.co.uk/dp/B0GZVPJMB2','Cyan, magenta, yellow and white (no black). Sold for colour lithophanes; reflected-light model blends are unmeasured.','backlit'),checked:'2026-11-05'},
+  {...bundle('esun-pla-plus-cmyk','PLA+ CMYK · 4 × 1 kg','eSUN','Lithophane CMYK','retail',make('eSUN','PLA+','Lithophane CMYK',[...cm,'White'],[...nominal,'#FFFFFF'],esun),esun,'Cyan, magenta, yellow and white (no black). Sold for colour lithophanes; nominal display swatches, not measured model blends. Use the appropriate PLA+ filament profile in your slicer.','backlit'),checked:'2026-11-05'},
 ]);
 
 export function validateBundle(value) {
@@ -38,7 +40,7 @@ export function validateBundle(value) {
 }
 export function bundleFit(bundle,capacity,interfaceEnabled=false) {
   const available=capacity-(interfaceEnabled?1:0),required=bundle.reels.length;
-  return {fits:required<=available,required,available,reason:required>available?`${required} model reels need ${required} inputs; ${available} available${interfaceEnabled?' after reserving PETG':''}. Choose a smaller set or increase printer capacity.`:''};
+  return {fits:required<=available,required,available,reason:required>available?`${required} model reels need ${required} inputs; ${available} available${interfaceEnabled?' after reserving PETG':''}. ${interfaceEnabled?'Choose fewer model reels, or turn off PETG support to use all four.':'Choose a smaller set or increase printer capacity.'}`:''};
 }
 export function bundleReels(bundle,capacity,interfaceReel=null) {
   const fit=bundleFit(bundle,capacity,Boolean(interfaceReel));if(!fit.fits)throw Error(fit.reason);

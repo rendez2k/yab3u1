@@ -1,4 +1,4 @@
-import {readFile, writeFile, mkdir, cp, rm, lstat} from 'node:fs/promises';
+import {readFile, writeFile, mkdir, cp, rm, lstat, readdir} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -36,4 +36,10 @@ await cp(path.join(here,'node_modules/@fontsource-variable/ibm-plex-sans/LICENSE
 const shell=(await readFile(path.join(here,'index.html'),'utf8')).replace('href="studio.css"',`href="${studioStyle}"`);
 await writeFile(path.join(out,'index.html'),shell);
 await writeFile(path.join(out,'recolour.html'),shell.replace('data-initial="converter"','data-initial="spectrum"'));
-console.log(`Workbench 2.6.41: ${out}`);
+// Version the complete module graph, including workers. A cached dependency
+// must never combine an old editing controller with a new workspace shell.
+const assets=(await readdir(out,{recursive:true})).filter(name=>/\.(js|html)$/.test(name)).sort();
+const contents=await Promise.all(assets.map(name=>readFile(path.join(out,name),'utf8')));
+const revision=createHash('sha256').update(contents.join('\n')).digest('hex').slice(0,12);
+await Promise.all(assets.map((name,i)=>writeFile(path.join(out,name),contents[i].replace(/(['"])(\.{1,2}\/[^'"\s]+\.js)\1/g,(_,quote,url)=>`${quote}${url}?v=${revision}${quote}`))));
+console.log(`Workbench 2.6.42: ${out}`);

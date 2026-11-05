@@ -61,10 +61,16 @@ export function composeView(doc,kind) {
   panels.colours.querySelector('.task-heading').after(make('div',{class:'workflow-explanation'},'<strong>Colour replacement changes the paint, not the parts.</strong><p>For example, replacing green with orange makes every green region print in orange. Orange regions stay orange. No objects are joined or removed.</p><p>With PETG support, replace a PLA colour to free one printer input. Use Undo to compare another choice. Full Spectrum can also approximate shades using blends.</p>'));
   panels.layout.querySelector('.task-heading').after(make('details',{class:'workflow-explanation'},'<summary>Copies, sets and colour groups explained</summary><p><strong>Add copies:</strong> select one object and enter how many new copies you want. <strong>Fill with this object:</strong> adds that object while keeping the other quantities, repacking the plate to find room.</p><p><strong>Fill with whole sets:</strong> repeats the current list of parts together, including their quantities. A set is that list, not a finished assembled model.</p><p><strong>Select parts by original filament:</strong> finds whole parts to keep or remove. A multicoloured pumpkin stays a whole object.</p><p><strong>Sequential printing:</strong> exports same-colour parts as one slicer group per filament, with their separate meshes preserved. Multicoloured parts go on a separate plate. Colours do not change.</p>'));
   panels.layout.querySelector('.task-heading').after(doc.getElementById('printoptimiser'));
+  panels.layout.querySelector('.task-heading').after(make('div',{class:'auto-arrange-controls','data-requires-model':''},'<button type="button" class="primary" data-auto-arrange>Auto arrange</button><p class="hint">Repack every current object. Quantities and print orientation stay the same.</p><p class="hint" data-arrange-status role="status" aria-live="polite"></p>'));
   panels.project.hidden=false;
   const explanation=panels.colours.querySelector('.workflow-explanation');
   const help=make('details',{class:'workflow-explanation'},'<summary>How colour replacement works</summary>');help.append(...explanation.childNodes);explanation.replaceWith(help);
   panels.colours.querySelector('.task-heading').after(make('div',{class:'colour-workflow'},`<div role="group" aria-label="Colour workflow"><button data-colour-workflow="converter" aria-pressed="${kind==='converter'}">Convert</button><button data-colour-workflow="spectrum" aria-pressed="${kind==='spectrum'}">Full Spectrum</button></div><p>Convert keeps or replaces solid colours. Full Spectrum explores blends. Each workspace keeps its own edits when you switch back.</p></div>`));
+  if(kind==='spectrum'){
+    panels.colours.append(help);
+    help.append(panels.colours.querySelector('.colour-workflow p'));
+    $('filamentbundles').open=true;
+  }
   // Contextual help remains available without consuming the main viewport.
   stage.append(make('div',{class:'stage-caption'},'Drag to orbit · Right-drag to pan · Shift/Ctrl/Cmd-click to select several · Delete to remove · Ctrl/Cmd+Z to undo'));
   return {workspace,stage,inspector,panels,move,make,feedback,empty,parking};

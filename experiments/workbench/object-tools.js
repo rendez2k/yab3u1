@@ -1,4 +1,4 @@
-import {editSelection,fillObject} from './object-edits.js';
+import {editSelection,fillObject,arrangeObjects} from './object-edits.js';
 import {plateHistory} from './plate-history.js';
 import {planLayout} from './shared/layout.js';
 const signature=s=>JSON.stringify([s.key,s.copies,s.quantities,s.layout]);
@@ -67,5 +67,5 @@ export function mountWorkbenchObjects(host,getState) {
   }
   doc.addEventListener('keydown',keydown);
   for(const type of ['click','input','change'])doc.addEventListener(type,()=>{history.observe();queueMicrotask(()=>history.observe());},true);
-  return {sync,key:keydown,act,selected:()=>selected(getState()),element:bar,history};
+  return {sync,key:keydown,act,arrange(){const s=getState();if(s.busy||working)throw Error('Wait for the model to finish loading.');const result=arrangeObjects(s,planLayout);history.apply(result.patch);sync();return result.plan;},selected:()=>selected(getState()),element:bar,history};
 }

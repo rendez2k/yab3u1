@@ -167,7 +167,7 @@ test('subdividing a U1 blend is explicit and preserves PETG, layer height and re
   assert.equal(b.support_interface_filament,a.support_interface_filament);
   assert.deepEqual(b.filament_type,a.filament_type);
   assert.equal(on.settings.subdivideMixLayer,true);
-  assert.throws(()=>exportProject(project,plate,null,{...base,target:'bambu',subdivideMixLayer:true}),/PETG interface demo requires/);
+  assert.throws(()=>exportProject(project,plate,null,{...base,target:'bambu',subdivideMixLayer:true}),/PETG support interface requires/);
   assert.throws(()=>exportProject(project,plate,null,{...base,recipes:[],subdivideMixLayer:true}),/Subdivide Mix Layer requires/);
 });
 test('session blocks unresolved PETG exports, snapshots the role and clears it on new files',async()=>{

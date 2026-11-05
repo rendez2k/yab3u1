@@ -1,4 +1,4 @@
-// Review demo: three PLA model reels and a dedicated PETG interface in any slot.
+// Three PLA model reels and a dedicated PETG interface in any slot.
 // The reserved role travels with the palette; it is never a model colour.
 export const interfaceSlot = reels => reels.findIndex(r=>r.role==='support-interface')+1;
 export const modelSlots = reels => reels.flatMap((r,i)=>r.role==='support-interface' ? [] : [i+1]);
@@ -36,11 +36,11 @@ export const INTERFACE_SETTINGS = Object.freeze({
 });
 
 export function validateInterfaceExport({target, reels, mapping={}, recipes=[], supportMode}) {
-  if(target!=='snapmaker') throw Error('The PETG interface demo requires Snapmaker U1 output.');
+  if(target!=='snapmaker') throw Error('PETG support interface requires Snapmaker U1 output.');
   const reserved=interfaceSlot(reels);
   if(reels.length!==4 || reels.filter(r=>r.role==='support-interface').length!==1
       || reels.some((r,i)=>String(r.type).toUpperCase()!==(i===reserved-1?'PETG':'PLA')))
-    throw Error('Use three PLA model reels and one reserved PETG interface reel for the interface demo.');
+    throw Error('Use three PLA model reels and one reserved PETG interface reel.');
   if(supportMode==='off') throw Error('PETG interface mode requires supports to be enabled.');
   if(Object.values(mapping).some(id=>Number(id)===reserved) || recipes.some(r=>Number(r.a)===reserved || Number(r.b)===reserved))
     throw Error(`Slot ${reserved} is reserved for PETG support interfaces and cannot colour the model or a blend.`);

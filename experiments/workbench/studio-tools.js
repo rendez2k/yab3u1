@@ -4,7 +4,7 @@ import {fitCompleteSets,fitOnOnePlate,waitForMeasuredState} from './auto-layout.
 import {colourName} from '../../web/shared/assignment.js';
 export function mountStudio({view,engine,kind,api,objects,setPanel}){
   const doc=view.stage.ownerDocument,make=view.make;
-  let multiple=false,preferredColour='';
+  let multiple=false,preferredColour='',colourDirty=false;
   let regions=[],regionPending=false,regionWorker=null,regionRequest=0,regionKey='';const regionCache=new WeakMap();
   let mode='select',selectionKey='',knownSource=null,working=false,committing=false,worker=null,rejectPending=null,baseColours=null,sourceColours=null,previewPending=false,previewRequest=0,undo=[],request=0;
   const tools=make('nav',{class:'studio-toolstrip','aria-label':'Model tools'},Object.entries({select:'Select',colour:'Colour',split:'Split',arrange:'Arrange'}).map(([key,label])=>`<button data-studio-tool="${key}" aria-pressed="${key===mode}" title="${label}">${svg(key)}<span>${label}</span></button>`).join('')+'<button data-studio-undo title="Undo model edit (Ctrl+Z)" aria-label="Undo model edit" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5-5 5 5 5M3 10h10a6 6 0 0 1 0 12"/></svg></button>');
@@ -66,7 +66,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
     finally{if(stamp===regionRequest){regionWorker?.terminate();regionWorker=null;regionPending=false;preview();sync();}}
   }
   function loadSourcePreview(){const stamp=++previewRequest;previewPending=true;engine.workbenchSourceColours().then(colours=>{if(stamp!==previewRequest)return;sourceColours=colours;previewPending=false;preview();sync();}).catch(error=>{if(stamp!==previewRequest)return;previewPending=false;message.textContent=error.message;sync();});}
-  function restorePreview(){stopRegions();previewRequest++;previewPending=false;sourceColours=null;const p=state().preview;if(p){p.suppressSelection=false;if(baseColours&&baseColours.length===p.lastPositions?.length)p.setColors(baseColours);p.requestDraw();}baseColours=null;}
+  function restorePreview(){colourDirty=false;stopRegions();previewRequest++;previewPending=false;sourceColours=null;const p=state().preview;if(p){p.suppressSelection=false;if(baseColours&&baseColours.length===p.lastPositions?.length)p.setColors(baseColours);p.requestDraw();}baseColours=null;}
   function show(next){
     if(working)return;
     restorePreview();mode=next;message.textContent='';
@@ -95,7 +95,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
       colours.forEach((c,i)=>area.add(new Option(`Replace colour ${i+1} · ${c}`,String(i+1))));
       for(const colour of colours){const b=make('button',{type:'button','aria-label':`Use ${colour}`,title:colour,'data-swatch':colour});b.style.setProperty('--swatch',colour);settings.querySelector('.studio-swatches').append(b);}
       settings.querySelector('[data-paint-colour]').value=colours[0]||'#F58231';
-      settings.querySelector('.hint').textContent='Editing original paint on the selected copies. Export palette replacements still apply. Other copies stay unchanged.';
+      settings.querySelector('.hint').textContent='Choose a swatch to preview a colour on these copies, then Apply. Undo or Cancel restores their paint. Export palette replacements still apply.';
       panel.querySelector('[data-edit-apply]').textContent='Apply colour';
       loadSourcePreview();
     }else if(mode==='split'){
@@ -120,6 +120,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
     if(mode==='colour'){
       const hex=settings.querySelector('[data-paint-colour]').value,from=settings.querySelector('[data-paint-area]').value;
       settings.querySelector('[data-hex]').textContent=hex.toUpperCase();
+      if(!colourDirty){sync();return;}
       const rgb=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255),hexSource=palette()[Number(from)-1];
       const match=hexSource?[1,3,5].map(i=>parseInt(hexSource.slice(i,i+2),16)/255):null;
       for(const r of ranges)for(let i=r.start*3;i<(r.start+r.count)*3;i+=3)if(!match||match.every((c,j)=>Math.abs(c-source[i+j])<.015))colours.set(rgb,i);
@@ -202,8 +203,8 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
     }catch(error){if(stamp===request)message.textContent=error.message;}finally{worker?.terminate();worker=null;rejectPending=null;working=false;committing=false;sync();}
   }
   async function undoEdit(){if(working||!undo.length)return;working=true;restorePreview();message.textContent='Restoring your previous model…';try{await loadSnapshot(undo.at(-1));undo.pop();autoResult.hidden=true;mode='select';selectionKey='';render();message.textContent='Model edit undone.';}catch(e){message.textContent=e.message;}finally{working=false;sync();}}
-  const undoKind=()=>objects.history?.canUndo?'plate':undo.length?'model':null;
-  async function undoCurrent(){if(working||state().busy)return;if(undoKind()==='plate')await objects.act('undo');else await undoEdit();sync();}
+  const undoKind=()=>colourDirty?'colour preview':objects.history?.canUndo?'plate':undo.length?'model':null;
+  async function undoCurrent(){if(working||state().busy)return;if(colourDirty){show('select');message.textContent='Colour preview undone. Original paint restored.';}else if(undoKind()==='plate')await objects.act('undo');else await undoEdit();sync();}
   let listStamp='';
   function sync(){
     const s=state();tools.hidden=!s.objects.length;if(s.preview)s.preview.selectionToggle=multiple;
@@ -221,7 +222,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
     panel.setAttribute('aria-busy',String(working));for(const b of tools.querySelectorAll('button')){b.disabled=working||s.busy;if(b.dataset.studioTool)b.setAttribute('aria-pressed',String(b.dataset.studioTool===mode));}const undoButton=tools.querySelector('[data-studio-undo]'),nextUndo=undoKind();undoButton.disabled=working||s.busy||!nextUndo;undoButton.setAttribute('aria-label',nextUndo?`Undo ${nextUndo} edit`:'Undo');undoButton.title=nextUndo?`Undo ${nextUndo} edit (Ctrl/Cmd+Z)`:'Nothing to undo';
     for(const control of panel.querySelectorAll('input,select,button'))if(!control.closest('.workbench-object-tools'))control.disabled=working||s.busy;
     panel.querySelector('[data-edit-cancel]').disabled=committing;
-    apply.disabled=working||s.busy||previewPending||regionPending||(mode==='split'&&splitMethod()==='by-colour'&&(!chosenRegion()||Boolean(chosenRegion().error)));
+    apply.disabled=working||s.busy||previewPending||regionPending||(mode==='colour'&&!colourDirty)||(mode==='split'&&splitMethod()==='by-colour'&&(!chosenRegion()||Boolean(chosenRegion().error)));
     const regionPicker=settings.querySelector('[data-region-piece]');if(regionPicker)regionPicker.disabled=working||s.busy||regionPending;
     objects.element.inert=working;
   }
@@ -229,7 +230,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
   panel.addEventListener('click',e=>{
     const b=e.target.closest('button');if(!b)return;
     if(b.matches('[data-multi-select]')){multiple=!multiple;sync();}
-    if(b.dataset.swatch){settings.querySelector('[data-paint-colour]').value=b.dataset.swatch;preview();}
+    if(b.dataset.swatch){colourDirty=true;settings.querySelector('[data-paint-colour]').value=b.dataset.swatch;preview();}
     if(b.dataset.regionColourButton){settings.querySelector('[data-region-colour]').value=b.dataset.regionColourButton;loadRegions();preview();}
     if(b.matches('[data-open-colour-split]'))show('split');
     if(b.dataset.findColour){const s=state(),ids=new Set(s.objects.filter(o=>(s.quantities[o.objectId]??1)*s.copies>0&&!o.undecodable&&o.colours?.length===1&&Number(o.colours[0].extruder)===Number(b.dataset.findColour)).map(o=>String(o.objectId))),p=s.preview;
@@ -240,6 +241,6 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
     if(b.matches('[data-edit-apply]'))apply();
     if(b.dataset.sceneObject){const p=state().preview;if(p?.pickRanges.length){p.selectRange(p.pickRanges.findIndex(r=>String(r.objectId)===b.dataset.sceneObject),e);objects.sync();}else{objects.element.querySelector('select').value=b.dataset.sceneObject;objects.element.querySelector('select').dispatchEvent(new Event('change'));}sync();}
   });
-  settings.addEventListener('input',preview);settings.addEventListener('change',e=>{if(e.target.matches('[data-split-method]')){stopRegions();if(splitMethod()!=='auto-separate')loadSourcePreview();}if(e.target.matches('[data-region-colour]'))loadRegions();if(e.target.matches('[data-region-piece]'))regionFeedback();preview();});
+  settings.addEventListener('input',e=>{if(e.target.matches('[data-paint-colour]'))colourDirty=true;preview();});settings.addEventListener('change',e=>{if(e.target.matches('[data-split-method]')){stopRegions();if(splitMethod()!=='auto-separate')loadSourcePreview();}if(e.target.matches('[data-region-colour]'))loadRegions();if(e.target.matches('[data-region-piece]'))regionFeedback();preview();});
   return {sync,show,get busy(){return working;},get pending(){return ['colour','split'].includes(mode)&&selected().length>0;},leavePanel(){if(!working&&['colour','split'].includes(mode)){restorePreview();mode='select';}},key(e){if(e.target?.closest?.('input,select,textarea,[contenteditable=true]'))return false;if(working){if(['Delete','Escape','z'].includes(e.key)){e.preventDefault();return true;}return false;}if(e.key==='Delete'&&['colour','split'].includes(mode)){e.preventDefault();message.textContent=mode==='split'?'To remove only a colour, choose “Remove this coloured part”. Cancel to delete whole objects.':'Apply or cancel the colour edit before deleting whole objects.';return true;}if(e.key==='Escape'){show('select');return true;}if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='z'){e.preventDefault();undoCurrent();return true;}return false;}};
 }
