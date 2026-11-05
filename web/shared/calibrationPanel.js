@@ -1,11 +1,13 @@
 import {CALIBRATION_KEY,validateCalibration,matchesCalibration} from './blendCalibration.js';
 import {reelIdentity} from './filamentIdentity.js';
+import {mountWallComparison} from './wallComparisonPanel.js';
 
 const esc = value => String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function mountCalibration(host,{getSetup,onChange}) {
   let profile=null, enabled=false, signature='', busy=false;
   try { const saved=localStorage.getItem(CALIBRATION_KEY); if(saved) profile=validateCalibration(JSON.parse(saved)); } catch { /* damaged storage is never applied */ }
   host.innerHTML=`<summary>Printed blend samples <span data-count></span></summary>
+    <details data-wall-comparison></details>
     <p class="hint">Calibrate your actual reels, printer and layer settings. Wall samples can improve model predictions; top-face samples are labelled for flat-surface experiments. One profile is saved here at a time; export a backup before replacing it.</p>
     <label class="field">Test surface<select data-surface><option value="wall">Vertical walls · model colours</option><option value="top">Top faces · experimental</option></select></label>
     <p class="hint" data-setup></p>
@@ -27,6 +29,7 @@ export function mountCalibration(host,{getSetup,onChange}) {
     </div>
     <p class="hint" role="status" aria-live="polite" data-status></p>`;
   const $=s=>host.querySelector(s), status=message=>$('[data-status]').textContent=message;
+  const wallComparison=mountWallComparison($('[data-wall-comparison]'));
   function setup(){try{return getSetup($('[data-surface]').value);}catch(error){return {error:error.message};}}
   function contextMatches(){const current=setup();return profile && !current.error && current.context===profile.context;}
   function compatible(){const current=setup();return contextMatches() && matchesCalibration(profile,current.reels,$('[data-surface]').value);}
@@ -123,5 +126,5 @@ export function mountCalibration(host,{getSetup,onChange}) {
     }catch(error){status(error.message);}finally{busy=false;render();}
   };
   renderProfile();render();
-  return {render,active:()=>enabled&&compatible()&&profile?.surface==='wall'?profile:null};
+  return {render,openWallComparison:bundleId=>{host.open=true;wallComparison.choosePack(bundleId);$('[data-wall-comparison]').scrollIntoView({block:'start'});},active:()=>enabled&&compatible()&&profile?.surface==='wall'?profile:null};
 }

@@ -75,3 +75,13 @@ body.has-model:has(#mode-single[aria-pressed="true"]) #converteractions { displa
 .optimiser-job label { margin-block:8px; }
 .print-optimiser [data-status]:not(:empty) { margin-block:12px; }
 @media(max-width:650px) { .optimiser-fields { grid-template-columns:1fr; } }
+.wall-test-slots { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-block:16px; }
+.wall-test-slots .field,.wall-test-process .field { display:grid; gap:6px; min-width:0; }
+.wall-test-slots select,.wall-test-process select { width:100%; }
+.wall-test-process { display:flex; align-items:end; gap:16px; margin-block:16px; }
+.wall-test-process .field { flex:1; }
+.wall-test-process .hint { flex:1; margin:0; }
+.wall-test-section { margin:20px 0; }
+.wall-test-section svg { width:100%; height:auto; display:block; }
+.wall-test-section figcaption { margin-top:8px; }
+.wall-comparison [data-test-download] { width:100%; white-space:normal; }

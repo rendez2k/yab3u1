@@ -196,9 +196,9 @@ export async function readZip(u8, { include = null, onEntry = null } = {}) {
  * Write members back out. `items` is an array of { name, data } so the caller
  * controls the order, which keeps the output comparable to the desktop tool's.
  */
-export async function writeZip(items, { compress = true } = {}) {
+export async function writeZip(items, { compress = true, modifiedAt = new Date() } = {}) {
   const encoder = new TextEncoder();
-  const now = new Date();
+  const now = modifiedAt;
   const dosTime =
     (now.getHours() << 11) | (now.getMinutes() << 5) | (Math.floor(now.getSeconds() / 2) & 31);
   const dosDate =

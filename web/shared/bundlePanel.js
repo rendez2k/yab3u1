@@ -1,7 +1,7 @@
 import {FILAMENT_BUNDLES,CATALOGUE_REVISION,BAMBU_PALETTE_SWATCH_SOURCE,bundleFit,validateBundle,selectBundleReels,smallerBundleOptions,compatibleBundleOptions} from './filamentBundles.js';
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const KEY='yab3d-filament-sets-v1';
-export function mountBundlePanel(host,{getState,compare,chooseSource,changeCapacity,changePriority,ownedChanged}) {
+export function mountBundlePanel(host,{getState,compare,chooseSource,changeCapacity,changePriority,ownedChanged,printComparison}) {
   let custom=[],owned=[],selected=[];
   try{const saved=JSON.parse(localStorage.getItem(KEY)||'{}');custom=(saved.custom||[]).slice(0,40).map(validateBundle);owned=(saved.owned||[]).filter(x=>typeof x==='string').slice(0,100);}catch{/* Damaged saved data never applies. */}
   host.innerHTML=`<div class="palette-source" role="group" aria-label="Choose your filament colours"><button type="button" data-start="model">Suggest colours</button><button type="button" data-start="loaded">Use my colours</button><button type="button" data-start="bundle">Filament packs</button></div>
@@ -16,6 +16,7 @@ export function mountBundlePanel(host,{getState,compare,chooseSource,changeCapac
         <p class="hint" data-fit role="status"></p>
         <div class="bundle-actions"><button type="button" data-use>Preview selected reels</button><button type="button" data-smaller></button></div>
         <button type="button" data-restore hidden>Include all reels</button>
+        <button type="button" data-print-comparison>Print a layer / wall comparison…</button>
         <details class="bundle-details"><summary>About this set</summary><p class="hint" data-description></p><label class="check"><input type="checkbox" data-owned>I own this set</label></details>
       </div>
       <details class="bundle-compare"><summary>Compare with other packs</summary>
@@ -36,6 +37,7 @@ export function mountBundlePanel(host,{getState,compare,chooseSource,changeCapac
   const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify({custom,owned}));}catch{status('Browser storage is unavailable. Export your set to keep it.');}};
   const sets=()=>[...FILAMENT_BUNDLES,...custom],currentBundle=()=>sets().find(b=>b.id===$('[data-bundle]').value);
   const ownStock=()=>sets().filter(b=>owned.includes(b.id)).flatMap(b=>b.reels);
+  $('[data-print-comparison]').onclick=()=>printComparison?.(currentBundle()?.id);
   function options(){const value=$('[data-bundle]').value;$('[data-bundle]').innerHTML='<option value="">Choose a filament set…</option>'+sets().map(b=>`<option value="${esc(b.id)}">${esc(b.brand?b.brand+' · ':'')}${esc(b.name)} · ${b.reels.length} reels${b.application==='backlit'?' · backlit':''}</option>`).join('');$('[data-bundle]').value=value;}
   function resetSelection(){selected=currentBundle()?.reels.map((_,i)=>i)||[];render();}
   function render(){
@@ -47,6 +49,7 @@ export function mountBundlePanel(host,{getState,compare,chooseSource,changeCapac
     $('[data-source]').hidden=!saved?.length||source==='model';$('[data-source]').disabled=Boolean(saved&&!bundleFit({reels:saved},s.capacity,s.supportInterface).fits);
     $('[data-capacity-note]').textContent=`${s.capacity-(s.supportInterface?1:0)} inputs for model colours${s.supportInterface?' + 1 for PETG':''}. Blended shades do not need extra inputs.${s.target==='bambu'?' Match the printer and AMS units you have.':''}`;
     const b=currentBundle();$('[data-set]').hidden=!b;if(!b)return;
+    $('[data-print-comparison]').hidden=!printComparison||!['elegoo-rilievo','esun-pla-plus-cmyk','snapmaker-white'].includes(b.id);
     $('[data-pack-purpose]').textContent=b.application==='backlit'?'This pack is made for backlit lithophanes. You can try it on this model, but the preview uses unmeasured blends, not a calibrated prediction for this pack.':'Choose the reels to compare. Apply a result to change your palette.';
     const signature=JSON.stringify([b.id,selected]);
     if($('[data-swatches]').dataset.signature!==signature){

@@ -39,7 +39,7 @@ import { mountCalibration } from './shared/calibrationPanel.js';
 import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } from './shared/supportInterface.js';
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 
-const VERSION = "2.6.42";
+const VERSION = "2.6.43";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -1738,6 +1738,7 @@ function applyFilamentSet(reels) {
   saveReels();invalidateRecommendation();renderReels();renderWorkflow();refresh();
 }
 bundlePanel=mountBundlePanel($('bundlepanel'),{
+  printComparison:bundleId=>calibrationPanel.openWallComparison(bundleId),
   getState:()=>state,
   chooseSource:source=>{state.compareBundles=null;if(source==='bundle'){state.paletteSource='bundle';invalidateRecommendation();renderWorkflow();refresh();}else{switchWorkflow(source);invalidateRecommendation();renderWorkflow();refresh();}},
   compare:bundles=>{state.paletteSource='bundle';state.compareBundles=bundles;invalidateRecommendation();refresh();},
