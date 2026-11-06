@@ -24,6 +24,7 @@ import { planningAllowance } from "./printSettings.js";
 import {selectionUsage} from './selectionUsage.js';
 import {bambuDefaultInputs,bambuInputLimit} from './bambuProfiles.js';
 import {colourLimit} from './targets.js';
+import {PlateCollection} from './plateCollection.js';
 export const TYPED_3MF = "application/vnd.ms-package.3dmanufacturing-3dmodel+xml";
 
 export { identityRule };
@@ -92,6 +93,7 @@ export class ConvertSession {
     this.renderThumbnail = null;   // set by the page: never save without one
     this.convertSeq = 0;    // so an obsolete export cannot clear a newer one's lock
     this.closed = false;
+    this.plateCollection = new PlateCollection();
   }
 
   /** The source→destination map of the mode that is in force now. */
@@ -119,7 +121,13 @@ export class ConvertSession {
     if(this.selectionSlotsKey===key)return;
     this.selectionSlotsKey=key;
     const rule=this.rules[SLOTS],all=this.state.colours.map((_,i)=>i+1);
-    if(!this.effectiveUsage()?.reservedThrough)[...active.sort((a,b)=>(rule[a]||a)-(rule[b]||b)),...all.filter(i=>!active.includes(i))].forEach((id,i)=>rule[id]=i+1);
+    const reserved=this.effectiveUsage()?.reservedThrough || 0;
+    // Keep numbered support/infill references fixed while closing gaps above
+    // them. If the user moved a reserved reel, leave that explicit map alone.
+    if(all.slice(0,reserved).every(id=>rule[id]===id)) {
+      const movable=active.filter(id=>id>reserved).sort((a,b)=>(rule[a]||a)-(rule[b]||b));
+      [...movable,...all.filter(id=>id>reserved&&!active.includes(id))].forEach((id,i)=>rule[id]=reserved+i+1);
+    }
     this.hooks.loaded?.(this.state);
     this.hooks.rule?.(this.rule);
   }
@@ -546,6 +554,8 @@ export class ConvertSession {
 
   /** Read a new file.  Every older load, export and download is abandoned first. */
   async load(file) {
+    this.exportingPlates=false;
+    this.plateCollection.reset();
     this.selectionSlotsKey=null;
     const token = (this.epoch += 1);
     this.revision += 1;
@@ -663,16 +673,79 @@ export class ConvertSession {
   setPlate(plateId) {
     if (!this.state) return false;
     const found = this.state.plates.find((entry) => Number(entry.id) === Number(plateId));
-    if (!found) return false;
+    if (!found || this.plateCollection.removed.has(String(found.id))) return false;
     if (Number(this.state.plateId) === Number(found.id)) return false;
+    this.rememberPlate();
     this.state.plateId = found.id;
     this.state.bounds = null;
     this.state.footprints = [];
     this.boundsPending = true;
-    this.layout = {...this.layout,quantities:{},copies:1};
+    const saved=this.plateCollection.get(found.id);
+    this.layout = {...this.layout,...saved?.layout,quantities:{...saved?.layout?.quantities},copies:saved?.layout?.copies ?? 1};
+    this.rules = saved?.rules || {[SLOTS]:identityRule(this.state.colours.length),[REPAINT]:identityRule(this.state.colours.length)};
+    this.assignmentMode=saved?.assignmentMode || SLOTS;
+    this.state.includeUnused=saved?.includeUnused || [];
+    this.selectionSlotsKey='';this.layoutProblem='';
     this.invalidate();
+    this.hooks.loaded?.(this.state);this.hooks.layout?.(this.layout);this.hooks.mode?.(this.assignmentMode);
     if (this.hooks.rule) this.hooks.rule(this.rule);
     return true;
+  }
+
+  rememberPlate() {
+    if(!this.state)return;
+    this.plateCollection.save(this.state.plateId,{layout:this.layout,rules:this.rules,
+      assignmentMode:this.assignmentMode,includeUnused:this.state.includeUnused});
+  }
+
+  visiblePlates() { return this.plateCollection.visible(this.state?.plates || []); }
+
+  deletePlate(id=this.state?.plateId) {
+    if(!this.state||this.busy)return false;
+    this.rememberPlate();
+    const next=this.plateCollection.remove(id,this.state.plates);
+    if(next==null)return false;
+    if(String(this.state.plateId)===String(id))this.setPlate(next);
+    else this.invalidate();
+    this.hooks.loaded?.(this.state);return true;
+  }
+
+  restorePlate() {
+    const id=this.plateCollection.restore();if(id==null)return false;
+    this.setPlate(id);this.invalidate();this.hooks.loaded?.(this.state);return true;
+  }
+
+  plateJobs() {
+    this.rememberPlate();
+    return this.visiblePlates().map(plate=>{
+      const edit=this.plateCollection.get(plate.id);
+      return {plateId:plate.id,name:plate.name,layout:edit?.layout || {...this.layout,copies:1,quantities:{},arrangement:'auto'},
+        mapping:edit?.rules[edit.assignmentMode] || identityRule(this.state.colours.length),
+        assignmentMode:edit?.assignmentMode || SLOTS,includeUnused:edit?.includeUnused || [],autoSlots:!edit};
+    });
+  }
+
+  plateExportOptions() {
+    return {target:this.target,title:this.state?.title,capacity:this.inputCapacity(),
+      bambuSetup:structuredClone(this.bambuSetup),preserveSourceSettings:this.preserveSourceSettings,
+      carrySettings:this.carrySettings,supportMode:this.supportMode,u1Nozzle:this.u1Nozzle,
+      filamentProfiles:structuredClone(this.filamentProfiles),...this.interfaceOptions()};
+  }
+
+  async exportPlates(format='project') {
+    if(!this.state||!this.worker||this.busy||this.closed)return null;
+    const token=this.epoch,revision=this.revision,worker=this.worker,seq=++this.convertSeq;
+    const jobs=this.plateJobs(),options=this.plateExportOptions();
+    this.busy=true;this.exportingPlates=true;this.hooks.busy?.(true);
+    try{
+      const result=await worker.request('export-plates',{format,jobs,options},{onProgress:p=>{
+        if(token===this.epoch&&revision===this.revision)this.setStatus(`${p.stage}… ${(p.ms/1000).toFixed(1)}s`);
+      }});
+      if(token!==this.epoch||revision!==this.revision||seq!==this.convertSeq)return null;
+      this.setStatus(`${result.plates} plates saved. Files stay in your browser.`);
+      return {...result,name:`${safeName(options.title)}-${format==='zip'?'print-jobs.zip':'all-plates.3mf'}`};
+    }catch(error){if(token===this.epoch){this.setStatus(error.message);this.hooks.error?.(error.message);}return null;}
+    finally{if(seq===this.convertSeq){this.busy=false;this.exportingPlates=false;this.hooks.busy?.(false);}}
   }
 
   /**

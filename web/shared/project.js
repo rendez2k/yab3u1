@@ -61,6 +61,12 @@ export class ProjectError extends Error {}
 
 const decoder = new TextDecoder("utf-8", { fatal: false });
 const encoder = new TextEncoder();
+const xmlText=value=>String(value).replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi,(match,code)=>{
+  const named={amp:'&',lt:'<',gt:'>',quot:'"',apos:"'"};
+  if(code in named)return named[code];
+  const n=code[1]?.toLowerCase()==='x'?parseInt(code.slice(2),16):Number(code.slice(1));
+  return Number.isInteger(n)&&n>0&&n<=0x10ffff?String.fromCodePoint(n):match;
+});
 
 const text = (entries, name) => {
   const data = entries.get(name);
@@ -143,8 +149,9 @@ export function readProject(entries, options = {}) {
     paletteCount: 0, objects: new Map(), items: [], plates: [], meta: new Map(),
     warnings: [], mixtures: { present: false, sources: [] }, entries, main,
   };
-  const title = /<metadata name="Title" value="([^"]*)"/.exec(main);
-  if (title) project.title = title[1];
+  const title = /<metadata name="Title" value="([^"]*)"/.exec(main)
+    || /<metadata name="Title">([^<]*)<\/metadata>/.exec(main);
+  if (title) project.title = xmlText(title[1]);
 
   readPalette(entries, project);
   readObjects(project);
@@ -643,7 +650,7 @@ function readMeta(entries, project) {
       const entry = { id: String(id), name: "", extruder: null, parts: [],
                       subtype: attr(object[1], "subtype") || "normal_part" };
       const name = /<metadata(?: type="[^"]*")? key="name" value="([^"]*)"/.exec(object[2]);
-      if (name) entry.name = name[1];
+      if (name) entry.name = xmlText(name[1]);
       const extruder = /<metadata(?: type="[^"]*")? key="extruder" value="([^"]*)"/.exec(object[2]);
       if (extruder) entry.extruder = Number(extruder[1]);
       // Per-object intent the optional preservation control may carry: an object
@@ -664,7 +671,7 @@ function readMeta(entries, project) {
         const subtype = attr(part[1], "subtype") || "normal_part";
         entry.parts.push({
           id: partId === null ? "" : String(partId),
-          name: partMetadata.name || "",
+          name: xmlText(partMetadata.name || ""),
           extruder: partMetadata.extruder != null ? Number(partMetadata.extruder) : null,
           subtype,
           firstid: null, lastid: null, range: false,
@@ -687,7 +694,7 @@ function readMeta(entries, project) {
                    instanceId: instanceId ? instanceId[1] : null };
         }).filter(Boolean);
       project.plates.push({ id: project.plates.length + 1,
-                            name: name ? name[1] : `Plate ${project.plates.length + 1}`,
+                            name: name ? xmlText(name[1]) : `Plate ${project.plates.length + 1}`,
                             entries,
                             objectIds: entries.map((entry) => entry.id) });
     }
@@ -1995,7 +2002,7 @@ export function conversionUsage(project) {
   return result;
 }
 
-export function convertProject(project, plateId, objectIds, options = {}) {
+export function conversionPlanForPlate(project, plateId, objectIds, options = {}) {
   // A virtual blend is not one more solid reel: refuse before anything is built.
   refuseMixtures(project, "convert");
   if(options.selectionAware){
@@ -2005,6 +2012,12 @@ export function convertProject(project, plateId, objectIds, options = {}) {
   let usage=options.removeUnused?conversionUsage(project):null;
   if(options.selectionAware&&usage)usage=selectionUsage(selectionFootprints(project,plateId,objectIds),options.layout?.quantities,usage,project.colors.length);
   const {physical,mapping,slots} = conversionPalette({...project,filamentUsage:usage},options);
+  return {physical,mapping,slots,objectIds,usage};
+}
+
+export function convertProject(project, plateId, objectIds, options = {}) {
+  const plan=conversionPlanForPlate(project,plateId,objectIds,options);
+  const {physical,mapping,slots}=plan;objectIds=plan.objectIds;
   return exportProject(project, plateId, objectIds, {
     target: options.target,
     bambuSetup: options.bambuSetup || null,
@@ -2012,6 +2025,7 @@ export function convertProject(project, plateId, objectIds, options = {}) {
     mapping,
     recipes: [],
     convert: true,
+    nativeProject: options.nativeProject === true,
     supportInterface: Boolean(options.supportInterface),
     assignmentMode: slots ? SLOTS : (options.assignmentMode || null),
     title: options.title,
@@ -2050,7 +2064,7 @@ export function exportProject(project, plateId, objectIds, options) {
   // Negative volumes need native project metadata, not the colour-model import.
   const negative = hasNegativeVolumes(project, objectIds || eligibleObjects(project, plateId));
   const modifiers = hasModifierVolumes(project, objectIds || eligibleObjects(project, plateId));
-  const standard = convert && target === "bambu" && !options.bambuSetup && !negative && !modifiers && !(options.physical || []).some(r=>r.profile);
+  const standard = convert && !options.nativeProject && target === "bambu" && !options.bambuSetup && !negative && !modifiers && !(options.physical || []).some(r=>r.profile);
   if (negative && target === 'prusa') throw new ProjectError('This selection contains negative cutout volumes. Prusa multi-volume export is not supported yet; choose Snapmaker Orca, Bambu Studio or OrcaSlicer to preserve them.');
   if (modifiers && target === 'prusa') throw new ProjectError('This selection contains settings modifiers. Prusa multi-volume export is not supported yet; choose Snapmaker Orca, Bambu Studio or OrcaSlicer to preserve them.');
   const reels = options.physical || options.reels || [];
@@ -2400,7 +2414,9 @@ export function exportProject(project, plateId, objectIds, options) {
         plateName: options.thumbnails.plateName
           || (plate(project, plateId) || {}).name || "Plate 1",
         instances: plateInstances,
-        plateId,
+        // This writer emits one plate, even when it came from source plate 4.
+        // Native slicers require its plate index to start at 1.
+        plateId: 1,
       })
     : null;
 

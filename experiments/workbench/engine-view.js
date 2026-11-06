@@ -4,11 +4,13 @@ import {mountFilamentTools} from './filament-tools.js';
 import {mountStudio} from './studio-tools.js';
 import {prepareWorkbenchPlates,connectPlatePreview} from './shared/sequentialPanel.js';
 import {mountPreparedPreview} from './prepared-preview.js';
+import {mountProjectPlates} from './project-plates.js';
+import {installModelDrop} from './file-drop.js';
 const kind=document.body.dataset.engine,$=id=>document.getElementById(id);
 const view=composeView(document,kind);
 let engine, currentPanel='project', lastReport='', source=null;
 let fallbackKey='',fallbackPending=false,fallbackUrl=null;
-let objectTools, filamentTools, studio, prepared, loading=false, busySince=0,previewSettledAt=0;
+let objectTools, filamentTools, studio, prepared, projectPlates, loading=false, busySince=0,previewSettledAt=0;
 const progress=view.make('div',{class:'workbench-progress',hidden:'',role:'status','aria-live':'polite'},'<span class="working-orb" aria-hidden="true"></span><div><strong>Preparing your model…</strong><p></p></div>');
 view.stage.append(progress);
 const fallback=view.make('div',{class:'software-preview',hidden:''},'<div><img alt="Static preview of the current model and colours"></div><p>Static preview · 3D acceleration is unavailable in this browser. Use Layout to edit objects.</p>');
@@ -67,7 +69,15 @@ const api={kind,setPanel,context,
     if(kind==='converter') {
       if(/\.(glb|zip)$/i.test(file.name)){engine.textureImporter.open(file);return;}
       if(options.target)engine.session.setTarget(options.target);
+      engine.session.rememberPlate();
+      const collection=options.edit?engine.session.plateCollection.snapshot():null;
       await engine.session.load(file);
+      if(collection&&engine.session.state){
+        // A geometry edit rebuilds the active plate. Other source plates keep
+        // their independent layout and reversible deletion state.
+        collection.edits=collection.edits.filter(([id])=>String(id)!==String(options.plateId));
+        engine.session.plateCollection.restoreSnapshot(collection,engine.session.state.plates);
+      }
       if(options.u1Nozzle)engine.session.setU1Nozzle(options.u1Nozzle);
       if(options.bambuSetup)engine.session.setBambuSetup(options.bambuSetup);
       if(options.capacity)engine.session.setInputCapacity(options.capacity);
@@ -92,8 +102,9 @@ const api={kind,setPanel,context,
     return kind==='converter'?Boolean(engine.session.state):Boolean(engine.state.project);
     }finally{loading=false;tick();}
   },
-  primary(){if(kind==='converter'&&!$('batchpanel').classList.contains('hidden'))return;const sequential=sequentialAction();if(sequential){sequential.click();return;}setPanel(kind==='spectrum'&&$('mainaction').dataset.action==='apply'?'colours':'output');$(kind==='converter'?'converterprimary':'mainaction').click();},
+  primary(){if(kind==='converter'&&!$('batchpanel').classList.contains('hidden'))return;const sequential=sequentialAction();if(sequential){sequential.click();return;}if(projectPlates&&engine.session.state?.plates.length>1){setPanel('layout');projectPlates.save('project');return;}setPanel(kind==='spectrum'&&$('mainaction').dataset.action==='apply'?'colours':'output');$(kind==='converter'?'converterprimary':'mainaction').click();},
 };
+installModelDrop(document,{load:file=>api.load(file),show:value=>parentHost?.workbench?.drag(value),delegate:event=>Boolean(event.target.closest?.('#batchdrop')),error:error=>parentHost?.workbench?.dropError?parentHost.workbench.dropError(error):reportError(error instanceof Error?error:Error(error))});
 function sequentialAction(){const mode=document.querySelector('[data-print-mode]')?.value;if(currentPanel!=='layout'||!mode||mode==='together')return null;const pack=document.querySelector('[data-pack]');return pack&&!pack.hidden?pack:document.querySelector('[data-prepare]');}
 function tick() {
   if(!engine)return;
@@ -104,7 +115,7 @@ function tick() {
   if(file&&file!==source){source=file;parentHost?.workbench?.sourceChanged(kind,file);}
   view.empty.hidden=loaded||busy;
   const batch=kind==='converter'&&!$('batchpanel').classList.contains('hidden');
-  const button=sequentialAction()||$(kind==='converter'?'converterprimary':'mainaction');
+  const button=sequentialAction()||(projectPlates&&s.state?.plates.length>1?projectPlates.primary:$(kind==='converter'?'converterprimary':'mainaction'));
   let status=kind==='converter'?$('convertstatus').textContent:$('loadstatus').textContent||$('actionstatus').textContent;
   if(studio?.busy)status=document.querySelector('.studio-message')?.textContent||status;
   if(kind==='converter'&&loaded&&!busy&&status.includes('Nothing has been uploaded'))status=`${s.state.displayName}: ${s.capacityStatus().needed} filament${s.capacityStatus().needed===1?'':'s'} used on this plate. Files stay in your browser.`;
@@ -132,12 +143,13 @@ function tick() {
   progress.hidden=!showingProgress;view.stage.dataset.loading=String(showingProgress);view.stage.setAttribute('aria-busy',String(showingProgress));
   if(preparing){
     if(!busySince)busySince=performance.now();
-    progress.querySelector('strong').textContent=studio?.busy?'Applying your model edit…':busy?'Reading your model…':fallbackPending?'Drawing the plate preview…':'Preparing the plate preview…';
+    progress.querySelector('strong').textContent=studio?.busy?'Applying your model edit…':s.exportingPlates?'Saving your plates…':busy?'Reading your model…':fallbackPending?'Drawing the plate preview…':'Preparing the plate preview…';
     progress.querySelector('p').textContent=`${((performance.now()-busySince)/1000).toFixed(1)}s · ${busy?(status||'Reading the file in your browser.'): 'Measuring objects and building the preview. Large models can take longer.'}`;
   }else if(!showingProgress)busySince=0;
   try{objectTools?.sync();}catch{}
   try{filamentTools?.sync();}catch{}
   try{studio?.sync();}catch{}
+  try{projectPlates?.sync();}catch{}
   clarifyControls();
 }
 
@@ -168,6 +180,10 @@ function clarifyControls(){
 try {
   engine=await import(kind==='converter'?'./convert-page.js':'./recolour.js');
   if(kind==='converter'){engine.session.selectionAware=true;filamentTools=mountFilamentTools(view.panels.colours.querySelector('[data-requires-model]'),engine.session);}
+  if(kind==='converter')projectPlates=mountProjectPlates({view,session:engine.session,editColours:()=>setPanel('colours'),select:async(id,refresh=false)=>{
+    if(!refresh&&!engine.session.setPlate(id))return;
+    await engine.session.refreshBounds();engine.refreshPreview?.();
+  }});
   objectTools=mountWorkbenchObjects($('platecontrols'),()=>engine.workbenchObjects());
   const arrangeButton=document.querySelector('[data-auto-arrange]'),arrangeStatus=document.querySelector('[data-arrange-status]');
   arrangeButton.onclick=async()=>{
@@ -180,7 +196,7 @@ try {
   studio=mountStudio({view,engine,kind,api,objects:objectTools,setPanel});
   prepared=mountPreparedPreview(view,{edit:()=>studio.show('select'),onSelect:id=>{
     document.querySelectorAll('[data-preview-plate]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.previewPlate===id)));
-    const heading=view.panels.layout.querySelector('.task-heading');heading.querySelector('h1').textContent=id?'Prepared plates':'Arrange your plate';heading.querySelector('p').textContent=id?'Choose a plate to inspect the copies. Edit model returns to your original quantities.':'Click an object in the preview to duplicate or remove it.';
+    const heading=view.panels.layout.querySelector('.task-heading');heading.querySelector('h1').textContent=id?'Prepared plates':kind==='converter'?'Plates & objects':'Arrange your plate';heading.querySelector('p').textContent=id?'Choose a plate to inspect the copies. Edit model returns to your original quantities.':kind==='converter'?'Choose a plate, edit its objects, then save the complete project.':'Click an object in the preview to duplicate or remove it.';
   }});
   connectPlatePreview($('printoptimiser'),prepared);
   document.addEventListener('keydown',e=>{if(engine.workbenchFocus?.key(e)||prepared.key(e)||studio.key(e))e.stopImmediatePropagation();},true);

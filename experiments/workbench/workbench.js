@@ -1,11 +1,19 @@
 import {interfaceDemoFile} from './shared/supportInterfaceDemo.js';
 import {receiveModel} from './shared/modelHandoff.js';
+import {installModelDrop} from './file-drop.js';
 const $=id=>document.getElementById(id),frames=new Map();
 const menu=document.createElement('details');menu.className='project-menu';menu.innerHTML='<summary>App menu</summary><div></div>';document.querySelector('.topbar').append(menu);for(const id of ['open','batch','help','theme'])menu.querySelector('div').append($(id));menu.addEventListener('click',e=>{if(e.target.closest('button'))menu.open=false;});
 document.querySelector('.topbar').append($('primary'));
 const projects=new WeakMap();let nextProject=0;
 const projectId=f=>{if(!f)return null;if(!projects.has(f))projects.set(f,++nextProject);return projects.get(f);};
 let active=document.body.dataset.initial||'converter',panel='project',file=null,theme='light',changing=false;
+const dropOverlay=document.createElement('div');dropOverlay.className='workspace-drop-overlay';dropOverlay.hidden=true;dropOverlay.setAttribute('role','status');dropOverlay.innerHTML='<div><strong>Drop to open your model</strong><span>3MF · GLB · OBJ + textures in a ZIP</span></div>';document.body.append(dropOverlay);
+const dropError=document.createElement('div');dropError.className='workspace-drop-error';dropError.hidden=true;dropError.innerHTML='<p role="alert"></p><button type="button" aria-label="Dismiss file import message">Dismiss</button>';document.body.append(dropError);
+const clearDropError=()=>{dropError.hidden=true;dropError.querySelector('p').textContent='';};
+dropError.querySelector('button').onclick=clearDropError;
+const showDrop=value=>{dropOverlay.hidden=!value;if(value)clearDropError();};
+const showDropError=message=>{dropError.hidden=false;dropError.querySelector('p').textContent=message.message || message;};
+installModelDrop(document,{show:showDrop,load:async incoming=>(await ensure(active)).load(incoming),error:showDropError});
 try{theme=localStorage.getItem('yab3d-workbench-theme')||'light';}catch{}
 if(!['light','dark'].includes(theme))theme='light';
 function setTheme(value){theme=value;document.documentElement.dataset.theme=value;$('theme').textContent=value==='light'?'Dark':'Light';$('theme').setAttribute('aria-label',`Switch to ${value==='light'?'dark':'light'} interface`);for(const f of frames.values())f.api?.theme(value);try{localStorage.setItem('yab3d-workbench-theme',value);}catch{}}
@@ -22,11 +30,13 @@ function ensure(kind){
 }
 async function guard(task){try{await task();}catch(error){$('workspace-status').textContent=error.message;$('primary').disabled=true;}}
 window.workbench={
+  drag:showDrop,
+  dropError:showDropError,
   ready(kind,api){const record=frames.get(kind);if(!record)return;clearTimeout(record.timer);record.api=api;api.theme(theme);api.setPanel(panel);record.frame.hidden=kind!==active;delete record.frame.dataset.mounting;record.resolve(api);$('engines').querySelector('.boot')?.remove();},
   failed(kind,message){const record=frames.get(kind);if(record){clearTimeout(record.timer);record.reject(Error(message));}},
   panelChanged(kind,value){if(kind===active)nav(value);},
   report(r){const record=frames.get(r.kind);if(record)record.report=r;showReport(r);},
-  sourceChanged(kind,next){const record=frames.get(kind);if(record){record.file=next;record.project=projectId(next);}if(kind===active)file=next;},
+  sourceChanged(kind,next){const record=frames.get(kind);if(record){record.file=next;record.project=projectId(next);}if(kind===active){file=next;clearDropError();}},
   async switchMode(kind,purpose){
     if(changing)return;
     if(kind===active){if(purpose){const api=await ensure(kind);api.setPanel('output');}return;}

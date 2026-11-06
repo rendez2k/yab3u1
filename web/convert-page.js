@@ -25,7 +25,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.46";
+const VERSION = "2.6.47";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -362,10 +362,10 @@ function syncOptions(select, palette, signature, value) {
 function renderChoices(state) {
   clearError();
   const plate = $("convertplate");
-  plate.innerHTML = state.plates.map((entry,index) =>
+  plate.innerHTML = session.visiblePlates().map((entry,index) =>
     `<option value="${esc(entry.id)}">${esc(entry.name || `Plate ${index+1}`)}</option>`).join("");
   plate.value = String(state.plateId);
-  plate.disabled = state.plates.length < 2;
+  plate.disabled = session.visiblePlates().length < 2;
 
   const target = $("converttarget");
   target.innerHTML = TARGETS.map((id) =>

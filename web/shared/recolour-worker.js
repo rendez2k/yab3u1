@@ -18,6 +18,15 @@ import { layoutOffsets, planLayout } from "./layout.js";
 import { surfaceAreas } from './surfaceWeights.js';
 import {exportComparisonJob} from './comparisonExport.js';
 import {focusFingerprint} from './focusRegions.js';
+import {planProjectPlates,projectPalette,buildProjectPlate,mergeNativePlates} from './multiPlateProject.js';
+
+async function plateThumbnail(job,size=512) {
+  const current=instanceView(job.plateId,job.ids,job.settings.layout);
+  const colours=Object.fromEntries(job.plan.physical.map((r,i)=>[i+1,r.color]));
+  const image=renderIso(current.positions,colourFacets(current.states,colours,job.plan.mapping),{size});
+  const small=downscale(image,128);
+  return {main:await encodePng(image.data,image.width,image.height),small:await encodePng(small.data,small.width,small.height),plateName:job.name};
+}
 
 // Preview detail level, in triangles: a small fixture is drawn verbatim, a big
 // model is clustered down to this so the picture stays a recognisable surface
@@ -435,6 +444,49 @@ self.onmessage = async (event) => {
              recipes: built.recipes.length, thumbnails: built.thumbnails },
            [bytes.buffer]);
       return;
+    }
+    if(type==='review-plates') {
+      const jobs=planProjectPlates(parsed,message.jobs,message.options),plates=[];
+      for(const job of jobs){
+        const thumbnail=job.plan ? await plateThumbnail(job,128) : null;
+        plates.push({plateId:job.plateId,name:job.name,objectCount:job.objectCount,problem:job.problem,
+          colours:job.activeSlots?.map(id=>({slot:id,...job.plan.physical[id-1]})) || [],thumbnail:thumbnail?.main || null});
+      }
+      post({type:'reviewed-plates',id,plates});return;
+    }
+    if(type==='export-plates') {
+      const started=Date.now(),options=message.options,jobs=planProjectPlates(parsed,message.jobs,options);
+      if(!jobs.length)throw Error('Keep at least one plate to export.');
+      const failure=jobs.find(job=>!job.plan || message.format==='zip'&&job.blocked);
+      if(failure)throw Error(`${failure.name}: ${failure.problem}`);
+      const merged=message.format==='project'?projectPalette(parsed,jobs,options.target):null;
+      const outputs=[],files=[],report={version:1,target:options.target,plates:[],notes:[
+        'Each file has its own filament assignments. Load the listed reels before each job.',
+        'Open as a project, slice and check supports, prime tower and clearances before printing.'
+      ]};
+      for(let index=0;index<jobs.length;index++){
+        const job=jobs[index];post({type:'progress',id,stage:`Preparing plate ${index+1} of ${jobs.length}`,ms:Date.now()-started});
+        const thumbnails=await plateThumbnail(job);
+        const built=buildProjectPlate(parsed,job,merged?.physical || job.plan.physical,merged?.mappings[index] || job.plan.mapping,thumbnails);
+        if(built.problems.length)throw Error(`${job.name}: ${built.problems.join(' ')}`);
+        if(merged)outputs.push({built,name:job.name,plateId:job.plateId});
+        const stem=job.name.replace(/[^\w.-]+/g,'-').slice(0,70)||'plate',name=`${String(index+1).padStart(2,'0')}-${stem}-${options.target}.3mf`;
+        report.plates.push({name:job.name,file:name,sourcePlate:job.plateId,objects:job.objectCount,filaments:job.activeSlots.map(slot=>({slot,...job.plan.physical[slot-1]})),settings:built.settings});
+        if(message.format==='zip')files.push({name,data:await writeZip([...built.entries].map(([name,data])=>({name,data})))});
+      }
+      let bytes,notes=report.notes;
+      if(merged){
+        notes=['Editable multi-plate project. Plate names, objects, copies and colours are retained.',
+          ...(options.target==='snapmaker'&&merged.physical.length>4?['This project has more than four logical filaments. Use Export print jobs for independently mapped U1 slots; do not send this whole palette to the printer unchanged.']:[]),
+          ...jobs.filter(j=>j.blocked).map(j=>`${j.name}: ${j.problem}`)];
+        const built=mergeNativePlates(outputs,{title:options.title,target:options.target,width:jobs[0].settings.layout.width,depth:jobs[0].settings.layout.depth,notes});
+        bytes=await writeZip([...built.entries].map(([name,data])=>({name,data})));
+      }else{
+        files.push({name:'print-jobs.json',data:new TextEncoder().encode(JSON.stringify(report,null,2))});
+        files.push({name:'READ-ME.txt',data:new TextEncoder().encode(report.notes.join('\n')+'\n\n'+report.plates.map(p=>`${p.file}\n${p.filaments.map(f=>`Slot ${f.slot}: ${f.color} ${f.type}`).join('\n')}`).join('\n\n'))});
+        bytes=await writeZip(files);
+      }
+      post({type:'exported-plates',id,bytes,notes,plates:report.plates.length,ms:Date.now()-started},[bytes.buffer]);return;
     }
     if (type === "convert") {
       // Portable conversion: identity painting, every source filament definition,
