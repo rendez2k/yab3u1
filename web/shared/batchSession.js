@@ -53,7 +53,7 @@ export class BatchSession {
     const report = { tool: "YAB3D", target, keepSettings, layerHeight, started: new Date().toISOString(),
       notes: ["Each source plate is exported separately; its objects and existing copies are kept and centred as a group.",
         "Colours and filament order are preserved. No resizing, extra clones or palette reduction.",
-        "Compatible global and object settings are transferred; part/modifier overrides and some slicer-specific settings are not supported.",
+        "Compatible global and object settings are transferred. Supported infill and shell modifiers are retained in native Snapmaker, Bambu and Orca outputs; other part overrides and some slicer-specific settings are not supported.",
         "Open and slice outputs in the destination slicer. Automatic supports, brims, rafts and tower size need checking.",
         target === "snapmaker" ? "U1 outputs use the bundled machine profile and check the 270 × 270 mm planning area."
           : "Portable outputs keep your destination printer profile. Bed fit cannot be verified without choosing that printer."],

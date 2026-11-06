@@ -80,7 +80,8 @@ function colourFaces(part){
 
 export function inspectRegions(input,{plateId=1,objectIds=[],from}={},progress=()=>{}){
   if(objectIds.length!==1)throw Error('Select one object to choose a painted region.');
-  const project=readProject(input,{allowNegative:true}),{parts}=sourceParts(project,plateId,objectIds[0]),regions=[];
+  const project=readProject(input,{allowNegative:true,allowModifiers:true}),{parts}=sourceParts(project,plateId,objectIds[0]),regions=[];
+  if(parts.some(p=>isHiddenPart(p.subtype)))throw Error('This object contains a negative or settings modifier. Split it in your slicer to preserve its roles.');
   for(const [partIndex,part] of parts.entries()){
     const faces=colourFaces(part),groups=connectedParts(faces.filter(f=>f.colour===Number(from)));
     if(groups.length>32)throw Error('This colour has more than 32 disconnected patches. Separate it in your slicer or use a plane cut.');
@@ -104,7 +105,7 @@ function meshXml(part,id){
 const settingsXml=settings=>Object.entries(settings||{}).map(([k,v])=>`<metadata key="${esc(k)}" value="${esc(v)}"/>`).join('');
 
 export function editProject(input,{plateId=1,objectIds=[],operation,from='all',colour,axis=2,position=50,connector=null,region=null,orientPins=true}={},progress=()=>{}){
-  const entries=new Map(input),project=readProject(entries,{allowNegative:true});
+  const entries=new Map(input),project=readProject(entries,{allowNegative:true,allowModifiers:true});
   if(!objectIds.length)throw Error('Select an object first.');
   if(!['colour','cut','separate','separate-colour','remove-colour','auto-separate'].includes(operation))throw Error('Choose Colour or Split.');
   if(operation==='auto-separate'&&connector&&connector.side==='base')throw Error('Automatic separation places pins on the detached pieces.');
@@ -118,6 +119,8 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
   let next=Math.max(1,...[...project.objects.keys()].map(Number))+1;
   const resources=[],newItems=[],newMeta=[],changes=[],reports=[];
   for(const oldId of objectIds){
+    if(operation==='colour' && project.meta.get(String(oldId))?.parts?.some(p=>p.subtype==='modifier_part'))
+      throw Error('This object contains a settings modifier. Reassign its filament in Colours, or edit it in your slicer to preserve the modifier.');
     const {parts,meta}=sourceParts(project,plateId,oldId);let groups=[],names=[];
     if(operation==='colour')groups=[parts.map(p=>recolour(p,from,target))];
     else {
@@ -185,6 +188,6 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
   entries.set(SRC_BBL_MODEL,encoder.encode(config));
   const cfg={...project.sourceSettings,...JSON.parse(text(entries,SRC_BBL_PROJECT)||'{}')};cfg.filament_colour=colours;cfg.filament_type=colours.map((_,i)=>project.types[i]||'PLA');entries.set(SRC_BBL_PROJECT,encoder.encode(JSON.stringify(cfg)));
   // Generated source is re-read before it can replace the live workspace.
-  const checked=readProject(entries,{allowNegative:true});for(const c of changes)for(const n of c.created)if(!checked.objects.has(n.id))throw Error('The edit could not be validated.');
+  const checked=readProject(entries,{allowNegative:true,allowModifiers:true});for(const c of changes)for(const n of c.created)if(!checked.objects.has(n.id))throw Error('The edit could not be validated.');
   return {entries,changes,colours,reports};
 }

@@ -156,19 +156,44 @@ export function readProject(entries, options = {}) {
   readMixtures(entries, project);
   guessKind(project);
   if (project.kind === "prusa") refusePrusaVolumeRanges(project);
-  refuseHiddenRoles(project, options.allowNegative === true);
+  refuseHiddenRoles(project, options.allowNegative === true, options.allowModifiers === true);
   project.colourPlan=readColourExportPlan(entries.get(EXPORT_PLAN_PATH));
   if(project.colourPlan && project.colourPlan.reels.some((r,i)=>norm(project.colors[i])!==r.color))project.colourPlan=null;
   return project;
 }
 
-/** The converter preserves native negative parts. Other modifier roles still
- * require settings handling that this reader/writer does not provide. UI
- * callers must explain that the preview does not perform boolean subtraction. */
-function refuseHiddenRoles(project, allowNegative = false) {
+// Only these reviewed native modifier settings can currently be preserved.
+// Unknown options must not disappear just because their mesh can be copied.
+const MODIFIER_DENSITIES = new Set(['sparse_infill_density', 'skin_infill_density', 'skeleton_infill_density']);
+const MODIFIER_COUNTS = new Set(['wall_loops', 'top_shell_layers', 'bottom_shell_layers']);
+const PART_DESCRIPTORS = new Set(['name', 'extruder', 'matrix', 'source_file',
+  'source_object_id', 'source_volume_id', 'source_offset_x', 'source_offset_y', 'source_offset_z']);
+
+function modifierProblem(part) {
+  if (part.extruder !== null && part.extruder !== undefined && Number(part.extruder) !== 0)
+    return 'a filament override';
+  for (const [key, value] of Object.entries(part.settings || {})) {
+    const number = Number(String(value).replace(/%$/, ''));
+    const density = MODIFIER_DENSITIES.has(key) && /^\d+(?:\.\d+)?%?$/.test(String(value)) && number <= 100;
+    const count = MODIFIER_COUNTS.has(key) && /^\d+$/.test(String(value)) && number <= 1000;
+    if (!density && !count) return `${key}=${value}`;
+  }
+  return '';
+}
+
+/** Native negative parts and reviewed settings modifiers keep their geometry,
+ * transforms and roles. They are excluded from the printable preview. */
+function refuseHiddenRoles(project, allowNegative = false, allowModifiers = false) {
+  let modifiers = 0;
   for (const meta of project.meta.values()) {
     for (const part of meta.parts || []) {
       if (isHiddenPart(part.subtype)) {
+        if (part.subtype === 'modifier_part' && allowModifiers) {
+          const problem = modifierProblem(part);
+          if (problem) throw new ProjectError(`${meta.name || 'This model'} has a settings modifier with ${problem}. This override cannot yet be preserved; open this project in its original slicer.`);
+          modifiers += 1;
+          continue;
+        }
         if (part.subtype === "negative_part") {
           if (allowNegative) continue;
           throw new ProjectError(`${meta.name || 'This model'} contains a negative cutout volume. Enable native negative-volume preservation to open it.`);
@@ -179,11 +204,18 @@ function refuseHiddenRoles(project, allowNegative = false) {
       }
     }
   }
+  if (modifiers) project.warnings.push(`${modifiers} settings modifier${modifiers === 1 ? '' : 's'} retained. These affect slicing and are hidden in the preview. Native Snapmaker, Bambu and Orca exports preserve their infill and shell overrides.`);
 }
 
 export function hasNegativeVolumes(project, objectIds = null) {
   return [...project.meta.values()].some(meta=>(!objectIds || objectIds.map(String).includes(String(meta.id)))
     && (meta.parts || []).some(part=>part.subtype==='negative_part'));
+}
+
+export function hasModifierVolumes(project, objectIds = null) {
+  const ids = objectIds && new Set(objectIds.map(String));
+  return [...project.meta.values()].some(meta => (!ids || ids.has(String(meta.id)))
+    && (meta.parts || []).some(part => part.subtype === 'modifier_part'));
 }
 
 /** PrusaSlicer volumes are triangle ranges inside one mesh.
@@ -627,16 +659,17 @@ function readMeta(entries, project) {
       if (!Object.keys(entry.settings).length) delete entry.settings;
       for (const part of object[2].matchAll(/<part\b([^>]*)>([\s\S]*?)<\/part>/g)) {
         const partId = attr(part[1], "id");
-        const partName = /<metadata(?: type="[^"]*")? key="name" value="([^"]*)"/.exec(part[2]);
-        const partExtruder = /<metadata(?: type="[^"]*")? key="extruder" value="([^"]*)"/.exec(part[2]);
+        const partMetadata = Object.fromEntries([...part[2].matchAll(/<metadata\b([^>]*)\/?\s*>/g)]
+          .map(m=>[attr(m[1],'key'), attr(m[1],'value')]).filter(([key])=>key));
+        const subtype = attr(part[1], "subtype") || "normal_part";
         entry.parts.push({
           id: partId === null ? "" : String(partId),
-          name: partName ? partName[1] : "",
-          extruder: partExtruder ? Number(partExtruder[1]) : null,
-          subtype: attr(part[1], "subtype") || "normal_part",
+          name: partMetadata.name || "",
+          extruder: partMetadata.extruder != null ? Number(partMetadata.extruder) : null,
+          subtype,
           firstid: null, lastid: null, range: false,
-          settings: Object.fromEntries([...part[2].matchAll(/<metadata key="([^"]*)" value="([^"]*)"/g)]
-            .filter(m=>SOURCE_KEYS.includes(m[1])).map(m=>[m[1],m[2]])),
+          settings: Object.fromEntries(Object.entries(partMetadata)
+            .filter(([key])=>subtype === 'modifier_part' ? !PART_DESCRIPTORS.has(key) : SOURCE_KEYS.includes(key))),
         });
       }
       project.meta.set(String(id), entry);
@@ -1934,6 +1967,7 @@ export function conversionUsage(project) {
     }
     for (const meta of project.meta.values()) {
       for (const entry of [meta, ...(meta.parts || [])]) {
+        if (entry.subtype === 'modifier_part' && !modifierProblem(entry)) continue;
         if (isHiddenPart(entry.subtype)) uncertain = true;
         if (positive(entry.extruder)) used.add(positive(entry.extruder));
       }
@@ -2015,8 +2049,10 @@ export function exportProject(project, plateId, objectIds, options) {
   // centres the model on their real bed (the non-project import path).
   // Negative volumes need native project metadata, not the colour-model import.
   const negative = hasNegativeVolumes(project, objectIds || eligibleObjects(project, plateId));
-  const standard = convert && target === "bambu" && !options.bambuSetup && !negative && !(options.physical || []).some(r=>r.profile);
+  const modifiers = hasModifierVolumes(project, objectIds || eligibleObjects(project, plateId));
+  const standard = convert && target === "bambu" && !options.bambuSetup && !negative && !modifiers && !(options.physical || []).some(r=>r.profile);
   if (negative && target === 'prusa') throw new ProjectError('This selection contains negative cutout volumes. Prusa multi-volume export is not supported yet; choose Snapmaker Orca, Bambu Studio or OrcaSlicer to preserve them.');
+  if (modifiers && target === 'prusa') throw new ProjectError('This selection contains settings modifiers. Prusa multi-volume export is not supported yet; choose Snapmaker Orca, Bambu Studio or OrcaSlicer to preserve them.');
   const reels = options.physical || options.reels || [];
   if (convert) {
     refuseMixtures(project, "convert");
@@ -2132,7 +2168,7 @@ export function exportProject(project, plateId, objectIds, options) {
   // default filament, read from the same metadata the paint path uses.  Resolved
   // before the member copy, because a facet with no paint reference needs it then.
   const innerBase = new Map();
-  const negativeOnly = new Set(), printableRefs = new Set();
+  const negativeOnly = new Set(), modifierOnly = new Set(), printableRefs = new Set();
   for (const [objectId] of instances) {
     if (!chosen.has(String(objectId))) continue;
     const object = project.objects.get(String(objectId));
@@ -2151,6 +2187,7 @@ export function exportProject(project, plateId, objectIds, options) {
       const value = positive(part && part.extruder) ?? positive(meta && meta.extruder) ?? 1;
       const key = `${ref.member}|${ref.id}`;
       if (part?.subtype === 'negative_part') negativeOnly.add(key);
+      else if (part?.subtype === 'modifier_part') modifierOnly.add(key);
       else printableRefs.add(key);
       if (innerBase.has(key) && innerBase.get(key) !== value) {
         throw new ProjectError(`${ref.member} object ${ref.id} is referenced with two `
@@ -2161,12 +2198,14 @@ export function exportProject(project, plateId, objectIds, options) {
     }
   }
   for (const key of printableRefs) negativeOnly.delete(key);
+  for (const key of printableRefs) modifierOnly.delete(key);
   for (const [member, keep] of needed) {
     blocksByMember.set(member, standard
       ? copyMemberObjectsStandard(project, member, keep, mapping,
                                   { base: innerBase,
                                     paletteSize: table.physical.length }, rename)
-      : copyMemberObjects(project, member, keep, mapping, target, rename, highest, convert ? new Set() : negativeOnly));
+      : copyMemberObjects(project, member, keep, mapping, target, rename, highest,
+        new Set([...modifierOnly, ...(convert ? [] : negativeOnly)])));
   }
 
   if (target === "prusa") {
@@ -2242,13 +2281,16 @@ export function exportProject(project, plateId, objectIds, options) {
       const world = matmul(matrixFromText(component.transform), matrixFromText(itemTransform));
       const sourceExtruder = positive(part && part.extruder)
         ?? positive(meta && meta.extruder) ?? 1;
+      if (part?.subtype === 'modifier_part' && modifierProblem(part))
+        throw new ProjectError(`${name}: unsupported modifier override ${modifierProblem(part)}.`);
       parts.push({ id: String(component.objectid), name: (part && part.name) || name,
-                   extruder: !convert && part?.subtype === 'negative_part' ? 1 : resolveExtruder(project, mapping, highest, sourceExtruder,
+                   extruder: part?.subtype === 'modifier_part' ? 0 : !convert && part?.subtype === 'negative_part' ? 1 : resolveExtruder(project, mapping, highest, sourceExtruder,
                                              `${name} (${member} object `
                                              + `${component.objectid})`),
                    // Prusa's ModelPart is the same printable volume as Orca's
                    // normal_part. Native exports must use the destination name.
-                   subtype: isPrintablePart(part?.subtype) ? "normal_part" : part.subtype });
+                   subtype: isPrintablePart(part?.subtype) ? "normal_part" : part.subtype,
+                   modifierSettings: part?.subtype === 'modifier_part' ? {...part.settings} : null });
       if (target === "prusa") {
         // PrusaSlicer wants the mesh in the object, with the volume range in
         // triangle indices. Only one volume per object reaches here.
@@ -2385,11 +2427,13 @@ export function exportProject(project, plateId, objectIds, options) {
     if (standard || options.bambuSetup) exportedObjectSettings.push({ name: root.name, values: Object.fromEntries(
       [...preserved.matchAll(/<metadata\b([^>]*)\/>/g)].map(m => [attr(m[1], 'key'), attr(m[1], 'value')])) });
     settings.push(`<object id="${root.id}"><metadata key="name" value="${esc(root.name)}"`
-      + `/>${extruderOf(root.parts[0] ? root.parts[0].extruder : 1)}${preserved}`
+      + `/>${extruderOf(root.parts.find(part => isPrintablePart(part.subtype))?.extruder || 1)}${preserved}`
       + root.parts.map((part) => `<part id="${esc(part.id)}" `
         + `subtype="${esc(part.subtype || "normal_part")}">`
         + `<metadata key="name" value="${esc(part.name)}"/>`
-        + `${extruderOf(part.extruder)}</part>`).join("")
+        + `${part.subtype === 'modifier_part' ? '' : extruderOf(part.extruder)}`
+        + Object.entries(part.modifierSettings || {}).map(([key, value]) => `<metadata key="${key}" value="${esc(value)}"/>`).join('')
+        + '</part>').join("")
       + "</object>");
   }
   if (plan && plan.plate) settings.push(plan.plate);
