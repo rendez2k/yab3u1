@@ -25,7 +25,7 @@ export function autoSeparate(parts,{connector=null,progress=()=>{}}={}){
   }
   const boxes=sources.map(p=>bounds(p.faces));
   const separateShells=sources.length>1&&sources.every(p=>closed(p.faces))&&boxes.every((b,i)=>boxes.slice(i+1).every(c=>disjoint(b,c)));
-  const anchors=[],detached=[];
+  const anchors=[],detached=[],dowels=[],joints=[];
   for(const [partIndex,part] of sources.entries()){
     let remaining=part.faces;
     const sizes=new Map();for(const f of remaining)sizes.set(f.colour,(sizes.get(f.colour)||0)+area(f));
@@ -51,18 +51,20 @@ export function autoSeparate(parts,{connector=null,progress=()=>{}}={}){
           const result=separateColour(remaining,colour,{region:at,connector:alreadySeparate?null:connector,capAttributes:paint});
           if(!result.remaining.length)continue;
           const piece=result.parts[0],joint=result.joints[0];
-          detached.push([{...part,base:colour,faces:piece,pinDirections:joint?[joint.normal.map(v=>-v)]:[]}]);
+          detached.push([{...part,base:colour,faces:piece,pinDirections:joint?.kind==='pin'?[joint.normal.map(v=>-v)]:[]}]);
+          if(joint)joints.push(joint);
+          dowels.push(...(result.loose||[]).map(({faces,joint})=>[{name:'Separate dowel',base:colour,faces,settings:{},subtype:'normal_part',dowel:true,pinDirections:[joint.normal]}]));
           remaining=resolvedCaps(result.remaining,part.base);
           current=null;
-          report.separated.push({colour,part:partIndex,region:index,pin:Boolean(joint)});
+          report.separated.push({colour,part:partIndex,region:index,pin:joint?.kind==='pin',connector:joint?.kind||null});
         }catch(error){report.retained.push({colour,count:1,reason:error.message.includes('already a disconnected part')?'This small or reversed shell stays with the body to preserve its shape.':error.message});}
       }
     }
     anchors.push({...part,faces:remaining});
   }
-  const groups=[...(separateShells?anchors.map(p=>[p]):[anchors]),...detached];
-  const names=[...(separateShells?anchors.map((_,i)=>`part ${i+1}`):['body']),...report.separated.map((p,i)=>`colour ${p.colour} · part ${i+1}`)];
+  const groups=[...(separateShells?anchors.map(p=>[p]):[anchors]),...detached,...dowels];
+  const names=[...(separateShells?anchors.map((_,i)=>`part ${i+1}`):['body']),...report.separated.map((p,i)=>`colour ${p.colour} · part ${i+1}`),...dowels.map((_,i)=>`dowel ${i+1}`)];
   report.disconnected=separateShells?anchors.length:0;
   report.parts=groups.length;
-  return {groups,names,report};
+  return {groups,names,report,joints};
 }

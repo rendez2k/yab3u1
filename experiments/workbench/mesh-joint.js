@@ -67,13 +67,15 @@ function caps(loops,frame,attrs,direction,hole=null){
   return out;
 }
 
-function chooseCentre(frame,radius){
+function chooseCentre(frame,radius,offset){
   let best=null,score=-Infinity;
   const consider=p=>{if(frame.rings.filter(r=>inside(p,r)).length%2!==1)return;let d=Infinity;for(const r of frame.rings)for(let i=0;i<r.length;i++)d=Math.min(d,distance(p,r[i],r[(i+1)%r.length]));if(d>score){score=d;best=p;}};
   consider([0,0]);
   for(let y=1;y<32;y++)for(let x=1;x<32;x++)consider(frame.lo.map((v,i)=>v+(frame.hi[i]-v)*(i?y:x)/32));
   if(!best||score<radius+.6)throw Error('The pin is too wide for this join. Reduce its diameter or choose a wider cut.');
-  return best;
+  const centre=best.map((v,i)=>v+offset[i]);
+  if(frame.rings.filter(r=>inside(centre,r)).length%2!==1||frame.rings.some(r=>r.some((p,i)=>distance(centre,p,r[(i+1)%r.length])<radius+.6)))throw Error('The connector is too close to an edge or hole at this position. Move it inward or reset its position.');
+  return {centre,automatic:best};
 }
 
 // Reject any source surface inside a conservative cylindrical clearance envelope.
@@ -94,27 +96,41 @@ function envelopeClear(faces,frame,centre,radius,depth,side){
 
 export function closeInterface(a,b,loops,{normal:direction,attrsA='',attrsB='',connector=null}={}){
   const frame=frameFor(loops,direction),flatA=caps(loops,frame,attrsA,1),flatB=caps(loops,frame,attrsB,-1);
-  if(!connector)return {halves:[[...a,...flatA],[...b,...flatB]],joint:null};
-  const {diameter=3,length=3,clearance=.3,side='selected'}=connector;
+  if(!connector)return {halves:[[...a,...flatA],[...b,...flatB]],joint:null,loose:[]};
+  const {diameter=3,length=3,clearance=.3,side='selected',kind='pin',offset=[0,0]}=connector;
   if(![diameter,length,clearance].every(Number.isFinite)||diameter<1||diameter>20||length<1||length>20||clearance<.05||clearance>1)throw Error('Use a 1–20 mm pin diameter and length, and 0.05–1 mm diameter clearance.');
   if(!['selected','base'].includes(side))throw Error('Choose which part carries the pin.');
-  const r=diameter/2,socketRadius=r+clearance/2,depth=length+.2,centre=chooseCentre(frame,socketRadius),pinOnB=side==='selected',travel=pinOnB?-1:1;
-  if(!envelopeClear(pinOnB?a:b,frame,centre,socketRadius+.6,depth+.6,travel))throw Error('There is not enough solid material behind the socket. Shorten the pin, reduce its diameter, or move the cut.');
-  if(!envelopeClear(pinOnB?b:a,frame,centre,r+.6,.8,-travel))throw Error('The pin base is too thin here. Reduce the diameter or move the cut.');
+  if(!['pin','dowel','sockets'].includes(kind))throw Error('Choose an attached pin, separate dowel or sockets only.');
+  if(!Array.isArray(offset)||offset.length!==2||!offset.every(v=>Number.isFinite(v)&&Math.abs(v)<=1000))throw Error('Use a finite connector position within 1,000 mm of the automatic centre.');
+  const r=diameter/2,socketRadius=r+clearance/2,depth=length+.2,{centre,automatic}=chooseCentre(frame,socketRadius,offset),pinOnB=side==='selected',travel=pinOnB?-1:1;
+  if(kind==='pin'){
+    if(!envelopeClear(pinOnB?a:b,frame,centre,socketRadius+.6,depth+.6,travel))throw Error('There is not enough solid material behind the socket. Shorten the pin, reduce its diameter, or move the cut.');
+    if(!envelopeClear(pinOnB?b:a,frame,centre,r+.6,.8,-travel))throw Error('The pin base is too thin here. Reduce the diameter or move the cut.');
+  }else if(!envelopeClear(a,frame,centre,socketRadius+.6,depth+.6,-1)||!envelopeClear(b,frame,centre,socketRadius+.6,depth+.6,1))throw Error('Both parts need enough material behind their sockets. Reduce the insertion depth or diameter, or move the connector.');
   const ring=(radius,z)=>Array.from({length:40},(_,i)=>frame.lift([centre[0]+Math.cos(i*TAU/40)*radius,centre[1]+Math.sin(i*TAU/40)*radius],z));
   const pinRing=ring(r,0),socketRing=ring(socketRadius,0);
   // Use the SAME closing surface on both sides of a curved paint boundary.
   // Only the pin side fills the annulus between the pin and socket diameters.
   const capA=caps(loops,frame,attrsA,1,socketRing),capB=caps(loops,frame,attrsB,-1,socketRing),pinCap=pinOnB?capB:capA;
-  for(let i=0;i<socketRing.length;i++){const j=(i+1)%socketRing.length;for(let tri of [[socketRing[i],socketRing[j],pinRing[j]],[socketRing[i],pinRing[j],pinRing[i]]]){if(dot(normal(tri),frame.n)*(pinOnB?-1:1)<0)tri=[tri[0],tri[2],tri[1]];pinCap.push({points:tri,attrs:pinOnB?attrsB:attrsA});}}
-  function cylinder(start,end,isSocket,attrs){
+  if(kind==='pin')for(let i=0;i<socketRing.length;i++){const j=(i+1)%socketRing.length;for(let tri of [[socketRing[i],socketRing[j],pinRing[j]],[socketRing[i],pinRing[j],pinRing[i]]]){if(dot(normal(tri),frame.n)*(pinOnB?-1:1)<0)tri=[tri[0],tri[2],tri[1]];pinCap.push({points:tri,attrs:pinOnB?attrsB:attrsA});}}
+  function cylinder(start,end,isSocket,attrs,along=travel){
     const faces=[],expected=isSocket?-1:1;
     for(let i=0;i<start.length;i++){const j=(i+1)%start.length;for(let tri of [[start[i],start[j],end[j]],[start[i],end[j],end[i]]]){const mid=mean(tri),from=sub(mid,frame.lift(centre)),radial=from.map((v,k)=>v-frame.n[k]*dot(from,frame.n));if(dot(normal(tri),radial)*expected<0)tri=[tri[0],tri[2],tri[1]];faces.push({points:tri,attrs});}}
-    const tip=mean(end),outward=travel*(isSocket?-1:1);
+    const tip=mean(end),outward=along*(isSocket?-1:1);
     for(let i=0;i<end.length;i++){let tri=[tip,end[i],end[(i+1)%end.length]];if(dot(normal(tri),frame.n)*outward<0)tri=[tri[0],tri[2],tri[1]];faces.push({points:tri,attrs});}return faces;
   }
+  const joint={kind,diameter,length,clearance,socketDiameter:diameter+clearance,socketDepth:depth,centre:frame.lift(centre),normal:frame.n,side,offset:[...offset],face:{rings:frame.rings,centre,automatic}};
+  if(kind!=='pin'){
+    const socketA=cylinder(socketRing,ring(socketRadius,-depth),true,attrsA,-1),socketB=cylinder(socketRing,ring(socketRadius,depth),true,attrsB,1),loose=[];
+    if(kind==='dowel'){
+      const bottom=ring(r,-length),top=ring(r,length),dowel=cylinder(bottom,top,false,attrsB,1),mid=mean(bottom);
+      for(let i=0;i<bottom.length;i++){let tri=[mid,bottom[i],bottom[(i+1)%bottom.length]];if(dot(normal(tri),frame.n)>0)tri=[tri[0],tri[2],tri[1]];dowel.push({points:tri,attrs:attrsB});}
+      loose.push(dowel);
+    }
+    return {halves:[[...a,...capA,...socketA],[...b,...capB,...socketB]],joint,loose};
+  }
   const pin=cylinder(pinRing,ring(r,travel*length),false,pinOnB?attrsB:attrsA),socket=cylinder(socketRing,ring(socketRadius,travel*depth),true,pinOnB?attrsA:attrsB);
-  return {halves:[[...a,...capA,...(pinOnB?socket:pin)],[...b,...capB,...(pinOnB?pin:socket)]],joint:{diameter,length,clearance,socketDiameter:diameter+clearance,socketDepth:depth,centre:frame.lift(centre),normal:frame.n,side}};
+  return {halves:[[...a,...capA,...(pinOnB?socket:pin)],[...b,...capB,...(pinOnB?pin:socket)]],joint,loose:[]};
 }
 
 /** faces have flat, resolved source colour IDs. Preserve their other attributes. */
@@ -126,7 +142,7 @@ export function separateColour(faces,colour,{connector=null,capAttributes=c=>` p
   const selectedSet=new Set(selected),rest=faces.filter(f=>!selectedSet.has(f));
   if(!rest.length){if(connector)throw Error('The whole object uses this colour. It has no joining surface for a pin.');return {remaining:[],parts:[selected],joints:[]};}
   const groups=region===null?allGroups:[selected];if(groups.length>32)throw Error('This colour has too many separate patches. Select one region or use a plane cut.');
-  let remaining=rest;const parts=[],joints=[];
+  let remaining=rest;const parts=[],joints=[],loose=[];
   for(const group of groups){
     const {loops,rim}=colourBoundary(group);
     if(!loops.length){if(connector)throw Error('This colour is already a disconnected part. Turn off the locating pin to separate it.');parts.push(group);joints.push(null);continue;}
@@ -141,16 +157,16 @@ export function separateColour(faces,colour,{connector=null,capAttributes=c=>` p
     // Validate before adding a pin: its volume must not make a flat patch pass.
     if(signedVolume(plain.halves[1])<.01||signedVolume(plain.halves[0])<.01)throw Error('This colour is a surface patch rather than a solid protruding part. Use a plane cut to give it thickness.');
     const result=connector?closeInterface(remaining,group,loops,{...surface,connector}):plain;
-    remaining=result.halves[0];parts.push(result.halves[1]);joints.push(result.joint);
+    remaining=result.halves[0];parts.push(result.halves[1]);joints.push(result.joint);loose.push(...(result.loose||[]).map(faces=>({faces,joint:result.joint,colour})));
   }
-  return {remaining,parts,joints};
+  return {remaining,parts,joints,loose};
 }
 
 /** Cut an explicit geometry selection, preserving all exterior paint trees. */
 export function separateShape(faces,indices,{connector=null,capAttributes='',selectedCapAttributes=capAttributes}={}){
   const wanted=new Set(indices),selected=faces.filter((_,i)=>wanted.has(i)),rest=faces.filter((_,i)=>!wanted.has(i));
   if(!selected.length||!rest.length)throw Error('Select part of this mesh, leaving some of it on the body.');
-  const groups=connectedParts(selected);let remaining=rest;const parts=[],joints=[];
+  const groups=connectedParts(selected);let remaining=rest;const parts=[],joints=[],loose=[];
   if(groups.length>32)throw Error('This selection has too many disconnected pieces. Select fewer regions.');
   for(const group of groups){
     const {loops,rim}=colourBoundary(group);
@@ -174,8 +190,8 @@ export function separateShape(faces,indices,{connector=null,capAttributes='',sel
     const result=connector?closeInterface(remaining,group,loops,{...options,connector}):plain;
     // The existing seam validator requires near-planarity and non-crossing loops.
     if(colourBoundary(result.halves[1]).loops.length)throw Error('The selected join could not be closed. Use a plane cut.');
-    remaining=result.halves[0];parts.push(result.halves[1]);joints.push(result.joint);
+    remaining=result.halves[0];parts.push(result.halves[1]);joints.push(result.joint);loose.push(...(result.loose||[]).map(faces=>({faces,joint:result.joint})));
   }
   if(colourBoundary(remaining).loops.length)throw Error('The remaining body has open boundaries. Repair it in your slicer first.');
-  return {remaining,parts,joints};
+  return {remaining,parts,joints,loose};
 }

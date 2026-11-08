@@ -55,3 +55,25 @@ test('a curved paint seam has identical mating cap triangles outside the socket'
   const outer=(faces,attrs)=>new Set(faces.filter(f=>f.attrs===attrs&&f.points.some(p=>rim.has(pointKey(p)))).map(f=>f.points.map(pointKey).sort().join('|')));
   assert.deepEqual(outer(halves[0],'capA'),outer(halves[1],'capB'));
 });
+
+test('separate dowels and socket-only joins have closed opposing sockets on every cut axis',()=>{
+  for(const axis of [0,1,2])for(const kind of ['dowel','sockets']){
+    const cut=cutMesh(cube,axis,5),connector={kind,diameter:2,length:2,clearance:.25,offset:[1,-1]};
+    const {halves,joint,loose}=closeInterface(...cut.openHalves,cut.loops,{normal:[0,1,2].map(i=>i===axis?1:0),connector});
+    halves.forEach(manifold);loose.forEach(manifold);
+    assert.equal(loose.length,kind==='dowel'?1:0);assert.deepEqual(joint.offset,[1,-1]);
+    const area=r=>20*r*r*Math.sin(Math.PI/20);
+    halves.forEach(f=>assert(Math.abs(signedVolume(f)-(500-area(1.125)*2.2))<1e-7));
+    if(loose.length)assert(Math.abs(signedVolume(loose[0])-area(1)*4)<1e-7);
+    assert.equal(joint.face.rings.length,1);assert.equal(joint.kind,kind);
+  }
+});
+
+test('manual placement validates edges and both socket receivers without moving the source',()=>{
+  const cut=cutMesh(cube,2,5),before=JSON.stringify(cut),normal=[0,0,1];
+  for(const offset of [[NaN,0],[0],[-20,0],[4,0],[0,1001]])assert.throws(()=>closeInterface(...cut.openHalves,cut.loops,{normal,connector:{kind:'dowel',diameter:2,length:2,offset}}),/position|edge|finite/);
+  assert.throws(()=>closeInterface(...cut.openHalves,cut.loops,{normal,connector:{kind:'dowel',length:5}}),/Both parts/);
+  const thin=cutMesh(cube,2,1);
+  assert.throws(()=>closeInterface(...thin.openHalves,thin.loops,{normal,connector:{kind:'dowel',length:2}}),/Both parts/);
+  assert.equal(JSON.stringify(cut),before);
+});

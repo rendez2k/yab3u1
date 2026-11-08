@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {cutMesh,connectedParts,signedVolume} from './mesh-cut.js';
-import {editProject} from './model-edit.js';
+import {editProject,sourceParts,inspectShapes} from './model-edit.js';
 import {jointSampleFile} from './joint-sample.js';
 import {readZip,writeZip} from '../../web/zip.js';
 import {interfaceDemoFile} from '../../web/shared/supportInterfaceDemo.js';
@@ -58,4 +58,22 @@ test('colour detachment exports a stalk and socket; removing it drops green with
   const out=project.convertProject(q,1,remaining,{target:'snapmaker',assignmentMode:'slots',selectionAware:true,removeUnused:true,mapping:{1:1}});
   assert.deepEqual(out.problems,[]);assert.deepEqual(project.readProject(out.entries).colors,['#F58231']);
   assert.deepEqual(entries.get(project.MODEL_FILE),original);assert.equal(q.sourceSettings.layer_height,'0.2');
+});
+
+test('dowel separation, shape separation and auto mode keep one printable upright dowel per join through export',async()=>{
+  const entries=await readZip(await jointSampleFile()),saved=[...entries].map(([name,data])=>[name,data.slice()]);
+  const shapes=inspectShapes(entries,{objectIds:['1']});
+  for(const operation of ['separate-colour','auto-separate','cut','shape-separate']){
+    const options={objectIds:['1'],operation,shapeIds:[shapes.regions[1].id],from:2,axis:2,position:70,connector:{kind:'dowel',diameter:2,length:2,clearance:.2,offset:[.2,0]},orientPins:false};
+    const checked=editProject(entries,{...options,previewOnly:true});
+    assert.equal(checked.changes.length,0);assert(checked.joins.length>0);
+    assert.deepEqual([...checked.entries],saved);
+    const result=editProject(entries,options),p=project.readProject(result.entries),created=result.changes[0].created;
+    const dowels=created.filter(n=>/dowel/.test(n.name));assert.equal(dowels.length,result.joins.length);
+    for(const d of dowels){const {parts}=sourceParts(p,1,d.id),v=parts.flatMap(p=>p.faces.flatMap(f=>f.points));assert(Math.abs(Math.min(...v.map(p=>p[2])))<1e-6);assert(Math.abs(Math.max(...v.map(p=>p[2]))-4)<1e-6);parts.forEach(p=>assert(edgeCounts(p.faces).every(n=>n===2)));assert.equal(project.analyse(p,1,[d.id]).used.length,1);}
+    const out=project.convertProject(p,1,created.map(n=>n.id),{target:'snapmaker',assignmentMode:'slots',selectionAware:true,removeUnused:true,mapping:{1:1,2:2}});
+    assert.deepEqual(out.problems,[]);const roundtrip=project.readProject(await readZip(await writeZip([...out.entries].map(([name,data])=>({name,data})))));
+    assert.equal(roundtrip.plates[0].objectIds.length,created.length);
+  }
+  assert.deepEqual([...entries],saved);
 });

@@ -6,6 +6,7 @@ self.onmessage=async({data})=>{
     if(data.options.operation==='inspect-shapes'){self.postMessage(inspectShapes(entries,data.options,progress=>self.postMessage({progress})));return;}
     self.postMessage({progress:data.options.operation==='colour'?'Applying colour to the selected copies…':'Separating and closing the selected geometry…'});
     const result=editProject(entries,data.options,progress=>self.postMessage({progress}));self.postMessage({progress:'Checking the edited project…'});
+    if(data.options.previewOnly){self.postMessage({joins:result.joins,reports:result.reports});return;}
     if(!result.changes.length){self.postMessage({changes:[],reports:result.reports});return;}
     const bytes=await writeZip([...result.entries].map(([name,data])=>({name,data})));
     self.postMessage({bytes,changes:result.changes,colours:result.colours,reports:result.reports},[bytes.buffer]);

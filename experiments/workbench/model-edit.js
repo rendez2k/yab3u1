@@ -64,13 +64,16 @@ function cutPart(part,axis,height,connector){
     if(node?.kind==='split')for(const leaf of leafTriangles(f.points,node))faces.push({points:leaf.triangle,attrs:stripPaint(f.attrs)+paintLeaf(leaf.state||part.base)});
     else faces.push(f);
   }
-  if(faces.every(f=>f.points.every(p=>p[axis]>=height-1e-6)))return [null,part];
-  if(faces.every(f=>f.points.every(p=>p[axis]<=height+1e-6)))return [part,null];
+  if(faces.every(f=>f.points.every(p=>p[axis]>=height-1e-6)))return {parts:[null,part],loose:[]};
+  if(faces.every(f=>f.points.every(p=>p[axis]<=height+1e-6)))return {parts:[part,null],loose:[]};
   const cut=cutMesh(faces,axis,height,paintLeaf(part.base));
   const joined=connector?closeInterface(...cut.openHalves,cut.loops,{normal:[0,1,2].map(i=>i===axis?1:0),attrsA:paintLeaf(part.base),attrsB:paintLeaf(part.base),connector}):{halves:cut.halves};
   const pinSide=connector?.side==='base'?0:1;
-  return joined.halves.map((f,i)=>({...part,faces:f,pinDirections:joined.joint&&i===pinSide?[joined.joint.normal.map(v=>v*(pinSide===0?1:-1))]:[]}));
+  return {parts:joined.halves.map((f,i)=>({...part,faces:f,pinDirections:hasAttachedPin(connector)&&joined.joint&&i===pinSide?[joined.joint.normal.map(v=>v*(pinSide===0?1:-1))]:[]})),joint:joined.joint,loose:(joined.loose||[]).map(faces=>({faces,joint:joined.joint}))};
 }
+
+const hasAttachedPin=connector=>connector&&(connector.kind||'pin')==='pin';
+const dowelPart=(part,{faces,joint,colour})=>({name:'Separate dowel',base:colour||part.base,settings:{},subtype:'normal_part',faces,dowel:true,pinDirections:[joint.normal]});
 
 function colourFaces(part){
   return part.faces.flatMap(f=>{
@@ -131,7 +134,7 @@ function meshXml(part,id){
 }
 const settingsXml=settings=>Object.entries(settings||{}).map(([k,v])=>`<metadata key="${esc(k)}" value="${esc(v)}"/>`).join('');
 
-export function editProject(input,{plateId=1,objectIds=[],operation,from='all',colour,axis=2,position=50,connector=null,region=null,orientPins=true,shapeIds=[],detail='coarse'}={},progress=()=>{}){
+export function editProject(input,{plateId=1,objectIds=[],operation,from='all',colour,axis=2,position=50,connector=null,region=null,orientPins=true,shapeIds=[],detail='coarse',previewOnly=false}={},progress=()=>{}){
   const entries=new Map(input),project=readProject(entries,{allowNegative:true,allowModifiers:true});
   if(!objectIds.length)throw Error('Select an object first.');
   if(!['colour','cut','separate','separate-colour','remove-colour','auto-separate','shape-colour','shape-separate'].includes(operation))throw Error('Choose Colour or Split.');
@@ -146,11 +149,12 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
     if(!target){if(colours.length>=MAX_SOURCE_COLOURS)throw Error(`This file already contains ${MAX_SOURCE_COLOURS} colours. Choose an existing filament.`);colours.push(colour.toUpperCase());target=colours.length;}
   }
   let next=Math.max(1,...[...project.objects.keys()].map(Number))+1;
-  const resources=[],newItems=[],newMeta=[],changes=[],reports=[];
+  const resources=[],newItems=[],newMeta=[],changes=[],reports=[],joins=[];
   for(const oldId of objectIds){
     if(operation==='colour' && project.meta.get(String(oldId))?.parts?.some(p=>p.subtype==='modifier_part'))
       throw Error('This object contains a settings modifier. Reassign its filament in Colours, or edit it in your slicer to preserve the modifier.');
-    const {parts,meta}=sourceParts(project,plateId,oldId);let groups=[],names=[];
+    const {parts,meta}=sourceParts(project,plateId,oldId);let groups=[],names=[];const dowels=[];
+    const collect=(result,part)=>{joins.push(...(result.joints||[result.joint]).filter(Boolean).map(j=>({...j,objectId:String(oldId),name:meta.name||`Object ${oldId}`})));dowels.push(...(result.loose||[]).map(piece=>[dowelPart(part,piece)]));};
     if(shaping){
       const suggestions=shapeRegions(parts,detail,progress),chosen=suggestions.filter(r=>shapeIds.includes(r.id));
       if(!chosen.length||chosen.length!==new Set(shapeIds).size)throw Error('Choose the shape regions again; this selection is no longer available.');
@@ -167,8 +171,9 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
         for(const f of selectedFaces){const [a,b,c]=f.points,u=b.map((v,i)=>v-a[i]),v=c.map((n,i)=>n-a[i]);const area=Math.hypot(u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]);counts.set(f.colour,(counts.get(f.colour)||0)+area);}
         const detachedBase=[...counts].sort((a,b)=>b[1]-a[1]||a[0]-b[0])[0][0];
         const result=separateShape(part.faces,ids,{connector,capAttributes:paintLeaf(part.base),selectedCapAttributes:paintLeaf(detachedBase)});
-        rest.push({...part,faces:result.remaining,pinDirections:connector?.side==='base'?result.joints.filter(Boolean).map(j=>j.normal):[]});
-        detached.push(...result.parts.map((faces,i)=>[{...part,faces,pinDirections:connector&&connector.side!=='base'&&result.joints[i]?[result.joints[i].normal.map(v=>-v)]:[]}]));
+        collect(result,{...part,base:detachedBase});
+        rest.push({...part,faces:result.remaining,pinDirections:hasAttachedPin(connector)&&connector.side==='base'?result.joints.filter(Boolean).map(j=>j.normal):[]});
+        detached.push(...result.parts.map((faces,i)=>[{...part,faces,pinDirections:hasAttachedPin(connector)&&connector.side!=='base'&&result.joints[i]?[result.joints[i].normal.map(v=>-v)]:[]}]));
       }
       if(painting)groups=[rest];else{groups=[...(rest.length?[rest]:[]),...detached];names=[...(rest.length?['body']:[]),...detached.map((_,i)=>`shape part ${i+1}`)];if(groups.length<2)throw Error('The entire object is selected. Leave a region on the body or choose Recolour.');}
     }
@@ -185,6 +190,7 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
         reports.push({objectId:String(oldId),name:meta.name,...result.report});
         if(result.groups.length<2)continue;
         groups=result.groups;names=result.names;
+        joins.push(...(result.joints||[]).map(j=>({...j,objectId:String(oldId),name:meta.name||`Object ${oldId}`})));
       }else if(operation.endsWith('-colour')){
         const rest=[],detached=[];let found=false;
         for(const [partIndex,part] of parts.entries()){
@@ -193,8 +199,9 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
           if(region&&Number(region.split(':')[0])!==partIndex){rest.push(part);continue;}
           found=true;
           const result=separateColour(faces,Number(from),{connector:operation==='remove-colour'?null:connector,capAttributes:paintLeaf,region:region?Number(region.split(':')[1]):null});
-          if(result.remaining.length)rest.push({...part,faces:result.remaining,pinDirections:connector?.side==='base'?result.joints.filter(Boolean).map(j=>j.normal):[]});
-          detached.push(...result.parts.map((faces,i)=>[{...part,base:Number(from),faces,pinDirections:connector&&connector.side!=='base'&&result.joints[i]?[result.joints[i].normal.map(v=>-v)]:[]}]));
+          collect(result,part);
+          if(result.remaining.length)rest.push({...part,faces:result.remaining,pinDirections:hasAttachedPin(connector)&&connector.side==='base'?result.joints.filter(Boolean).map(j=>j.normal):[]});
+          detached.push(...result.parts.map((faces,i)=>[{...part,base:Number(from),faces,pinDirections:hasAttachedPin(connector)&&connector.side!=='base'&&result.joints[i]?[result.joints[i].normal.map(v=>-v)]:[]}]));
         }
         if(!found)throw Error('This colour is not painted on one of the selected objects. Select only objects that use it.');
         if(rest.length){groups.push(rest);names.push('remainder');}
@@ -204,17 +211,20 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
         if(groups.length<2)throw Error('This is one connected piece. Use a plane cut to make separate parts.');
         if(groups.length>64)throw Error('This object contains more than 64 disconnected shells. Repair or group them in your slicer first.');
       } else {
+        if(![0,1,2].includes(axis))throw Error('Choose an X, Y or Z cut direction.');
         if(!Number.isFinite(position)||position<=0||position>=100)throw Error('Place the cut between 1% and 99% of the object.');
         let lo=Infinity,hi=-Infinity;for(const p of parts)for(const f of p.faces)for(const v of f.points){lo=Math.min(lo,v[axis]);hi=Math.max(hi,v[axis]);}
-        const height=lo+(hi-lo)*position/100;groups=[[],[]];for(const part of parts){const split=cutPart(part,axis,height,connector);split.forEach((p,i)=>{if(p)groups[i].push(p);});}
+        const height=lo+(hi-lo)*position/100;groups=[[],[]];for(const part of parts){const split=cutPart(part,axis,height,connector);collect(split,part);split.parts.forEach((p,i)=>{if(p)groups[i].push(p);});}
         if(groups.some(g=>!g.length))throw Error('The cut leaves an empty part. Change the cut position.');
       }
     }
+    if(previewOnly)continue;
+    if(dowels.length){names=groups.map((_,i)=>names[i]||`part ${i+1}`).concat(dowels.map((_,i)=>`dowel ${i+1}`));groups.push(...dowels);}
     const created=[];
     for(let g=0;g<groups.length;g++){
       let group=groups[g];
       if(!painting){
-        if(connector&&orientPins)group=orientPinUp(group,group.flatMap(p=>p.pinDirections||[]));
+        if((connector&&orientPins)||group.some(p=>p.dowel))group=orientPinUp(group,group.flatMap(p=>p.pinDirections||[]));
         let floor=Infinity;for(const p of group)for(const f of p.faces)for(const v of f.points)floor=Math.min(floor,v[2]);
         group=group.map(p=>({...p,faces:p.faces.map(f=>({...f,points:f.points.map(v=>[v[0],v[1],v[2]-floor])}))}));
       }
@@ -228,7 +238,7 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
     }
     changes.push({oldId:String(oldId),created});
   }
-  if(!changes.length)return {entries,changes,colours,reports};
+  if(!changes.length)return {entries,changes,colours,reports,joins};
   const root=text(entries,MODEL_FILE).replace('</resources>',resources.join('')+'</resources>').replace('</build>',newItems.join('')+'</build>');
   entries.set(MODEL_FILE,encoder.encode(root));
   let config=text(entries,SRC_BBL_MODEL);
@@ -239,5 +249,5 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
   const cfg={...project.sourceSettings,...JSON.parse(text(entries,SRC_BBL_PROJECT)||'{}')};cfg.filament_colour=colours;cfg.filament_type=colours.map((_,i)=>project.types[i]||'PLA');entries.set(SRC_BBL_PROJECT,encoder.encode(JSON.stringify(cfg)));
   // Generated source is re-read before it can replace the live workspace.
   const checked=readProject(entries,{allowNegative:true,allowModifiers:true});for(const c of changes)for(const n of c.created)if(!checked.objects.has(n.id))throw Error('The edit could not be validated.');
-  return {entries,changes,colours,reports};
+  return {entries,changes,colours,reports,joins};
 }
