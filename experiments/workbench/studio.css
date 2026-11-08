@@ -152,3 +152,27 @@ body[data-engine=spectrum] [data-task=colours] .task-heading{margin-bottom:12px}
   #inspector [data-editing=true] .studio-apply button,#inspector [data-editing=true] .studio-dimensions input,#inspector [data-editing=true] .studio-field select{min-height:44px}
   [data-editing=true] .studio-check{min-height:44px;margin:10px 0}
 }
+:root .split-inspection{position:absolute;inset:0;z-index:4;background:var(--studio-canvas);border-radius:inherit;overflow:hidden}
+#stage:has(.split-inspection) #platecontrols{visibility:hidden;pointer-events:none}
+.split-inspection canvas{position:absolute;left:0;top:112px;width:100%;height:calc(100% - 136px);display:block;touch-action:none}
+.boundary-overlay{position:absolute;left:0;top:112px;width:100%;height:calc(100% - 136px);pointer-events:none;overflow:visible}
+.boundary-path{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-dasharray:5 3;stroke-linejoin:round}
+.boundary-point{fill:var(--panel);stroke:var(--accent);stroke-width:2}
+.boundary-point.chosen{fill:var(--soft);stroke-width:3}
+.boundary-overlay text{fill:var(--text);font:600 11px Plex,'Segoe UI',sans-serif}
+.inspection-caption{position:absolute;top:78px;left:24px;right:24px;display:flex;align-items:center;justify-content:space-between;gap:12px;pointer-events:none;color:var(--muted);font-size:12px}
+.inspection-caption button{pointer-events:auto;background:var(--panel);border:0;min-height:36px;white-space:nowrap}
+.inspection-caption>div{display:flex;gap:6px}
+[data-inspection-expand]{display:none}
+.boundary-points{display:flex;flex-wrap:wrap;gap:6px;margin:16px 0 12px}
+.boundary-points button{min-width:40px;min-height:40px;font-variant-numeric:tabular-nums}
+.boundary-points button[aria-pressed=true]{background:var(--soft);color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.boundary-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.boundary-actions button{flex:1 1 auto}
+.boundary-status[data-error=true],[data-assembly-status][data-error=true]{color:var(--bad)}
+.split-preview-controls{margin:24px 0;padding-top:20px;border-top:1px solid var(--line)}
+.boundary-status{min-height:3em}
+.split-preview-controls>[data-split-preview]{width:100%;color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);min-height:42px}
+[data-assembly-controls]{margin-top:16px}
+[data-assembly-controls] output{font-variant-numeric:tabular-nums;color:var(--muted)}
+@media(max-width:760px){.split-inspection canvas,.boundary-overlay{top:56px;height:calc(100% - 138px)}.inspection-caption{top:auto;bottom:8px;left:12px;right:12px;font-size:11px;gap:4px;align-items:flex-start;flex-direction:column}.inspection-caption button,.boundary-points button,.boundary-actions button,.split-preview-controls>[data-split-preview],[data-assembly-controls] input[type=range]{min-height:44px}.boundary-points button{min-width:44px}.boundary-actions{gap:8px}.inspection-caption span{max-width:none}[data-inspection-expand]{display:inline-block}#engine-workspace:has([data-task=edit][data-editing=true] [data-split-method]) #stage[data-inspection-expanded=true]{flex:1;min-height:0;padding:0}#engine-workspace:has([data-inspection-expanded=true]) #inspector{display:none}}

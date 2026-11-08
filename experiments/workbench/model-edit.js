@@ -9,6 +9,8 @@ import {orientPinUp} from './orientation.js';
 import {autoSeparate} from './auto-split.js';
 import {detectShapeParts} from './shape-parts.js';
 import {mapShapePreview} from './shape-preview.js';
+import {surfaceGraph,traceBoundary} from './surface-boundary.js';
+import {inspectionSoup} from './split-inspection.js';
 const decoder=new TextDecoder(),encoder=new TextEncoder();
 const text=(entries,name)=>decoder.decode(entries.get(name)||new Uint8Array());
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
@@ -134,11 +136,11 @@ function meshXml(part,id){
 }
 const settingsXml=settings=>Object.entries(settings||{}).map(([k,v])=>`<metadata key="${esc(k)}" value="${esc(v)}"/>`).join('');
 
-export function editProject(input,{plateId=1,objectIds=[],operation,from='all',colour,axis=2,position=50,connector=null,region=null,orientPins=true,shapeIds=[],detail='coarse',previewOnly=false}={},progress=()=>{}){
+export function editProject(input,{plateId=1,objectIds=[],operation,from='all',colour,axis=2,position=50,connector=null,region=null,orientPins=true,shapeIds=[],detail='coarse',boundary=null,previewOnly=false,includeAssembly=false}={},progress=()=>{}){
   const entries=new Map(input),project=readProject(entries,{allowNegative:true,allowModifiers:true});
   if(!objectIds.length)throw Error('Select an object first.');
-  if(!['colour','cut','separate','separate-colour','remove-colour','auto-separate','shape-colour','shape-separate'].includes(operation))throw Error('Choose Colour or Split.');
-  const shaping=operation.startsWith('shape-'),painting=operation==='colour'||operation==='shape-colour';
+  if(!['colour','cut','separate','separate-colour','remove-colour','auto-separate','shape-colour','shape-separate','boundary-separate'].includes(operation))throw Error('Choose Colour or Split.');
+  const shaping=operation.startsWith('shape-')||operation==='boundary-separate',painting=operation==='colour'||operation==='shape-colour';
   if(shaping&&objectIds.length!==1)throw Error('Select one object for a shape edit.');
   if(operation==='auto-separate'&&connector&&connector.side==='base')throw Error('Automatic separation places pins on the detached pieces.');
   if(['separate-colour','remove-colour'].includes(operation)&&(!Number.isInteger(Number(from))||Number(from)<1||Number(from)>project.colors.length))throw Error('Choose a source colour to separate.');
@@ -149,15 +151,24 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
     if(!target){if(colours.length>=MAX_SOURCE_COLOURS)throw Error(`This file already contains ${MAX_SOURCE_COLOURS} colours. Choose an existing filament.`);colours.push(colour.toUpperCase());target=colours.length;}
   }
   let next=Math.max(1,...[...project.objects.keys()].map(Number))+1;
-  const resources=[],newItems=[],newMeta=[],changes=[],reports=[],joins=[];
+  const resources=[],newItems=[],newMeta=[],changes=[],reports=[],joins=[],assemblyGroups=[],assemblyNames=[];
   for(const oldId of objectIds){
     if(operation==='colour' && project.meta.get(String(oldId))?.parts?.some(p=>p.subtype==='modifier_part'))
       throw Error('This object contains a settings modifier. Reassign its filament in Colours, or edit it in your slicer to preserve the modifier.');
     const {parts,meta}=sourceParts(project,plateId,oldId);let groups=[],names=[];const dowels=[];
     const collect=(result,part)=>{joins.push(...(result.joints||[result.joint]).filter(Boolean).map(j=>({...j,objectId:String(oldId),name:meta.name||`Object ${oldId}`})));dowels.push(...(result.loose||[]).map(piece=>[dowelPart(part,piece)]));};
     if(shaping){
-      const suggestions=shapeRegions(parts,detail,progress),chosen=suggestions.filter(r=>shapeIds.includes(r.id));
-      if(!chosen.length||chosen.length!==new Set(shapeIds).size)throw Error('Choose the shape regions again; this selection is no longer available.');
+      let chosen;
+      if(operation==='boundary-separate'){
+        if(parts.some(p=>isHiddenPart(p.subtype)))throw Error('This object contains a modifier or negative volume. Use your slicer to preserve its role.');
+        if(!boundary||!Number.isInteger(boundary.part)||!parts[boundary.part])throw Error('Draw a closed boundary on one part first.');
+        progress('Following the boundary on the original mesh…');
+        const selection=traceBoundary(surfaceGraph(parts[boundary.part].faces),boundary.points,{closed:true,flip:boundary.flip});
+        chosen=[{part:boundary.part,faces:selection.indices}];
+      }else{
+        const suggestions=shapeRegions(parts,detail,progress);chosen=suggestions.filter(r=>shapeIds.includes(r.id));
+        if(!chosen.length||chosen.length!==new Set(shapeIds).size)throw Error('Choose the shape regions again; this selection is no longer available.');
+      }
       const rest=[],detached=[];
       for(const [partIndex,part] of parts.entries()){
         const ids=chosen.filter(r=>r.part===partIndex).flatMap(r=>r.faces),wanted=new Set(ids);
@@ -218,8 +229,8 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
         if(groups.some(g=>!g.length))throw Error('The cut leaves an empty part. Change the cut position.');
       }
     }
-    if(previewOnly)continue;
     if(dowels.length){names=groups.map((_,i)=>names[i]||`part ${i+1}`).concat(dowels.map((_,i)=>`dowel ${i+1}`));groups.push(...dowels);}
+    if(previewOnly){if(includeAssembly){assemblyGroups.push(...groups);assemblyNames.push(...groups.map((_,i)=>names[i]||`part ${i+1}`));}continue;}
     const created=[];
     for(let g=0;g<groups.length;g++){
       let group=groups[g];
@@ -238,7 +249,7 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
     }
     changes.push({oldId:String(oldId),created});
   }
-  if(!changes.length)return {entries,changes,colours,reports,joins};
+  if(!changes.length)return {entries,changes,colours,reports,joins,...(includeAssembly?{assembly:inspectionSoup(assemblyGroups,colours,assemblyNames)}:{})};
   const root=text(entries,MODEL_FILE).replace('</resources>',resources.join('')+'</resources>').replace('</build>',newItems.join('')+'</build>');
   entries.set(MODEL_FILE,encoder.encode(root));
   let config=text(entries,SRC_BBL_MODEL);
