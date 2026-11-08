@@ -110,4 +110,32 @@ body[data-engine=spectrum] [data-task=colours] .task-heading{margin-bottom:12px}
 .workspace-drop-overlay strong{font-size:24px}.workspace-drop-overlay span{font-size:13px;color:var(--muted,#626c73)}
 .workspace-drop-error{position:fixed;top:76px;left:50%;transform:translateX(-50%);z-index:1900;display:flex;align-items:center;gap:16px;width:min(540px,calc(100% - 32px));padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);box-shadow:var(--studio-shadow)}
 .workspace-drop-error[hidden]{display:none}.workspace-drop-error p{margin:0;line-height:1.5;min-width:0;overflow-wrap:anywhere}.workspace-drop-error button{flex:none;min-height:44px}
+.shape-detection{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px;margin:16px 0 24px}
+.shape-detection .studio-field{margin:0}
+.shape-selection-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.shape-region-list{display:grid;gap:6px;max-height:260px;overflow:auto;margin:12px 0}
+#inspector .shape-region-list button{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:44px;text-align:left;padding:10px 12px}
+.shape-size{font-size:11px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+#inspector .shape-region-list button[aria-pressed=true]{background:var(--soft);box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent)}
+.shape-region-list button[aria-pressed=true] .shape-size{color:var(--accent)}
+[data-shape-undo]{margin-bottom:20px}
+#inspector .studio-swatches [data-shape-swatch]{background:var(--swatch);width:40px;height:40px;border:1px solid var(--line);border-radius:8px}
+#inspector [data-shape-colour]{width:100%;height:44px;padding:4px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+@media(max-width:760px){#inspector [data-shape-settings] button,#inspector [data-shape-settings] select{min-height:44px}.shape-region-list{max-height:none;overflow:visible}#inspector .studio-swatches [data-shape-swatch]{width:44px;height:44px}}
 @media(max-width:760px){#inspector .plate-management button,#inspector .project-saves button,#inspector .plate-review button{min-height:44px;min-width:44px}.workspace-drop-error{top:64px;align-items:flex-start}}
+/* A shape edit needs room to compare regions and adjust a complete joint. */
+@media(max-width:760px){
+  #engine-workspace:has([data-task=edit][data-editing=true] [data-shape-settings]:not([hidden])) #stage{flex:0 0 38%;min-height:270px;padding-top:64px;padding-bottom:60px}
+  #engine-workspace:has([data-task=edit][data-editing=true] [data-shape-settings]:not([hidden])) #platecontrols{bottom:6px;max-width:calc(100% - 24px);overflow-x:auto}
+  #engine-workspace:has([data-task=edit][data-editing=true] [data-shape-settings]:not([hidden])) #platecontrols .plate-tool-row{flex-wrap:nowrap}
+  #engine-workspace:has([data-task=edit][data-editing=true] [data-shape-settings]:not([hidden])) #platecontrols .plate-tool-row>*{flex:none;white-space:nowrap}
+  #engine-workspace:has([data-task=edit][data-editing=true] [data-shape-settings]:not([hidden])) #platecontrols #convertpreviewtoolbar{padding:0!important}
+  #engine-workspace:has([data-task=edit][data-editing=true] [data-shape-settings]:not([hidden])) #platecontrols>p:empty{display:none}
+  #inspector>section[data-task=edit][data-editing=true]:has([data-shape-settings]:not([hidden])){padding:14px 20px 0}
+  [data-editing=true]:has([data-shape-settings]:not([hidden])) .task-heading{margin-bottom:8px}
+  [data-editing=true]:has([data-shape-settings]:not([hidden])) .task-heading p{margin:4px 0}
+  [data-editing=true]:has([data-shape-settings]:not([hidden])) .studio-message{font-size:11px;margin:8px 0;max-height:48px}
+  [data-editing=true]:has([data-shape-settings]:not([hidden])) .studio-apply{margin-top:6px;padding-bottom:12px}
+  #inspector [data-editing=true] .studio-apply button,#inspector [data-editing=true] .studio-dimensions input,#inspector [data-editing=true] .studio-field select{min-height:44px}
+  [data-editing=true] .studio-check{min-height:44px;margin:10px 0}
+}

@@ -41,7 +41,7 @@ import { mountCalibration } from './shared/calibrationPanel.js';
 import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } from './shared/supportInterface.js';
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 
-const VERSION = "2.6.47";
+const VERSION = "2.6.48";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({

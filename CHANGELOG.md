@@ -1,3 +1,9 @@
+## 2.6.48 — Shape selection
+
+- Detect geometric regions independently of paint, review highlights, combine selections and undo selection changes.
+- Recolour selected regions or separate suitable joins with matching pin/socket, fit settings and pin-up orientation. Preserve original paint elsewhere; reject unsupported seams without applying the edit.
+- Give active shape editing more space on mobile and larger connector/action touch targets. See [release details and limits](docs/shape-selection-release-2.6.48.md).
+
 ## 2.6.1
 
 - Publish the reviewed ZIP/texture imports, U1 profile and filament-preset matching, Full Spectrum cutouts, slot arrangement, copies, layer-height choices and compact workspace.

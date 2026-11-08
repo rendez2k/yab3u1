@@ -182,6 +182,7 @@ export class Preview {
         const triangle=pickTriangle(this.lastPositions,this.viewProjection,
           2*(event.clientX-rect.left)/rect.width-1,1-2*(event.clientY-rect.top)/rect.height);
         if(!this.pointerTool?.active){
+          if(this.onRegionPick?.({triangle,event}))return;
           this.selectRange(this.pickRanges.findIndex(r=>triangle>=r.start/3&&triangle<(r.start+r.count)/3),event);
           this.onPick?.({triangle,event});
         }

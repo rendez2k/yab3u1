@@ -4,9 +4,11 @@ import {readProject,selectionInstances,matrixFromText,matmul,applyMatrix,isHidde
 import {decode,encode} from '../../web/shared/paint.js';
 import {leafTriangles} from '../../web/shared/standard.js';
 import {cutMesh,connectedParts} from './mesh-cut.js';
-import {closeInterface,separateColour} from './mesh-joint.js';
+import {closeInterface,separateColour,separateShape} from './mesh-joint.js';
 import {orientPinUp} from './orientation.js';
 import {autoSeparate} from './auto-split.js';
+import {detectShapeParts} from './shape-parts.js';
+import {mapShapePreview} from './shape-preview.js';
 const decoder=new TextDecoder(),encoder=new TextEncoder();
 const text=(entries,name)=>decoder.decode(entries.get(name)||new Uint8Array());
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
@@ -96,6 +98,31 @@ export function inspectRegions(input,{plateId=1,objectIds=[],from}={},progress=(
   return regions;
 }
 
+export function shapeRegions(parts,detail,progress=()=>{}){
+  if(parts.some(p=>isHiddenPart(p.subtype)))throw Error('This object contains a modifier or negative volume. Use your slicer to preserve its role.');
+  if(parts.reduce((n,p)=>n+p.faces.length,0)>750000)throw Error('Select an object with fewer than 750,000 triangles for shape detection.');
+  const regions=[];
+  for(const [part,p] of parts.entries()){
+    progress(`Finding shape regions in part ${part+1} of ${parts.length}…`);
+    const groups=detectShapeParts(p.faces,{detail});
+    for(const [i,faces] of groups.entries()){
+      const min=[Infinity,Infinity,Infinity],max=min.map(()=>-Infinity);
+      for(const f of faces)for(const v of p.faces[f].points)for(let a=0;a<3;a++){min[a]=Math.min(min[a],v[a]);max[a]=Math.max(max[a],v[a]);}
+      regions.push({id:`${part}:${i}`,part,faces,bounds:{min,max},size:max.map((v,a)=>v-min[a]),triangles:faces.length});
+    }
+  }
+  if(regions.length>96)throw Error('This detail produces more than 96 regions. Choose Fewer parts and detect again.');
+  return regions;
+}
+export function inspectShapes(input,{plateId=1,objectIds=[],detail='coarse',previewPositions=[]}={},progress=()=>{}){
+  if(objectIds.length!==1)throw Error('Select one object to detect its shape regions.');
+  const project=readProject(input,{allowNegative:true,allowModifiers:true}),{parts}=sourceParts(project,plateId,objectIds[0]);
+  const regions=shapeRegions(parts,detail,progress);
+  progress('Matching the highlighted regions to your preview…');
+  const previewRegions=mapShapePreview(parts,regions,previewPositions);
+  return {regions:regions.map(({faces,...r})=>r),previewRegions};
+}
+
 function meshXml(part,id){
   const vertices=[],triangles=[],indices=new Map();
   const add=p=>{const key=p.map(n=>Number(n.toFixed(7))).join(',');if(indices.has(key))return indices.get(key);const index=vertices.length;indices.set(key,index);vertices.push(`<vertex x="${+p[0].toFixed(7)}" y="${+p[1].toFixed(7)}" z="${+p[2].toFixed(7)}"/>`);return index;};
@@ -104,14 +131,16 @@ function meshXml(part,id){
 }
 const settingsXml=settings=>Object.entries(settings||{}).map(([k,v])=>`<metadata key="${esc(k)}" value="${esc(v)}"/>`).join('');
 
-export function editProject(input,{plateId=1,objectIds=[],operation,from='all',colour,axis=2,position=50,connector=null,region=null,orientPins=true}={},progress=()=>{}){
+export function editProject(input,{plateId=1,objectIds=[],operation,from='all',colour,axis=2,position=50,connector=null,region=null,orientPins=true,shapeIds=[],detail='coarse'}={},progress=()=>{}){
   const entries=new Map(input),project=readProject(entries,{allowNegative:true,allowModifiers:true});
   if(!objectIds.length)throw Error('Select an object first.');
-  if(!['colour','cut','separate','separate-colour','remove-colour','auto-separate'].includes(operation))throw Error('Choose Colour or Split.');
+  if(!['colour','cut','separate','separate-colour','remove-colour','auto-separate','shape-colour','shape-separate'].includes(operation))throw Error('Choose Colour or Split.');
+  const shaping=operation.startsWith('shape-'),painting=operation==='colour'||operation==='shape-colour';
+  if(shaping&&objectIds.length!==1)throw Error('Select one object for a shape edit.');
   if(operation==='auto-separate'&&connector&&connector.side==='base')throw Error('Automatic separation places pins on the detached pieces.');
-  if(operation.endsWith('-colour')&&(!Number.isInteger(Number(from))||Number(from)<1||Number(from)>project.colors.length))throw Error('Choose a source colour to separate.');
+  if(['separate-colour','remove-colour'].includes(operation)&&(!Number.isInteger(Number(from))||Number(from)<1||Number(from)>project.colors.length))throw Error('Choose a source colour to separate.');
   const colours=project.colors.slice();let target=0;
-  if(operation==='colour'){
+  if(painting){
     if(!/^#[0-9a-f]{6}$/i.test(colour||''))throw Error('Choose a valid filament colour.');
     target=colours.findIndex(c=>c.toUpperCase()===colour.toUpperCase())+1;
     if(!target){if(colours.length>=MAX_SOURCE_COLOURS)throw Error(`This file already contains ${MAX_SOURCE_COLOURS} colours. Choose an existing filament.`);colours.push(colour.toUpperCase());target=colours.length;}
@@ -122,7 +151,28 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
     if(operation==='colour' && project.meta.get(String(oldId))?.parts?.some(p=>p.subtype==='modifier_part'))
       throw Error('This object contains a settings modifier. Reassign its filament in Colours, or edit it in your slicer to preserve the modifier.');
     const {parts,meta}=sourceParts(project,plateId,oldId);let groups=[],names=[];
-    if(operation==='colour')groups=[parts.map(p=>recolour(p,from,target))];
+    if(shaping){
+      const suggestions=shapeRegions(parts,detail,progress),chosen=suggestions.filter(r=>shapeIds.includes(r.id));
+      if(!chosen.length||chosen.length!==new Set(shapeIds).size)throw Error('Choose the shape regions again; this selection is no longer available.');
+      const rest=[],detached=[];
+      for(const [partIndex,part] of parts.entries()){
+        const ids=chosen.filter(r=>r.part===partIndex).flatMap(r=>r.faces),wanted=new Set(ids);
+        if(!ids.length){rest.push(part);continue;}
+        if(painting){rest.push({...part,faces:part.faces.map((f,i)=>wanted.has(i)?{...f,attrs:stripPaint(f.attrs)+paintLeaf(target)}:f)});continue;}
+        if(ids.length===part.faces.length){if(connector)throw Error('This is an existing complete part. Turn off the locating pin.');detached.push([part]);continue;}
+        progress('Checking and closing the selected join…');
+        // Give the new cap/pin the selected surface's dominant colour. Keep the
+        // original base so implicit paint on the untouched faces means the same.
+        const selectedFaces=colourFaces({...part,faces:ids.map(i=>part.faces[i])}),counts=new Map();
+        for(const f of selectedFaces){const [a,b,c]=f.points,u=b.map((v,i)=>v-a[i]),v=c.map((n,i)=>n-a[i]);const area=Math.hypot(u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]);counts.set(f.colour,(counts.get(f.colour)||0)+area);}
+        const detachedBase=[...counts].sort((a,b)=>b[1]-a[1]||a[0]-b[0])[0][0];
+        const result=separateShape(part.faces,ids,{connector,capAttributes:paintLeaf(part.base),selectedCapAttributes:paintLeaf(detachedBase)});
+        rest.push({...part,faces:result.remaining,pinDirections:connector?.side==='base'?result.joints.filter(Boolean).map(j=>j.normal):[]});
+        detached.push(...result.parts.map((faces,i)=>[{...part,faces,pinDirections:connector&&connector.side!=='base'&&result.joints[i]?[result.joints[i].normal.map(v=>-v)]:[]}]));
+      }
+      if(painting)groups=[rest];else{groups=[...(rest.length?[rest]:[]),...detached];names=[...(rest.length?['body']:[]),...detached.map((_,i)=>`shape part ${i+1}`)];if(groups.length<2)throw Error('The entire object is selected. Leave a region on the body or choose Recolour.');}
+    }
+    else if(operation==='colour')groups=[parts.map(p=>recolour(p,from,target))];
     else {
       if(parts.some(p=>isHiddenPart(p.subtype))){
         if(operation==='auto-separate'){reports.push({objectId:String(oldId),name:meta.name,parts:1,separated:[],retained:[{count:1,reason:'Contains modifier or negative volumes. Use your slicer to preserve their roles.'}]});continue;}
@@ -163,12 +213,12 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
     const created=[];
     for(let g=0;g<groups.length;g++){
       let group=groups[g];
-      if(operation!=='colour'){
+      if(!painting){
         if(connector&&orientPins)group=orientPinUp(group,group.flatMap(p=>p.pinDirections||[]));
         let floor=Infinity;for(const p of group)for(const f of p.faces)for(const v of f.points)floor=Math.min(floor,v[2]);
         group=group.map(p=>({...p,faces:p.faces.map(f=>({...f,points:f.points.map(v=>[v[0],v[1],v[2]-floor])}))}));
       }
-      const id=String(next++),name=(meta.name||`Object ${oldId}`)+(operation==='colour'?' · coloured':` · ${names[g]||`part ${g+1}`}`);
+      const id=String(next++),name=(meta.name||`Object ${oldId}`)+(painting?' · coloured':` · ${names[g]||`part ${g+1}`}`);
       const components=[],partMeta=[];
       for(const p of group){const pid=String(next++);resources.push(meshXml(p,pid));components.push(`<component objectid="${pid}"/>`);partMeta.push(`<part id="${pid}" subtype="${esc(p.subtype)}"><metadata key="name" value="${esc(p.name)}"/><metadata key="extruder" value="${p.base}"/>${settingsXml(p.settings)}</part>`);}
       resources.push(`<object id="${id}" type="model"><components>${components.join('')}</components></object>`);

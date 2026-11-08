@@ -145,3 +145,37 @@ export function separateColour(faces,colour,{connector=null,capAttributes=c=>` p
   }
   return {remaining,parts,joints};
 }
+
+/** Cut an explicit geometry selection, preserving all exterior paint trees. */
+export function separateShape(faces,indices,{connector=null,capAttributes='',selectedCapAttributes=capAttributes}={}){
+  const wanted=new Set(indices),selected=faces.filter((_,i)=>wanted.has(i)),rest=faces.filter((_,i)=>!wanted.has(i));
+  if(!selected.length||!rest.length)throw Error('Select part of this mesh, leaving some of it on the body.');
+  const groups=connectedParts(selected);let remaining=rest;const parts=[],joints=[];
+  if(groups.length>32)throw Error('This selection has too many disconnected pieces. Select fewer regions.');
+  for(const group of groups){
+    const {loops,rim}=colourBoundary(group);
+    if(!loops.length){
+      if(signedVolume(group)<.01)throw Error('This selection does not enclose a solid part.');
+      if(connector)throw Error('This piece is already separate. Turn off the locating pin.');
+      parts.push(group);joints.push(null);continue;
+    }
+    const expected=new Map(rim.map(e=>[edgeKey(e.a,e.b),e])),matches=new Map();
+    for(const f of remaining)for(let i=0;i<3;i++){
+      const a=f.points[i],b=f.points[(i+1)%3],k=edgeKey(a,b),e=expected.get(k);if(!e)continue;
+      if(key(a)!==key(e.b))throw Error('This join has inconsistent face winding. Repair the mesh first.');
+      matches.set(k,(matches.get(k)||0)+1);
+    }
+    if([...expected.keys()].some(k=>matches.get(k)!==1))throw Error('This selection has an open or mismatched join. Adjust the selection or use a plane cut.');
+    const options={attrsA:capAttributes,attrsB:selectedCapAttributes};
+    const plain=closeInterface(remaining,group,loops,options);
+    if(signedVolume(plain.halves[0])<.01||signedVolume(plain.halves[1])<.01)throw Error('This is a surface patch with no printable thickness. Recolour it, or use a plane cut.');
+    const tolerance=Math.max(.001,Math.abs(signedVolume(remaining)+signedVolume(group))*1e-6);
+    if(Math.abs(signedVolume(plain.halves[0])+signedVolume(plain.halves[1])-signedVolume(remaining)-signedVolume(group))>tolerance)throw Error('This join could not preserve the model volume. Use a plane cut.');
+    const result=connector?closeInterface(remaining,group,loops,{...options,connector}):plain;
+    // The existing seam validator requires near-planarity and non-crossing loops.
+    if(colourBoundary(result.halves[1]).loops.length)throw Error('The selected join could not be closed. Use a plane cut.');
+    remaining=result.halves[0];parts.push(result.halves[1]);joints.push(result.joint);
+  }
+  if(colourBoundary(remaining).loops.length)throw Error('The remaining body has open boundaries. Repair it in your slicer first.');
+  return {remaining,parts,joints};
+}
