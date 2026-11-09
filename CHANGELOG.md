@@ -1,3 +1,9 @@
+## 2.6.53 — Repair meshes in the studio
+
+- Add Repair mesh in Split & connect and directly on mesh-related split failures. The repair runs locally, preserves retained triangle painting and supports Undo.
+- Remove redundant and zero-thickness faces and separate suitable pinched edges with adjustments limited to 0.001 mm. Reject unsupported holes, conflicting paint and ambiguous joins without applying partial changes.
+- Recheck the generated 3MF before applying the repair. The supplied alien passes all edge checks after repair and retains its four colours; automatic body-part separation still cannot close its proposed joins.
+
 ## 2.6.52 — Clear split results
 
 - Keep the outcome of a split visible above the tool settings when selecting objects or changing features. An unsuccessful split explicitly says “No split made” and includes the reason.

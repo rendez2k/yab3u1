@@ -7,7 +7,8 @@ import {cutMesh,connectedParts} from './mesh-cut.js';
 import {closeInterface,separateColour,separateShape} from './mesh-joint.js';
 import {orientPinUp} from './orientation.js';
 import {autoSeparate} from './auto-split.js';
-import {autoAssembly} from './assembly-split.js';
+import {autoAssembly,assemblyMeshHealth} from './assembly-split.js';
+import {repairMesh} from './mesh-repair.js';
 import {detectShapeParts} from './shape-parts.js';
 import {mapShapePreview} from './shape-preview.js';
 import {surfaceGraph,traceBoundary} from './surface-boundary.js';
@@ -140,7 +141,8 @@ const settingsXml=settings=>Object.entries(settings||{}).map(([k,v])=>`<metadata
 export function editProject(input,{plateId=1,objectIds=[],operation,from='all',colour,axis=2,position=50,connector=null,region=null,orientPins=true,shapeIds=[],detail='coarse',boundary=null,previewOnly=false,includeAssembly=false}={},progress=()=>{}){
   const entries=new Map(input),project=readProject(entries,{allowNegative:true,allowModifiers:true});
   if(!objectIds.length)throw Error('Select an object first.');
-  if(!['colour','cut','separate','separate-colour','remove-colour','auto-separate','auto-assembly','shape-colour','shape-separate','boundary-separate'].includes(operation))throw Error('Choose Colour or Split.');
+  if(!['colour','cut','separate','separate-colour','remove-colour','auto-separate','auto-assembly','shape-colour','shape-separate','boundary-separate','repair'].includes(operation))throw Error('Choose Colour, Split or Repair mesh.');
+  const repairing=operation==='repair';
   const automatic=['auto-separate','auto-assembly'].includes(operation);
   const shaping=operation.startsWith('shape-')||operation==='boundary-separate',painting=operation==='colour'||operation==='shape-colour';
   if(shaping&&objectIds.length!==1)throw Error('Select one object for a shape edit.');
@@ -159,7 +161,13 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
       throw Error('This object contains a settings modifier. Reassign its filament in Colours, or edit it in your slicer to preserve the modifier.');
     const {parts,meta}=sourceParts(project,plateId,oldId);let groups=[],names=[];const dowels=[];
     const collect=(result,part)=>{joins.push(...(result.joints||[result.joint]).filter(Boolean).map(j=>({...j,objectId:String(oldId),name:meta.name||`Object ${oldId}`})));dowels.push(...(result.loose||[]).map(piece=>[dowelPart(part,piece)]));};
-    if(shaping){
+    if(repairing){
+      if(parts.some(p=>isHiddenPart(p.subtype)))throw Error('This object includes a modifier or negative volume. Repair its solid parts separately in the slicer to preserve those roles.');
+      const repaired=parts.map(part=>({...repairMesh(part.faces,{progress}),part}));
+      reports.push({objectId:String(oldId),name:meta.name||`Object ${oldId}`,strategy:'repair',repairs:repaired.map(r=>r.report)});
+      if(!repaired.some(r=>r.changed))continue;
+      groups=[repaired.map(r=>({...r.part,faces:r.faces}))];names=['repaired'];
+    }else if(shaping){
       let chosen;
       if(operation==='boundary-separate'){
         if(parts.some(p=>isHiddenPart(p.subtype)))throw Error('This object contains a modifier or negative volume. Use your slicer to preserve its role.');
@@ -236,7 +244,7 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
     const created=[];
     for(let g=0;g<groups.length;g++){
       let group=groups[g];
-      if(!painting){
+      if(!painting&&!repairing){
         if((connector&&orientPins)||group.some(p=>p.dowel))group=orientPinUp(group,group.flatMap(p=>p.pinDirections||[]));
         let floor=Infinity;for(const p of group)for(const f of p.faces)for(const v of f.points)floor=Math.min(floor,v[2]);
         group=group.map(p=>({...p,faces:p.faces.map(f=>({...f,points:f.points.map(v=>[v[0],v[1],v[2]-floor])}))}));
@@ -261,6 +269,9 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
   entries.set(SRC_BBL_MODEL,encoder.encode(config));
   const cfg={...project.sourceSettings,...JSON.parse(text(entries,SRC_BBL_PROJECT)||'{}')};cfg.filament_colour=colours;cfg.filament_type=colours.map((_,i)=>project.types[i]||'PLA');entries.set(SRC_BBL_PROJECT,encoder.encode(JSON.stringify(cfg)));
   // Generated source is re-read before it can replace the live workspace.
-  const checked=readProject(entries,{allowNegative:true,allowModifiers:true});for(const c of changes)for(const n of c.created)if(!checked.objects.has(n.id))throw Error('The edit could not be validated.');
+  const checked=readProject(entries,{allowNegative:true,allowModifiers:true});for(const c of changes)for(const n of c.created){
+    if(!checked.objects.has(n.id))throw Error('The edit could not be validated.');
+    if(repairing&&sourceParts(checked,plateId,n.id).parts.some(p=>!assemblyMeshHealth(p.faces).ok))throw Error('The saved repair did not pass its edge checks. Your original model is unchanged.');
+  }
   return {entries,changes,colours,reports,joins};
 }

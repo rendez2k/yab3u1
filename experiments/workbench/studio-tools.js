@@ -19,10 +19,12 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
   view.panels.edit=panel;view.inspector.append(panel);
   // Completed edit feedback belongs to the model, not to a disposable tool preview.
   // Keep it visible when Select or another feature replaces the settings panel.
-  const outcome=make('div',{class:'studio-edit-outcome',hidden:'',role:'status','aria-live':'polite','aria-atomic':'true'},'<strong></strong><button type="button" aria-label="Dismiss split result">Dismiss</button><p></p>');
+  let repairTargets=[];
+  const outcome=make('div',{class:'studio-edit-outcome',hidden:'',role:'status','aria-live':'polite','aria-atomic':'true'},'<strong></strong><button type="button" aria-label="Dismiss edit result">Dismiss</button><p></p><button type="button" data-repair-result hidden>Repair mesh</button>');
   view.inspector.prepend(outcome);
   outcome.querySelector('button').addEventListener('click',()=>{outcome.hidden=true;});
-  function showOutcome(title,detail){outcome.querySelector('strong').textContent=title;outcome.querySelector('p').textContent=detail;outcome.hidden=false;}
+  outcome.querySelector('[data-repair-result]').addEventListener('click',()=>repairSelected(repairTargets));
+  function showOutcome(title,detail,ids=[]){repairTargets=ids;outcome.querySelector('[data-repair-result]').hidden=!ids.length;outcome.querySelector('strong').textContent=title;outcome.querySelector('p').textContent=detail;outcome.hidden=false;}
   panel.querySelector('[data-selection-controls]').append(objects.element);
   const oldUndo=objects.element.querySelector('[data-object-edit=undo]');if(oldUndo)oldUndo.hidden=true;
   const settings=panel.querySelector('[data-tool-settings]'),message=panel.querySelector('.studio-message'),actions=panel.querySelector('.studio-apply');
@@ -120,6 +122,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
       const area=settings.querySelector('[data-region-colour]');
       jointTool=mountJointTool({root:settings.querySelector('[data-joint-settings]'),source:api.source,options:editOptions,busy:()=>working||state().busy,changed:sync});
       const method=settings.querySelector('[data-split-method]');method.prepend(new Option('Automatic · larger assembly parts','auto-assembly'),new Option('Automatic · painted regions','auto-separate'));method.value=preferredColour?'by-colour':'auto-assembly';
+      const repair=make('div',{class:'studio-repair-tools'},'<button type="button" data-repair-selected>Repair mesh</button><p class="hint">Fix duplicate faces and tiny pinched joins before splitting. Local adjustments are at most 0.001 mm. Undo restores the original.</p>');settings.prepend(repair);
       method.append(new Option('By shape · review parts','by-shape'));if(preferredShape)method.value='by-shape';preferredShape=false;
       method.append(new Option('Draw boundary · place points','boundary'));
       const boundaryRoot=make('div',{'data-boundary-settings':''});method.closest('label').after(boundaryRoot);
@@ -199,13 +202,18 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
     }
     return options;
   }
-  async function apply(){
+  function repairSelected(ids=selected()){
+    if(working||state().busy)return;
+    if(!ids.length){show('split');message.textContent='Select an object to repair.';return;}
+    show('split');apply('repair',ids);
+  }
+  async function apply(operation=null,targetIds=null){
     if(working||previewPending||regionPending||shape?.pending||boundary?.pending||splitPreview?.pending||jointTool?.pending||!['colour','split'].includes(mode))return;
-    const s=state(),ids=selected(),before=snapshot(),finish=autoFinish();if(!ids.length||!before.file)return;
-    if(mode==='split'&&splitMethod()==='by-colour'&&!settings.querySelector('[data-region-colour]').value){message.textContent='Choose the source colour to separate.';return;}
-    let options;try{options=editOptions();}catch(error){message.textContent=error.message;return;}
+    const repairing=operation==='repair',s=state(),ids=targetIds||selected(),before=snapshot(),finish=autoFinish();if(!ids.length||!before.file)return;
+    if(!repairing&&mode==='split'&&splitMethod()==='by-colour'&&!settings.querySelector('[data-region-colour]').value){message.textContent='Choose the source colour to separate.';return;}
+    let options;try{options=repairing?{operation:'repair',objectIds:ids,plateId:before.context.plateId}:editOptions();}catch(error){message.textContent=error.message;return;}
     autoResult.hidden=true;outcome.hidden=true;
-    const splitting=mode==='split'&&!['shape-colour','remove-colour'].includes(options.operation);let applied=false;
+    const splitting=!repairing&&mode==='split'&&!['shape-colour','remove-colour'].includes(options.operation);let applied=false;
     const stamp=++request;working=true;splitPreview?.invalidate();if(!['by-shape','boundary'].includes(splitMethod()))restorePreview();message.textContent='Preparing your edit…';sync();
     try{
       const bytes=await before.file.arrayBuffer();
@@ -218,20 +226,27 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
       });
       if(stamp!==request)return;
       if(!result.changes.length){
+        if(repairing){showOutcome('No repair needed','The selected mesh passed the local edge checks. No changes were made.');message.textContent='No repair needed. Your model is unchanged.';return;}
         showAutoReport(result.reports||[]);
         message.textContent=`No parts were separated.${finish==='once'?'':' Filling was not started.'} Your model is unchanged.`;
         const reason=result.reports?.flatMap(r=>r.retained||[])[0]?.reason||'No suitable closed parts were found. Adjust the split method or connector settings and try again.';
-        if(splitting)showOutcome('No split made',`Your model is unchanged. ${reason}`);
+        if(splitting)showOutcome('No split made',`Your model is unchanged. ${reason}`,result.reports?.some(r=>r.needsRepair)?ids:[]);
         return;
       }
       const quantities=Object.fromEntries(s.objects.map(o=>[o.objectId,(s.quantities[o.objectId]??1)*s.copies]));
       for(const c of result.changes){quantities[c.oldId]=Math.max(0,(quantities[c.oldId]??1)-1);for(const n of c.created)quantities[n.id]=1;}
       const file=result.changes.length?new File([result.bytes],before.file.name,{type:before.file.type}):before.file;
-      const next={...before,file,context:{...before.context,layout:{...before.context.layout,copies:1,quantities,arrangement:'objects'}}};
+      const next={...before,file,context:{...before.context,layout:{...before.context.layout,copies:1,quantities,arrangement:repairing?before.context.layout.arrangement:'objects'}}};
       committing=true;sync();
       restorePreview();
       try{await loadSnapshot(next);}catch(error){await loadSnapshot(before);throw error;}
       undo.push(before);if(undo.length>6)undo.shift();applied=true;
+      if(repairing){
+        const repairs=result.reports.flatMap(r=>r.repairs||[]),removed=repairs.reduce((n,r)=>n+r.duplicateFaces+r.zeroThicknessFaces+r.degenerateFaces,0),movement=Math.max(0,...repairs.map(r=>r.maxMovement));
+        mode='select';selectionKey='';render();
+        showOutcome('Mesh repaired',`${removed} redundant face${removed===1?'':'s'} removed. ${movement?`Largest surface adjustment: ${movement.toFixed(4)} mm. `:''}Edge checks passed; painting on the retained surface is preserved. Choose Split & connect to continue. Undo restores the original.`);
+        message.textContent='Repair complete. Your original model is available through Undo.';return;
+      }
       if(splitting){const count=result.changes.reduce((n,c)=>n+c.created.length,0);showOutcome(`Split complete · ${count} new parts`,'The parts are separate objects. Open Plates & arrange to review their positions. Undo restores the original model.');}
       if(isAutomatic(options.operation)){
         const changed=new Set(result.changes.map(c=>c.oldId)),fillIds=[...result.changes.flatMap(c=>c.created.map(n=>n.id)),...ids.filter(id=>!changed.has(id))];
@@ -253,7 +268,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
       }
       const jointLabel=options.connector?.kind==='dowel'?'matching sockets and separate upright dowels':options.connector?.kind==='sockets'?'matching sockets for your own pins':`an attached pin and matching socket${options.orientPins?' · pins facing upwards':''}`;
       mode='select';selectionKey='';message.textContent=['colour','shape-colour'].includes(options.operation)?'Colour applied to the selected regions or copies. Undo restores the original paint.':options.operation==='remove-colour'?'Coloured part removed; the remaining surface is closed. Undo restores it.':options.connector?`Parts separated with ${jointLabel}. Use Arrange for printing; Undo restores the original.`:'Parts separated. Use Arrange to prepare colour plates or sequential groups.';render();
-    }catch(error){if(stamp===request){message.textContent=error.message;if(splitting)showOutcome(applied?'Parts separated; plate setup not completed':'Split not completed',error.message);}}finally{worker?.terminate();worker=null;rejectPending=null;working=false;committing=false;sync();}
+    }catch(error){if(stamp===request){message.textContent=error.message;if(repairing)showOutcome('Repair not applied',error.message);else if(splitting)showOutcome(applied?'Parts separated; plate setup not completed':'Split not completed',error.message);}}finally{worker?.terminate();worker=null;rejectPending=null;working=false;committing=false;sync();}
   }
   async function undoEdit(){if(working||!undo.length)return;working=true;restorePreview();message.textContent='Restoring your previous model…';try{await loadSnapshot(undo.at(-1));undo.pop();autoResult.hidden=true;outcome.hidden=true;mode='select';selectionKey='';render();message.textContent='Model edit undone.';}catch(e){message.textContent=e.message;}finally{working=false;sync();}}
   const undoKind=()=>boundary?.canUndo?'boundary':shape?.canUndo?'shape selection':colourDirty?'colour preview':engine.workbenchBlends?.canUndo?'blend':objects.history?.canUndo?'plate':undo.length?'model':null;
@@ -272,6 +287,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
       panel.querySelector('[data-scene-count]').textContent=String(total);
     }
     const apply=panel.querySelector('[data-edit-apply]');apply.disabled=working||s.busy;apply.textContent=working?'Working…':applyLabel();
+    outcome.querySelector('[data-repair-result]').disabled=working||s.busy||!repairTargets.every(id=>s.objects.some(o=>String(o.objectId)===String(id)&&(s.quantities[o.objectId]??1)*s.copies>0));
     panel.setAttribute('aria-busy',String(working));for(const b of tools.querySelectorAll('button')){b.disabled=working||s.busy;if(b.dataset.studioTool)b.setAttribute('aria-pressed',String(b.dataset.studioTool===mode));}const undoButton=tools.querySelector('[data-studio-undo]'),nextUndo=undoKind();undoButton.disabled=working||s.busy||!nextUndo;undoButton.setAttribute('aria-label',nextUndo?`Undo ${nextUndo} edit`:'Undo');undoButton.title=nextUndo?`Undo ${nextUndo} edit (Ctrl/Cmd+Z)`:'Nothing to undo';
     for(const control of panel.querySelectorAll('input,select,button'))if(!control.closest('.workbench-object-tools'))control.disabled=working||s.busy;
     panel.querySelector('[data-edit-cancel]').disabled=committing;
@@ -299,6 +315,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
     }
     if(b.matches('[data-edit-cancel]')){if(committing)return;if(working){request++;worker?.terminate();rejectPending?.(Error('Cancelled'));working=false;message.textContent='Edit cancelled. Your model is unchanged.';}show('select');}
     if(b.matches('[data-edit-apply]'))apply();
+    if(b.matches('[data-repair-selected]'))repairSelected();
     if(b.dataset.sceneObject){const p=state().preview;if(p?.pickRanges.length){p.selectRange(p.pickRanges.findIndex(r=>String(r.objectId)===b.dataset.sceneObject),e);objects.sync();}else{objects.element.querySelector('select').value=b.dataset.sceneObject;objects.element.querySelector('select').dispatchEvent(new Event('change'));}sync();}
   });
   settings.addEventListener('input',e=>{if(e.target.matches('[data-paint-colour]'))colourDirty=true;preview();});

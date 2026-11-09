@@ -31,7 +31,7 @@ export function autoAssembly(parts,{connector=null,progress=()=>{}}={}){
     const health=assemblyMeshHealth(part.faces);
     if(!health.ok){
       const faults=[health.open&&`${health.open} open edges`,health.nonManifold&&`${health.nonManifold} non-manifold edges`,health.reversed&&`${health.reversed} inconsistently oriented edges`,health.degenerate&&`${health.degenerate} degenerate faces`].filter(Boolean).join(', ');
-      anchors.push(part);report.retained.push({count:1,reason:`This mesh needs repair (${faults}). Repair it in your slicer and reopen it before automatic assembly splitting. Its painting and geometry are unchanged.`});continue;
+      report.needsRepair=true;anchors.push(part);report.retained.push({count:1,reason:`This mesh needs repair (${faults}). Choose Repair mesh to try a local repair before splitting.`});continue;
     }
     const shells=connectedParts(part.faces),boxes=shells.map(box);
     const independent=shells.length>1&&shells.length<=64&&shells.every(s=>signedVolume(s)>.01)&&boxes.every((b,i)=>boxes.slice(i+1).every(c=>disjoint(b,c)));
@@ -68,7 +68,7 @@ export function autoAssembly(parts,{connector=null,progress=()=>{}}={}){
         joints.push(...(result.joints||[]).filter(Boolean));
         dowels.push(...(result.loose||[]).map(({faces,joint})=>[{name:'Separate dowel',base:part.base,faces,settings:{},subtype:'normal_part',dowel:true,pinDirections:[joint.normal]}]));
         remaining=result.remaining;
-      }catch(e){report.retained.push({count:1,reason:e.message});}
+      }catch(e){report.retained.push({count:1,reason:e.message.replace(/^This colour /,'This shape region ')});}
     }
     anchors.push({...part,faces:remaining});
   }
