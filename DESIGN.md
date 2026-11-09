@@ -1,6 +1,6 @@
 ---
 name: YAB3D Workbench studio
-description: Implemented visual system for experiments/workbench v2.6.30-test only.
+description: Workbench visual system, with the authorised v2.6.51 production toolbox refinement documented below.
 colors:
   paper: "#f1f3f5"
   panel: "#fff"
@@ -145,6 +145,16 @@ components:
 ---
 
 # Design System: YAB3D Workbench studio
+
+## Production refinement — v2.6.51
+
+The user authorised a visible left-hand toolbox, inspired by the clarity of Split3MF's large labelled feature buttons. For this release this section supersedes the historical test-only scope and right-inspector/four-tool-island directions below. Preserve the existing palette, Plex typography, green selected states and brand assets.
+
+The shell starts with Quick conversion and Full studio choices. Remembering a choice is opt-in. A persistent header selector switches workspaces without reopening the loaded model. Quick conversion keeps the model, its used colours, destination and export together, with print compatibility details collapsed.
+
+Full studio has a 360px left column (330px at intermediate desktop widths): model colour count and named swatches, six large buttons in a three-column grid, and independently scrolling contextual settings. Features are Open & convert, Colours & filaments, Paint objects, Split & connect, Plates & arrange, and Export project. The canvas retains only Select and Undo. Below 760px the canvas sits above the inspector, the toolbox scrolls horizontally, and editing controls share the inspector's scroll area with sticky Apply/Cancel actions. Selected and focus states remain explicit.
+
+Automatic larger-part splitting uses geometry and preserves paint. It does not identify named anatomical parts. Unsafe or damaged meshes get reasons in the preview before Apply. The painted-region workflow stays separately available. No new raster assets ship: the existing YAB3D mark is reused unchanged; screenshots and private source models are review evidence only. See `docs/workbench-toolbox-release-2.6.51.md` for validation and limits.
 
 ## Overview
 

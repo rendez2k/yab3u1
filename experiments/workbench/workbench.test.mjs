@@ -16,7 +16,7 @@ test('automatic split controls and finish choices work without a WebGL preview',
     const state={key:'model',objects:[{objectId:'1',name:'Body',colours:[{extruder:1}]}],quantities:{},copies:1,busy:false};
     const studio=mountStudio({view,kind:'converter',engine:{session:{state:{colours:[]}},workbenchObjects:()=>state},api:{source:()=>null},objects:{selected:()=>['1'],element:document.querySelector('section')},setPanel(){}});
     studio.show('split');
-    assert.equal(view.inspector.querySelector('[data-split-method]').value,'auto-separate');
+    assert.equal(view.inspector.querySelector('[data-split-method]').value,'auto-assembly');
     assert(view.inspector.querySelector('[data-region-settings]').hidden);assert(!view.inspector.querySelector('[data-auto-settings]').hidden);
     assert.equal(view.inspector.querySelector('[data-edit-apply]').textContent,'Separate automatically');
     const finish=view.inspector.querySelector('[data-auto-finish]');finish.value='fill';finish.dispatchEvent(new window.Event('change',{bubbles:true}));
@@ -85,7 +85,7 @@ for(const [kind,file,features]of [
 }
 test('production build serves the Workbench without publishing private models',async()=>{
   const shell=await readFile(new URL('./index.html',import.meta.url),'utf8');
-  assert.match(shell,/2\.6\.50/);assert.doesNotMatch(shell,/Test version|2\.6\.50-test/);assert.match(shell,/data-panel="layout"/);
+  assert.match(shell,/2\.6\.51/);assert.doesNotMatch(shell,/Test version|2\.6\.51-test/);assert.match(shell,/data-panel="layout"/);
   const builder=await readFile(new URL('./build.mjs',import.meta.url),'utf8');
   assert.match(builder,/dist-workbench/);assert.doesNotMatch(builder,/Desktop|Stabby|Flippin/);
   const config=await readFile(new URL('../../netlify.toml',import.meta.url),'utf8');

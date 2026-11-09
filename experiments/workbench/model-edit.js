@@ -7,6 +7,7 @@ import {cutMesh,connectedParts} from './mesh-cut.js';
 import {closeInterface,separateColour,separateShape} from './mesh-joint.js';
 import {orientPinUp} from './orientation.js';
 import {autoSeparate} from './auto-split.js';
+import {autoAssembly} from './assembly-split.js';
 import {detectShapeParts} from './shape-parts.js';
 import {mapShapePreview} from './shape-preview.js';
 import {surfaceGraph,traceBoundary} from './surface-boundary.js';
@@ -139,10 +140,11 @@ const settingsXml=settings=>Object.entries(settings||{}).map(([k,v])=>`<metadata
 export function editProject(input,{plateId=1,objectIds=[],operation,from='all',colour,axis=2,position=50,connector=null,region=null,orientPins=true,shapeIds=[],detail='coarse',boundary=null,previewOnly=false,includeAssembly=false}={},progress=()=>{}){
   const entries=new Map(input),project=readProject(entries,{allowNegative:true,allowModifiers:true});
   if(!objectIds.length)throw Error('Select an object first.');
-  if(!['colour','cut','separate','separate-colour','remove-colour','auto-separate','shape-colour','shape-separate','boundary-separate'].includes(operation))throw Error('Choose Colour or Split.');
+  if(!['colour','cut','separate','separate-colour','remove-colour','auto-separate','auto-assembly','shape-colour','shape-separate','boundary-separate'].includes(operation))throw Error('Choose Colour or Split.');
+  const automatic=['auto-separate','auto-assembly'].includes(operation);
   const shaping=operation.startsWith('shape-')||operation==='boundary-separate',painting=operation==='colour'||operation==='shape-colour';
   if(shaping&&objectIds.length!==1)throw Error('Select one object for a shape edit.');
-  if(operation==='auto-separate'&&connector&&connector.side==='base')throw Error('Automatic separation places pins on the detached pieces.');
+  if(automatic&&connector&&connector.side==='base')throw Error('Automatic separation places pins on the detached pieces.');
   if(['separate-colour','remove-colour'].includes(operation)&&(!Number.isInteger(Number(from))||Number(from)<1||Number(from)>project.colors.length))throw Error('Choose a source colour to separate.');
   const colours=project.colors.slice();let target=0;
   if(painting){
@@ -191,13 +193,13 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
     else if(operation==='colour')groups=[parts.map(p=>recolour(p,from,target))];
     else {
       if(parts.some(p=>isHiddenPart(p.subtype))){
-        if(operation==='auto-separate'){reports.push({objectId:String(oldId),name:meta.name,parts:1,separated:[],retained:[{count:1,reason:'Contains modifier or negative volumes. Use your slicer to preserve their roles.'}]});continue;}
+        if(automatic){reports.push({objectId:String(oldId),name:meta.name,strategy:operation==='auto-assembly'?'assembly':'colour',parts:1,separated:[],retained:[{count:1,reason:'Contains modifier or negative volumes. Use your slicer to preserve their roles.'}]});continue;}
         throw Error('This object contains a negative or modifier volume. Split it in your slicer so its cutouts stay correct.');
       }
-      if(operation==='auto-separate'){
+      if(automatic){
         let result;
-        try{result=autoSeparate(parts.map(p=>({...p,faces:colourFaces(p)})),{connector,progress});}
-        catch(error){reports.push({objectId:String(oldId),name:meta.name,parts:1,separated:[],retained:[{count:1,reason:error.message}]});continue;}
+        try{result=operation==='auto-assembly'?autoAssembly(parts,{connector,progress}):autoSeparate(parts.map(p=>({...p,faces:colourFaces(p)})),{connector,progress});}
+        catch(error){reports.push({objectId:String(oldId),name:meta.name,strategy:operation==='auto-assembly'?'assembly':'colour',parts:1,separated:[],retained:[{count:1,reason:error.message}]});continue;}
         reports.push({objectId:String(oldId),name:meta.name,...result.report});
         if(result.groups.length<2)continue;
         groups=result.groups;names=result.names;

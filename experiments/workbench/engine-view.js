@@ -6,9 +6,11 @@ import {prepareWorkbenchPlates,connectPlatePreview} from './shared/sequentialPan
 import {mountPreparedPreview} from './prepared-preview.js';
 import {mountProjectPlates} from './project-plates.js';
 import {installModelDrop} from './file-drop.js';
+import {mountModelColours} from './model-colours.js';
+import {mountFeatureToolbox} from './feature-toolbox.js';
 const kind=document.body.dataset.engine,$=id=>document.getElementById(id);
 const view=composeView(document,kind);
-let engine, currentPanel='project', lastReport='', source=null;
+let engine, currentPanel='project', lastReport='', source=null, workspaceMode='studio', colourSummary, toolbox;
 let fallbackKey='',fallbackPending=false,fallbackUrl=null;
 let objectTools, filamentTools, studio, prepared, projectPlates, loading=false, busySince=0,previewSettledAt=0;
 const progress=view.make('div',{class:'workbench-progress',hidden:'',role:'status','aria-live':'polite'},'<span class="working-orb" aria-hidden="true"></span><div><strong>Preparing your model…</strong><p></p></div>');
@@ -19,13 +21,17 @@ const parentHost=window.parent!==window ? window.parent : null;
 const reportError=error=>{const p=document.createElement('p');p.setAttribute('role','alert');p.textContent=`The workspace could not complete that action: ${error.message}`;view.feedback.append(p);};
 function setPanel(panel) {
   if(!view.panels[panel])return;
+  if(workspaceMode==='quick'&&!['project','output','help'].includes(panel)){
+    if(parentHost?.workbench){parentHost.workbench.chooseWorkspace('studio').then(changed=>{if(changed)setPanel(panel);});return;}
+    api.setWorkspaceMode('studio');
+  }
   if(panel===currentPanel&&!view.panels[panel].hidden)return;
   if(panel!=='colours')engine?.workbenchFocus?.stop();
   if(panel!=='layout')prepared?.close();
   else prepared?.resume();
   if(panel!=='edit')studio?.leavePanel();
   currentPanel=panel;
-  for(const [key,node]of Object.entries(view.panels))node.hidden=key!==panel;
+  for(const [key,node]of Object.entries(view.panels))node.hidden=workspaceMode==='quick'&&panel!=='help'?!['project','output'].includes(key):key!==panel;
   if(kind==='converter')$('mode-single').click();
   view.inspector.scrollTop=0;
   parentHost?.workbench?.panelChanged(kind,panel);
@@ -53,11 +59,21 @@ function context() {
   const s=engine.state;return {capacity:s.capacity,bambuSetup:s.bambuSetup,target:s.target,plateId:String(s.plateId??''),supportInterface:s.supportInterface,interfaceSlot:s.interfacePosition+1,interfaceColor:s.reels[s.interfacePosition]?.color,layout:{quantities:{...s.quantities},copies:Number($('spectrumcopies').value),spacing:Number($('spectrumgap').value),width:Number($('spectrumwidth').value),depth:Number($('spectrumdepth').value),tower:$('spectrumtower').checked,arrangement:$('spectrumarrangement').value},u1Nozzle:s.u1Nozzle};
 }
 const api={kind,setPanel,context,
+  setWorkspaceMode(value){
+    const next=value==='quick'&&kind==='converter'?'quick':'studio',changed=next!==workspaceMode;workspaceMode=next;
+    document.body.dataset.workspaceMode=workspaceMode;
+    view.panels.project.querySelector('h1').textContent=workspaceMode==='quick'?'Quick conversion':'Your project';
+    view.panels.project.querySelector('.task-heading p').textContent=workspaceMode==='quick'?'Open a model, choose its destination and download.':'Choose the model, plate and destination.';
+    if(workspaceMode==='quick'){studio?.leavePanel();currentPanel='project';prepared?.close();}
+    for(const [key,node]of Object.entries(view.panels))node.hidden=workspaceMode==='quick'?!['project','output'].includes(key):key!==currentPanel;
+    const advanced=document.querySelector('.conversion-settings');if(advanced&&changed)advanced.open=workspaceMode!=='quick';
+    tick();
+  },
   get loading(){return loading;},
   preparePlates:options=>{setPanel('layout');return prepareWorkbenchPlates($('printoptimiser'),options);},
   key:event=>{if(!engine?.workbenchFocus?.key(event)&&!prepared?.key(event)&&!studio?.key(event))objectTools?.key(event);},
-  captureView:()=>({panel:currentPanel,scroll:view.inspector.scrollTop}),
-  restoreView(saved){if(saved){setPanel(saved.panel);view.inspector.scrollTop=saved.scroll;}},
+  captureView:()=>({panel:currentPanel,scroll:view.inspector.scrollTop,panelScroll:view.panels[currentPanel]?.scrollTop||0}),
+  restoreView(saved){if(saved){setPanel(saved.panel);view.inspector.scrollTop=saved.scroll;if(view.panels[saved.panel])view.panels[saved.panel].scrollTop=saved.panelScroll||0;}},
   source:()=>kind==='converter'?engine.session.sourceFile:engine.workbenchSource(),
   theme:value=>{document.documentElement.dataset.theme=value;prepared?.theme();const p=engine?.workbenchObjects()?.preview;if(p){p.plateKey='';p.requestDraw();engine.refreshPreview?.();}},
   open:()=>{if(studio?.busy)throw Error('Finish or cancel the current model edit first.');if(kind==='converter')$('mode-single').click();const input=$(kind==='converter'?'convertfile':'file');input.value='';input.click();},
@@ -102,7 +118,7 @@ const api={kind,setPanel,context,
     return kind==='converter'?Boolean(engine.session.state):Boolean(engine.state.project);
     }finally{loading=false;tick();}
   },
-  primary(){if(kind==='converter'&&!$('batchpanel').classList.contains('hidden'))return;const sequential=sequentialAction();if(sequential){sequential.click();return;}if(projectPlates&&engine.session.state?.plates.length>1){setPanel('layout');projectPlates.save('project');return;}setPanel(kind==='spectrum'&&$('mainaction').dataset.action==='apply'?'colours':'output');$(kind==='converter'?'converterprimary':'mainaction').click();},
+  primary(){if(kind==='converter'&&!$('batchpanel').classList.contains('hidden'))return;const sequential=sequentialAction();if(sequential){sequential.click();return;}if(projectPlates&&engine.session.state?.plates.length>1){if(workspaceMode!=='quick')setPanel('layout');projectPlates.save('project');return;}setPanel(kind==='spectrum'&&$('mainaction').dataset.action==='apply'?'colours':'output');$(kind==='converter'?'converterprimary':'mainaction').click();},
 };
 installModelDrop(document,{load:file=>api.load(file),show:value=>parentHost?.workbench?.drag(value),delegate:event=>Boolean(event.target.closest?.('#batchdrop')),error:error=>parentHost?.workbench?.dropError?parentHost.workbench.dropError(error):reportError(error instanceof Error?error:Error(error))});
 function sequentialAction(){const mode=document.querySelector('[data-print-mode]')?.value;if(currentPanel!=='layout'||!mode||mode==='together')return null;const pack=document.querySelector('[data-pack]');return pack&&!pack.hidden?pack:document.querySelector('[data-prepare]');}
@@ -121,8 +137,9 @@ function tick() {
   if(kind==='converter'&&loaded&&!busy&&status.includes('Nothing has been uploaded'))status=`${s.state.displayName}: ${s.capacityStatus().needed} filament${s.capacityStatus().needed===1?'':'s'} used on this plate. Files stay in your browser.`;
   const plateStatus=currentPanel==='layout'?document.querySelector('#printoptimiser [data-status]'):null,plateBusy=plateStatus?.dataset.busy==='true';
   if(plateStatus?.textContent)status=plateStatus.textContent;
-  const report={kind,loaded,busy:busy||plateBusy,batch,title:file?.yab3dDisplayName||file?.name||'Untitled project',status:status||'Files stay in your browser.',action:studio?.pending?'Apply or cancel edit':loaded?button.textContent:'Open a model to start',disabled:studio?.pending||busy||!loaded||button.disabled||batch};
+  const report={kind,loaded,pending:Boolean(studio?.pending),busy:busy||plateBusy,batch,title:file?.yab3dDisplayName||file?.name||'Untitled project',status:status||'Files stay in your browser.',action:studio?.pending?'Apply or cancel edit':loaded?button.textContent:'Open a model to start',disabled:studio?.pending||busy||!loaded||button.disabled||batch};
   const serial=JSON.stringify(report);if(serial!==lastReport){lastReport=serial;parentHost?.workbench?.report(report);}
+  colourSummary?.sync();toolbox?.sync(currentPanel,studio?.mode,busy);
   let snapshot;try{snapshot=engine.workbenchPreview();}catch{}
   if(snapshot&&!fallbackPending&&snapshot.key!==fallbackKey){
     fallbackPending=true;fallback.hidden=false;document.body.classList.add('software-mode');
@@ -194,6 +211,8 @@ try {
     finally{arrangeButton.disabled=false;arrangeButton.setAttribute('aria-busy','false');}
   };
   studio=mountStudio({view,engine,kind,api,objects:objectTools,setPanel});
+  toolbox=mountFeatureToolbox({view,choose:feature=>{if(feature==='paint'||feature==='split')studio.show(feature==='paint'?'colour':'split');else setPanel(feature);}});
+  colourSummary=mountModelColours({view,read:()=>{const state=kind==='converter'?engine.session.state:engine.state.project;const data=engine.workbenchObjects();return {loaded:Boolean(state),checking:loading||data.busy,palette:kind==='converter'?state?.colours:state?.colors,objects:data.objects,quantities:data.quantities,copies:data.copies};},manage:()=>setPanel('colours')});
   prepared=mountPreparedPreview(view,{edit:()=>studio.show('select'),onSelect:id=>{
     document.querySelectorAll('[data-preview-plate]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.previewPlate===id)));
     const heading=view.panels.layout.querySelector('.task-heading');heading.querySelector('h1').textContent=id?'Prepared plates':kind==='converter'?'Plates & objects':'Arrange your plate';heading.querySelector('p').textContent=id?'Choose a plate to inspect the copies. Edit model returns to your original quantities.':kind==='converter'?'Choose a plate, edit its objects, then save the complete project.':'Click an object in the preview to duplicate or remove it.';

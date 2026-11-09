@@ -18,7 +18,8 @@ export function composeView(doc,kind) {
     panels.project.append($('convertplate').closest('.row'));
     move('#bambuprinter',panels.project);move('#printercapacity',panels.project);
     move('#petgsupport',panels.colours);move('fieldset.repaint',panels.colours);
-    move('#platelayout',panels.layout);move('#settingsbox',panels.output);
+    move('#platelayout',panels.layout);
+    const conversionSettings=make('details',{class:'conversion-settings',open:''},'<summary>Print settings & compatibility</summary>');panels.output.append(conversionSettings);move('#settingsbox',conversionSettings);
     move('#convertplan',panels.output);move('#convertgo',panels.output);move('#convertout',panels.output);move('#printersetup',panels.output);
     move('#loaderror',feedback);move('#convertstatus',feedback);
     const batch=move('#batchpanel',workspace);batch.prepend(make('button',{'data-close-batch':''},'Back to model'));

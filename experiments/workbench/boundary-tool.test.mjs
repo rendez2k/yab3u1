@@ -29,3 +29,16 @@ test('assembly checks are cancelled and invalidated by changed split settings wi
     root.querySelector('[data-split-preview]').click();await tick();workers[1].onmessage({data:{assembly:{positions:[1],ranges:[{},{}]}}});assert.equal(inspection.owner,'assembly');tool.destroy();assert.equal(inspection.owner,null);assert.equal(await file.text(),'original');
   }finally{tool.destroy();globalThis.Worker=previous;}
 });
+
+test('failed automatic previews expose repair reasons before Apply and clear stale reports on changes',async()=>{
+  const {document}=parseHTML('<section></section>'),root=document.querySelector('section'),previous=globalThis.Worker,file=new File(['source'],'model.3mf');let worker,operation='auto-assembly',reported=[];
+  globalThis.Worker=class{constructor(){worker=this;}postMessage(){}terminate(){}};
+  const tool=mountSplitPreview({root,source:()=>file,options:()=>({operation}),inspection:{hide(){}},reports:r=>reported=r});
+  try{
+    tool.sync({enabled:true});root.querySelector('[data-split-preview]').click();await tick();
+    const reports=[{strategy:'assembly',retained:[{count:1,reason:'This mesh needs repair.'}],separated:[]}];
+    worker.onmessage({data:{assembly:{positions:[],ranges:[]},reports}});
+    assert.deepEqual(reported,reports);assert.match(root.querySelector('[data-assembly-status]').textContent,/needs repair/);assert(!tool.pending);
+    operation='auto-separate';tool.sync();assert.deepEqual(reported,[]);assert.equal(await file.text(),'source');
+  }finally{tool.destroy();globalThis.Worker=previous;}
+});

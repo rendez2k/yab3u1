@@ -1,3 +1,10 @@
+## 2.6.51 — Visible tools and quick conversion
+
+- Choose Quick conversion or Full studio at launch; optionally remember the choice. Change workspace without reopening the model.
+- Put six large labelled feature buttons on the left, with actual used model colours and swatches visible above them. Keep existing conversion, Full Spectrum, plate and export capabilities.
+- Default automatic splitting to substantial geometry regions, preserving their paint. Keep painted-region splitting as a separate option; show unsafe joins and mesh-repair reasons before Apply.
+- The supplied alien is rejected for automatic assembly splitting because its original mesh has 22 non-manifold edges. The new mode does not yet produce a head/arms/legs assembly from that file.
+
 ## 2.6.48 — Shape selection
 
 - Detect geometric regions independently of paint, review highlights, combine selections and undo selection changes.
