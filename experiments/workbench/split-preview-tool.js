@@ -1,3 +1,4 @@
+import {noSplitReason} from './split-result.js';
 export function mountSplitPreview({root,source,options,inspection,busy=()=>false,changed=()=>{},reports=()=>{},returnToEdit=()=>{}}){
   root.innerHTML='<button type="button" data-split-preview>Preview split</button><div data-assembly-controls hidden><label class="studio-field">Separate pieces <output data-explode-label>15 mm</output><input type="range" min="0" max="60" value="15" step="1" data-explode aria-label="Separate preview pieces"></label><div class="boundary-actions"><button type="button" data-assembly-together>Show assembled</button><button type="button" data-assembly-back>Back to editing</button></div></div><p class="hint" data-assembly-status role="status" aria-live="polite">Inspect the closed pieces before applying.</p>';
   const q=s=>root.querySelector(s);let worker=null,pending=false,dead=false,active=false,signature='',file=null,soup=null,request=0;
@@ -15,7 +16,7 @@ export function mountSplitPreview({root,source,options,inspection,busy=()=>false
     try{const bytes=await file.arrayBuffer();if(stamp!==request||dead)return;worker=new Worker(new URL('./model-edit-worker.js',import.meta.url),{type:'module'});
       worker.onmessage=({data})=>{if(stamp!==request||dead)return;if(data.progress){status(data.progress);return;}worker?.terminate();worker=null;pending=false;
         if(data.error){status(data.error,true);sync();changed();return;}soup=data.assembly?.positions.length?data.assembly:null;reports(data.reports||[]);
-        if(!soup?.positions.length){status(data.reports?.flatMap(r=>r.retained||[])[0]?.reason||'No pieces could be separated. Adjust the split and try again.',true);sync();changed();return;}
+        if(!soup?.positions.length){status(noSplitReason(data.reports),true);sync();changed();return;}
         try{inspection.show('assembly',soup,'Split preview · model unchanged');q('[data-explode]').value='15';explode();q('[data-assembly-controls]').hidden=false;status(`${soup.ranges.length} pieces checked, including any dowels. Assembled view uses their original positions; Apply places them for printing.`);}catch(e){status(e.message,true);}
         sync();changed();
       };

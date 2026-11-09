@@ -3,8 +3,9 @@
 import {readProject,selectionInstances,matrixFromText,matmul,applyMatrix,isHiddenPart,isPrintablePart,MODEL_FILE,SRC_BBL_MODEL,SRC_BBL_PROJECT,MAX_SOURCE_COLOURS} from '../../web/shared/project.js';
 import {decode,encode} from '../../web/shared/paint.js';
 import {leafTriangles} from '../../web/shared/standard.js';
-import {cutMesh,connectedParts} from './mesh-cut.js';
-import {closeInterface,separateColour,separateShape} from './mesh-joint.js';
+import {connectedParts} from './mesh-cut.js';
+import {cutPaintedPart as cutPart} from './painted-cut.js';
+import {separateColour,separateShape} from './mesh-joint.js';
 import {orientPinUp} from './orientation.js';
 import {autoSeparate} from './auto-split.js';
 import {autoAssembly,assemblyMeshHealth} from './assembly-split.js';
@@ -55,25 +56,6 @@ function recolour(part,from,to){
     }else value=paintLeaf(part.base===Number(from)?to:part.base);
     return {...face,attrs:stripPaint(face.attrs)+value};
   })};
-}
-
-function cutPart(part,axis,height,connector){
-  const faces=[];
-  for(const f of part.faces){
-    const crosses=f.points.some(p=>p[axis]<height-1e-6)&&f.points.some(p=>p[axis]>height+1e-6);
-    if(!crosses){faces.push(f);continue;}
-    // A cut cannot reinterpret a subdivided support/seam tree on a new triangle.
-    for(const a of f.attrs.matchAll(/(?:support|seam)[\w:]*="([0-9a-f]+)"/gi))if(decode(a[1]).kind!=='leaf')throw Error('The cut crosses subdivided support or seam painting. Move the cut, or make this cut in the slicer.');
-    const code=paintRE.exec(f.attrs)?.[1],node=code?decode(code):null;
-    if(node?.kind==='split')for(const leaf of leafTriangles(f.points,node))faces.push({points:leaf.triangle,attrs:stripPaint(f.attrs)+paintLeaf(leaf.state||part.base)});
-    else faces.push(f);
-  }
-  if(faces.every(f=>f.points.every(p=>p[axis]>=height-1e-6)))return {parts:[null,part],loose:[]};
-  if(faces.every(f=>f.points.every(p=>p[axis]<=height+1e-6)))return {parts:[part,null],loose:[]};
-  const cut=cutMesh(faces,axis,height,paintLeaf(part.base));
-  const joined=connector?closeInterface(...cut.openHalves,cut.loops,{normal:[0,1,2].map(i=>i===axis?1:0),attrsA:paintLeaf(part.base),attrsB:paintLeaf(part.base),connector}):{halves:cut.halves};
-  const pinSide=connector?.side==='base'?0:1;
-  return {parts:joined.halves.map((f,i)=>({...part,faces:f,pinDirections:hasAttachedPin(connector)&&joined.joint&&i===pinSide?[joined.joint.normal.map(v=>v*(pinSide===0?1:-1))]:[]})),joint:joined.joint,loose:(joined.loose||[]).map(faces=>({faces,joint:joined.joint}))};
 }
 
 const hasAttachedPin=connector=>connector&&(connector.kind||'pin')==='pin';

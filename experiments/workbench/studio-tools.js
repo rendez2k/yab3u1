@@ -7,6 +7,7 @@ import {mountJointTool} from './joint-tool.js';
 import {mountBoundaryTool} from './boundary-tool.js';
 import {mountSplitPreview} from './split-preview-tool.js';
 import {createInspectionView} from './inspection-view.js';
+import {noSplitReason} from './split-result.js';
 export function mountStudio({view,engine,kind,api,objects,setPanel}){
   const doc=view.stage.ownerDocument,make=view.make;
   let multiple=false,preferredColour='',preferredShape=false,colourDirty=false,shape=null,jointTool=null,boundary=null,splitPreview=null;
@@ -31,11 +32,12 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
   const autoResult=make('section',{class:'studio-auto-result',hidden:'','aria-label':'Automatic separation result'},'<strong data-auto-summary></strong><p class="hint"></p><details><summary>Why some parts stayed attached</summary><ul></ul></details>');message.after(autoResult);
   function showAutoReport(reports,container=panel,previewOnly=false){
     if(!reports.length){autoResult.hidden=true;return;}
-    const assembly=reports.some(r=>r.strategy==='assembly'),separated=reports.reduce((n,r)=>n+(r.separated?.length||0),0),existing=reports.reduce((n,r)=>n+(r.disconnected||0),0),retained=reports.flatMap(r=>(r.retained||[]).map(p=>({...p,name:r.name})));
+    const assembly=reports.some(r=>r.strategy==='assembly'),separated=reports.reduce((n,r)=>n+(r.separated?.length||0),0),existing=reports.reduce((n,r)=>n+(r.disconnected||0),0),retained=reports.flatMap(r=>(r.retained||[]).map(p=>({...p,name:r.name}))).sort((a,b)=>Number(!!a.informational)-Number(!!b.informational));
     autoResult.hidden=false;
     autoResult.querySelector('[data-auto-summary]').textContent=separated?`${separated} ${assembly?'larger':'coloured'} part${separated===1?'':'s'} ${previewOnly?'ready to separate':'separated'}`:existing?`${existing} existing pieces ${previewOnly?'ready to separate':'separated'}`:`No safe ${assembly?'larger-part':'automatic colour'} split found`;
     const kept=[...new Set(retained.map(r=>r.colour).filter(Boolean))].map(n=>colourName(palette()[n-1]||'#FFFFFF'));
-    autoResult.querySelector('p').textContent=retained.length?`${kept.length?`${kept.join(' and ')} regions remain attached.`:'Some regions stayed attached.'} See the reasons below.${separated||existing?' They stay on the body when it is duplicated.':' Your model and quantities are unchanged.'}`:'The main body and its remaining paint are preserved.';
+    const neck=reports.some(r=>r.separated?.some(p=>p.method==='neck-plane'));
+    autoResult.querySelector('p').textContent=neck?'A straight cut through a narrow section keeps the colours on both pieces. Review the joining face in the split preview.':retained.length?`${kept.length?`${kept.join(' and ')} regions remain attached.`:'Some regions stayed attached.'} See the reasons below.${separated||existing?' They stay on the body when it is duplicated.':' Your model and quantities are unchanged.'}`:'The main body and its remaining paint are preserved.';
     autoResult.querySelector('details').hidden=!retained.length;autoResult.querySelector('details').open=!separated&&!existing;
     const list=autoResult.querySelector('ul');list.replaceChildren();const grouped=new Map();
     for(const row of retained){const key=`${row.colour?`${colourName(palette()[row.colour-1]||'#FFFFFF')} — `:''}${row.reason}`,count=grouped.get(key)||0;grouped.set(key,count+row.count);}
@@ -158,7 +160,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
       settings.querySelector('[data-plane-settings]').hidden=method!=='cut';settings.querySelector('[data-cut-label]').textContent=`${position}%`;
       settings.querySelector('[data-region-settings]').hidden=method!=='by-colour';settings.querySelector('[data-joint-settings]').hidden=method==='separate'||removing;
       settings.querySelector('[data-auto-settings]').hidden=!isAutomatic();
-      settings.querySelector('[data-auto-settings]>.hint').textContent=method==='auto-assembly'?'Finds larger parts from the shape, keeping all their painted colours. Small details stay attached. Each join must close safely; damaged meshes need repair first.':'Checks disconnected pieces and each painted region. Separates what can be closed safely; the main body and unsuitable paint patches stay intact.';
+      settings.querySelector('[data-auto-settings]>.hint').textContent=method==='auto-assembly'?'Finds larger parts from the shape, keeping their colours. If curved joins cannot be closed, it tries one straight cut through a narrow section. Use Preview split to check the proposed pieces and connectors.':'Checks disconnected pieces and each painted region. Separates what can be closed safely; the main body and unsuitable paint patches stay intact.';
       settings.querySelector('[data-shape-settings]').hidden=method!=='by-shape';
       settings.querySelector('[data-boundary-settings]').hidden=method!=='boundary';
       settings.querySelector('[data-split-preview-settings]').hidden=removing||(method==='by-shape'&&shape?.painting);
@@ -229,7 +231,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
         if(repairing){showOutcome('No repair needed','The selected mesh passed the local edge checks. No changes were made.');message.textContent='No repair needed. Your model is unchanged.';return;}
         showAutoReport(result.reports||[]);
         message.textContent=`No parts were separated.${finish==='once'?'':' Filling was not started.'} Your model is unchanged.`;
-        const reason=result.reports?.flatMap(r=>r.retained||[])[0]?.reason||'No suitable closed parts were found. Adjust the split method or connector settings and try again.';
+        const reason=noSplitReason(result.reports);
         if(splitting)showOutcome('No split made',`Your model is unchanged. ${reason}`,result.reports?.some(r=>r.needsRepair)?ids:[]);
         return;
       }

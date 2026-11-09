@@ -2,6 +2,8 @@ import {connectedParts,signedVolume} from './mesh-cut.js';
 import {separateShape} from './mesh-joint.js';
 import {detectShapeParts} from './shape-parts.js';
 import {encode} from '../../web/shared/paint.js';
+import {neckCandidates} from './neck-candidates.js';
+import {cutPaintedPart} from './painted-cut.js';
 
 const paint=base=>` paint_color="${encode({kind:'leaf',state:base})}"`;
 const area=f=>{const [a,b,c]=f.points,u=b.map((v,i)=>v-a[i]),v=c.map((n,i)=>n-a[i]);return Math.hypot(u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0])/2;};
@@ -43,7 +45,7 @@ export function autoAssembly(parts,{connector=null,progress=()=>{}}={}){
   const boxes=sources.map(p=>box(p.faces)),independent=sources.length>1&&boxes.every((b,i)=>boxes.slice(i+1).every(c=>disjoint(b,c)));
   const largest=sources.reduce((best,p,i)=>p.faces.reduce((sum,f)=>sum+area(f),0)>(sources[best]?.faces.reduce((sum,f)=>sum+area(f),0)||0)?i:best,0);
   for(const [partIndex,part]of sources.entries()){
-    let remaining=part.faces;
+    let remaining=part.faces,anchorPart=part;const reportStart=report.retained.length;
     const partArea=remaining.reduce((sum,f)=>sum+area(f),0);
     if(independent&&partIndex!==largest&&partArea>=minimumArea){detached.push([part]);report.disconnected++;continue;}
     let regions;
@@ -52,9 +54,9 @@ export function autoAssembly(parts,{connector=null,progress=()=>{}}={}){
     const eligible=regions.slice(1).filter(r=>r.size>=minimumArea),candidates=eligible.slice(0,12);
     if(eligible.length>12)report.retained.push({count:eligible.length-12,reason:'Automatic assembly splitting checks up to 12 large joins per component. Review further regions with By shape.'});
     const small=regions.slice(1).filter(r=>r.size<minimumArea).length;
-    if(small)report.retained.push({count:small,reason:'Small details stay on the body so the result remains a set of larger assembly parts.'});
+    if(small)report.retained.push({count:small,informational:true,reason:'Small details stay on the body so the result remains a set of larger assembly parts.'});
     if(!candidates.length&&!small)report.retained.push({count:1,reason:'No distinct larger join was found. Use By shape to combine regions, Draw boundary, or Plane cut to choose the separation.'});
-    const minimumVolume=Math.max(1,Math.abs(signedVolume(remaining))*.01);
+    const minimumVolume=Math.max(1,Math.abs(signedVolume(remaining))*.01),detachedBefore=detached.length;
     for(const [index,candidate]of candidates.entries()){
       progress(`Checking larger part ${index+1} of ${candidates.length}…`);
       const wanted=new Set(candidate.faces),indices=[];remaining.forEach((f,i)=>{if(wanted.has(f))indices.push(i);});if(!indices.length)continue;
@@ -70,9 +72,40 @@ export function autoAssembly(parts,{connector=null,progress=()=>{}}={}){
         remaining=result.remaining;
       }catch(e){report.retained.push({count:1,reason:e.message.replace(/^This colour /,'This shape region ')});}
     }
-    anchors.push({...part,faces:remaining});
+    // Curved surface regions can wrap around a whole head or body. When none
+    // closes, try one conservative plane through a genuine narrow section.
+    if(detached.length===detachedBefore){
+      const neck=splitAtNeck(part,{connector,progress});
+      if(neck.result){
+        report.retained.splice(reportStart);
+        anchorPart=neck.result.parts[0];remaining=anchorPart.faces;detached.push([neck.result.parts[1]]);
+        if(neck.result.joint)joints.push(neck.result.joint);
+        dowels.push(...neck.result.loose.map(({faces,joint})=>[{name:'Separate dowel',base:part.base,faces,settings:{},subtype:'normal_part',dowel:true,pinDirections:[joint.normal]}]));
+        report.separated.push({part:partIndex,method:'neck-plane',axis:neck.axis,height:neck.height,connector:neck.result.joint?.kind||null,pin:neck.result.joint?.kind==='pin'});
+      }else if(neck.reason)report.retained.unshift({count:1,reason:neck.reason});
+    }
+    anchors.push({...anchorPart,faces:remaining});
   }
   const groups=[...(anchors.length?[anchors]:[]),...detached,...dowels];
   const names=[...(anchors.length?['body']:[]),...detached.map((_,i)=>`assembly part ${i+1}`),...dowels.map((_,i)=>`dowel ${i+1}`)];
   report.parts=groups.length;return {groups,names,report,joints};
+}
+
+export function splitAtNeck(part,{connector=null,progress=()=>{}}={}){
+  progress('Looking for a narrow section for a larger-part cut…');
+  const candidates=neckCandidates(part.faces),volume=signedVolume(part.faces);let reason='';
+  for(const [index,candidate]of candidates.entries())for(const offset of [0,1,-1,2,-2,3,-3]){
+    const {axis,step}=candidate,height=candidate.height+offset*step;
+    progress(`Checking narrow section ${index+1} of ${candidates.length}…`);
+    try{
+      const plain=cutPaintedPart(part,axis,height,null,{singleJoin:true,conform:true});
+      if(plain.parts.some(p=>!p||signedVolume(p.faces)<Math.max(1,volume*.1)))continue;
+      if(Math.abs(plain.parts.reduce((n,p)=>n+signedVolume(p.faces),0)-volume)>Math.max(.001,volume*1e-6))continue;
+      if(plain.parts.some(p=>!assemblyMeshHealth(p.faces).ok))continue;
+      const result=connector?cutPaintedPart(part,axis,height,connector,{singleJoin:true,conform:true}):plain;
+      if(result.parts.some(p=>!assemblyMeshHealth(p.faces).ok)||result.loose.some(p=>!assemblyMeshHealth(p.faces).ok))continue;
+      return {result,axis,height};
+    }catch(e){reason=e.message;}
+  }
+  return {reason:candidates.length?(reason||'The narrow-section cuts could not preserve closed painted parts. Use Plane cut to choose a different join.'):''};
 }

@@ -1,3 +1,9 @@
+## 2.6.55 — Find a larger-part cut when curved joins cannot close
+
+- Try one straight cut through a substantial narrow section when automatic shape-region splitting finds no detachable parts. Preview the pieces and checked connectors before applying.
+- Preserve fine paint boundaries while matching neighbouring triangle edges. Validate closed pieces and source volume before accepting the cut.
+- Show the actual blocking reason when no split is possible, ahead of informational notes about small details.
+
 ## 2.6.54 — Show and select the repaired model
 
 - Exclude objects with quantity zero from every plate arrangement. Repair keeps the original resource for Undo, but only its replacement is drawn, selected and exported.
