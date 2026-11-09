@@ -44,7 +44,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
   }
   const palette=()=>kind==='converter'?engine.session.state?.colours||[]:engine.state.project?.colors||[];
   const state=()=>engine.workbenchObjects();
-  const selected=()=>objects.selected();
+  const selected=()=>{const s=state(),visible=new Set(s.objects.filter(o=>(s.quantities[o.objectId]??1)*s.copies>0).map(o=>String(o.objectId)));return objects.selected().filter(id=>visible.has(String(id)));};
   const snapshot=()=>({file:api.source(),context:api.context(),settings:engine.workbenchCaptureSettings?.()});
   const sourceName=(colour,i)=>`Colour ${i+1} · ${colour}`;
   const commonColours=()=>{const s=state(),ids=selected();return palette().map((colour,i)=>({colour,index:i+1})).filter(c=>ids.every(id=>{const o=s.objects.find(o=>String(o.objectId)===id);return !o?.colours?.length||o.colours.some(v=>Number(v.extruder)===c.index);}));};
@@ -236,7 +236,10 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
       const quantities=Object.fromEntries(s.objects.map(o=>[o.objectId,(s.quantities[o.objectId]??1)*s.copies]));
       for(const c of result.changes){quantities[c.oldId]=Math.max(0,(quantities[c.oldId]??1)-1);for(const n of c.created)quantities[n.id]=1;}
       const file=result.changes.length?new File([result.bytes],before.file.name,{type:before.file.type}):before.file;
-      const next={...before,file,context:{...before.context,layout:{...before.context.layout,copies:1,quantities,arrangement:repairing?before.context.layout.arrangement:'objects'}}};
+      // A full replacement can keep the original grouped positions. If an old
+      // copy remains, pack it separately from the repaired copy at that position.
+      const keepArrangement=repairing&&result.changes.every(c=>!quantities[c.oldId])&&Object.values(quantities).every(n=>n<=1);
+      const next={...before,file,context:{...before.context,layout:{...before.context.layout,copies:1,quantities,arrangement:keepArrangement?before.context.layout.arrangement:'objects'}}};
       committing=true;sync();
       restorePreview();
       try{await loadSnapshot(next);}catch(error){await loadSnapshot(before);throw error;}

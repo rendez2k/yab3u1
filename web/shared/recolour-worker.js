@@ -240,9 +240,10 @@ let objectGeometry = new Map();
 function objectView(plateId, objectIds, layout) {
   const key = `${plateId}|${(objectIds||[]).join(',')}|${JSON.stringify(layout)}`;
   if (viewCache?.key === key) return {...viewCache.view,reused:true};
-  const {plan} = project.layoutInstances(loaded.project,plateId,objectIds,layout);
-  const footprints=project.selectionFootprints(loaded.project,plateId,objectIds);
-  const offsets=plan && !plan.placements ? layoutOffsets(ensureBounds(plateId,objectIds),plan,layout.centre || [0,0]) : [[0,0,0]];
+  const {instances,plan,bounds} = project.layoutInstances(loaded.project,plateId,objectIds,layout);
+  const visibleIds=[...new Set(instances.map(([id])=>id))];
+  const footprints=project.selectionFootprints(loaded.project,plateId,visibleIds);
+  const offsets=plan && !plan.placements ? layoutOffsets(bounds,plan,layout.centre || [0,0]) : [[0,0,0]];
   const placements=plan?.placements || offsets.flatMap(offset=>footprints.map(f=>({objectId:f.objectId,offset})));
   const parts = placements.map(p=>{
     const id = `${plateId}|${p.objectId}`;

@@ -950,6 +950,11 @@ export function selectionFootprints(project, plateId, objectIds) {
 }
 
 export function layoutInstances(project, plateId, objectIds, layout) {
+  // Geometry edits retain the old resource for Undo but give it quantity zero.
+  // Omission applies to grouped/source layouts as well as individually packed
+  // objects; otherwise a repaired replacement overlaps its damaged original.
+  if (layout?.quantities) objectIds = (objectIds ?? eligibleObjects(project, plateId))
+    .filter(id => (layout.quantities[id] ?? 1) > 0);
   const base = selectionInstances(project, plateId, objectIds);
   if (!layout) return { instances: base, plan: null, bounds: null };
   const bounds = selectionBounds(project, plateId, objectIds);

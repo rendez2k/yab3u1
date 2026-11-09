@@ -1,3 +1,9 @@
+## 2.6.54 — Show and select the repaired model
+
+- Exclude objects with quantity zero from every plate arrangement. Repair keeps the original resource for Undo, but only its replacement is drawn, selected and exported.
+- Make the preview worker use the same visible objects and bounds as export. This removes the overlapping old geometry that could make a repaired mesh appear damaged and send the original back to the splitter.
+- Keep grouped positions when replacing a whole object; arrange separately when original copies remain. Ignore stale canvas selections for removed objects.
+
 ## 2.6.53 — Repair meshes in the studio
 
 - Add Repair mesh in Split & connect and directly on mesh-related split failures. The repair runs locally, preserves retained triangle painting and supports Undo.

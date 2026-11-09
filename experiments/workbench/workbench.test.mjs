@@ -115,22 +115,36 @@ test('repair from a failed split targets that model, preserves quantities, and c
   window.HTMLSelectElement.prototype.add=function(option){this.append(option);};
   globalThis.Worker=class{postMessage(data){sent.push(data.options);queueMicrotask(()=>this.onmessage({data:data.options.operation==='repair'?{bytes:new Uint8Array(),changes:[{oldId:'1',created:[{id:'2',name:'Repaired'}]}],reports:[{repairs:[{duplicateFaces:1,zeroThicknessFaces:0,degenerateFaces:0,maxMovement:0}]}]}:{changes:[],reports:[{strategy:'assembly',needsRepair:true,retained:[{reason:'This mesh needs repair.',count:1}],separated:[]}]}}));}terminate(){}};
   try{
+    for(const count of [1,2]){
     const make=(tag,attrs={},html='')=>{const n=document.createElement(tag);for(const [k,v]of Object.entries(attrs))n.setAttribute(k,v);n.innerHTML=html;return n;};
     const view={stage:make('main'),inspector:make('aside'),panels:{},make},source=new File(['original'],'model.3mf');let file=source,selection=['1'];
-    const context={plateId:1,layout:{copies:1,quantities:{1:2},arrangement:'together'}},state={key:'source',objects:[{objectId:'1',name:'Body'}],quantities:{1:2},copies:1,busy:false};
-    const api={source:()=>file,context:()=>context,async load(next,options){file=next;state.key=next===source?'source':'repaired';state.quantities=options.layout.quantities;state.objects=next===source?[{objectId:'1',name:'Body'}]:[{objectId:'1',name:'Body'},{objectId:'2',name:'Repaired'}];assert.equal(options.layout.arrangement,'together');return true;}};
+    const context={plateId:1,layout:{copies:1,quantities:{1:count},arrangement:'group'}},state={key:'source',objects:[{objectId:'1',name:'Body'}],quantities:{1:count},copies:1,busy:false};
+    const api={source:()=>file,context:()=>context,async load(next,options){file=next;state.key=next===source?'source':'repaired';state.quantities=options.layout.quantities;state.objects=next===source?[{objectId:'1',name:'Body'}]:[{objectId:'1',name:'Body'},{objectId:'2',name:'Repaired'}];assert.equal(options.layout.arrangement,next===source||count===1?'group':'objects');return true;}};
     const studio=mountStudio({view,kind:'converter',engine:{session:{state:{colours:[]}},workbenchObjects:()=>state},api,objects:{selected:()=>selection,element:make('section'),history:{canUndo:false,reset(){}}},setPanel(){}});
     studio.sync();studio.show('split');view.inspector.querySelector('[data-edit-apply]').click();while(studio.busy)await new Promise(resolve=>setImmediate(resolve));
     const outcome=view.inspector.querySelector('.studio-edit-outcome');assert(!outcome.querySelector('[data-repair-result]').hidden);
     studio.show('select');selection=[];studio.sync();outcome.querySelector('[data-repair-result]').click();while(studio.busy)await new Promise(resolve=>setImmediate(resolve));
-    assert.deepEqual(sent.at(-1),{operation:'repair',objectIds:['1'],plateId:1});assert.match(outcome.textContent,/Mesh repaired.*1 redundant face/s);assert(outcome.querySelector('[data-repair-result]').hidden);assert.deepEqual(state.quantities,{1:1,2:1});
-    studio.key({key:'z',ctrlKey:true,preventDefault(){}});while(studio.busy)await new Promise(resolve=>setImmediate(resolve));assert.equal(file,source);assert.deepEqual(state.quantities,{1:2});assert(outcome.hidden);
+    assert.deepEqual(sent.at(-1),{operation:'repair',objectIds:['1'],plateId:1});assert.match(outcome.textContent,/Mesh repaired.*1 redundant face/s);assert(outcome.querySelector('[data-repair-result]').hidden);assert.deepEqual(state.quantities,{1:count-1,2:1});
+    studio.key({key:'z',ctrlKey:true,preventDefault(){}});while(studio.busy)await new Promise(resolve=>setImmediate(resolve));assert.equal(file,source);assert.deepEqual(state.quantities,{1:count});assert(outcome.hidden);
+    }
   }finally{
     if(originalOption===undefined)delete globalThis.Option;else globalThis.Option=originalOption;
     if(originalWorker===undefined)delete globalThis.Worker;else globalThis.Worker=originalWorker;
     if(originalAdd===undefined)delete window.HTMLSelectElement.prototype.add;else window.HTMLSelectElement.prototype.add=originalAdd;
     Object.defineProperty(window.HTMLSelectElement.prototype,'value',descriptor);
   }
+});
+test('an outdated canvas selection cannot edit a replaced object with zero quantity',()=>{
+  const {document}=parseHTML('<html><body></body></html>');
+  const make=(tag,attrs={},html='')=>{const n=document.createElement(tag);for(const [k,v]of Object.entries(attrs))n.setAttribute(k,v);n.innerHTML=html;return n;};
+  const view={stage:make('main'),inspector:make('aside'),panels:{},make};
+  const state={key:'repaired',objects:[{objectId:'1',name:'Old mesh'},{objectId:'2',name:'Repaired mesh'}],quantities:{1:0,2:1},copies:1,busy:false};
+  const studio=mountStudio({view,kind:'converter',engine:{session:{state:{colours:[]}},workbenchObjects:()=>state},api:{source:()=>null},objects:{selected:()=>['1'],element:make('section'),history:{canUndo:false}},setPanel(){}});
+  studio.sync();studio.show('split');
+  assert(view.inspector.querySelector('.studio-apply').hidden,'a discarded resource must not be editable');
+  assert.match(view.inspector.querySelector('[data-selection-title]').textContent,/Click an object/);
+  assert.equal(view.inspector.querySelector('[data-scene-object="1"]'),null);
+  assert(view.inspector.querySelector('[data-scene-object="2"]'));
 });
 for(const [kind,file,features]of [
   ['converter','index.html',{project:['convertfile','converttarget','convertplate','bambumodel','printerinputs','importtools'],colours:['convertmap','convertpetg','mergefrom','mergeto','mergeundo','unusedfilaments'],layout:['quantityfields','layoutfill','fillundo','printoptimiser'],output:['settingsbox','printersetup','convertgo','convertout']}],
@@ -153,7 +167,7 @@ for(const [kind,file,features]of [
 }
 test('production build serves the Workbench without publishing private models',async()=>{
   const shell=await readFile(new URL('./index.html',import.meta.url),'utf8');
-  assert.match(shell,/2\.6\.53/);assert.doesNotMatch(shell,/Test version|2\.6\.53-test/);assert.match(shell,/data-panel="layout"/);
+  assert.match(shell,/2\.6\.54/);assert.doesNotMatch(shell,/Test version|2\.6\.54-test/);assert.match(shell,/data-panel="layout"/);
   const builder=await readFile(new URL('./build.mjs',import.meta.url),'utf8');
   assert.match(builder,/dist-workbench/);assert.doesNotMatch(builder,/Desktop|Stabby|Flippin/);
   const config=await readFile(new URL('../../netlify.toml',import.meta.url),'utf8');

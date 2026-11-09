@@ -42,7 +42,7 @@ test('Full Spectrum remove, duplicate and Fill use identical preview and archive
   assert.deepEqual(analyse(reopened,reopened.plates[0].id,null).used,analyse(project,plate,selected).used);
   const restored=layoutInstances(project,plate,selected,options);
   assert.equal(restored.instances.length,2,'Undo restores the pre-fill quantity');
-  assert.throws(()=>layoutInstances(project,plate,selected,{...options,quantities:{20:0}}),/does not fit/);
+  assert.throws(()=>layoutInstances(project,plate,selected,{...options,quantities:{20:0}}),/nothing is selected/);
 });
 
 test('worker bounds retains the object footprints needed by Full Spectrum Fill',async()=>{
