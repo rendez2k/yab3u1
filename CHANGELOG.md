@@ -1,3 +1,9 @@
+## 2.6.52 — Clear split results
+
+- Keep the outcome of a split visible above the tool settings when selecting objects or changing features. An unsuccessful split explicitly says “No split made” and includes the reason.
+- Confirm the number of new parts only after an edited model loads successfully. Dismiss, Undo, a new edit or a new model clears the previous result.
+- Preserve the mesh checks: this update does not repair or separate the supplied alien's damaged mesh.
+
 ## 2.6.51 — Visible tools and quick conversion
 
 - Choose Quick conversion or Full studio at launch; optionally remember the choice. Change workspace without reopening the model.

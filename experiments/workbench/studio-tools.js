@@ -17,6 +17,12 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
   view.stage.append(tools);
   const panel=make('section',{'data-task':'edit',hidden:'','aria-label':'Selected objects'},'<div class="task-heading"><h1 data-edit-heading>Objects</h1><p data-selection-title>Choose an object on the canvas.</p></div><button data-multi-select aria-pressed="false">Select multiple</button><p class="hint" data-multi-hint hidden>Tap objects on the canvas or in the list to add or remove them from the selection.</p><div data-selection-controls></div><div data-tool-settings></div><p class="studio-message" role="status" aria-live="polite"></p><div class="studio-apply" hidden><button data-edit-cancel>Cancel</button><button class="primary" data-edit-apply>Apply colour</button></div><details class="studio-objects" open><summary>Objects on this plate <span data-scene-count></span></summary><div data-scene-list></div></details>');
   view.panels.edit=panel;view.inspector.append(panel);
+  // Completed edit feedback belongs to the model, not to a disposable tool preview.
+  // Keep it visible when Select or another feature replaces the settings panel.
+  const outcome=make('div',{class:'studio-edit-outcome',hidden:'',role:'status','aria-live':'polite','aria-atomic':'true'},'<strong></strong><button type="button" aria-label="Dismiss split result">Dismiss</button><p></p>');
+  view.inspector.prepend(outcome);
+  outcome.querySelector('button').addEventListener('click',()=>{outcome.hidden=true;});
+  function showOutcome(title,detail){outcome.querySelector('strong').textContent=title;outcome.querySelector('p').textContent=detail;outcome.hidden=false;}
   panel.querySelector('[data-selection-controls]').append(objects.element);
   const oldUndo=objects.element.querySelector('[data-object-edit=undo]');if(oldUndo)oldUndo.hidden=true;
   const settings=panel.querySelector('[data-tool-settings]'),message=panel.querySelector('.studio-message'),actions=panel.querySelector('.studio-apply');
@@ -198,7 +204,8 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
     const s=state(),ids=selected(),before=snapshot(),finish=autoFinish();if(!ids.length||!before.file)return;
     if(mode==='split'&&splitMethod()==='by-colour'&&!settings.querySelector('[data-region-colour]').value){message.textContent='Choose the source colour to separate.';return;}
     let options;try{options=editOptions();}catch(error){message.textContent=error.message;return;}
-    autoResult.hidden=true;
+    autoResult.hidden=true;outcome.hidden=true;
+    const splitting=mode==='split'&&!['shape-colour','remove-colour'].includes(options.operation);let applied=false;
     const stamp=++request;working=true;splitPreview?.invalidate();if(!['by-shape','boundary'].includes(splitMethod()))restorePreview();message.textContent='Preparing your edit…';sync();
     try{
       const bytes=await before.file.arrayBuffer();
@@ -210,7 +217,13 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
         worker.postMessage({bytes,options},[bytes]);
       });
       if(stamp!==request)return;
-      if(!result.changes.length){showAutoReport(result.reports||[]);message.textContent=`No parts were separated.${finish==='once'?'':' Filling was not started.'} Review the reasons below; adjust the pin settings or use a manual split.`;return;}
+      if(!result.changes.length){
+        showAutoReport(result.reports||[]);
+        message.textContent=`No parts were separated.${finish==='once'?'':' Filling was not started.'} Your model is unchanged.`;
+        const reason=result.reports?.flatMap(r=>r.retained||[])[0]?.reason||'No suitable closed parts were found. Adjust the split method or connector settings and try again.';
+        if(splitting)showOutcome('No split made',`Your model is unchanged. ${reason}`);
+        return;
+      }
       const quantities=Object.fromEntries(s.objects.map(o=>[o.objectId,(s.quantities[o.objectId]??1)*s.copies]));
       for(const c of result.changes){quantities[c.oldId]=Math.max(0,(quantities[c.oldId]??1)-1);for(const n of c.created)quantities[n.id]=1;}
       const file=result.changes.length?new File([result.bytes],before.file.name,{type:before.file.type}):before.file;
@@ -218,7 +231,8 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
       committing=true;sync();
       restorePreview();
       try{await loadSnapshot(next);}catch(error){await loadSnapshot(before);throw error;}
-      undo.push(before);if(undo.length>6)undo.shift();
+      undo.push(before);if(undo.length>6)undo.shift();applied=true;
+      if(splitting){const count=result.changes.reduce((n,c)=>n+c.created.length,0);showOutcome(`Split complete · ${count} new parts`,'The parts are separate objects. Open Plates & arrange to review their positions. Undo restores the original model.');}
       if(isAutomatic(options.operation)){
         const changed=new Set(result.changes.map(c=>c.oldId)),fillIds=[...result.changes.flatMap(c=>c.created.map(n=>n.id)),...ids.filter(id=>!changed.has(id))];
         mode='select';selectionKey='';render();showAutoReport(result.reports||[]);
@@ -239,9 +253,9 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
       }
       const jointLabel=options.connector?.kind==='dowel'?'matching sockets and separate upright dowels':options.connector?.kind==='sockets'?'matching sockets for your own pins':`an attached pin and matching socket${options.orientPins?' · pins facing upwards':''}`;
       mode='select';selectionKey='';message.textContent=['colour','shape-colour'].includes(options.operation)?'Colour applied to the selected regions or copies. Undo restores the original paint.':options.operation==='remove-colour'?'Coloured part removed; the remaining surface is closed. Undo restores it.':options.connector?`Parts separated with ${jointLabel}. Use Arrange for printing; Undo restores the original.`:'Parts separated. Use Arrange to prepare colour plates or sequential groups.';render();
-    }catch(error){if(stamp===request)message.textContent=error.message;}finally{worker?.terminate();worker=null;rejectPending=null;working=false;committing=false;sync();}
+    }catch(error){if(stamp===request){message.textContent=error.message;if(splitting)showOutcome(applied?'Parts separated; plate setup not completed':'Split not completed',error.message);}}finally{worker?.terminate();worker=null;rejectPending=null;working=false;committing=false;sync();}
   }
-  async function undoEdit(){if(working||!undo.length)return;working=true;restorePreview();message.textContent='Restoring your previous model…';try{await loadSnapshot(undo.at(-1));undo.pop();autoResult.hidden=true;mode='select';selectionKey='';render();message.textContent='Model edit undone.';}catch(e){message.textContent=e.message;}finally{working=false;sync();}}
+  async function undoEdit(){if(working||!undo.length)return;working=true;restorePreview();message.textContent='Restoring your previous model…';try{await loadSnapshot(undo.at(-1));undo.pop();autoResult.hidden=true;outcome.hidden=true;mode='select';selectionKey='';render();message.textContent='Model edit undone.';}catch(e){message.textContent=e.message;}finally{working=false;sync();}}
   const undoKind=()=>boundary?.canUndo?'boundary':shape?.canUndo?'shape selection':colourDirty?'colour preview':engine.workbenchBlends?.canUndo?'blend':objects.history?.canUndo?'plate':undo.length?'model':null;
   async function undoCurrent(){if(working||state().busy||boundary?.pending)return;if(boundary?.canUndo)boundary.undo();else if(shape?.canUndo){shape.undo();}else if(colourDirty){show('select');message.textContent='Colour preview undone. Original paint restored.';}else if(undoKind()==='blend')engine.workbenchBlends.undo();else if(undoKind()==='plate')await objects.act('undo');else await undoEdit();sync();}
   let listStamp='';
@@ -249,7 +263,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
     const s=state();const byShape=mode==='split'&&splitMethod()==='by-shape';panel.querySelector('[data-multi-select]').hidden=byShape;panel.querySelector('[data-edit-heading]').textContent=byShape?'Shape selection':mode==='split'?'Split selection':mode==='colour'?'Colour selection':'Objects';tools.hidden=!s.objects.length;if(s.preview)s.preview.selectionToggle=multiple;
     panel.querySelector('[data-multi-select]').setAttribute('aria-pressed',String(multiple));panel.querySelector('[data-multi-hint]').hidden=!multiple;
     const guide=objects.element.querySelector('[data-object-message]');if(guide&&/Shift-click/.test(guide.textContent))guide.textContent='Use Select multiple to pick several copies. Keyboard: Shift adds, Ctrl/Cmd toggles; Delete removes; Ctrl/Cmd+Z undoes.';
-    const currentSource=api.source();if(!working&&currentSource!==knownSource){knownSource=currentSource;undo=[];baseColours=null;message.textContent='';autoResult.hidden=true;}
+    const currentSource=api.source();if(!working&&currentSource!==knownSource){knownSource=currentSource;undo=[];baseColours=null;message.textContent='';autoResult.hidden=true;outcome.hidden=true;}
     const ids=selected(),key=JSON.stringify([s.key,ids]);
     if(!working&&!s.busy&&!api.loading&&key!==selectionKey){restorePreview();selectionKey=key;if(mode!=='arrange'){if(ids.length)setPanel('edit');render();}}
     const catalogue=JSON.stringify([s.key,s.objects.map(o=>[o.objectId,o.name]),s.quantities,s.copies,ids]);
