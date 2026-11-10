@@ -11,7 +11,10 @@ print each layer's outer wall in that reel, on a model of realistic size?
 
 ## What was tested
 
-**No real scanned or sculpted figurine was tested.** None was supplied. In its place:
+Three real painted figurines supplied by the owner were banded, sliced and checked
+(see "Owner-supplied figurines" below): Super Man (plate 1 of 4 only, a 15 mm-tall
+piece), They Live Alien (140 mm) and Flirty Figures Alien (105 mm). None was printed.
+Before they arrived, the spike used:
 
 1. `web/tests/four-colours.3mf` (named in the brief) and `web/tests/five-colours.3mf`
    (the largest painted fixture in the repo, 3,265 bytes). Both contain only flat,
@@ -23,12 +26,11 @@ print each layer's outer wall in that reel, on a model of realistic size?
    (one- and three-side splits, some nested). Source mesh: 0 open edges.
 
 The test solid is curved and of realistic size and triangle count, but it is
-star-shaped, smooth and has no overhangs, thin features or multiple shells. A real
-figurine may behave differently.
+star-shaped, smooth and has no overhangs, thin features or multiple shells.
 
 ## Method
 
-`tools/built-in-colours-spike.mjs <input.3mf> <layerHeight> <output.3mf> [--raw]`:
+`tools/built-in-colours-spike.mjs <input.3mf> <layerHeight> <output.3mf> [--raw] [--whole-splits] [--no-band] [--plate=N]`:
 
 1. `exportProject` for `snapmaker`, four ELEGOO reels (Cyan, Magenta, Yellow, White),
    no recipes, source colour *n* mapped to reel ((*n*−1) mod 4)+1.
@@ -41,8 +43,20 @@ figurine may behave differently.
    `mmu_segmented_region_interlocking_depth` 0, `dithering_local_z_mode` 0,
    `mixed_filament_advanced_dithering` 0. The dual-wall step sets
    `mmu_segmented_region_max_width` 0.45.
-5. Strip corners closer than 1e-6 mm are merged (welded) unless `--raw` is given. See
-   finding 2 for why.
+5. Strip corners are merged (welded) onto a 1e-6 mm grid unless `--raw` is given. See
+   finding 3 for why.
+
+Controls: `--whole-splits` bands each split-painted triangle as one whole triangle, so
+no split midpoints are added. `--no-band` stops after export and dual wall, so the
+source's own open edges can be told apart from those added by banding. `--plate=N`
+picks a plate (default: the first). Each run writes a JSON beside its output with
+triangle counts, split-painted count, model height and open-edge counts (before,
+after, and after without the weld).
+
+Changes made to run the owner's files: `readProject` is called with
+`allowNegative: true`, because Super Man contains a negative volume. Negative volumes
+pass through unbanded. The bed height is now taken only from painted (printed) meshes,
+so a negative volume cannot shift the layer grid.
 
 Deviation from the brief: the brief says to expand split paint "the way `previewSoup`
 expands it". `previewSoup` does not expand it geometrically; it colours the whole
@@ -64,8 +78,14 @@ layer whose top is at 0.2 + *n* × height; for *n* ≥ 1 the expected tool is
   the expected tool must have the most length and no other tool may exceed 5%.
 - **Visible-surface view (added):** around the layer's centroid, 180 two-degree
   sectors; each is owned by the tool of the outer-wall point (sampled every 0.2 mm)
-  lying furthest out. The layer fails if more than 5% of sectors belong to another
-  tool. Only valid for star-shaped layers such as this test solid.
+  lying furthest out. The layer fails if more than 5% of occupied sectors belong to
+  another tool, or if fewer than 162 of the 180 sectors are occupied. Only valid for
+  star-shaped layers such as this test solid. On figurines with several islands per
+  layer (legs, arms), the occupancy rule fails those layers. This view is reported
+  but not relied on there.
+- **Colour-only view (added):** the strict rule with the interior reel (T3) left out,
+  so a layer fails only when another *colour* reel exceeds 5%. It works for any shape
+  but cannot tell whether the stray path is on the visible surface.
 
 Tower grams are computed from the G-code (extruding moves typed `Prime tower`, 1.75 mm,
 1.24 g/cm³). The method was cross-checked: its per-tool filament totals equal the
@@ -105,32 +125,54 @@ from `T` commands equal the slicer's `total filament change`. Spike run times: 3
    that region's boundary as `Outer wall`. That path is about 0.43 mm inside the
    surface (in layer 600 at 0.08 mm, the median radius is 19.92 mm against 20.35 mm for
    the colour loops), and it is about 123 mm long against about 252 mm for the expected
-   colour. That is far above the 5% limit. In layers 1–2, a reel-1 `Outer wall` of
-   about 120 mm also appears inside the surface: the bottom face is in layer 0 (reel 1)
-   and its paint is carried up into the bottom shell. Neither path is outermost. A
+   colour. That is far above the 5% limit. In layers 1–2 (0.08 mm: also 1246–1247;
+   0.12 mm: also 830–831), a reel-1 `Outer wall` of about 120 mm also appears inside
+   the surface. Layer 0 (the bottom face) and the top layer are both reel 1, and their
+   paint is carried into the bottom and top shells. With reel 4 ignored (the
+   checker's colour-only view), exactly these 4 layers fail at each height. None of
+   these paths is outermost (radius evidence: `spike-output/radii-test-solid-0.08.txt`). A
    checker for the real feature needs to tell the outermost path from region
    boundaries. The strict counts are reported as measured.
 
 3. **The banded mesh is not watertight, and the slicer says so.** Measured two ways
    that agree exactly (the spike's own edge count and Orca's `--info`):
-   - `bandTriangle` (Task 1) computes a cut point from whichever polygon edge it is
-     clipping at the time. The same point reached from the strip above and the strip
-     below, or from two neighbouring triangles, can differ in the last bits. Unwelded,
-     this gives 646,512 open edges and Orca counts 71 separate parts. Merging corners
-     within 1e-6 mm removes all of these.
-   - The remaining 6,012 (0.08) and 6,325 (0.12) open edges all come from expanding
-     split paint into real sub-triangles. A split adds a midpoint on an edge that the
-     unsplit neighbour does not have (a T-junction), and banding repeats it in every
-     layer. Measured control: with splits treated as whole triangles, the welded
-     result had 0 open edges. That variant was not sliced.
+   - `bandTriangle` (Task 1) clips the already-clipped polygon at the upper plane, so
+     the cut point shared by two consecutive strips of one triangle can differ in the
+     last bits (shown on a two-triangle example). Unwelded, the test solid has 646,512
+     open edges at 0.08 mm and Orca counts 71 separate parts. Merging corners on a
+     1e-6 mm grid leaves 6,012 (0.08) and 6,325 (0.12).
+   - Expanding split paint into real sub-triangles adds T-junctions: a split adds a
+     midpoint on an edge that the unsplit neighbour does not have, and banding repeats
+     it in every layer. Control (`--whole-splits`, split triangles banded whole,
+     welded, otherwise identical):
+
+     | Height | Open edges, normal | Open edges, `--whole-splits` | Attributable to split paint | Unexplained residual |
+     |---|---|---|---|---|
+     | 0.08 | 6,012 | 0 | 6,012 (100%) | 0 |
+     | 0.12 | 6,325 | 318 | 6,007 (95%) | 318 |
+
+     Orca `--info` agrees: `test-solid-0.08-wholesplits` manifold = yes;
+     `test-solid-0.12-wholesplits` manifold = no, open_edges = 318. The 318 at 0.12 mm
+     were **not explained by split paint**. A one-off experiment repeated the 0.12 mm
+     `--whole-splits` run with a 1e-4 mm weld grid instead of 1e-6. It used a
+     throw-away copy of the tool; the outputs are in `spike-output/weld-1e-4-experiment/`.
+     The 318 fell to 12, so most of the residual is cut-point mismatch larger than
+     1e-6 mm. The last 12 are unexplained. A fixed grid can still put two very close
+     points in different cells, but that was not tested. Neither control variant was
+     sliced.
 
    Orca sliced every one of these meshes without an error and the colours came out
-   right. However, `--info` reports `manifold = no`, and the log does not show
+   right on the visible surface. However, `--info` reports `manifold = no`, and the log does not show
    whether Orca repaired the mesh while slicing. By the gate rule ("if the slicer
    repairs or rejects the mesh, do not continue"), **this needs the owner's
-   decision.** Both causes can be fixed in the geometry (cut from the original edge;
-   split the unsplit neighbour at the same midpoint), but that is a re-plan, not
-   something this spike changes.
+   decision.** The two identified causes look fixable in the geometry (cut from the
+   original edge; split the unsplit neighbour at the same midpoint), but that is a
+   re-plan, not something this spike changes.
+
+   `--info` on the unbanded source solid crashed (exit 139, segmentation fault). On the
+   same solid after export and dual wall with no banding (`--no-band`) it ran:
+   manifold = yes, 200,160 facets. All `--info` outputs are saved in
+   `spike-output/info/`.
 
 4. **Cost.** Triangles grow about 10× at 0.08 mm and about 7× at 0.12 mm. The 3MF grows
    from 2.4 MB to 32 MB / 22 MB. Snapmaker Orca CLI slice times are 44 s / 28 s. The
@@ -144,19 +186,97 @@ from `T` commands equal the slicer's `total filament change`. Spike run times: 3
 5. **The repo fixtures cannot answer the question.** Both are open, zero-thickness
    squares. The slicer refuses them ("Nothing to be sliced") whether banded or not.
 
+## Owner-supplied figurines
+
+Inputs (read only, not modified): `D:/3D/Super Man/Super Man Final.3mf` (4.8 MB),
+`D:/3D/They Live Alien/They Live Alien 5 Colors.3mf` (19.2 MB) and
+`D:/3D/Flirty Figures Alien/Flirty Figures Alien Updated Painted (1).3mf` (12.3 MB).
+Outputs are in `spike-output/` as `superman-*`, `theylive-*` and `flirty-*`. The run
+log is `run-figurines.log`, and the `--info` output is in `info/`.
+
+What happened on reading:
+- **Super Man**: the unmodified tool refused it with *"ProjectError: superman parts.obj
+  contains a negative cutout volume. Enable native negative-volume preservation to open
+  it."* The tool was changed to allow negative volumes (see Method), and the file then
+  ran.
+  - It has 6 source colours and 4 plates. Each plate holds one object with 26 normal
+    parts and one negative part.
+  - Only **plate 1** was run; it is 15.0 mm tall. Plates 2–4 were exported unbanded to
+    check (`--plate=N --no-band`): each is also 15.0 mm tall with 326,320–327,952
+    triangles. None was banded or sliced.
+- **They Live Alien**: a PrusaSlicer-style project with 8 source colours and one
+  object. It read and exported without change.
+- **Flirty Figures Alien**: 4 colours, one object. It read and exported without change.
+- Source colours above 4 are folded onto reels 1–4 by the mapping. This does not
+  matter here, because every painted face is then repainted with the layer pattern.
+
+| Model | Height | Split-painted | Layer | Triangles before → after | 3MF | Uncompressed model | Spike | Slice | Slicer warnings (besides exclude-triangles) | `--info` banded | `--info` unbanded (`--no-band`) | Layers checked | Strict fail | Colour-only fail | Visible-surface fail (of which < 162 sectors) | Tool changes | Print time | Tower g / total g |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Super Man (plate 1) | 15.0 mm | 0 | 0.08 | 327,952 → 1,761,194 | 31.4 MB | 170.1 MB | 17 s | 16.9 s | "Reversing even wall line causes it to be printed CCW instead of CW!" | manifold = no, 4 open edges, 26 parts | manifold = yes, 26 parts | 184 | 65 | 9 | 62 (62) | 278 | 4 h 23 m | 15.0 / 22.3 |
+| Super Man (plate 1) | 15.0 mm | 0 | 0.12 | 327,952 → 1,284,789 | 22.5 MB | 122.6 MB | 13 s | 12.8 s | "Detected missing Voronoi vertex even after the rotation of input." | manifold = no, 3 open edges, 26 parts | as above | 123 | 48 | 15 | 44 (44) | 224 | 2 h 51 m | 13.6 / 21.3 |
+| They Live Alien | 140.0 mm | 152 | 0.08 | 1,333,448 → 7,922,682 | 133.2 MB | 799.0 MB | 144 s | 135.0 s | none | manifold = no, 2,580 open edges, 19 parts | manifold = no, 120 open edges, 18 parts | 1,746 | 1,677 | 8 | 25 (20) | 2,939 | 45 h 9 m | 115.5 / 234.1 |
+| They Live Alien | 140.0 mm | 152 | 0.12 | 1,333,448 → 5,727,491 | 95.2 MB | 571.5 MB | 93 s | 87.8 s | "Detected finite Voronoi vertex with non finite vertex even after the rotation of input." | manifold = no, 2,379 open edges, 20 parts | as above | 1,164 | 1,118 | 10 | 19 (13) | 2,017 | 31 h 43 m | 119.7 / 236.5 |
+| Flirty Figures Alien | 105.4 mm | 12,233 | 0.08 | 608,046 → 4,262,422 | 84.5 MB | 441.4 MB | 66 s | 39.6 s | none | manifold = no, 556,786 open edges, **46,439 parts** | manifold = yes, 3 parts | 1,315 | 58 | 14 | 343 (337) | 1,434 | 20 h 34 m | 68.6 / 116.5 |
+| Flirty Figures Alien | 105.4 mm | 12,233 | 0.12 | 608,046 → 3,119,295 | 62.5 MB | 320.2 MB | 48 s | 28.7 s | none | manifold = no, 472,861 open edges, **53,446 parts** | as above | 877 | 47 | 16 | 232 (223) | 1,016 | 14 h 45 m | 73.4 / 120.2 |
+
+All six slices exited 0 and produced G-code (16–183 MB). All logged the usual
+`calc_exclude_triangles` error. Print times are the slicer's estimates. Tower grams
+are computed from the G-code as above.
+
+Open edges, separated by cause. These are the spike's own counts on the welded output;
+Orca's `--info` counts are close but not identical for They Live (it reports 120 in
+the source where the spike counts 80):
+
+| Model | Layer | Source (unbanded) | Banded | Banded, `--whole-splits` | Attributable to split paint | Left after `--whole-splits`, beyond the source |
+|---|---|---|---|---|---|---|
+| Super Man | 0.08 | 0 | 4 (+5 edges on 3+ faces) | 4 | 0 (no splits) | 4 |
+| Super Man | 0.12 | 0 | 3 (+5 edges on 3+ faces) | 3 | 0 | 3 |
+| They Live Alien | 0.08 | 80 (+49 on 3+ faces) | 2,519 | 429 | 2,090 (83%) | 349 |
+| They Live Alien | 0.12 | 80 | 2,324 | 308 | 2,016 (87%) | 228 |
+| Flirty Figures Alien | 0.08 | 0 (+22 on 3+ faces) | 556,784 | 158,053 | 398,731 (72%) | 158,053 |
+| Flirty Figures Alien | 0.12 | 0 | 472,859 | 81,017 | 391,842 (83%) | 81,017 |
+
+In the one-off 1e-4 mm weld experiment, Flirty at 0.12 mm with `--whole-splits` went
+from 81,017 open edges to **0**, with 1,073 strips collapsing to zero area. So on that
+model most of the non-split open edges are cut-point mismatches larger than 1e-6 mm.
+This was not repeated for the other models or heights.
+
+What the figurines show:
+- **Every file sliced.** None was rejected, at either height. No mesh-repair message
+  appeared in the command-line log, but `--info` reports every banded output as
+  non-manifold. On Flirty, banding broke a 3-part mesh into about 46,000–53,000
+  disconnected parts.
+- **The strict rule fails on most They Live layers and some Super Man and Flirty
+  layers.** By the colour-only view (reel 4 ignored), 8–16 layers per file have
+  another colour reel above 5%. These always include layers 1–2. On the test solid
+  those two layers were bottom-shell carry-over; on the figurines that was not
+  checked. The rest are not classified. Whether any of these stray paths is visible
+  was **not determined**. The visible-surface view cannot judge these shapes: most of
+  its failures are layers with fewer than 162 occupied sectors. They Live has 5–6
+  layers per height and Flirty 6–9 that fail on a foreign colour rather than on
+  occupancy. They were not inspected.
+- **Cost at full size:** about 5–7× (0.08) and 4–5× (0.12) more triangles, model XML up
+  to 799 MB, and 3MF up to 133 MB. Print estimates run to 45 h for the 140 mm They
+  Live Alien at 0.08 mm, with the prime tower about half the filament (115–120 g of
+  about 235 g). At 0.12 mm the same model is 31.7 h.
+
 ## What was and was not verified
 
 Verified (measured, reproducible with the commands below):
 - The spike's triangle, vertex, size and open-edge counts; Orca's `--info` agrees on
   facets and open edges.
-- Orca 2.4.1 command-line slicing succeeds (exit 0) for all three test-solid outputs.
-  It refuses the fixtures.
-- Per-layer tool use of `Outer wall` extrusions in the G-code, under both rules above.
+- Orca 2.4.1 command-line slicing succeeds (exit 0) for all three test-solid outputs
+  and all six figurine outputs. It refuses the fixtures.
+- Per-layer tool use of `Outer wall` extrusions in the G-code, under the three rules above.
 - The slicer's own print-time, filament and filament-change figures; tower grams
   computed from the G-code.
 
 Not verified:
-- **Any real figurine.** Only a synthetic, star-shaped solid was tested.
+- **Whether the figurines' colours are right on the visible surface.** The
+  visible-surface view only works for star-shaped layers. On the figurines, the
+  colour-only view finds 8–16 layers per file with a stray colour that was not
+  inspected.
+- **Super Man plates 2–4** (only plate 1 was banded and sliced).
 - **Any print.** Nothing was printed; whether the bands look like the intended colour
   is unknown.
 - Whether Orca silently repairs the non-manifold mesh while slicing, and whether the
@@ -165,7 +285,10 @@ Not verified:
   from the command line).
 - The visible-surface rule only applies to star-shaped layers; it is not a general
   checker.
-- A T-junction-free (split-safe) banded mesh was counted as watertight but not sliced.
+- The `--whole-splits` and 1e-4 mm weld controls were counted (spike and `--info`) but
+  not sliced.
+- The last 12 open edges on the test solid at 0.12 mm (1e-4 weld, `--whole-splits`)
+  are unexplained.
 - No baseline (unbanded) slice, so the extra cost is not separated from the cost of
   multi-colour printing in general.
 
@@ -178,6 +301,14 @@ node tools/built-in-colours-spike.mjs web/tests/four-colours.3mf 0.08 $O/four-co
 node --max-old-space-size=8192 tools/built-in-colours-spike.mjs $O/test-solid-source.3mf 0.08 $O/test-solid-0.08.3mf
 node --max-old-space-size=8192 tools/built-in-colours-spike.mjs $O/test-solid-source.3mf 0.12 $O/test-solid-0.12.3mf
 node --max-old-space-size=8192 tools/built-in-colours-spike.mjs $O/test-solid-source.3mf 0.08 $O/test-solid-0.08-raw.3mf --raw
+node --max-old-space-size=8192 tools/built-in-colours-spike.mjs $O/test-solid-source.3mf 0.12 $O/test-solid-0.12-wholesplits.3mf --whole-splits   # and 0.08
+node tools/built-in-colours-spike.mjs $O/test-solid-source.3mf 0.08 $O/test-solid-noband.3mf --no-band
 "C:/Program Files/Snapmaker_Orca/snapmaker-orca.exe" --arrange 0 --orient 0 --slice 0 --outputdir $O/gc-test-solid-0.08 $O/test-solid-0.08.3mf
+"C:/Program Files/Snapmaker_Orca/snapmaker-orca.exe" --info $O/test-solid-0.08.3mf
 node --max-old-space-size=8192 tools/check-built-in-toolpaths.mjs $O/gc-test-solid-0.08/plate_1.gcode 0.2 0.08
 ```
+
+Figurines: `$O/run-figurines.sh` (spike runs, including `--no-band` and
+`--whole-splits` for each model), then `$O/slice.sh <name>` for each banded output,
+`--info` on each output, and the checker as above (`--max-old-space-size=12288` for the
+spike on They Live Alien).

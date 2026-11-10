@@ -62,7 +62,7 @@ for (const raw of gcode.split('\n')) {
   x = nx; y = ny;
 }
 
-const failures = [];
+const failures = [], colourFailures = [];
 let checked = 0, passed = 0;
 const missing = [];
 for (let n = 1; n <= maxLayer; n++) {
@@ -76,14 +76,22 @@ for (let n = 1; n <= maxLayer; n++) {
     failures.push({layer: n, z: Number((first + n * height).toFixed(4)), wanted, lengths: Object.fromEntries(Object.entries(l).map(([k, v]) => [k, Number(v.toFixed(2))])),
       strayShare: Number((strays.reduce((a, [, v]) => a + v, 0) / total).toFixed(4))});
   } else passed += 1;
+  // Colour-only view (not the brief's rule): the same test with the interior reel
+  // (T3) left out, so a layer fails only when another *colour* reel strays.
+  const c = Object.entries(l).filter(([k]) => Number(k) !== 3), ctotal = c.reduce((a, [, v]) => a + v, 0);
+  const cstray = c.filter(([k]) => Number(k) !== wanted).reduce((a, [, v]) => a + v, 0);
+  if (ctotal && ((l[wanted] || 0) < cstray || c.some(([k, v]) => Number(k) !== wanted && v > 0.05 * ctotal)))
+    colourFailures.push({layer: n, wanted, strayShare: Number((cstray / ctotal).toFixed(4))});
 }
 
 // Secondary view (not the brief's rule): what is on the visible surface. Around the
 // layer's centroid the layer is cut into 180 two-degree sectors; each sector is owned
 // by the tool of the outer-wall point (sampled every 0.2 mm) lying furthest out. A layer fails
-// when more than 5% of its occupied sectors are owned by another tool. Valid for
+// when more than 5% of its occupied sectors are owned by another tool, or when fewer
+// than 162 of the 180 sectors are occupied at all. Valid for
 // star-shaped layers (such as the spike's test solid), not for arbitrary models.
-let surfaceChecked = 0, surfacePassed = 0, layersWithAnyForeignSector = 0;
+let surfaceChecked = 0, surfacePassed = 0, layersWithAnyForeignSector = 0, minOccupied = Infinity, layersUnder90Percent = 0;
+const MIN_SECTORS = 162;   // 90% of 180: fewer occupied sectors fails the layer, so a sparse layer cannot pass silently
 const surfaceFailures = [];
 for (let n = 1; n <= maxLayer; n++) {
   const segs = segments.get(n);
@@ -99,7 +107,9 @@ for (let n = 1; n <= maxLayer; n++) {
   surfaceChecked += 1;
   const total = Object.values(l).reduce((a, b) => a + b, 0), wanted = wantedTool(n), foreign = total - (l[wanted] || 0);
   if (foreign) layersWithAnyForeignSector += 1;
-  if (foreign > 0.05 * total) surfaceFailures.push({layer: n, wanted, sectorsPerTool: l});
+  minOccupied = Math.min(minOccupied, total);
+  if (total < MIN_SECTORS) layersUnder90Percent += 1;
+  if (foreign > 0.05 * total || total < MIN_SECTORS) surfaceFailures.push({layer: n, wanted, occupiedSectors: total, sectorsPerTool: l});
   else surfacePassed += 1;
 }
 
@@ -113,16 +123,19 @@ const grams = (tool, mm) => {
 };
 const towerGrams = Object.entries(towerE).reduce((a, [k, v]) => a + grams(Number(k), v), 0);
 const report = {file, first, height, checkedAt: new Date().toISOString(), layersWithOuterWall: layers.size, highestLayer: maxLayer,
-  layersChecked: checked, layersPassed: passed, layersFailing: failures.length, layersAboveFirstWithoutOuterWall: missing.length,
+  layersChecked: checked, layersPassed: passed, layersFailing: failures.length,
+  colourOnlyView: {layersFailing: colourFailures.length, worstStrayShare: Math.max(0, ...colourFailures.map(f => f.strayShare)), failingLayers: colourFailures.map(f => f.layer).slice(0, 300)},
+  layersAboveFirstWithoutOuterWall: missing.length,
   offGridZValues: [...offGrid].slice(0, 20), toolChangesCounted: toolChanges,
   towerGramsComputed: Number(towerGrams.toFixed(2)), towerFilamentMmPerTool: Object.fromEntries(Object.entries(towerE).map(([k, v]) => [k, Number(v.toFixed(1))])),
   filamentMmPerTool: Object.fromEntries(Object.entries(allE).map(([k, v]) => [k, Number(v.toFixed(1))])),
   slicerSummary: header, firstFailures: failures.slice(0, 10),
-  outermostPathView: {layersChecked: surfaceChecked, layersPassed: surfacePassed, layersFailing: surfaceFailures.length, layersWithAnyForeignSector, failingLayers: surfaceFailures.map(f => f.layer).slice(0, 200), firstFailures: surfaceFailures.slice(0, 10)}};
+  outermostPathView: {layersChecked: surfaceChecked, layersPassed: surfacePassed, layersFailing: surfaceFailures.length, layersWithAnyForeignSector, fewestOccupiedSectors: minOccupied, layersWithFewerThan162Sectors: layersUnder90Percent, failingLayers: surfaceFailures.map(f => f.layer).slice(0, 200), firstFailures: surfaceFailures.slice(0, 10)}};
 writeFileSync(`${file}.check.json`, JSON.stringify(report, null, 2));
 console.log(`${checked} layers checked, ${passed} pass, ${failures.length} fail` + (missing.length ? `, ${missing.length} layers above the first have no outer wall` : ''));
 for (const f of failures.slice(0, 10)) console.log(`  layer ${f.layer} (z ${f.z}): wanted T${f.wanted}, outer-wall mm ${JSON.stringify(f.lengths)}`);
-console.log(`outermost-path view (secondary): ${surfaceChecked} checked, ${surfacePassed} pass, ${surfaceFailures.length} fail, ${layersWithAnyForeignSector} with at least one foreign sector`);
-for (const f of surfaceFailures.slice(0, 10)) console.log(`  layer ${f.layer}: wanted T${f.wanted}, sectors per tool ${JSON.stringify(f.sectorsPerTool)}`);
+console.log(`colour-only view (T3 ignored): ${colourFailures.length} of ${checked} layers have another colour reel above 5%` + (colourFailures.length ? `, worst stray share ${Math.max(...colourFailures.map(f => f.strayShare))}` : ''));
+console.log(`outermost-path view (secondary): ${surfaceChecked} checked, ${surfacePassed} pass, ${surfaceFailures.length} fail, ${layersWithAnyForeignSector} with at least one foreign sector, fewest occupied sectors ${minOccupied}/180 (${layersUnder90Percent} layers under ${MIN_SECTORS})`);
+for (const f of surfaceFailures.slice(0, 10)) console.log(`  layer ${f.layer}: wanted T${f.wanted}, ${f.occupiedSectors} sectors occupied, per tool ${JSON.stringify(f.sectorsPerTool)}`);
 console.log(JSON.stringify({toolChangesCounted: toolChanges, towerGramsComputed: report.towerGramsComputed, slicerSummary: header}, null, 2));
 if (failures.length || !checked) process.exitCode = 1;

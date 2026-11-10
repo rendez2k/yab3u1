@@ -1,6 +1,6 @@
 // Throwaway spike (built-in colours, Task 2). Not wired into the app.
 //
-//   node tools/built-in-colours-spike.mjs <input.3mf> <layerHeight> <output.3mf> [--raw]
+//   node tools/built-in-colours-spike.mjs <input.3mf> <layerHeight> <output.3mf> [--raw] [--whole-splits] [--no-band] [--plate=N]
 //   node tools/built-in-colours-spike.mjs --make-test-solid <output.3mf>
 //
 // The first form exports the input for the Snapmaker U1 with four reels and no
@@ -13,9 +13,15 @@
 // docs/built-in-colours-spike-2026-11.md). A JSON report is written next to the
 // output.
 //
+// --whole-splits  band split-painted triangles whole (control: no split midpoints)
+// --no-band       export and dual-wall only, no banding (control: the source's own
+//                 open edges, for comparing with the banded output)
+// --plate=N       export plate N instead of the first plate
+// Negative volumes are kept (readProject allowNegative); they carry no paint and
+// are not banded.
+//
 // The second form writes a synthetic painted test solid (about 100 mm tall,
-// about 200,000 triangles, three painted shades plus split-painted boundaries),
-// because no real painted figurine was available for the spike.
+// about 200,000 triangles, three painted shades plus split-painted boundaries).
 import {readFileSync, writeFileSync} from 'node:fs';
 import {readZip, writeZip} from '../web/zip.js';
 import {readProject, exportProject, matrixFromText, matmul, applyMatrix, SRC_BBL_PROJECT} from '../web/shared/project.js';
@@ -152,14 +158,15 @@ function encodeParts(parts) {
 
 const WELD = 1e-6;   // mm; far below any printer resolution
 
-async function spike(input, height, output, raw = false) {
+async function spike(input, height, output, {raw = false, wholeSplits = false, noBand = false, plate = null} = {}) {
   const started = Date.now();
   const source = await readZip(readFileSync(input));
-  const project = readProject(source);
+  // Negative volumes are kept as they are (minimal fix for the owner's Super Man file).
+  const project = readProject(source, {allowNegative: true});
   const setup = wallTestSetup({height: 0.08});   // only for the four ELEGOO reels; height is set below
   const reels = setup.reels;
   const mapping = Object.fromEntries(project.colors.map((_, i) => [i + 1, (i % 4) + 1]));
-  const plateId = project.plates[0]?.id ?? 1;
+  const plateId = plate ?? project.plates[0]?.id ?? 1;
   const built = exportProject(project, plateId, null, {target: 'snapmaker', reels, recipes: [], mapping, u1Nozzle: '0.4',
     layerHeight: {mode: 'custom', value: String(height)}, subdivideMixLayer: false, title: 'Built-in colours spike'});
   if (built.problems.length) throw Error(built.problems.join('\n'));
@@ -168,7 +175,7 @@ async function spike(input, height, output, raw = false) {
 
   const where = placements(entries);
   // Bed height = world z above the lowest point of the build item.
-  const itemMin = new Map();
+  const itemMin = new Map(), itemMax = new Map();
   const meshes = [];
   for (const [name, data] of entries) {
     if (!/^3D\/.*\.model$/i.test(name)) continue;
@@ -176,15 +183,17 @@ async function spike(input, height, output, raw = false) {
     for (const m of text.matchAll(OBJECT_RE)) {
       if (!m[2].includes('<triangle')) continue;
       const key = `${name}#${attr(m[1], 'id')}`, place = where.get(key);
-      if (!place) continue;
+      // Only printed (painted, after dual wall) meshes set the bed height; a negative
+      // volume carries no paint and does not touch the bed.
+      if (!place || !PAINT_RE.test(m[2])) continue;
       const pts = [...m[2].matchAll(VERTEX_RE)].map(v => [Number(v[1]), Number(v[2]), Number(v[3])]);
-      for (const p of pts) { const z = applyMatrix(place.m, p)[2]; itemMin.set(place.item, Math.min(itemMin.get(place.item) ?? Infinity, z)); }
+      for (const p of pts) { const z = applyMatrix(place.m, p)[2]; itemMin.set(place.item, Math.min(itemMin.get(place.item) ?? Infinity, z)); itemMax.set(place.item, Math.max(itemMax.get(place.item) ?? -Infinity, z)); }
       meshes.push({name, id: attr(m[1], 'id'), place});
     }
   }
 
   const stats = {trianglesBefore: 0, trianglesAfter: 0, paintedBefore: 0, splitPaintedBefore: 0, leafSubTriangles: 0, stripsWritten: 0,
-    unpaintedKept: 0, stripsCollapsedByWeld: 0, verticesBefore: 0, verticesAfter: 0, layersSpanned: [Infinity, -Infinity], weldMm: raw ? 0 : WELD,
+    unpaintedKept: 0, stripsCollapsedByWeld: 0, verticesBefore: 0, verticesAfter: 0, layersSpanned: [Infinity, -Infinity], weldMm: raw ? 0 : WELD, wholeSplits, noBand,
     before: {openEdges: 0, edgesOnMoreThanTwoFaces: 0}, after: {openEdges: 0, edgesOnMoreThanTwoFaces: 0}, afterWithoutWeld: {openEdges: 0, edgesOnMoreThanTwoFaces: 0}};
   const reelFaces = {1: 0, 2: 0, 3: 0};
   const codes = Object.fromEntries(PATTERN.map(s => [s, paint.encode({kind: 'leaf', state: s})]));
@@ -198,13 +207,12 @@ async function spike(input, height, output, raw = false) {
     for (const m of text.matchAll(OBJECT_RE)) {
       const id = attr(m[1], 'id'), place = where.get(`${name}#${id}`);
       if (!place || !m[2].includes('<triangle')) continue;
-      const zmin = itemMin.get(place.item), M = place.m;
+      const zmin = itemMin.get(place.item) ?? 0, M = place.m;
       const zOf = p => applyMatrix(M, p)[2] - zmin;
       const pts = [...m[2].matchAll(VERTEX_RE)].map(v => [Number(v[1]), Number(v[2]), Number(v[3])]);
       stats.verticesBefore += pts.length;
-      // bandTriangle computes a cut point from whichever polygon edge it is clipping, so
-      // the same point reached from two strips (or two triangles) can differ in the last
-      // bits. Points within WELD mm are merged unless --raw; both counts are reported.
+      // bandTriangle clips the already-clipped polygon at the upper plane, so the cut
+      // point shared by consecutive strips of one triangle can differ in the last bits. Points within WELD mm are merged unless --raw; both counts are reported.
       const index = new Map(), exact = new Map(), verts = [];
       const exactId = p => { const k = `${p[0]},${p[1]},${p[2]}`; let i = exact.get(k); if (i === undefined) { i = exact.size; exact.set(k, i); } return i; };
       const vid = p => {
@@ -220,11 +228,13 @@ async function spike(input, height, output, raw = false) {
         stats.trianglesBefore += 1;
         const found = PAINT_RE.exec(a);
         const rest = a.replace(/\s(?:v1|v2|v3)="[^"]*"/g, '').replace(PAINT_RE, '');
-        if (!found || !found[1]) { stats.unpaintedKept += 1; afterTris.push(cornerIds); exactTris.push(corners.map(exactId)); triText.push(`<triangle v1="${cornerIds[0]}" v2="${cornerIds[1]}" v3="${cornerIds[2]}"${rest}/>`); continue; }
+        if (!found || !found[1] || noBand) { stats.unpaintedKept += 1; afterTris.push(cornerIds); exactTris.push(corners.map(exactId)); triText.push(`<triangle v1="${cornerIds[0]}" v2="${cornerIds[1]}" v3="${cornerIds[2]}"${rest}/>`); continue; }
         stats.paintedBefore += 1;
         const node = paint.decode(found[1]);
         if (node.kind !== 'leaf') stats.splitPaintedBefore += 1;
-        const leaves = leafTriangles(corners, node);
+        // --whole-splits: a split-painted triangle is banded as one triangle (control run
+        // that adds no split midpoints, so its open edges are not from split expansion).
+        const leaves = wholeSplits ? [{triangle: corners, state: 0}] : leafTriangles(corners, node);
         stats.leafSubTriangles += leaves.length;
         for (const leaf of leaves) for (const strip of bandTriangle(leaf.triangle, zOf, FIRST, height)) {
           const reel = PATTERN[strip.layer % 3], s = strip.points.map(vid);
@@ -258,11 +268,11 @@ async function spike(input, height, output, raw = false) {
 
   // Process settings for the spike.
   const cfg = JSON.parse(dec.decode(entries.get(SRC_BBL_PROJECT)));
-  const process = {layer_height: String(height), initial_layer_print_height: String(FIRST), mmu_segmented_region_interlocking_depth: '0',
+  const spikeSettings = {layer_height: String(height), initial_layer_print_height: String(FIRST), mmu_segmented_region_interlocking_depth: '0',
     dithering_local_z_mode: '0', mixed_filament_advanced_dithering: '0'};
-  Object.assign(cfg, process);
+  Object.assign(cfg, spikeSettings);
   if (Array.isArray(cfg.different_settings_to_system) && typeof cfg.different_settings_to_system[0] === 'string')
-    cfg.different_settings_to_system[0] = [...new Set([...cfg.different_settings_to_system[0].split(';').filter(Boolean), ...Object.keys(process)])].sort().join(';');
+    cfg.different_settings_to_system[0] = [...new Set([...cfg.different_settings_to_system[0].split(';').filter(Boolean), ...Object.keys(spikeSettings)])].sort().join(';');
   entries.set(SRC_BBL_PROJECT, enc.encode(JSON.stringify(cfg, null, 2)));
   // The export writes a per-object layer height, which would override the global one.
   const ms = 'Metadata/model_settings.config';
@@ -270,22 +280,23 @@ async function spike(input, height, output, raw = false) {
 
   const zip = await writeZip([...entries].map(([name, data]) => ({name, data})));
   writeFileSync(output, zip);
-  const report = {input, output, layerHeight: height, firstLayer: FIRST, reels: reels.map(r => r.name || r.color), pattern: 'strip in layer n -> reel [1,2,3][n % 3]; reel 4 inner',
+  const report = {input, output, plateId, layerHeight: height, firstLayer: FIRST, reels: reels.map(r => r.name || r.color), pattern: 'strip in layer n -> reel [1,2,3][n % 3]; reel 4 inner',
     dualWall: {innerSlot: dualWall.innerSlot, outerDepth: dualWall.outerDepth, facesGivenExplicitPaint: dualWall.facesGivenExplicitPaint, settings: dualWall.settings},
-    itemMinWorldZ: Object.fromEntries(itemMin), ...stats, stripsPerReel: reelFaces, uncompressedModelBytes: modelBytes, outputBytes: zip.length,
-    processSettings: process, seconds: (Date.now() - started) / 1000};
+    itemMinWorldZ: Object.fromEntries(itemMin), modelHeightMm: Math.max(...[...itemMax].map(([k, v]) => v - itemMin.get(k))), ...stats, stripsPerReel: reelFaces, uncompressedModelBytes: modelBytes, outputBytes: zip.length,
+    processSettings: spikeSettings, seconds: (Date.now() - started) / 1000};
   writeFileSync(output.replace(/\.3mf$/i, '') + '.json', JSON.stringify(report, null, 2));
   return report;
 }
 
 const args = process.argv.slice(2);
 if (args[0] === '--make-test-solid' && args[1]) console.log(JSON.stringify(await makeTestSolid(args[1]), null, 2));
-else if ((args.length === 3 || (args.length === 4 && args[3] === '--raw')) && Number(args[1]) > 0) {
-  const r = await spike(args[0], Number(args[1]), args[2], args[3] === '--raw');
-  console.log(JSON.stringify({output: r.output, trianglesBefore: r.trianglesBefore, trianglesAfter: r.trianglesAfter, splitPaintedBefore: r.splitPaintedBefore,
+else if (args.length >= 3 && Number(args[1]) > 0 && args.slice(3).every(a => ['--raw', '--whole-splits', '--no-band'].includes(a) || /^--plate=\d+$/.test(a))) {
+  const flags = new Set(args.slice(3)), plate = Number(args.slice(3).find(a => a.startsWith('--plate='))?.slice(8)) || null;
+  const r = await spike(args[0], Number(args[1]), args[2], {raw: flags.has('--raw'), wholeSplits: flags.has('--whole-splits'), noBand: flags.has('--no-band'), plate});
+  console.log(JSON.stringify({output: r.output, trianglesBefore: r.trianglesBefore, trianglesAfter: r.trianglesAfter, splitPaintedBefore: r.splitPaintedBefore, modelHeightMm: r.modelHeightMm,
     stripsCollapsedByWeld: r.stripsCollapsedByWeld, before: r.before, after: r.after, afterWithoutWeld: r.afterWithoutWeld,
     uncompressedModelBytes: r.uncompressedModelBytes, outputBytes: r.outputBytes, seconds: r.seconds}, null, 2));
 } else {
-  console.error('usage: node tools/built-in-colours-spike.mjs <input.3mf> <layerHeight> <output.3mf> [--raw]\n       node tools/built-in-colours-spike.mjs --make-test-solid <output.3mf>');
+  console.error('usage: node tools/built-in-colours-spike.mjs <input.3mf> <layerHeight> <output.3mf> [--raw] [--whole-splits] [--no-band] [--plate=N]\n       node tools/built-in-colours-spike.mjs --make-test-solid <output.3mf>');
   process.exitCode = 2;
 }
