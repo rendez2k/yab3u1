@@ -1,3 +1,10 @@
+## 2.6.64 — Painted objects stay put
+
+- Painting a whole object no longer moves it to a corner of the plate; it keeps its position, as repair and turn already did.
+- The original of a repainted or repaired object is kept for Undo but no longer listed in Plates with a Restore button.
+- Painting an object twice no longer names it "coloured · coloured".
+- File pickers in dialogs match the other controls.
+
 ## 2.6.63 — Polish from a click-through
 
 - Quick conversion's header button downloads directly again for single-plate projects instead of opening the Export menu.

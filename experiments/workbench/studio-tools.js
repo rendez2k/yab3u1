@@ -227,7 +227,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
     if(!repairing&&mode==='split'&&splitMethod()==='by-colour'&&!settings.querySelector('[data-region-colour]').value){message.textContent='Choose the source colour to separate.';return;}
     let options;try{options=repairing||turning?{operation,objectIds:ids,plateId:before.context.plateId,...extra}:editOptions();}catch(error){message.textContent=error.message;return;}
     autoResult.hidden=true;outcome.hidden=true;
-    const splitting=!repairing&&!turning&&mode==='split'&&!['shape-colour','remove-colour'].includes(options.operation);let applied=false;
+    const recolouring=['colour','shape-colour'].includes(options.operation),splitting=!repairing&&!turning&&mode==='split'&&!['shape-colour','remove-colour'].includes(options.operation);let applied=false;
     const stamp=++request;working=true;splitPreview?.invalidate();if(!['by-shape','boundary'].includes(splitMethod()))restorePreview();message.textContent='Preparing your edit…';sync();
     try{
       const bytes=await before.file.arrayBuffer();
@@ -248,11 +248,13 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
         return;
       }
       const quantities=Object.fromEntries(s.objects.map(o=>[o.objectId,(s.quantities[o.objectId]??1)*s.copies]));
-      for(const c of result.changes){if(turning){const count=quantities[c.oldId]??1;quantities[c.oldId]=0;superseded.add(String(c.oldId));for(const n of c.created)quantities[n.id]=count;continue;}quantities[c.oldId]=Math.max(0,(quantities[c.oldId]??1)-1);for(const n of c.created)quantities[n.id]=1;}
+      for(const c of result.changes){if(turning){const count=quantities[c.oldId]??1;quantities[c.oldId]=0;superseded.add(String(c.oldId));for(const n of c.created)quantities[n.id]=count;continue;}quantities[c.oldId]=Math.max(0,(quantities[c.oldId]??1)-1);for(const n of c.created)quantities[n.id]=1;
+        // A repainted or repaired object replaces its original; Undo brings the original back.
+        if((repairing||recolouring)&&!quantities[c.oldId])superseded.add(String(c.oldId));}
       const file=result.changes.length?new File([result.bytes],before.file.name,{type:before.file.type}):before.file;
       // A full replacement can keep the original grouped positions. If an old
       // copy remains, pack it separately from the repaired copy at that position.
-      const keepArrangement=(repairing||turning&&Object.values(quantities).every(n=>n<=1))&&result.changes.every(c=>!quantities[c.oldId])&&Object.values(quantities).every(n=>n<=1);
+      const keepArrangement=(repairing||(turning||recolouring)&&Object.values(quantities).every(n=>n<=1))&&result.changes.every(c=>!quantities[c.oldId])&&Object.values(quantities).every(n=>n<=1);
       const next={...before,file,context:{...before.context,layout:{...before.context.layout,copies:1,quantities,arrangement:keepArrangement?before.context.layout.arrangement:'objects'}}};
       committing=true;sync();
       restorePreview();

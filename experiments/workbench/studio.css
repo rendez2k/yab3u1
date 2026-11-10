@@ -364,3 +364,7 @@ dialog kbd{font:inherit;font-size:12px;padding:1px 6px;border-radius:5px;backgro
 #inspector .object-edit-row [data-object-edit=add]{grid-column:2}
 #inspector .object-edit-row [data-object-edit=fill],#inspector .object-edit-row [data-object-edit=remove]{grid-column:auto}
 dialog ul li{margin:0}
+/* File inputs match the other controls. */
+input[type=file]{font:inherit;font-size:12px;color:var(--dim);max-width:100%}
+input[type=file]::file-selector-button{font:inherit;font-size:12px;font-weight:500;color:var(--text);background:var(--panel2);border:0;border-radius:8px;padding:8px 12px;margin-right:10px;cursor:pointer}
+input[type=file]::file-selector-button:hover{background:var(--soft)}

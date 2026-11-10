@@ -234,7 +234,7 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
         let floor=Infinity;for(const p of group)for(const f of p.faces)for(const v of f.points)floor=Math.min(floor,v[2]);
         group=group.map(p=>({...p,faces:p.faces.map(f=>({...f,points:f.points.map(v=>[v[0],v[1],v[2]-floor])}))}));
       }
-      const id=String(next++),name=(meta.name||`Object ${oldId}`)+(turning?'':painting?' · coloured':` · ${names[g]||`part ${g+1}`}`);
+      const id=String(next++),name=(meta.name||`Object ${oldId}`)+(turning?'':painting?(/ · coloured$/.test(meta.name||'')?'':' · coloured'):` · ${names[g]||`part ${g+1}`}`);
       const components=[],partMeta=[];
       for(const p of group){const pid=String(next++);resources.push(meshXml(p,pid));components.push(`<component objectid="${pid}"/>`);partMeta.push(`<part id="${pid}" subtype="${esc(p.subtype)}"><metadata key="name" value="${esc(p.name)}"/><metadata key="extruder" value="${p.base}"/>${settingsXml(p.settings)}</part>`);}
       resources.push(`<object id="${id}" type="model"><components>${components.join('')}</components></object>`);
