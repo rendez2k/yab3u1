@@ -167,7 +167,7 @@ for(const [kind,file,features]of [
 }
 test('production build serves the Workbench without publishing private models',async()=>{
   const shell=await readFile(new URL('./index.html',import.meta.url),'utf8');
-  assert.match(shell,/2\.6\.66/);assert.doesNotMatch(shell,/Test version|2\.6\.66-test/);assert.match(shell,/data-panel="layout"/);
+  assert.match(shell,/2\.6\.68/);assert.doesNotMatch(shell,/Test version|2\.6\.68-test/);assert.match(shell,/data-panel="layout"/);
   const builder=await readFile(new URL('./build.mjs',import.meta.url),'utf8');
   assert.match(builder,/dist-workbench/);assert.doesNotMatch(builder,/Desktop|Stabby|Flippin/);
   const config=await readFile(new URL('../../netlify.toml',import.meta.url),'utf8');

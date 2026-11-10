@@ -1,3 +1,16 @@
+## 2.6.68 — One workspace
+
+- The start screen and the Quick / Full studio picker are gone. The app opens straight into the workspace, with Open a model, the samples and Reopen in front of you.
+- Quick conversion lives on as **Simple view** in the App menu: it hides the tool rail and shows only destination and export settings. The preference is remembered, and anyone who had chosen Quick conversion before starts in Simple view.
+- Convert and Full Spectrum are presented as two colour methods for the same model, **Solid colours** and **Full Spectrum blends**, chosen in Colours.
+- Before a model is open, the header button reads "Open a model" and opens one.
+
+## 2.6.67 — Hand placement everywhere
+
+- Full Spectrum blends now supports moving objects by hand, with the same checks, Undo and Redo. Positions carry between the two colour methods.
+- Type an exact position for the selected object's centre, in millimetres from the front-left corner, in Move, turn & resize.
+- Touch drags on a phone or tablet move the selected object.
+
 ## 2.6.66 — Move objects by hand
 
 - In Convert, drag a selected object across the plate to place it. Positions then stay fixed: new copies pack around them, and Auto arrange releases them and repacks everything.

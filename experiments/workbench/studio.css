@@ -372,3 +372,10 @@ input[type=file]::file-selector-button:hover{background:var(--soft)}
 .studio-angle{display:flex;align-items:center;justify-content:flex-end;gap:8px;font-size:12px}
 #inspector .studio-angle input{width:72px}
 .studio-turn-axes{grid-template-columns:1fr 1fr 1fr;margin-top:6px}
+/* Typed position, and touch drags reach the move tool instead of scrolling. */
+.studio-position{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:end;margin-top:14px}
+.studio-position label{display:flex;flex-direction:column;gap:5px;font-size:12px;min-width:0}
+#inspector .studio-position input{width:100%}
+#inspector .studio-position button{min-height:38px}
+#stage canvas{touch-action:none}
+@media(max-width:760px){#inspector .studio-position button,#inspector .studio-position input{min-height:44px}}

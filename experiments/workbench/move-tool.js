@@ -130,7 +130,27 @@ export function mountMoveTool({getState,enabled,history,say,changed=()=>{}}){
       changed();return true;
     },
   };
-  return {tool,
+  /** The single selected object's placement key and current centre, or null. */
+  function selected(){
+    const p=preview;if(!p||p.selectedRanges.size!==1)return null;
+    const index=[...p.selectedRanges][0],range=p.pickRanges[index];if(!range)return null;
+    try{
+      const state=getState(),pinned=pinCurrent(state),position=p.pickRanges.slice(0,index).filter(r=>String(r.objectId)===String(range.objectId)).length,key=(pinned.order.get(String(range.objectId))||[])[position],rect=pinned.rects.get(key);
+      return rect?{key,position,objectId:String(range.objectId),centre:[rect.x+rect.w/2,rect.y+rect.h/2],width:state.layout.width,depth:state.layout.depth}:null;
+    }catch{return null;}
+  }
+  /** Place the selected object's centre at typed coordinates. */
+  function moveTo(x,y){
+    const target=selected();if(!target)throw Error('Select one object to move.');
+    if(![x,y].every(Number.isFinite))throw Error('Enter the position in millimetres.');
+    const result=moveObject(getState(),target.key,[x-target.centre[0],y-target.centre[1]]);
+    if(result.moved<.05)throw Error('The object is already there.');
+    history.apply(result.patch);
+    reselect={positions:preview.lastPositions,objectId:target.objectId,position:target.position,until:Date.now()+15000};
+    say(`Moved to ${result.position[0].toFixed(1)}, ${result.position[1].toFixed(1)} mm from the front-left corner.${Math.hypot(result.position[0]-x,result.position[1]-y)>.05?' Kept on the bed.':''} Ctrl/Cmd+Z undoes.`);
+    changed();
+  }
+  return {tool,selected,moveTo,
     /** Attach to the current preview unless another tool owns its pointer. */
     sync(next){
       if(reselect&&next?.lastPositions&&next.lastPositions!==reselect.positions&&next.pickRanges.length){

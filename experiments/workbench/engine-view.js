@@ -56,7 +56,7 @@ document.addEventListener('click',event=>{
 },true);
 function context() {
   if(kind==='converter')return {capacity:engine.session.inputCapacity(),bambuSetup:engine.session.bambuSetup,target:engine.session.target,plateId:String(engine.session.state?.plateId??''),supportInterface:engine.session.supportInterface,interfaceSlot:engine.session.interfaceSlot,interfaceColor:engine.session.interfaceColor,layout:{...engine.session.layout},u1Nozzle:engine.session.u1Nozzle};
-  const s=engine.state;return {capacity:s.capacity,bambuSetup:s.bambuSetup,target:s.target,plateId:String(s.plateId??''),supportInterface:s.supportInterface,interfaceSlot:s.interfacePosition+1,interfaceColor:s.reels[s.interfacePosition]?.color,layout:{quantities:{...s.quantities},copies:Number($('spectrumcopies').value),spacing:Number($('spectrumgap').value),width:Number($('spectrumwidth').value),depth:Number($('spectrumdepth').value),tower:$('spectrumtower').checked,arrangement:$('spectrumarrangement').value},u1Nozzle:s.u1Nozzle};
+  const s=engine.state;return {capacity:s.capacity,bambuSetup:s.bambuSetup,target:s.target,plateId:String(s.plateId??''),supportInterface:s.supportInterface,interfaceSlot:s.interfacePosition+1,interfaceColor:s.reels[s.interfacePosition]?.color,layout:{quantities:{...s.quantities},...(s.manual?{manual:{...s.manual}}:{}),copies:Number($('spectrumcopies').value),spacing:Number($('spectrumgap').value),width:Number($('spectrumwidth').value),depth:Number($('spectrumdepth').value),tower:$('spectrumtower').checked,arrangement:$('spectrumarrangement').value},u1Nozzle:s.u1Nozzle};
 }
 const api={kind,setPanel,context,
   // Colour and export choices, as already captured for undoing a model edit.
@@ -67,8 +67,8 @@ const api={kind,setPanel,context,
   setWorkspaceMode(value){
     const next=value==='quick'&&kind==='converter'?'quick':'studio',changed=next!==workspaceMode;workspaceMode=next;
     document.body.dataset.workspaceMode=workspaceMode;
-    view.panels.project.querySelector('h1').textContent=workspaceMode==='quick'?'Quick conversion':'Your project';
-    view.panels.project.querySelector('.task-heading p').textContent=workspaceMode==='quick'?'Open a model, choose its destination and download.':'Choose the model, plate and destination.';
+    view.panels.project.querySelector('h1').textContent=workspaceMode==='quick'?'Convert a model':'Your project';
+    view.panels.project.querySelector('.task-heading p').textContent=workspaceMode==='quick'?'Choose its destination, then export.':'Choose the model, plate and destination.';
     if(workspaceMode==='quick'){studio?.leavePanel();currentPanel='project';prepared?.close();}
     for(const [key,node]of Object.entries(view.panels))node.hidden=workspaceMode==='quick'?!['project','output'].includes(key):key!==currentPanel;
     const advanced=document.querySelector('.conversion-settings');if(advanced&&changed)advanced.open=workspaceMode!=='quick';
@@ -108,7 +108,7 @@ const api={kind,setPanel,context,
     }else {
       await engine.load(file,options);
       if(engine.state.project&&options.layout) {
-        engine.state.quantities={...options.layout.quantities};
+        engine.state.quantities={...options.layout.quantities};engine.state.manual=options.layout.manual&&Object.keys(options.layout.manual).length?{...options.layout.manual}:null;
         for(const [key,id]of Object.entries({copies:'spectrumcopies',spacing:'spectrumgap',width:'spectrumwidth',depth:'spectrumdepth',arrangement:'spectrumarrangement'}))if(options.layout[key]!==undefined)$(id).value=options.layout[key];
         if(options.layout.tower!==undefined)$('spectrumtower').checked=options.layout.tower;
         if(options.u1Nozzle){engine.state.u1Nozzle=options.u1Nozzle;$('spectrumnozzle').value=options.u1Nozzle;}
