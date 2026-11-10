@@ -398,3 +398,28 @@ dialog.plate-picker::backdrop{background:#10161acc}
 .plate-picker-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
 .plate-picker button{min-height:40px}
 @media(max-width:560px){dialog.plate-picker{padding:18px}.plate-picker button{min-height:44px}.plate-picker-actions .primary{flex:1 1 100%;order:-1}}
+/* Filament packs: a pick-list, reel chips and one action, instead of a stack of controls. */
+#inspector .palette-source button{white-space:nowrap;font-size:12px;min-height:38px}
+#inspector .bundle-step{font-size:12px;font-weight:600;letter-spacing:0;margin:18px 0 8px;color:var(--dim)}
+#inspector .bundle-cards{display:grid;gap:5px;max-height:258px;overflow-y:auto;padding:2px;scrollbar-gutter:stable}
+#inspector .bundle-cards button{display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;padding:8px 10px;min-height:50px;background:var(--panel2);border:0;border-radius:10px}
+#inspector .bundle-cards button[aria-checked=true]{background:var(--soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.bundle-card-copy{display:flex;flex-direction:column;gap:1px;min-width:0}
+.bundle-card-copy small{font-size:10px;color:var(--dim)}
+.bundle-card-copy strong{font-size:12px;font-weight:600;line-height:1.3;overflow-wrap:anywhere}
+.bundle-dots{display:flex;gap:3px;flex:none}
+.bundle-dots i{width:14px;height:14px;border-radius:50%;border:1px solid #8886}
+#inspector #bundlepanel .bundle-reel-options{display:flex;flex-wrap:wrap;gap:6px}
+#inspector #bundlepanel .bundle-reel{display:flex;align-items:center;gap:6px;min-height:36px;padding:5px 10px 5px 8px;border-radius:999px;background:var(--panel2);font-size:12px;grid-template-columns:none;opacity:.55}
+#inspector #bundlepanel .bundle-reel:has(input:checked){opacity:1;box-shadow:inset 0 0 0 1px var(--accent);background:var(--soft)}
+#inspector #bundlepanel .bundle-reel input{position:absolute;opacity:0;width:1px;height:1px}
+#inspector #bundlepanel .bundle-reel:has(input:focus-visible){outline:2px solid var(--focus);outline-offset:2px}
+#inspector #bundlepanel .bundle-reel .swatch{width:16px;height:16px;border-radius:50%;border:1px solid #8886;flex:none}
+#inspector .bundle-fit{font-size:12px;line-height:1.5;color:var(--dim);margin:10px 0}
+#inspector #bundlepanel .bundle-actions{display:grid;grid-template-columns:1fr;gap:6px}
+#inspector .bundle-more{margin-top:10px}
+#inspector .bundle-more button{width:100%;margin:8px 0 0}
+#inspector .bundle-more .check{margin-top:10px}
+@media(max-width:760px){#inspector .bundle-cards button{min-height:56px}#inspector #bundlepanel .bundle-reel{min-height:44px}}
+/* A little more room for the panel on wide screens. */
+@media(min-width:1500px){#engine-workspace{grid-template-columns:440px minmax(0,1fr)}}
