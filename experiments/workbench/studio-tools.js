@@ -328,6 +328,10 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
     apply.disabled=apply.disabled||Boolean(jointTool?.pending)||Boolean(splitPreview?.pending)||Boolean(boundary?.pending);
     objects.element.inert=working;
   }
+  // Clicking an object that is already selected changes nothing in the selection, so open its panel here.
+  let pressed=null;
+  view.stage.addEventListener('pointerdown',e=>{pressed=e.target.closest?.('canvas')?[e.clientX,e.clientY]:null;},true);
+  view.stage.addEventListener('pointerup',e=>{const start=pressed;pressed=null;if(!start||Math.hypot(e.clientX-start[0],e.clientY-start[1])>4)return;setTimeout(()=>{if(!working&&mode==='select'&&selected().length)setPanel('edit');},0);},true);
   tools.addEventListener('click',e=>{const b=e.target.closest('button');if(b?.dataset.studioTool)show(b.dataset.studioTool);if(b?.matches('[data-studio-undo]'))undoCurrent();if(b?.matches('[data-studio-redo]'))redoCurrent();});
   panel.addEventListener('click',e=>{
     const b=e.target.closest('button');if(!b)return;

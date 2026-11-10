@@ -1,3 +1,7 @@
+## 2.6.62 — Click a selected object to open it
+
+- Clicking an object that is already selected now opens its Objects panel (copies, Turn & resize) from any tool. Dragging to orbit does not.
+
 ## 2.6.61 — Resize objects
 
 - Resize a selected object from 10% to 1000% in the Turn & resize group. The panel shows the current and resulting dimensions before you apply.
