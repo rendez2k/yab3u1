@@ -88,6 +88,8 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
   function show(next){
     if(working)return;
     restorePreview();mode=next;message.textContent='';
+    // With one object on the plate there is nothing to choose: start editing it.
+    if(['colour','split'].includes(next)&&!selected().length){const p=state().preview;if(p?.pickRanges.length===1){p.selectRange(0);objects.sync();}}
     for(const b of tools.querySelectorAll('[data-studio-tool]'))b.setAttribute('aria-pressed',String(b.dataset.studioTool===mode));
     if(next==='arrange'){setPanel('layout');return;}
     setPanel('edit');render();
@@ -124,13 +126,17 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
       const area=settings.querySelector('[data-region-colour]');
       jointTool=mountJointTool({root:settings.querySelector('[data-joint-settings]'),source:api.source,options:editOptions,busy:()=>working||state().busy,changed:sync});
       const method=settings.querySelector('[data-split-method]');method.prepend(new Option('Automatic · larger assembly parts','auto-assembly'),new Option('Automatic · painted regions','auto-separate'));method.value=preferredColour?'by-colour':'auto-assembly';
-      const repair=make('div',{class:'studio-repair-tools'},'<button type="button" data-repair-selected>Repair mesh</button><p class="hint">Fix duplicate faces and tiny pinched joins before splitting. Local adjustments are at most 0.001 mm. Undo restores the original.</p>');settings.prepend(repair);
+      // Repair is an occasional first aid step, so it sits folded beneath the split flow.
+      const repair=make('details',{class:'studio-repair-tools'},'<summary>Mesh problems? Repair first</summary><button type="button" data-repair-selected>Repair mesh</button><p class="hint">Fix duplicate faces and tiny pinched joins before splitting. Local adjustments are at most 0.001 mm. Undo restores the original.</p>');settings.append(repair);
+      const step=(node,number,title)=>node.prepend(make('h2',{class:'split-step'},`<b>${number}</b>${title}`));
+      step(settings,1,'Choose how to split');
       method.append(new Option('By shape · review parts','by-shape'));if(preferredShape)method.value='by-shape';preferredShape=false;
       method.append(new Option('Draw boundary · place points','boundary'));
       const boundaryRoot=make('div',{'data-boundary-settings':''});method.closest('label').after(boundaryRoot);
       boundary=mountBoundaryTool({root:boundaryRoot,make,source:api.source,context:api.context,ids:selected,inspection,busy:()=>working||state().busy,changed:()=>{splitPreview?.invalidate();sync();}});
       const previewRoot=make('div',{'data-split-preview-settings':'',class:'split-preview-controls'});settings.querySelector('[data-joint-settings]').before(previewRoot);
       splitPreview=mountSplitPreview({root:previewRoot,source:api.source,options:editOptions,inspection,busy:()=>working||state().busy,changed:sync,reports:reports=>showAutoReport(reports,previewRoot,true),returnToEdit:()=>{if(splitMethod()==='boundary')boundary?.resume();}});
+      step(previewRoot,2,'Preview the pieces');step(settings.querySelector('[data-joint-settings]'),3,'Connect them');
       const shapeRoot=make('div',{'data-shape-settings':''});method.closest('label').after(shapeRoot);
       shape=mountShapeTool({root:shapeRoot,make,state,source:api.source,context:api.context,ids:selected,preview,changed:sync,message,palette,busy:()=>working});
       const automatic=make('div',{'data-auto-settings':''},'<p class="hint">Checks disconnected pieces and each painted region. Separates what can be closed safely; the main body and unsuitable paint patches stay intact.</p><label class="studio-field">After separating<select data-auto-finish><option value="once">Keep one set of parts</option><option value="fill">Fill one plate with complete sets</option><option value="sequential">Fill sequential colour-group plates</option></select></label><p class="hint" data-auto-fill-help>All colours are checked in one pass. Undo restores the complete model.</p>');area.closest('[data-region-settings]').before(automatic);

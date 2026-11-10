@@ -25,3 +25,10 @@ test('colour summary updates with the plate and the visible toolbox opens every 
   toolbox.sync('project','select',true);assert([...toolbox.element.querySelectorAll('button')].every(b=>b.disabled));
   summary.element.querySelector('button').click();assert.equal(chosen,'colours');
 });
+test('slim rail keeps full tool names for assistive technology and offers a Tips switch',()=>{
+  const {document}=parseHTML('<html><body><aside></aside></body></html>'),view={inspector:document.querySelector('aside'),make(tag,attrs={},html=''){const n=document.createElement(tag);for(const [k,v]of Object.entries(attrs))n.setAttribute(k,v);n.innerHTML=html;return n;}};
+  const toolbox=mountFeatureToolbox({view,choose(){}});
+  assert.deepEqual([...toolbox.element.querySelectorAll('button')].map(b=>[b.textContent,b.getAttribute('aria-label')]),[['Project','Open & convert'],['Colours','Colours & filaments'],['Paint','Paint objects'],['Split','Split & connect'],['Plates','Plates & arrange'],['Settings','Print settings & printer']]);
+  const tips=toolbox.element.querySelector('[data-tips]');assert.equal(tips.checked,false);assert.equal(document.body.dataset.tips,'off');
+  tips.checked=true;tips.dispatchEvent(new document.defaultView.Event('change'));assert.equal(document.body.dataset.tips,'on');
+});

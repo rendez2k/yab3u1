@@ -118,9 +118,19 @@ const api={kind,setPanel,context,
     return kind==='converter'?Boolean(engine.session.state):Boolean(engine.state.project);
     }finally{loading=false;tick();}
   },
-  primary(){if(kind==='converter'&&!$('batchpanel').classList.contains('hidden'))return;const sequential=sequentialAction();if(sequential){sequential.click();return;}if(projectPlates&&engine.session.state?.plates.length>1){if(workspaceMode!=='quick')setPanel('layout');projectPlates.save('project');return;}setPanel(kind==='spectrum'&&$('mainaction').dataset.action==='apply'?'colours':'output');$(kind==='converter'?'converterprimary':'mainaction').click();},
+  // One Export button: the shell shows these choices as a menu when there is more than one.
+  export(id){if(!exportChoices().some(choice=>choice.id===id&&!choice.disabled))return;if(id==='plate'){setPanel('output');$('converterprimary').click();return;}if(workspaceMode!=='quick')setPanel('layout');projectPlates.save(id);},
+  primary(){if(kind==='converter'&&!$('batchpanel').classList.contains('hidden'))return;const sequential=sequentialAction();if(sequential){sequential.click();return;}setPanel(kind==='spectrum'&&$('mainaction').dataset.action==='apply'?'colours':'output');$(kind==='converter'?'converterprimary':'mainaction').click();},
 };
 installModelDrop(document,{load:file=>api.load(file),show:value=>parentHost?.workbench?.drag(value),delegate:event=>Boolean(event.target.closest?.('#batchdrop')),error:error=>parentHost?.workbench?.dropError?parentHost.workbench.dropError(error):reportError(error instanceof Error?error:Error(error))});
+function exportChoices(){
+  if(kind!=='converter'||!projectPlates||!engine?.session.state||sequentialAction())return [];
+  const session=engine.session,several=session.visiblePlates().length>1,single=$('converterprimary'),text=single.textContent;
+  const choices=[{id:'plate',label:text==='Download project'?(several?'This plate · 3MF':'Project · 3MF'):text,hint:several?'Only the plate you are viewing.':'Open it in your slicer.',disabled:single.disabled}];
+  if(several)choices.push({id:'project',label:'All plates · one 3MF',hint:session.target==='prusa'?'PrusaSlicer projects hold one plate. Use print jobs instead.':'Keeps every plate together for editing.',disabled:projectPlates.saveDisabled('project')});
+  choices.push({id:'zip',label:'Print jobs · ZIP',hint:'A separate printer file and filament list per plate.',disabled:projectPlates.saveDisabled('zip')});
+  return choices;
+}
 function sequentialAction(){const mode=document.querySelector('[data-print-mode]')?.value;if(currentPanel!=='layout'||!mode||mode==='together')return null;const pack=document.querySelector('[data-pack]');return pack&&!pack.hidden?pack:document.querySelector('[data-prepare]');}
 function tick() {
   if(!engine)return;
@@ -131,13 +141,13 @@ function tick() {
   if(file&&file!==source){source=file;parentHost?.workbench?.sourceChanged(kind,file);}
   view.empty.hidden=loaded||busy;
   const batch=kind==='converter'&&!$('batchpanel').classList.contains('hidden');
-  const button=sequentialAction()||(projectPlates&&s.state?.plates.length>1?projectPlates.primary:$(kind==='converter'?'converterprimary':'mainaction'));
+  const button=sequentialAction()||$(kind==='converter'?'converterprimary':'mainaction'),exports=loaded&&!studio?.pending?exportChoices():[],menu=exports.length>1;
   let status=kind==='converter'?$('convertstatus').textContent:$('loadstatus').textContent||$('actionstatus').textContent;
   if(studio?.busy)status=document.querySelector('.studio-message')?.textContent||status;
   if(kind==='converter'&&loaded&&!busy&&status.includes('Nothing has been uploaded'))status=`${s.state.displayName}: ${s.capacityStatus().needed} filament${s.capacityStatus().needed===1?'':'s'} used on this plate. Files stay in your browser.`;
   const plateStatus=currentPanel==='layout'?document.querySelector('#printoptimiser [data-status]'):null,plateBusy=plateStatus?.dataset.busy==='true';
   if(plateStatus?.textContent)status=plateStatus.textContent;
-  const report={kind,loaded,pending:Boolean(studio?.pending),busy:busy||plateBusy,batch,title:file?.yab3dDisplayName||file?.name||'Untitled project',status:status||'Files stay in your browser.',action:studio?.pending?'Apply or cancel edit':loaded?button.textContent:'Open a model to start',disabled:studio?.pending||busy||!loaded||button.disabled||batch};
+  const report={kind,loaded,pending:Boolean(studio?.pending),busy:busy||plateBusy,batch,title:file?.yab3dDisplayName||file?.name||'Untitled project',status:status||'Files stay in your browser.',exports:menu?exports:[],action:studio?.pending?'Finish edit to export':loaded?(menu?'Export':button.textContent):'Open a model to start',disabled:studio?.pending||busy||!loaded||(menu?exports.every(choice=>choice.disabled):button.disabled)||batch};
   const serial=JSON.stringify(report);if(serial!==lastReport){lastReport=serial;parentHost?.workbench?.report(report);}
   colourSummary?.sync();toolbox?.sync(currentPanel,studio?.mode,busy);
   let snapshot;try{snapshot=engine.workbenchPreview();}catch{}

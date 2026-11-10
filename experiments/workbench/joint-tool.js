@@ -3,6 +3,7 @@
 export function mountJointTool({root,source,options,busy=()=>false,changed=()=>{}}){
   root.innerHTML=`<label class="studio-check"><input type="checkbox" data-add-pin> Add connectors</label>
     <div data-pin-settings hidden>
+      <details class="joint-options"><summary>Connector size &amp; fit</summary>
       <label class="studio-field">Connector<select data-pin-kind aria-label="Connector type"><option value="pin">Attached pin &amp; socket</option><option value="dowel">Separate dowel &amp; two sockets</option><option value="sockets">Two sockets only</option></select></label>
       <div class="studio-dimensions">
         <label>Diameter (mm)<input type="number" min="1" max="20" step="0.1" value="3" data-pin-diameter></label>
@@ -14,6 +15,7 @@ export function mountJointTool({root,source,options,busy=()=>false,changed=()=>{
       <p class="hint" data-joint-description></p>
       <details class="joint-position"><summary>Position on join</summary><p class="hint">Offset from the automatically fitted centre. Across and up follow the face diagram. Offsets apply to each join.</p>
         <div class="studio-dimensions"><label>Across (mm)<input type="number" min="-1000" max="1000" step="0.1" value="0" data-pin-across></label><label>Up (mm)<input type="number" min="-1000" max="1000" step="0.1" value="0" data-pin-up></label></div><button type="button" data-joint-reset>Reset position</button>
+      </details>
       </details>
       <button type="button" class="joint-check" data-joint-check>Check join</button>
       <p class="hint joint-status" data-joint-status role="status" aria-live="polite">Check the join before applying. Your model stays unchanged.</p>

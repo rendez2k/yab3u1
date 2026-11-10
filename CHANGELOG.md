@@ -1,3 +1,18 @@
+## 2.6.57 — Reopen your last model after a reload
+
+- Keep a copy of the last opened model in this browser. After a reload or a closed tab, a prompt offers to reopen it with its applied model edits (splits, repairs, painted objects), destination, plate and quantities.
+- Colour assignments, Full Spectrum palettes and unapplied previews are not restored. The prompt says so.
+- Forget removes the stored copy. A switch in Help turns the feature off and deletes anything stored. Nothing is uploaded.
+
+## 2.6.56 — A slimmer studio and one Export button
+
+- Replace the six large tool tiles with a narrow rail (Project, Colours, Paint, Split, Plates, Settings). Model colours shrink to one line of swatches. Panels gain roughly 340 px of height on a 900 px window; on a phone the tools fit one row without sideways scrolling.
+- Offer every download from one Export button in the header: this plate, all plates in one 3MF, or a ZIP of print jobs. The separate save buttons in Plates are gone.
+- Present Split as three steps: choose a method, preview the pieces, connect them. Connector dimensions and mesh repair are folded away until needed.
+- Start editing straight away when Paint or Split is opened with a single object on the plate.
+- Add a Tips switch at the foot of the rail. Explanations are hidden by default in the studio; status, warnings and Quick conversion keep their text.
+- Keep Open model visible in the header on wide screens, say "Finish edit to export" while an edit is pending, list keyboard shortcuts in Help, and fix "1 objects".
+
 ## 2.6.55 — Find a larger-part cut when curved joins cannot close
 
 - Try one straight cut through a substantial narrow section when automatic shape-region splitting finds no detachable parts. Preview the pieces and checked connectors before applying.
