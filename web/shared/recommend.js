@@ -2,7 +2,7 @@
 // Search is exhaustive within a bounded, colour-diverse candidate pool.
 import { distance, norm, toLab } from './colour.js';
 import { colourName } from './assignment.js';
-import { describeColourMapping, mappingFromPlan, planBlends, blendStrength, MIN_IMPROVEMENT, POOR_COVERAGE } from './mix.js';
+import { describeColourMapping, mappingFromPlan, planBlends, blendStrength, huePenalty, MIN_IMPROVEMENT, POOR_COVERAGE } from './mix.js';
 import { mixFdmHex, approximateDistance } from './fdmMix.js';
 import { interfacePalette, validateInterfaceExport } from './supportInterface.js';
 import {reelIdentity} from './filamentIdentity.js';
@@ -75,8 +75,8 @@ export function recommendPalette({sources,loaded,stock=null,locked=[],blends=tru
       if(!pairs.has(key)) {
         const shades=blendStrength().ratios.map(percent=>({percent,lab:toLab(mixFdmHex(pool[lo].color,pool[hi].color,percent))}));
         pairs.set(key,sourceLabs.map(c=>{
-          const best=shades.map(r=>({error:distance(c,r.lab),key:key+','+r.percent})).sort((x,y)=>x.error-y.error)[0];
-          best.approx=shades.map(r=>({error:approximateDistance(c,r.lab),key:key+','+r.percent})).sort((x,y)=>x.error-y.error)[0];
+          const best=shades.map(r=>({error:distance(c,r.lab),rank:distance(c,r.lab)+huePenalty(c,r.lab),key:key+','+r.percent})).sort((x,y)=>x.rank-y.rank)[0];
+          best.approx=shades.map(r=>({error:approximateDistance(c,r.lab),rank:approximateDistance(c,r.lab)+huePenalty(c,r.lab),key:key+','+r.percent})).sort((x,y)=>x.rank-y.rank)[0];
           return best;
         }));
       }
@@ -94,8 +94,8 @@ export function recommendPalette({sources,loaded,stock=null,locked=[],blends=tru
         for(let a=0;a<4;a++) for(let b=a+1;b<4;b++) {
           if(ids[a]===ids[b]) continue;
           const candidate=pair(ids[a],ids[b])[c];
-          if(!best || candidate.error<best.error) best=candidate;
-          if(!approxBest || candidate.approx.error<approxBest.error) approxBest=candidate.approx;
+          if(!best || candidate.rank<best.rank) best=candidate;
+          if(!approxBest || candidate.approx.rank<approxBest.rank) approxBest=candidate.approx;
         }
         if(!best) return;
         if(tenth(best.error)>POOR_COVERAGE || tenth(tenth(direct)-tenth(best.error))<MIN_IMPROVEMENT) approximate=true;

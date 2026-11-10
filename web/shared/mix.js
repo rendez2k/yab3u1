@@ -5,7 +5,7 @@
 // not a calibration: what it is good for is *ranking* -- saying that a blend comes
 // closer than either reel, or that it does not.
 
-import { distance, nearest, norm } from "./colour.js";
+import { distance, nearest, norm, toLab } from "./colour.js";
 import { MIX_COEFFICIENTS, MIX_INTERCEPT, MIX_POWERS } from "./mix_model.js";
 import { mixFdmHex, FDM_MODEL, approximateDistance } from './fdmMix.js';
 import { calibratedPredictor } from './blendCalibration.js';
@@ -30,6 +30,28 @@ export function setBlendStrength(name) {
   strength = name;
 }
 export const blendStrength = () => ({ name: strength, ...BLEND_STRENGTHS[strength] });
+
+// Keeping hues. Plain colour distance can rate a pale yellow as closer to a
+// light green than a vivid green is, because lightness and saturation outweigh
+// the hue. On a figure the hue is what reads as "the right colour", so a blend
+// that drifts to a neighbouring hue is marked down when this is on.
+let keepHue = false;
+export function setHueFidelity(on) { keepHue = Boolean(on); }
+export const hueFidelity = () => keepHue;
+const labOf = (value) => (Array.isArray(value) ? value : toLab(value));
+export function huePenalty(target, candidate) {
+  if (!keepHue) return 0;
+  const a = labOf(target), b = labOf(candidate);
+  if (!a || !b) return 0;
+  const ca = Math.hypot(a[1], a[2]), cb = Math.hypot(b[1], b[2]);
+  // A near-neutral colour has no hue to keep; plain distance already covers lost saturation.
+  if (ca < 8 || cb < 8) return 0;
+  let degrees = Math.abs(Math.atan2(a[2], a[1]) - Math.atan2(b[2], b[1])) * 180 / Math.PI;
+  if (degrees > 180) degrees = 360 - degrees;
+  // Hue only counts once a colour is clearly saturated: pastels and skin tones
+  // sit close to neutral, where a small drift changes the angle a lot.
+  return 0.5 * degrees * Math.max(0, Math.min(1, (Math.min(ca, cb) - 14) / 20));
+}
 
 // Truncation, not rounding: the Python oracle is the reference and the two must
 // predict the identical hex or the parity check is meaningless.
@@ -111,7 +133,9 @@ export function planMixtures(sourceColors, reels, ratios = RATIOS,
       // two source colours onto one virtual recipe or an existing physical shade.
       if(allowApproximate && approximateColours.has(recipe.color) && approximateColours.get(recipe.color)!==original) continue;
       const error = (allowApproximate ? approximateDistance : distance)(original, recipe.color);
-      if (!best || error < best.error) best = { recipe, error };
+      // Ranked with the hue penalty; the reported error stays the plain distance.
+      const score = error + huePenalty(original, recipe.color);
+      if (!best || score < best.score) best = { recipe, error, score };
     }
     const solid = {
       slot: solidSlot == null ? null : solidSlot + 1,
