@@ -1,3 +1,11 @@
+## 2.6.63 — Polish from a click-through
+
+- Quick conversion's header button downloads directly again for single-plate projects instead of opening the Export menu.
+- Batch conversion is laid out as a form of readable width, and the header says "Batch conversion" while it is open.
+- Redo's icon was missing on phones.
+- Copy controls in Objects take two rows instead of four.
+- Help is reorganised into short sections: the tools, working with objects, splitting in detail, keyboard, and your last model.
+
 ## 2.6.62 — Click a selected object to open it
 
 - Clicking an object that is already selected now opens its Objects panel (copies, Turn & resize) from any tool. Dragging to orbit does not.
