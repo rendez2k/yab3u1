@@ -48,6 +48,7 @@ export function restingFaces(parts, {minShare = .02, limit = 12} = {}) {
 }
 /** Turn whole objects rigidly about their centre. Quarter turns are exact;
  * `flat` rests the object on its largest supporting flat area. */
+// Quarter turns are exact; any other angle is an ordinary rigid rotation.
 export function turnParts(parts, {axis = 2, degrees = 90, flat = false, scale = null} = {}) {
   const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
   for (const part of parts) for (const face of part.faces) for (const p of face.points) for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], p[i]); hi[i] = Math.max(hi[i], p[i]); }
@@ -69,8 +70,9 @@ export function turnParts(parts, {axis = 2, degrees = 90, flat = false, scale = 
          [k[1]*k[0]*t + k[2]*s, c + k[1]*k[1]*t, k[1]*k[2]*t - k[0]*s],
          [k[2]*k[0]*t - k[1]*s, k[2]*k[1]*t + k[0]*s, c + k[2]*k[2]*t]];
   } else {
-    if (![0, 1, 2].includes(axis) || ![90, -90, 180].includes(degrees)) throw Error('Choose a quarter or half turn about X, Y or Z.');
-    const c = degrees === 180 ? -1 : 0, s = degrees === 180 ? 0 : Math.sign(degrees), a = (axis + 1) % 3, b = (axis + 2) % 3;
+    if (![0, 1, 2].includes(axis) || !Number.isFinite(degrees) || Math.abs(degrees) > 360 || degrees % 360 === 0) throw Error('Enter an angle between -360° and 360°, other than a full turn.');
+    // Quarter turns stay exact; other angles use the usual rotation.
+    const r = degrees * Math.PI / 180, exact = degrees % 90 === 0, c = exact ? Math.round(Math.cos(r)) : Math.cos(r), s = exact ? Math.round(Math.sin(r)) : Math.sin(r), a = (axis + 1) % 3, b = (axis + 2) % 3;
     m = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]; m[axis][axis] = 1; m[a][a] = c; m[b][b] = c; m[a][b] = -s; m[b][a] = s;
   }
   const turn = p => { const q = p.map((v, i) => v - centre[i]); return m.map((row, i) => centre[i] + row[0]*q[0] + row[1]*q[1] + row[2]*q[2]); };

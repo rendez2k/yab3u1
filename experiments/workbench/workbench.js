@@ -35,7 +35,7 @@ function drawExport(){
   exportMenu.replaceChildren(...exportChoices.map(choice=>{const b=document.createElement('button');b.type='button';b.setAttribute('role','menuitem');b.disabled=choice.disabled;const label=document.createElement('strong'),hint=document.createElement('span');label.textContent=choice.label;hint.textContent=choice.hint;b.append(label,hint);b.onclick=()=>{closeExport();$('primary').focus();frames.get(active)?.api?.export(choice.id);};return b;}));
 }
 function showReport(r){
-  if(r.kind!==active)return;$('project-title').textContent=r.title;$('workspace-status').textContent=r.status;$('primary').textContent=r.action;$('primary').disabled=r.disabled;workspacePicker.disabled=r.busy||r.pending;
+  if(r.kind!==active)return;$('project-title').textContent=r.title;$('workspace-status').textContent=r.status;$('workspace-status').title=r.status;$('primary').textContent=r.action;$('primary').disabled=r.disabled;workspacePicker.disabled=r.busy||r.pending;
   const serial=JSON.stringify(r.exports||[]),menu=(r.exports||[]).length>1;
   if(menu){$('primary').setAttribute('aria-haspopup','menu');$('primary').setAttribute('aria-controls','export-menu');if(!$('primary').hasAttribute('aria-expanded'))$('primary').setAttribute('aria-expanded','false');}
   else{closeExport();for(const name of ['aria-haspopup','aria-controls','aria-expanded'])$('primary').removeAttribute(name);}
@@ -54,7 +54,7 @@ async function guard(task){try{await task();}catch(error){$('workspace-status').
 // Session restore: the last model is copied into this browser so a reload can reopen it.
 const session=createSessionStore();let savedMeta=null,savedContext='',restoring=false;
 const resume=document.createElement('div');resume.className='session-resume';resume.hidden=true;resume.setAttribute('role','region');resume.setAttribute('aria-label','Reopen your last model');resume.innerHTML='<div><strong></strong><span></span></div><button type="button" class="primary" data-resume>Reopen</button><button type="button" data-forget>Forget</button><button type="button" data-later aria-label="Not now">×</button>';document.body.append(resume);
-const readContext=()=>{try{const record=frames.get(active);if(!record?.api||!record.report?.loaded||record.report.busy||record.report.pending)return null;return {kind:active,context:plainContext(record.api.context()),settings:record.api.captureSettings()};}catch{return null;}};
+const readContext=()=>{try{const record=frames.get(active);if(!record?.api||!record.report?.loaded||record.report.busy||record.report.pending)return null;return {kind:active,context:plainContext(record.api.context()),settings:record.api.captureSettings(),hidden:record.api.hiddenObjects?.()||[]};}catch{return null;}};
 const serialise=value=>{try{return JSON.stringify(value);}catch{return String(Date.now());}};
 function rememberSource(next){
   if(!session.enabled()||!next?.size||sameFile(savedMeta,next))return;
@@ -67,7 +67,7 @@ setInterval(()=>{
   if(!file||!savedMeta||restoring||!session.enabled())return;
   const current=readContext();if(!current)return;
   const serial=serialise(current);if(serial===savedContext)return;
-  savedContext=serial;session.saveContext(current.context,{kind:current.kind,settings:current.settings,workspace:workspaceMode});
+  savedContext=serial;session.saveContext(current.context,{kind:current.kind,settings:current.settings,hidden:current.hidden,workspace:workspaceMode});
 },3000);
 async function offerResume(){
   const record=await session.read();if(!record||file)return;
@@ -87,6 +87,7 @@ async function offerResume(){
     try{await api.load(restored,record.context||{});}catch{await api.load(restored);}
     // Colour choices belong to the workspace that made them.
     if(record.kind==='spectrum'&&active!=='spectrum'){await window.workbench.switchMode('spectrum');if(active!=='spectrum')return;api=await ensure('spectrum');}
+    if(record.hidden?.length&&record.kind===active)api.setHiddenObjects?.(record.hidden);
     if(record.settings&&record.kind===active){try{await api.restoreSettings(record.settings);}catch{$('workspace-status').textContent='Model reopened. Its colour choices could not be restored.';}}
     }finally{restoring=false;}
   });

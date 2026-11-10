@@ -1,3 +1,9 @@
+## 2.6.65 — Turn by any angle
+
+- Tip and Spin now use an angle you enter, from -360° to 360°, instead of fixed quarter turns. Quarter turns remain exact.
+- The status line after an export reads "2 filaments" and "1 compatible print setting", and shows its full text on hover when it is too long for the bar.
+- Originals hidden from Plates after a paint, repair or turn stay hidden when the model is reopened.
+
 ## 2.6.64 — Painted objects stay put
 
 - Painting a whole object no longer moves it to a corner of the plate; it keeps its position, as repair and turn already did.

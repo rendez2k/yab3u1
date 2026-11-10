@@ -62,6 +62,8 @@ const api={kind,setPanel,context,
   // Colour and export choices, as already captured for undoing a model edit.
   captureSettings:()=>engine.workbenchCaptureSettings?.(),
   restoreSettings:saved=>engine.workbenchRestoreSettings?.(saved),
+  hiddenObjects:()=>[...(studio?.superseded||[])],
+  setHiddenObjects:ids=>studio?.hide(ids),
   setWorkspaceMode(value){
     const next=value==='quick'&&kind==='converter'?'quick':'studio',changed=next!==workspaceMode;workspaceMode=next;
     document.body.dataset.workspaceMode=workspaceMode;
