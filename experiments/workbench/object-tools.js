@@ -41,6 +41,7 @@ export function mountWorkbenchObjects(host,getState) {
     try {
       s=getState();if(s.busy)throw Error('Wait for the model to finish loading.');
       if(action==='undo') {if(history.undo())message.textContent='Restored the previous plate edit.';return;}
+      if(action==='redo') {if(history.redo())message.textContent='Plate edit redone.';return;}
       const amount=Number($('[data-add-count]').value);
       if(action==='add'&&(!Number.isInteger(amount)||amount<1))throw Error('Enter how many new copies to add, from 1 to 64.');
       const stamp=signature(s),selection=selected(s);

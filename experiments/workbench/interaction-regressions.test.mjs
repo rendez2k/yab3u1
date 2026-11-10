@@ -55,3 +55,16 @@ test('actual 3MF export removes excluded geometry and its unused filament; readb
  const built=project.convertProject(p,plate,null,{target:'snapmaker',selectionAware:true,removeUnused:true,assignmentMode:'slots',mapping:s.rule,layout:{...s.layout,tower:false}});assert.deepEqual(built.problems,[]);
  const read=project.readProject(built.entries),report=project.analyse(read,read.plates[0].id,null);assert.equal(read.colors.length,4);assert.equal(report.used.length,4);assert.ok(!read.colors.includes(p.colors[remove-1]));
 });
+test('plate edits can be redone after undo, and a new edit ends the redo trail',()=>{
+ let s={key:'plate-1',quantities:{a:1},copies:1,arrangement:'objects',apply(p){Object.assign(s,p);}};
+ const h=plateHistory(()=>s);h.observe();assert.equal(h.canRedo,false);assert.equal(h.redo(),false);
+ h.apply({quantities:{a:2}});h.apply({quantities:{a:3}});
+ assert.equal(h.undo(),true);assert.deepEqual(s.quantities,{a:2});assert.equal(h.canRedo,true);
+ assert.equal(h.undo(),true);assert.deepEqual(s.quantities,{a:1});
+ assert.equal(h.redo(),true);assert.deepEqual(s.quantities,{a:2});assert.equal(h.redo(),true);assert.deepEqual(s.quantities,{a:3});assert.equal(h.canRedo,false);
+ h.undo();assert.deepEqual(s.quantities,{a:2});h.apply({quantities:{a:5}});assert.equal(h.canRedo,false);
+ h.undo();assert.deepEqual(s.quantities,{a:2});h.redo();assert.deepEqual(s.quantities,{a:5});
+ // Each plate keeps its own trail.
+ h.undo();s={...s,key:'plate-2',quantities:{b:1}};h.observe();assert.equal(h.canRedo,false);
+ s={...s,key:'plate-1',quantities:{a:2}};assert.equal(h.canRedo,true);h.reset();assert.equal(h.canRedo,false);
+});

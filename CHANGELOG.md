@@ -1,3 +1,8 @@
+## 2.6.59 — Redo
+
+- Add Redo beside Undo in the model toolstrip, with Ctrl/Cmd+Shift+Z and Ctrl+Y. It replays undone plate edits (copies, removals, arrangement) and model edits (splits, repairs, painted objects) in the order they were undone.
+- A new edit clears the redo trail. Redo is unavailable while a colour or split edit is waiting to be applied.
+
 ## 2.6.58 — Reopen with your colour choices
 
 - Reopening the last model now restores colour work too: slot arrangement, repaints and filament profiles in Convert; reels, blends, priorities and palette choices in Full Spectrum.

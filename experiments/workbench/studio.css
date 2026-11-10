@@ -332,3 +332,7 @@ body[data-tips=off]:not([data-workspace-mode=quick]) #inspector .task-heading{ma
 .session-resume [data-later]{background:transparent;font-size:18px;line-height:1;padding:6px 10px}
 .keep-session{display:flex;gap:8px;align-items:flex-start}
 @media(max-width:560px){.session-resume{flex-wrap:wrap;width:auto;left:12px;right:12px;transform:none}.session-resume>div{flex-basis:100%}.session-resume button{min-height:44px}}
+/* Redo sits beside undo in the model toolstrip. */
+.studio-toolstrip [data-studio-undo]{border-radius:0}
+.studio-toolstrip [data-studio-redo]{padding:6px;min-width:36px;border-radius:0 7px 7px 0}
+@media(max-width:760px){.studio-toolstrip [data-studio-redo]{min-width:44px}}
