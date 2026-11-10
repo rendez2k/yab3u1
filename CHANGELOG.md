@@ -1,3 +1,9 @@
+## 2.6.71 — Open larger projects
+
+- A single project can now be up to 512 MB as a file, and each model inside it up to 480 MB unpacked. The previous limits were 96 MB and 256 MB.
+- Batch conversion keeps its 96 MB per-file limit, because it holds many projects in memory at once.
+- What a browser tab can actually hold still depends on the computer's memory. A file whose single model unpacks to more than 480 MB is refused with a message that says so; that ceiling is the browser's own limit on text length.
+
 ## 2.6.70 — Stronger blending when reducing colours
 
 - Full Spectrum blends has a **Blend detail** setting in Colours. Strong, the new default, lets the planner use nine ratios (17% to 83%) and up to 10 blended colours instead of three ratios and six. Finest uses 5% steps and up to 12. Standard is the previous behaviour.
