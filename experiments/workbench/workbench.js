@@ -10,11 +10,12 @@ document.querySelector('.topbar').append($('primary'));
 const projects=new WeakMap();let nextProject=0;
 const projectId=f=>{if(!f)return null;if(!projects.has(f))projects.set(f,++nextProject);return projects.get(f);};
 let active=document.body.dataset.initial||'converter',panel='project',file=null,theme='light',changing=false;
-let workspaceMode='studio',chosen=false;
-try{const saved=localStorage.getItem('yab3d-workspace-choice');if(['quick','studio'].includes(saved)){workspaceMode=saved;chosen=true;}}catch{}
-if(active==='spectrum'){workspaceMode='studio';chosen=true;}
-const workspacePicker=document.createElement('select');workspacePicker.id='workspace-mode';workspacePicker.setAttribute('aria-label','Workspace');workspacePicker.innerHTML='<option value="">Choose workspace</option><option value="quick">Quick conversion</option><option value="studio">Full studio</option>';document.querySelector('.topbar .brand').after(workspacePicker);
-function showWorkspace(){document.body.dataset.workspaceMode=workspaceMode;document.body.dataset.launch=String(!chosen);$('launch').hidden=chosen;$('engines').inert=!chosen;workspacePicker.value=chosen?workspaceMode:'';}
+let workspaceMode='studio';const chosen=true;
+// Earlier builds stored a Quick/Full choice; honour it as the Simple view preference.
+try{if(localStorage.getItem('yab3d-view')==='simple'||(localStorage.getItem('yab3d-view')===null&&localStorage.getItem('yab3d-workspace-choice')==='quick'))workspaceMode='quick';}catch{}
+if(active==='spectrum')workspaceMode='studio';
+const simpleView=document.createElement('button');simpleView.type='button';simpleView.id='simple-view';menu.querySelector('div').append(simpleView);
+function showWorkspace(){document.body.dataset.workspaceMode=workspaceMode;const on=workspaceMode==='quick';simpleView.textContent=on?'Show all tools':'Simple view';simpleView.title=on?'Bring back the tool rail and every panel':'Hide the tool rail and show only destination and export settings';simpleView.setAttribute('aria-pressed',String(on));}
 showWorkspace();
 const dropOverlay=document.createElement('div');dropOverlay.className='workspace-drop-overlay';dropOverlay.hidden=true;dropOverlay.setAttribute('role','status');dropOverlay.innerHTML='<div><strong>Drop to open your model</strong><span>3MF · GLB · OBJ + textures in a ZIP</span></div>';document.body.append(dropOverlay);
 const dropError=document.createElement('div');dropError.className='workspace-drop-error';dropError.hidden=true;dropError.innerHTML='<p role="alert"></p><button type="button" aria-label="Dismiss file import message">Dismiss</button>';document.body.append(dropError);
@@ -22,7 +23,7 @@ const clearDropError=()=>{dropError.hidden=true;dropError.querySelector('p').tex
 dropError.querySelector('button').onclick=clearDropError;
 const showDrop=value=>{dropOverlay.hidden=!value;if(value)clearDropError();};
 const showDropError=message=>{dropError.hidden=false;dropError.querySelector('p').textContent=message.message || message;};
-installModelDrop(document,{show:showDrop,load:async incoming=>{if(!chosen)await window.workbench.chooseWorkspace('quick');return (await ensure(active)).load(incoming);},error:showDropError});
+installModelDrop(document,{show:showDrop,load:async incoming=>{return (await ensure(active)).load(incoming);},error:showDropError});
 try{theme=localStorage.getItem('yab3d-workbench-theme')||'light';}catch{}
 if(!['light','dark'].includes(theme))theme='light';
 function setTheme(value){theme=value;document.documentElement.dataset.theme=value;$('theme').textContent=value==='light'?'Dark':'Light';$('theme').setAttribute('aria-label',`Switch to ${value==='light'?'dark':'light'} interface`);for(const f of frames.values())f.api?.theme(value);try{localStorage.setItem('yab3d-workbench-theme',value);}catch{}}
@@ -35,7 +36,8 @@ function drawExport(){
   exportMenu.replaceChildren(...exportChoices.map(choice=>{const b=document.createElement('button');b.type='button';b.setAttribute('role','menuitem');b.disabled=choice.disabled;const label=document.createElement('strong'),hint=document.createElement('span');label.textContent=choice.label;hint.textContent=choice.hint;b.append(label,hint);b.onclick=()=>{closeExport();$('primary').focus();frames.get(active)?.api?.export(choice.id);};return b;}));
 }
 function showReport(r){
-  if(r.kind!==active)return;$('project-title').textContent=r.title;$('workspace-status').textContent=r.status;$('workspace-status').title=r.status;$('primary').textContent=r.action;$('primary').disabled=r.disabled;workspacePicker.disabled=r.busy||r.pending;
+  if(r.kind!==active)return;$('project-title').textContent=r.title;$('workspace-status').textContent=r.status;$('workspace-status').title=r.status;// Before a model is open, the header button opens one instead of sitting disabled.
+  const idle=!r.loaded&&!r.busy&&!r.batch;$('primary').dataset.idle=String(idle);$('primary').textContent=idle?'Open a model':r.action;$('primary').disabled=idle?false:r.disabled;simpleView.disabled=Boolean(r.busy||r.pending);
   const serial=JSON.stringify(r.exports||[]),menu=(r.exports||[]).length>1;
   if(menu){$('primary').setAttribute('aria-haspopup','menu');$('primary').setAttribute('aria-controls','export-menu');if(!$('primary').hasAttribute('aria-expanded'))$('primary').setAttribute('aria-expanded','false');}
   else{closeExport();for(const name of ['aria-haspopup','aria-controls','aria-expanded'])$('primary').removeAttribute(name);}
@@ -81,7 +83,7 @@ async function offerResume(){
     const restored=new File([record.blob],record.name,{type:record.type||'',lastModified:record.lastModified});
     if(record.displayName)restored.yab3dDisplayName=record.displayName;
     savedMeta={name:restored.name,size:restored.size,lastModified:restored.lastModified};savedContext='';
-    if(!chosen)await window.workbench.chooseWorkspace(record.workspace==='quick'?'quick':'studio');
+
     let api=await ensure(active);
     // Saved settings are a convenience: if they no longer apply, open the model without them.
     try{await api.load(restored,record.context||{});}catch{await api.load(restored);}
@@ -99,12 +101,12 @@ window.workbench={
   failed(kind,message){const record=frames.get(kind);if(record){clearTimeout(record.timer);record.reject(Error(message));}},
   panelChanged(kind,value){if(kind===active)nav(value);},
   report(r){const record=frames.get(r.kind);if(record)record.report=r;showReport(r);},
-  sourceChanged(kind,next){const record=frames.get(kind);if(record){record.file=next;record.project=projectId(next);}if(kind===active){file=next;chosen=true;showWorkspace();clearDropError();resume.hidden=true;rememberSource(next);}},
+  sourceChanged(kind,next){const record=frames.get(kind);if(record){record.file=next;record.project=projectId(next);}if(kind===active){file=next;showWorkspace();clearDropError();resume.hidden=true;rememberSource(next);}},
   async chooseWorkspace(value,{open=false,remember=false}={}){
     if(!['quick','studio'].includes(value))return;
     const current=frames.get(active);if(current?.report?.busy||current?.report?.pending){$('workspace-status').textContent='Finish or cancel the current edit before changing workspace.';showWorkspace();return false;}
     if(value==='quick'&&active!=='converter'){await window.workbench.switchMode('converter');if(active!=='converter')return false;}
-    workspaceMode=value;chosen=true;showWorkspace();
+    workspaceMode=value;showWorkspace();try{localStorage.setItem('yab3d-view',value==='quick'?'simple':'studio');}catch{}
     if(remember)try{localStorage.setItem('yab3d-workspace-choice',value);}catch{}
     const api=await ensure(active);api.setWorkspaceMode(value);if(open)api.open();return true;
   },
@@ -120,9 +122,9 @@ window.workbench={
     await guard(async()=>{
       const options=previous?.api?.context()||{},original=previous?.api?.source()||file;
       if(previous){previous.view=previous.api.captureView();previous.file=original;previous.project=projectId(original);}
-      $('workspace-status').textContent=`Opening ${kind==='spectrum'?'Full Spectrum':'Convert'}…`;
+      $('workspace-status').textContent=`Opening ${kind==='spectrum'?'Full Spectrum blends':'Solid colours'}…`;
       const api=await ensure(kind);active=kind;modeButtons();
-      if(kind==='spectrum'){workspaceMode='studio';chosen=true;showWorkspace();}api.setWorkspaceMode(workspaceMode);
+      if(kind==='spectrum'){workspaceMode='studio';showWorkspace();}api.setWorkspaceMode(workspaceMode);
       for(const [key,r]of frames)r.frame.hidden=key!==kind;
       const destination=frames.get(kind);
       if(original&&destination.project!==projectId(original)){
@@ -138,10 +140,11 @@ window.workbench={
 for(const b of document.querySelectorAll('[data-panel]'))b.addEventListener('click',()=>guard(async()=>{nav(b.dataset.panel);(await ensure(active)).setPanel(panel);}));
 for(const b of document.querySelectorAll('[data-engine]'))b.addEventListener('click',()=>window.workbench.switchMode(b.dataset.engine));
 $('open').addEventListener('click',()=>guard(async()=>(await ensure(active)).open()));
-workspacePicker.onchange=()=>guard(()=>window.workbench.chooseWorkspace(workspacePicker.value));
-for(const button of document.querySelectorAll('[data-start]'))button.onclick=()=>guard(()=>window.workbench.chooseWorkspace(button.dataset.start,{open:button.dataset.start==='quick',remember:$('remember-workspace').checked}));
+simpleView.onclick=()=>guard(()=>window.workbench.chooseWorkspace(workspaceMode==='quick'?'studio':'quick'));
+
 $('batch').addEventListener('click',()=>guard(async()=>{await window.workbench.switchMode('converter');if(active!=='converter')return;(await ensure('converter')).batch();$('primary').disabled=true;}));
 $('primary').addEventListener('click',()=>{
+  if($('primary').dataset.idle==='true'){$('open').click();return;}
   if(exportChoices.length<2){frames.get(active)?.api?.primary();return;}
   if(!exportMenu.hidden){closeExport();return;}
   drawExport();exportMenu.hidden=false;$('primary').setAttribute('aria-expanded','true');exportMenu.querySelector('button:not(:disabled)')?.focus();
@@ -162,5 +165,5 @@ $('theme').addEventListener('click',()=>setTheme(theme==='light'?'dark':'light')
 document.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key==='o'){event.preventDefault();$('open').click();}else frames.get(active)?.api?.key?.(event);});
 setTheme(theme);modeButtons();
 await guard(()=>ensure(active));
-receiveModel({mount:document.body,canReceive:()=>!file,load:async(incoming,context)=>{if(!chosen)await window.workbench.chooseWorkspace('quick');return (await ensure(active)).load(incoming,context);}});
+receiveModel({mount:document.body,canReceive:()=>!file,load:async(incoming,context)=>{return (await ensure(active)).load(incoming,context);}});
 offerResume();

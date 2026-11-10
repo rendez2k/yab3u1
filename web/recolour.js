@@ -41,7 +41,7 @@ import { mountCalibration } from './shared/calibrationPanel.js';
 import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } from './shared/supportInterface.js';
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 
-const VERSION = "2.6.66";
+const VERSION = "2.6.68";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -94,6 +94,8 @@ function layoutSettings() {
   const sources=state.objects.map(id=>({...state.project?.sourceSettings,...state.project.meta.get(String(id))?.settings,...(state.supportInterface?{enable_support:'1'}:{})}));
   return targetLayout(state.target,{copies,spacing,width,depth,tower:$('spectrumtower').checked,
     arrangement:$('spectrumarrangement').value,quantities:{...state.quantities},footprints:state.footprints,
+    // Hand-placed positions from the Workbench: "objectId:ordinal" -> footprint centre in bed millimetres.
+    ...(state.manual?{manual:state.manual}:{}),
     ...planningAllowance(sources,state.target,state.target==='snapmaker','auto',state.supportsPainted)});
 }
 function updateCopies() {
@@ -686,7 +688,7 @@ function setLoading(active) {
 function resetForUpload() {
   focusBrush?.reset();focusGeometry=null;
   state.modelApplied=false;state.importantColours=[];state.focusMarks=[];
-  state.quantities={};state.footprints=[];state.bounds=null;state.boundsKey='';state.measuredKey='';
+  state.quantities={};state.manual=null;state.footprints=[];state.bounds=null;state.boundsKey='';state.measuredKey='';
   $('spectrumcopies').value=1;$('spectrumarrangement').value='auto';clearFill();
   $('subdividemix').checked=true;
   state.approximate=false;
@@ -760,7 +762,7 @@ function show() {
 
 $("plate").addEventListener("change", () => {
   state.plateId = Number($("plate").value);
-  state.quantities={};state.footprints=[];state.measuredKey='';$("spectrumcopies").value=1;clearFill();
+  state.quantities={};state.manual=null;state.footprints=[];state.measuredKey='';$("spectrumcopies").value=1;clearFill();
   state.objects = [];
   $("exportlog").innerHTML = "";
   clearReview();
@@ -1824,6 +1826,7 @@ export function workbenchObjects() {
       state.quantities={...patch.quantities};$('spectrumcopies').value=patch.copies;$('spectrumarrangement').value=patch.arrangement;
       for(const [key,id]of Object.entries({spacing:'spectrumgap',width:'spectrumwidth',depth:'spectrumdepth'}))if(patch[key]!==undefined)$(id).value=patch[key];
       if(patch.tower!==undefined)$('spectrumtower').checked=patch.tower;
+      if(patch.manual!==undefined)state.manual=patch.manual&&Object.keys(patch.manual).length?{...patch.manual}:null;
       $('objects').querySelectorAll('[data-object]').forEach(box=>{box.checked=(state.quantities[box.dataset.object]??1)>0;});
       state.objects=selectedObjects();renderQuantityFields();layoutChanged();refresh();
     }};

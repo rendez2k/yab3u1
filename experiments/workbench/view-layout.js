@@ -66,7 +66,7 @@ export function composeView(doc,kind) {
   panels.project.hidden=false;
   const explanation=panels.colours.querySelector('.workflow-explanation');
   const help=make('details',{class:'workflow-explanation'},'<summary>How colour replacement works</summary>');help.append(...explanation.childNodes);explanation.replaceWith(help);
-  panels.colours.querySelector('.task-heading').after(make('div',{class:'colour-workflow'},`<div role="group" aria-label="Colour workflow"><button data-colour-workflow="converter" aria-pressed="${kind==='converter'}">Convert</button><button data-colour-workflow="spectrum" aria-pressed="${kind==='spectrum'}">Full Spectrum</button></div><p>Convert keeps or replaces solid colours. Full Spectrum explores blends. Each workspace keeps its own edits when you switch back.</p></div>`));
+  panels.colours.querySelector('.task-heading').after(make('div',{class:'colour-workflow'},`<div role="group" aria-label="Colour workflow"><button data-colour-workflow="converter" aria-pressed="${kind==='converter'}">Solid colours</button><button data-colour-workflow="spectrum" aria-pressed="${kind==='spectrum'}">Full Spectrum blends</button></div><p>Two colour methods for the same model. Solid colours keeps or replaces each colour. Full Spectrum blends mixes your filaments to reach more shades. Each keeps its own colour choices when you switch back.</p></div>`));
   if(kind==='spectrum'){
     panels.colours.append(help);
     help.append(panels.colours.querySelector('.colour-workflow p'));
