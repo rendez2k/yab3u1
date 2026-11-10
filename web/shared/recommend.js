@@ -2,7 +2,7 @@
 // Search is exhaustive within a bounded, colour-diverse candidate pool.
 import { distance, norm, toLab } from './colour.js';
 import { colourName } from './assignment.js';
-import { describeColourMapping, mappingFromPlan, planBlends, RATIOS, MIN_IMPROVEMENT, POOR_COVERAGE } from './mix.js';
+import { describeColourMapping, mappingFromPlan, planBlends, blendStrength, MIN_IMPROVEMENT, POOR_COVERAGE } from './mix.js';
 import { mixFdmHex, approximateDistance } from './fdmMix.js';
 import { interfacePalette, validateInterfaceExport } from './supportInterface.js';
 import {reelIdentity} from './filamentIdentity.js';
@@ -13,7 +13,7 @@ const BASICS=['#FFFFFF','#000000','#808080','#FF0000','#0080C0','#0000FF',
 const objective=errors=>errors.reduce((a,b)=>a+b,0)/errors.length+.35*Math.max(...errors);
 const tenth=value=>Math.round(value*10)/10;
 const material=reel=>String(reel.type || 'PLA').trim().toUpperCase();
-function outcomeFor(sources,reels,blends,approximate=false,calibration=null,maxRecipes=6) {
+function outcomeFor(sources,reels,blends,approximate=false,calibration=null,maxRecipes=blendStrength().recipes) {
   const plan=planBlends(sources,reels,approximate,null,calibration,maxRecipes);
   const outcome=describeColourMapping(sources,{
     mapping:mappingFromPlan(plan,blends),physical:reels,kept:blends ? plan.recipes : [],
@@ -73,7 +73,7 @@ export function recommendPalette({sources,loaded,stock=null,locked=[],blends=tru
     function pair(a,b) {
       const lo=Math.min(a,b),hi=Math.max(a,b),key=lo+','+hi;
       if(!pairs.has(key)) {
-        const shades=RATIOS.map(percent=>({percent,lab:toLab(mixFdmHex(pool[lo].color,pool[hi].color,percent))}));
+        const shades=blendStrength().ratios.map(percent=>({percent,lab:toLab(mixFdmHex(pool[lo].color,pool[hi].color,percent))}));
         pairs.set(key,sourceLabs.map(c=>{
           const best=shades.map(r=>({error:distance(c,r.lab),key:key+','+r.percent})).sort((x,y)=>x.error-y.error)[0];
           best.approx=shades.map(r=>({error:approximateDistance(c,r.lab),key:key+','+r.percent})).sort((x,y)=>x.error-y.error)[0];
@@ -100,7 +100,7 @@ export function recommendPalette({sources,loaded,stock=null,locked=[],blends=tru
         if(!best) return;
         if(tenth(best.error)>POOR_COVERAGE || tenth(tenth(direct)-tenth(best.error))<MIN_IMPROVEMENT) approximate=true;
         recipes.add(best.key);
-        if(recipes.size>6) return; // Same recipe ceiling as the export planner.
+        if(recipes.size>blendStrength().recipes) return; // Same recipe ceiling as the export planner.
         errors.push(tenth(best.error));
         approximateErrors.push(tenth(approxBest.error));
       }
@@ -185,7 +185,7 @@ export function recommendWorkflow({mode='model', sources, loaded=[], stock=null,
     search.evaluated++;
     if(search.evaluated%32===0)onProgress({evaluated:search.evaluated});
     if(keepExact.some(color=>!reels.some(r=>r.role!=='support-interface' && norm(r.color)===norm(color)))) return;
-    const budget=Math.max(0,Math.min(6,visibleLimit-reels.length));
+    const budget=Math.max(0,Math.min(blendStrength().recipes,visibleLimit-reels.length));
     let result=outcomeFor(sources,reels,blends,false,calibration,budget);
     if(result.unresolved && blends) result=outcomeFor(sources,reels,true,true,calibration,budget);
     if(result.unresolved) return;

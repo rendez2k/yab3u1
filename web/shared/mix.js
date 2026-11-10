@@ -15,6 +15,22 @@ export const MIN_IMPROVEMENT = 2.0;
 export const POOR_COVERAGE = 12.0;
 export const MAX_RECIPES = 12;
 
+// How finely Full Spectrum may dither when a model has more colours than reels.
+// More ratios and more recipes reach more of the model's shades; long ratios
+// repeat over more layers, so they band more visibly without thin layers.
+// RATIOS above stays the reference set shared with the Python oracle.
+export const BLEND_STRENGTHS = {
+  standard: { ratios: RATIOS, recipes: 6, period: 4 },
+  strong: { ratios: [17, 25, 33, 40, 50, 60, 67, 75, 83], recipes: 10, period: 6 },
+  finest: { ratios: [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90], recipes: 12, period: 20 },
+};
+let strength = 'standard';
+export function setBlendStrength(name) {
+  if (!Object.hasOwn(BLEND_STRENGTHS, name)) throw new Error('Choose Standard, Strong or Finest blend detail.');
+  strength = name;
+}
+export const blendStrength = () => ({ name: strength, ...BLEND_STRENGTHS[strength] });
+
 // Truncation, not rounding: the Python oracle is the reference and the two must
 // predict the identical hex or the parity check is meaningless.
 const clamp = (value) => Math.max(0, Math.min(255, Math.trunc(value)));
@@ -236,7 +252,7 @@ export function plausibleBlend(first, second, predicted) {
 
 /** Interactive Full Spectrum planning rejects implausible predictions before
  * choosing a recipe, so a rejected nearest prediction cannot hide a valid one. */
-export function planBlends(sourceColors,reels,approximate=false,slotOrder=null,calibration=null,maxRecipes=6) {
+export function planBlends(sourceColors,reels,approximate=false,slotOrder=null,calibration=null,maxRecipes=blendStrength().recipes) {
   // Keep the original search order when arranging a chosen palette. Re-running
   // tied candidates in physical-slot order can otherwise change its shades.
   if(slotOrder) {
@@ -250,7 +266,7 @@ export function planBlends(sourceColors,reels,approximate=false,slotOrder=null,c
         solid:{...row.solid,slot:slot(row.solid.slot)},mixture:recipe(row.mixture)}))};
   }
   const predictor=calibratedPredictor(reels,calibration);
-  const plan=planMixtures(sourceColors,reels,RATIOS,maxRecipes,true,predictor.predict,approximate);
+  const plan=planMixtures(sourceColors,reels,blendStrength().ratios,maxRecipes,true,predictor.predict,approximate);
   plan.recipes.forEach(recipe=>{
     recipe.model=FDM_MODEL;
     const measured=predictor.measured(recipe.a,recipe.b,recipe.percent);
