@@ -5,7 +5,7 @@ export function mountProjectPlates({view,session,select,editColours}) {
   panel.setAttribute('aria-label','Plates & objects');
   panel.querySelector('.task-heading p').textContent='Choose a plate, edit its objects, then save the complete project.';
   const host=view.make('section',{class:'project-plates','aria-label':'Project plates'},
-    '<div class="plate-collection-heading"><h2>Project plates</h2><span data-plate-count></span></div><div class="source-plate-list" role="group" aria-label="Choose a plate"></div><div class="plate-management"><button data-delete-plate>Delete this plate</button><button data-restore-plate hidden>Undo deletion</button></div><div class="project-saves"><button class="primary" data-save-project>Save all plates · 3MF</button><button data-save-jobs>Export print jobs · ZIP</button><p class="hint">3MF keeps your plates together for editing. ZIP gives each plate its own printer file and filament list.</p><p class="hint" data-project-result role="status" aria-live="polite"></p></div>');
+    '<div class="plate-collection-heading"><h2>Project plates</h2><span data-plate-count></span></div><div class="source-plate-list" role="group" aria-label="Choose a plate"></div><div class="plate-management"><button data-delete-plate>Delete this plate</button><button data-restore-plate hidden>Undo deletion</button></div><div class="project-saves"><p class="hint">Use Export at the top to save this plate, every plate in one 3MF, or a ZIP of separate print jobs.</p><p class="hint" data-project-result role="status" aria-live="polite"></p></div>');
   content.prepend(host);
   const $=q=>host.querySelector(q),result=$('[data-project-result]'),list=$('.source-plate-list');
   // The legacy plate selector now lives beside plate operations, never in a
@@ -30,7 +30,7 @@ export function mountProjectPlates({view,session,select,editColours}) {
     const visible=session.visiblePlates();$('[data-plate-count]').textContent=`${visible.length} ${visible.length===1?'plate':'plates'}`;
     list.innerHTML=visible.map((p,i)=>{
       const r=rows.get(String(p.id)),active=String(p.id)===String(session.state?.plateId);
-      return `<button type="button" class="source-plate" data-source-plate="${escape(p.id)}" aria-pressed="${active}">${r?.url?`<img src="${r.url}" alt="" width="64" height="64">`:'<span class="plate-thumbnail-placeholder" aria-hidden="true"></span>'}<span class="source-plate-copy"><strong>${escape(p.name || `Plate ${i+1}`)}</strong><span>${r?.objectCount!=null?`${r.objectCount} objects`:'Measuring…'}</span><span class="plate-filament-swatches">${(r?.colours||[]).map(c=>`<i style="background:${/^#[0-9a-f]{6}$/i.test(c.color)?c.color:'#ffffff'}" title="Slot ${c.slot}: ${escape(c.color)} ${escape(c.type)}"></i>`).join('')}${r?.problem?'<b>Needs review</b>':''}</span></span></button>`;
+      return `<button type="button" class="source-plate" data-source-plate="${escape(p.id)}" aria-pressed="${active}">${r?.url?`<img src="${r.url}" alt="" width="64" height="64">`:'<span class="plate-thumbnail-placeholder" aria-hidden="true"></span>'}<span class="source-plate-copy"><strong>${escape(p.name || `Plate ${i+1}`)}</strong><span>${r?.objectCount!=null?`${r.objectCount} object${r.objectCount===1?'':'s'}`:'Measuring…'}</span><span class="plate-filament-swatches">${(r?.colours||[]).map(c=>`<i style="background:${/^#[0-9a-f]{6}$/i.test(c.color)?c.color:'#ffffff'}" title="Slot ${c.slot}: ${escape(c.color)} ${escape(c.type)}"></i>`).join('')}${r?.problem?'<b>Needs review</b>':''}</span></span></button>`;
     }).join('');
     list.scrollTop=scrollTop;
     // Async thumbnail/count updates must not drop a keyboard user's position.
@@ -69,8 +69,9 @@ export function mountProjectPlates({view,session,select,editColours}) {
     const a=document.createElement('a');a.href=downloadUrl;a.download=output.name;a.textContent=`Download ${output.name} again`;
     a.click();result.replaceChildren(document.createTextNode(`${output.plates} plates saved. ${output.notes?.filter(n=>/four logical|need review/.test(n)).join(' ') || ''} `),a);
   }
-  $('[data-save-project]').onclick=()=>save('project');$('[data-save-jobs]').onclick=()=>save('zip');
-  return {save,primary:$('[data-save-project]'),sync(){
+    // Saving is offered from the single Export menu in the header.
+  const saveDisabled=format=>!session.state||session.busy||session.boundsPending||(format==='project'&&session.target==='prusa');
+  return {save,saveDisabled,sync(){
     if(!session.state)return;
     if(downloadUrl&&downloadRevision!==session.revision){URL.revokeObjectURL(downloadUrl);downloadUrl=null;result.replaceChildren();}
     if(fileEpoch!==session.epoch){fileEpoch=session.epoch;key='';rows.clear();draw();}
@@ -78,7 +79,6 @@ export function mountProjectPlates({view,session,select,editColours}) {
     for(const b of host.querySelectorAll('button'))b.disabled=disabled;
     $('[data-delete-plate]').disabled=disabled||session.visiblePlates().length<2;
     $('[data-restore-plate]').hidden=!session.plateCollection.undo.length;
-    $('[data-save-project]').disabled=disabled||session.target==='prusa';
     for(const b of list.querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.sourcePlate===String(session.state.plateId)));
     refresh();
   }};

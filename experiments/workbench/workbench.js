@@ -2,7 +2,9 @@ import {interfaceDemoFile} from './shared/supportInterfaceDemo.js';
 import {receiveModel} from './shared/modelHandoff.js';
 import {installModelDrop} from './file-drop.js';
 const $=id=>document.getElementById(id),frames=new Map();
-const menu=document.createElement('details');menu.className='project-menu';menu.innerHTML='<summary>App menu</summary><div></div>';document.querySelector('.topbar').append(menu);for(const id of ['open','batch','help','theme'])menu.querySelector('div').append($(id));menu.addEventListener('click',e=>{if(e.target.closest('button'))menu.open=false;});
+const menu=document.createElement('details');menu.className='project-menu';menu.innerHTML='<summary>App menu</summary><div></div>';document.querySelector('.topbar').append(menu);for(const id of ['batch','help','theme'])menu.querySelector('div').append($(id));
+// Open stays one click away on wide screens; narrow screens keep it in the menu.
+menu.before($('open'));const menuOpen=document.createElement('button');menuOpen.type='button';menuOpen.className='menu-open';menuOpen.textContent='Open model';menuOpen.onclick=()=>$('open').click();menu.querySelector('div').prepend(menuOpen);menu.addEventListener('click',e=>{if(e.target.closest('button'))menu.open=false;});
 document.querySelector('.topbar').append($('primary'));
 const projects=new WeakMap();let nextProject=0;
 const projectId=f=>{if(!f)return null;if(!projects.has(f))projects.set(f,++nextProject);return projects.get(f);};
@@ -25,7 +27,20 @@ if(!['light','dark'].includes(theme))theme='light';
 function setTheme(value){theme=value;document.documentElement.dataset.theme=value;$('theme').textContent=value==='light'?'Dark':'Light';$('theme').setAttribute('aria-label',`Switch to ${value==='light'?'dark':'light'} interface`);for(const f of frames.values())f.api?.theme(value);try{localStorage.setItem('yab3d-workbench-theme',value);}catch{}}
 function nav(value){panel=value;for(const b of document.querySelectorAll('[data-panel]')){if(b.dataset.panel===value)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');}}
 function modeButtons(){for(const b of document.querySelectorAll('[data-engine]'))b.setAttribute('aria-pressed',String(b.dataset.engine===active));}
-function showReport(r){if(r.kind!==active)return;$('project-title').textContent=r.title;$('workspace-status').textContent=r.status;$('primary').textContent=r.action;$('primary').disabled=r.disabled;workspacePicker.disabled=r.busy||r.pending;}
+const exportMenu=document.createElement('div');exportMenu.className='export-menu';exportMenu.id='export-menu';exportMenu.hidden=true;exportMenu.setAttribute('role','menu');exportMenu.setAttribute('aria-label','Export');document.body.append(exportMenu);
+let exportChoices=[];
+function closeExport(){if(exportMenu.hidden)return;exportMenu.hidden=true;$('primary').setAttribute('aria-expanded','false');}
+function drawExport(){
+  exportMenu.replaceChildren(...exportChoices.map(choice=>{const b=document.createElement('button');b.type='button';b.setAttribute('role','menuitem');b.disabled=choice.disabled;const label=document.createElement('strong'),hint=document.createElement('span');label.textContent=choice.label;hint.textContent=choice.hint;b.append(label,hint);b.onclick=()=>{closeExport();$('primary').focus();frames.get(active)?.api?.export(choice.id);};return b;}));
+}
+function showReport(r){
+  if(r.kind!==active)return;$('project-title').textContent=r.title;$('workspace-status').textContent=r.status;$('primary').textContent=r.action;$('primary').disabled=r.disabled;workspacePicker.disabled=r.busy||r.pending;
+  const serial=JSON.stringify(r.exports||[]),menu=(r.exports||[]).length>1;
+  if(menu){$('primary').setAttribute('aria-haspopup','menu');$('primary').setAttribute('aria-controls','export-menu');if(!$('primary').hasAttribute('aria-expanded'))$('primary').setAttribute('aria-expanded','false');}
+  else{closeExport();for(const name of ['aria-haspopup','aria-controls','aria-expanded'])$('primary').removeAttribute(name);}
+  if(r.disabled)closeExport();
+  if(serial!==JSON.stringify(exportChoices)){exportChoices=r.exports||[];if(!exportMenu.hidden)drawExport();}
+}
 function ensure(kind){
   if(frames.has(kind))return frames.get(kind).promise;
   let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});
@@ -84,7 +99,19 @@ $('open').addEventListener('click',()=>guard(async()=>(await ensure(active)).ope
 workspacePicker.onchange=()=>guard(()=>window.workbench.chooseWorkspace(workspacePicker.value));
 for(const button of document.querySelectorAll('[data-start]'))button.onclick=()=>guard(()=>window.workbench.chooseWorkspace(button.dataset.start,{open:button.dataset.start==='quick',remember:$('remember-workspace').checked}));
 $('batch').addEventListener('click',()=>guard(async()=>{await window.workbench.switchMode('converter');if(active!=='converter')return;(await ensure('converter')).batch();$('primary').disabled=true;}));
-$('primary').addEventListener('click',()=>frames.get(active)?.api?.primary());
+$('primary').addEventListener('click',()=>{
+  if(exportChoices.length<2){frames.get(active)?.api?.primary();return;}
+  if(!exportMenu.hidden){closeExport();return;}
+  drawExport();exportMenu.hidden=false;$('primary').setAttribute('aria-expanded','true');exportMenu.querySelector('button:not(:disabled)')?.focus();
+});
+// Clicks inside the workspace frame never reach this document, so blur closes the menu too.
+document.addEventListener('pointerdown',event=>{if(!event.target.closest('#export-menu,#primary'))closeExport();});
+window.addEventListener('blur',closeExport);
+exportMenu.addEventListener('keydown',event=>{
+  const items=[...exportMenu.querySelectorAll('button:not(:disabled)')],at=items.indexOf(document.activeElement);
+  if(event.key==='Escape'){event.stopPropagation();closeExport();$('primary').focus();}
+  else if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();items[(at+(event.key==='ArrowDown'?1:items.length-1))%items.length]?.focus();}
+});
 $('help').addEventListener('click',()=>$('help-dialog').showModal());
 $('integrations').addEventListener('click',()=>{$('help-dialog').close();frames.get(active)?.api?.setPanel('help');});
 $('theme').addEventListener('click',()=>setTheme(theme==='light'?'dark':'light'));

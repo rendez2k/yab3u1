@@ -16,10 +16,10 @@ export function modelColours({palette=[],objects=[],quantities={},copies=1,loade
 }
 
 export function mountModelColours({view,read,manage}) {
-  const root=view.make('section',{class:'model-colour-summary',hidden:'','aria-label':'Model colours'},'<div class="model-colour-heading"><strong></strong><button type="button" data-manage-colours>Manage colours</button></div><p class="hint" data-colour-scope></p><ul class="model-colour-list"></ul>');
+  const root=view.make('section',{class:'model-colour-summary',hidden:'','aria-label':'Model colours'},'<div class="model-colour-heading"><strong></strong><button type="button" data-manage-colours aria-label="Manage colours">Manage</button></div><p class="hint" data-colour-scope></p><ul class="model-colour-list"></ul>');
   view.inspector.prepend(root);root.querySelector('button').onclick=manage;let previous='';
   return {element:root,sync(){
-    const data=modelColours(read()),key=JSON.stringify(data);if(key===previous)return;previous=key;root.hidden=!data.loaded;
+    const data=modelColours(read()),key=JSON.stringify(data);if(key===previous)return;previous=key;root.hidden=!data.loaded;root.dataset.uncertain=String(Boolean(data.uncertain));
     root.querySelector('strong').textContent=data.checking?'Checking model colours…':`${data.count}${data.uncertain?' known':''} model colour${data.count===1?'':'s'}`;
     root.querySelector('[data-colour-scope]').textContent=data.uncertain?'Some paint could not be read. Check the source in your slicer.':`Original paint · this plate${data.filaments>data.count?` · ${data.filaments} filaments`:''}`;
     const list=root.querySelector('ul');list.replaceChildren();

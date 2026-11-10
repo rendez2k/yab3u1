@@ -263,3 +263,63 @@ body[data-engine=spectrum] [data-task=colours] .task-heading{margin-bottom:12px}
 }
 @media(max-width:440px){.topbar{gap:5px;padding:0 8px}.topbar .brand strong{display:none}#workspace-mode{max-width:122px}.topbar>.primary{font-size:11px;padding:8px;max-width:124px}.launch-content .launch-note{margin-top:12px}.launch-content>p{font-size:13px;margin-bottom:14px}}
 @media(max-width:760px){.split-inspection canvas,.boundary-overlay{top:56px;height:calc(100% - 138px)}.inspection-caption{top:auto;bottom:8px;left:12px;right:12px;font-size:11px;gap:4px;align-items:flex-start;flex-direction:column}.inspection-caption button,.boundary-points button,.boundary-actions button,.split-preview-controls>[data-split-preview],[data-assembly-controls] input[type=range]{min-height:44px}.boundary-points button{min-width:44px}.boundary-actions{gap:8px}.inspection-caption span{max-width:none}[data-inspection-expand]{display:inline-block}#engine-workspace:has([data-task=edit][data-editing=true] [data-split-method]) #stage[data-inspection-expanded=true]{flex:1;min-height:0;padding:0}#engine-workspace:has([data-inspection-expanded=true]) #inspector{display:none}}
+/* 2.6.56 — slim feature rail. Tools sit in a narrow column so each panel keeps the full height. */
+#engine-workspace{grid-template-columns:404px minmax(0,1fr)}
+#engine-workspace>#inspector{display:grid;grid-template-columns:68px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
+#inspector>.feature-toolbox{grid-column:1;grid-row:1/-1;display:flex;flex-direction:column;gap:4px;padding:10px 6px;border-bottom:0;border-right:1px solid var(--line);overflow-y:auto;scrollbar-width:none}
+#inspector .feature-toolbox button{min-height:58px;padding:8px 2px 7px;gap:5px;border-color:transparent;background:transparent;font-size:11px;color:var(--dim);border-radius:10px;flex:none}
+#inspector .feature-toolbox button[aria-pressed=true]{border-color:transparent}
+.feature-toolbox svg{width:22px;height:22px}
+.feature-toolbox span{max-width:none;white-space:nowrap}
+#inspector>.model-colour-summary{grid-column:2;grid-row:1;display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;padding:10px 12px 10px 20px;border-bottom:1px solid var(--line)}
+.model-colour-summary .model-colour-heading{display:contents}
+.model-colour-heading strong{font-size:12px;letter-spacing:0;font-weight:600;white-space:nowrap}
+#inspector .model-colour-heading button{order:3;margin-left:auto;min-height:30px}
+.model-colour-summary .hint{display:none;order:4;flex-basis:100%;margin:0}
+.model-colour-summary[data-uncertain=true] .hint{display:block}
+.model-colour-list{order:2;flex:1;min-width:0;flex-wrap:nowrap;gap:5px;max-height:none;overflow:hidden}
+.model-colour-list li{min-height:0}
+.model-colour-list i{width:18px;height:18px}
+.model-colour-list span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+#inspector>section[data-task]{grid-column:2;grid-row:2}
+[data-workspace-mode=quick] #engine-workspace>#inspector{display:flex}
+[data-workspace-mode=quick] #inspector>.model-colour-summary{padding:14px 20px}
+.project-saves{display:block}.project-saves p{margin:10px 0 0}
+@media(max-width:1050px) and (min-width:761px){#engine-workspace{grid-template-columns:360px minmax(0,1fr)}#engine-workspace>#inspector{grid-template-columns:60px minmax(0,1fr)}#inspector .feature-toolbox button{font-size:10px}}
+@media(max-width:760px){
+  #engine-workspace>#inspector{display:flex}
+  #inspector>.feature-toolbox{order:-1;position:sticky;top:0;z-index:3;flex-direction:row;gap:2px;padding:4px 6px;border-right:0;border-bottom:1px solid var(--line);background:var(--panel);overflow:visible}
+  #inspector .feature-toolbox button{flex:1 1 0;min-width:0;min-height:52px;padding:6px 0 5px;font-size:10px;gap:3px}
+  .feature-toolbox svg{width:20px;height:20px}
+  #inspector>.model-colour-summary{padding:6px 12px 6px 16px}
+  .model-colour-list{margin-top:0}
+}
+/* One Export entry point; choices open beneath the header button. */
+.topbar>.primary[aria-haspopup]::after{content:'';display:inline-block;width:6px;height:6px;margin:0 0 3px 9px;border:solid currentColor;border-width:0 1.6px 1.6px 0;transform:rotate(45deg)}
+.export-menu{position:fixed;top:58px;right:22px;z-index:30;width:min(300px,calc(100vw - 16px));display:flex;flex-direction:column;gap:2px;padding:6px;background:var(--panel);border-radius:12px;box-shadow:0 8px 32px #172c3830}
+.export-menu button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;border:0;background:transparent;padding:10px 12px;min-height:52px;border-radius:8px}
+.export-menu button strong{font-size:13px;font-weight:600}
+.export-menu button span{font-size:11px;line-height:1.4;color:var(--muted)}
+@media(max-width:560px){.export-menu{top:52px;right:8px}}
+/* Split reads as three steps; rarely needed options are folded away. */
+#inspector .split-step{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;letter-spacing:0;margin:0 0 12px}
+#inspector .split-step b{flex:none;width:20px;height:20px;border-radius:50%;background:var(--soft);color:var(--accent);font-size:11px;display:grid;place-items:center}
+#inspector [data-split-preview-settings],#inspector [data-joint-settings]{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
+.joint-options{margin:10px 0 14px}
+.studio-repair-tools{margin:22px 0 0}
+/* Tips: explanations are opt-in in the studio. Status, warnings and Quick conversion keep their text. */
+body[data-tips=off]:not([data-workspace-mode=quick]) #inspector p.hint:not([role]):not([aria-live]):not([data-colour-scope]),
+body[data-tips=off]:not([data-workspace-mode=quick]) #inspector .colour-workflow p,
+body[data-tips=off]:not([data-workspace-mode=quick]) #inspector .task-heading p:not([data-selection-title]){display:none}
+body[data-tips=off]:not([data-workspace-mode=quick]) #inspector .task-heading{margin-bottom:16px}
+#inspector .tips-toggle{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:5px;padding:8px 2px 7px;min-height:58px;border-radius:10px;font-size:11px;color:var(--dim);cursor:pointer;flex:none}
+#inspector .tips-toggle:hover{background:var(--panel2)}
+#inspector .tips-toggle input{position:absolute;opacity:0;width:1px;height:1px}
+#inspector .tips-toggle:has(input:checked){color:var(--accent);background:var(--soft)}
+#inspector .tips-toggle:has(input:focus-visible){outline:2px solid var(--focus);outline-offset:2px}
+@media(max-width:760px){#inspector .tips-toggle{margin:0;flex:1 1 0;min-width:0;min-height:52px;padding:6px 0 5px;font-size:10px;gap:3px}}
+.topbar>#open{border:0;background:var(--panel);font-size:12px;padding:10px 15px;white-space:nowrap}
+.project-menu .menu-open{display:none!important}
+@media(max-width:900px){.topbar>#open{display:none}.project-menu .menu-open{display:block!important}}
+/* Phone: view controls stay on one scrollable row so the model keeps its space. */
+@media(max-width:760px){#platecontrols .plate-tool-row{flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:none}#platecontrols .plate-tool-row>*{flex:none;white-space:nowrap}#platecontrols #convertpreviewtoolbar,#platecontrols .previewtoolbar{flex-wrap:nowrap}}
