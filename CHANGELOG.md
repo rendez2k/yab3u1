@@ -1,3 +1,13 @@
+## 2.6.73 — A simpler filament pack chooser
+
+- Packs are a pick-list showing each pack's full name and its colours, in place of a dropdown that cut the name off.
+- Reels are compact chips you tap to include or leave out.
+- Choosing a pack, or changing its reels, previews on the model straight away.
+- Compare smaller options, the comparison print, pack details and "I own this set" are folded under More options.
+- The three source tabs fit on one line as Suggest, My reels and Packs.
+- With four reels selected the panel says that a four-reel pack has room for only one of black or white.
+- The side panel is a little wider on large screens.
+
 ## 2.6.72 — Choose which plates to open
 
 - Opening a multi-plate project of 40 MB or more now lists its plates first, with thumbnails, object names and approximate sizes. Tick the plates you want and only those are loaded.

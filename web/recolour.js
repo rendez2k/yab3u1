@@ -42,7 +42,7 @@ import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } 
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 import { DUAL_WALL_TARGETS, dualWallProblem } from './shared/dualWall.js';
 
-const VERSION = "2.6.72";
+const VERSION = "2.6.73";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
