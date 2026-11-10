@@ -687,6 +687,14 @@
       <div id="printoptimiser"></div>
     </details>
     <h2 id="exportsettingsheading">Export settings</h2>
+    <div id="dualwalloptions" hidden>
+      <label class="check"><input type="checkbox" id="dualwallon">Dual-wall mixing <span class="hint">· experimental</span></label>
+      <div id="dualwallfields" hidden>
+        <div class="row"><label class="field">Inner wall filament<select id="dualwallinner" aria-label="Filament for the inner walls"></select></label><label class="field">Outer colour depth (mm)<input id="dualwalldepth" type="number" min="0.3" max="1.2" step="0.05" value="0.45"></label></div>
+        <p id="dualwallnote" class="hint" role="status"></p>
+        <p class="hint">Each colour is printed only in the outer wall; the walls behind it, and the infill, use the inner filament. A light inner filament shows through translucent colours and softens them; a dark one deepens them. Match the depth to your outer wall width. The inner filament must be one of your loaded reels: add one in Colours (white, for example) if it is not listed. The 3D preview does not simulate this: slice the file and check the wall colours before printing.</p>
+      </div>
+    </div>
     <div id="subdivideoptions" hidden>
       <label class="check"><input type="checkbox" id="subdividemix" checked>Subdivide Mix Layer <span class="hint">· experimental</span></label>
       <p class="hint">Split layers in blended areas into thinner colour sublayers. May reduce visible bands; your blend ratios stay the same. Re-slice and compare a small test.</p>

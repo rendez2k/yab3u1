@@ -14,6 +14,7 @@ import * as project from "./project.js";
 import { cluster, clusterWithinBudget } from "./simplify.js";
 import { encodePng } from "./png.js";
 import { downscale, renderIso } from "./raster.js";
+import { applyDualWall } from "./dualWall.js";
 import { layoutOffsets, planLayout } from "./layout.js";
 import { surfaceAreas } from './surfaceWeights.js';
 import {exportComparisonJob} from './comparisonExport.js';
@@ -439,10 +440,14 @@ self.onmessage = async (event) => {
         post({ type: "error", id, message: built.problems[0] });
         return;
       }
+      // Dual-wall mixing rewrites the finished project: explicit paint outside, one filament inside.
+      const dualWall = message.options.dualWall
+        ? applyDualWall(built.entries, { target: message.options.target, innerSlot: message.options.dualWall.slot, depth: message.options.dualWall.depth })
+        : null;
       const bytes = await writeZip([...built.entries].map(([name, data]) =>
         ({ name, data })));
       post({ type: "exported", id, bytes, ms: Date.now() - started,
-             recipes: built.recipes.length, thumbnails: built.thumbnails },
+             recipes: built.recipes.length, thumbnails: built.thumbnails, dualWall },
            [bytes.buffer]);
       return;
     }
