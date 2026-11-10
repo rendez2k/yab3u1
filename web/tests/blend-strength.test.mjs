@@ -37,3 +37,25 @@ test('the palette search honours the chosen detail',()=>{
   const blends=result=>new Set((result.outcome?.rows||[]).filter(r=>r.recipe).map(r=>`${r.recipe.a},${r.recipe.b},${r.recipe.percent}`)).size;
   assert(blends(strong)>=blends(standard));assert(blends(strong)<=10);
 });
+
+import {setHueFidelity,hueFidelity,huePenalty} from '../shared/mix.js';
+test('keeping hues picks a cyan and yellow green for a light green instead of a paler yellow',()=>{
+  const cmyw=['#00FFFF','#FF00FF','#FFFF00','#FFFFFF'].map(color=>({color,type:'PLA'}));
+  const model={1:'#B5D88A',2:'#A8D8E8',3:'#D2B0A0',4:'#E0403A'};
+  assert.equal(hueFidelity(),false);assert.equal(huePenalty('#B5D88A','#F9FBA6'),0);
+  setBlendStrength('strong');
+  const plain=planBlends(model,cmyw,true);
+  setHueFidelity(true);const kept=planBlends(model,cmyw,true);
+  const pale=huePenalty('#B5D88A','#F9FBA6'),green=huePenalty('#B5D88A','#9DFA00'),skin=huePenalty('#D2B0A0','#F7CBDE');
+  setHueFidelity(false);setBlendStrength('standard');
+  const mix=(plan,i)=>[plan.rows[i].mixture.a,plan.rows[i].mixture.b].join('/');
+  // Without it the green is matched by yellow and white; with it, by cyan and yellow.
+  assert.equal(mix(plain,0),'3/4');assert.equal(mix(kept,0),'1/3');
+  // Pastels and skin tones are close to neutral and are not pushed about by hue.
+  assert.equal(mix(kept,1),mix(plain,1));assert.equal(kept.rows[1].mixture.percent,plain.rows[1].mixture.percent);
+  assert(pale>green+4);assert(skin<pale/2);
+  // Red is still magenta and yellow either way.
+  assert.equal(mix(kept,3),'2/3');
+  // The reported error is the plain distance, not the ranking score.
+  assert(kept.rows[0].mixture.error>plain.rows[0].mixture.error);
+});

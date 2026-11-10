@@ -1,3 +1,9 @@
+## 2.6.74 — Keep each colour's hue
+
+- Full Spectrum blends now prefers a blend of the right hue over a paler or greyer colour that is numerically closer. With cyan, magenta, yellow and white loaded, a light green is matched by cyan and yellow, where before it was matched by yellow and white and came out pale yellow.
+- The preference only applies to clearly saturated colours, so pastels and skin tones are matched as before.
+- It is a tick box under Blend detail in Colours, on by default, and is used by both the palette suggestions and the final plan.
+
 ## 2.6.73 — A simpler filament pack chooser
 
 - Packs are a pick-list showing each pack's full name and its colours, in place of a dropdown that cut the name off.
