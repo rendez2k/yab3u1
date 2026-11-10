@@ -6,7 +6,7 @@ export async function unpackBundle(bytes) {
   if(entries.size>50) throw new Error('This ZIP contains more than 50 projects. Split it into smaller bundles.');
   const files=[];
   for(const [name,data] of entries) {
-    if(data.byteLength>MAX_ARCHIVE_BYTES) throw new Error(`${name} exceeds the 96 MB project limit.`);
+    if(data.byteLength>MAX_ARCHIVE_BYTES) throw new Error(`${name} exceeds the ${MAX_ARCHIVE_BYTES/1048576} MB project limit.`);
     files.push({name,bytes:data});
   }
   return {files,ignored:inventory.filter(i=>!i.name.endsWith('/') && !/\.3mf$/i.test(i.name))};

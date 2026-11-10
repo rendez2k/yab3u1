@@ -1,4 +1,4 @@
-import { MAX_ARCHIVE_BYTES } from "../zip.js";
+const BATCH_FILE_BYTES = 96 * 1024 * 1024;   // per file in a batch; single files may be larger
 import { TARGETS } from "./targets.js";
 import { targetLayout, planLayout } from "./layout.js";
 import { planningAllowance, transferSettings } from "./printSettings.js";
@@ -72,7 +72,7 @@ export class BatchSession {
         const results = [];
         try {
           if (!/\.3mf$/i.test(file.name)) throw new Error("Not a .3mf file");
-          if (file.size > MAX_ARCHIVE_BYTES) throw new Error("File exceeds the 96 MB input limit; convert a smaller project.");
+          if (file.size > BATCH_FILE_BYTES) throw new Error("File exceeds the 96 MB input limit; convert a smaller project.");
           this.status(`File ${index + 1} of ${files.length}: reading ${file.name}`);
           this.row(index, "working", "Reading model…");
           const bytes = await file.arrayBuffer();

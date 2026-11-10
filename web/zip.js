@@ -12,8 +12,11 @@ const SIG_EOCD = 0x06054b50;
 // is checked before and after inflating: the size in the header is a claim, not
 // a fact.  These are what a real sliced 3MF needs (the alien model is 18 MB
 // compressed and ~150 MB expanded) with headroom to spare.
-export const MAX_ARCHIVE_BYTES = 96 * 1024 * 1024;
-export const MAX_MEMBER_BYTES = 256 * 1024 * 1024;
+// A single project file. Large multi-part designs reach a few hundred megabytes
+// compressed; what finally limits them is the browser's memory and its maximum
+// text length (about 512 MB per model file), so one member stops just below that.
+export const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024;
+export const MAX_MEMBER_BYTES = 480 * 1024 * 1024;
 export const MAX_TOTAL_BYTES = 512 * 1024 * 1024;
 export const MAX_MEMBERS = 5000;
 

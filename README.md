@@ -219,7 +219,7 @@ The ZIP includes `conversion-report.txt` for a readable summary and
 `conversion-report.json` with transferred settings and recognised omissions.
 Duplicate source names get unique numbered output names.
 
-Limits: 50 source files per batch, 96 MB per source archive and 256 MB of completed
+Limits (batch conversion; a single project may be up to 512 MB): 50 source files per batch, 96 MB per source archive and 256 MB of completed
 3MFs per ZIP. Split larger jobs into smaller batches. Existing converter limits
 still apply, including unsupported volume structures and native filament blends;
 those are reported rather than silently simplified. U1 groups must fit its bed
