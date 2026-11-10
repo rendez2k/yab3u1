@@ -6,7 +6,7 @@ import {leafTriangles} from '../../web/shared/standard.js';
 import {connectedParts} from './mesh-cut.js';
 import {cutPaintedPart as cutPart} from './painted-cut.js';
 import {separateColour,separateShape} from './mesh-joint.js';
-import {orientPinUp} from './orientation.js';
+import {orientPinUp,turnParts} from './orientation.js';
 import {autoSeparate} from './auto-split.js';
 import {autoAssembly,assemblyMeshHealth} from './assembly-split.js';
 import {repairMesh} from './mesh-repair.js';
@@ -120,11 +120,11 @@ function meshXml(part,id){
 }
 const settingsXml=settings=>Object.entries(settings||{}).map(([k,v])=>`<metadata key="${esc(k)}" value="${esc(v)}"/>`).join('');
 
-export function editProject(input,{plateId=1,objectIds=[],operation,from='all',colour,axis=2,position=50,connector=null,region=null,orientPins=true,shapeIds=[],detail='coarse',boundary=null,previewOnly=false,includeAssembly=false}={},progress=()=>{}){
+export function editProject(input,{plateId=1,objectIds=[],operation,from='all',colour,axis=2,position=50,connector=null,region=null,orientPins=true,shapeIds=[],detail='coarse',boundary=null,turn=null,previewOnly=false,includeAssembly=false}={},progress=()=>{}){
   const entries=new Map(input),project=readProject(entries,{allowNegative:true,allowModifiers:true});
   if(!objectIds.length)throw Error('Select an object first.');
-  if(!['colour','cut','separate','separate-colour','remove-colour','auto-separate','auto-assembly','shape-colour','shape-separate','boundary-separate','repair'].includes(operation))throw Error('Choose Colour, Split or Repair mesh.');
-  const repairing=operation==='repair';
+  if(!['colour','cut','separate','separate-colour','remove-colour','auto-separate','auto-assembly','shape-colour','shape-separate','boundary-separate','repair','orient'].includes(operation))throw Error('Choose Colour, Split or Repair mesh.');
+  const repairing=operation==='repair',turning=operation==='orient';
   const automatic=['auto-separate','auto-assembly'].includes(operation);
   const shaping=operation.startsWith('shape-')||operation==='boundary-separate',painting=operation==='colour'||operation==='shape-colour';
   if(shaping&&objectIds.length!==1)throw Error('Select one object for a shape edit.');
@@ -149,6 +149,9 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
       reports.push({objectId:String(oldId),name:meta.name||`Object ${oldId}`,strategy:'repair',repairs:repaired.map(r=>r.report)});
       if(!repaired.some(r=>r.changed))continue;
       groups=[repaired.map(r=>({...r.part,faces:r.faces}))];names=['repaired'];
+    }else if(turning){
+      // Every part turns together, so modifiers and cutouts keep their place in the object.
+      groups=[turnParts(parts,turn||{})];names=['turned'];
     }else if(shaping){
       let chosen;
       if(operation==='boundary-separate'){
@@ -231,7 +234,7 @@ export function editProject(input,{plateId=1,objectIds=[],operation,from='all',c
         let floor=Infinity;for(const p of group)for(const f of p.faces)for(const v of f.points)floor=Math.min(floor,v[2]);
         group=group.map(p=>({...p,faces:p.faces.map(f=>({...f,points:f.points.map(v=>[v[0],v[1],v[2]-floor])}))}));
       }
-      const id=String(next++),name=(meta.name||`Object ${oldId}`)+(painting?' · coloured':` · ${names[g]||`part ${g+1}`}`);
+      const id=String(next++),name=(meta.name||`Object ${oldId}`)+(turning?'':painting?(/ · coloured$/.test(meta.name||'')?'':' · coloured'):` · ${names[g]||`part ${g+1}`}`);
       const components=[],partMeta=[];
       for(const p of group){const pid=String(next++);resources.push(meshXml(p,pid));components.push(`<component objectid="${pid}"/>`);partMeta.push(`<part id="${pid}" subtype="${esc(p.subtype)}"><metadata key="name" value="${esc(p.name)}"/><metadata key="extruder" value="${p.base}"/>${settingsXml(p.settings)}</part>`);}
       resources.push(`<object id="${id}" type="model"><components>${components.join('')}</components></object>`);

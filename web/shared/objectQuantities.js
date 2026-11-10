@@ -40,7 +40,7 @@ export function quantityRows(objects, quantities = {}) {
     const name = esc(f.name);
     const colours=(f.colours||[]).map(c=>`<span class="object-swatch" style="background:${safeColour(c.color)}" title="Source filament ${esc(c.extruder)} · ${esc(c.color)}"></span>`).join('');
     const size=f.bounds ? f.bounds.max.map((n,i)=>(n-f.bounds.min[i]).toFixed(1)).join(' × ')+' mm' : '';
-    const description=`<small class="object-colours">${colours}${f.undecodable ? 'Unknown paint' : `${f.colours?.length || '?'} source colour(s)`}${size ? ` · ${size}` : ''}</small>`;
+    const description=`<small class="object-colours">${colours}${f.undecodable ? 'Unknown paint' : `${f.colours?.length || '?'} source colour${f.colours?.length===1?'':'s'}`}${size ? ` · ${size}` : ''}</small>`;
     return `<div class="object-quantity"><span>${name}${f.instances > 1 ? ` <small>· ${f.instances} linked instances</small>` : ''}${description}</span><div class="quantity-actions"><input aria-label="Quantity for ${name}" data-object="${esc(f.objectId)}" type="number" min="0" max="64" step="1" value="${count}"><button type="button" data-quantity="add" aria-label="Add copy of ${name}">Add copy</button><button type="button" data-quantity="remove" aria-label="Remove ${name}">Remove</button><button type="button" data-quantity="restore" aria-label="Restore ${name}"${count !== 0 ? ' hidden' : ''}>Restore</button></div></div>`;
   }).join('');
 }

@@ -59,6 +59,9 @@ function context() {
   const s=engine.state;return {capacity:s.capacity,bambuSetup:s.bambuSetup,target:s.target,plateId:String(s.plateId??''),supportInterface:s.supportInterface,interfaceSlot:s.interfacePosition+1,interfaceColor:s.reels[s.interfacePosition]?.color,layout:{quantities:{...s.quantities},copies:Number($('spectrumcopies').value),spacing:Number($('spectrumgap').value),width:Number($('spectrumwidth').value),depth:Number($('spectrumdepth').value),tower:$('spectrumtower').checked,arrangement:$('spectrumarrangement').value},u1Nozzle:s.u1Nozzle};
 }
 const api={kind,setPanel,context,
+  // Colour and export choices, as already captured for undoing a model edit.
+  captureSettings:()=>engine.workbenchCaptureSettings?.(),
+  restoreSettings:saved=>engine.workbenchRestoreSettings?.(saved),
   setWorkspaceMode(value){
     const next=value==='quick'&&kind==='converter'?'quick':'studio',changed=next!==workspaceMode;workspaceMode=next;
     document.body.dataset.workspaceMode=workspaceMode;
@@ -128,6 +131,7 @@ function exportChoices(){
   const session=engine.session,several=session.visiblePlates().length>1,single=$('converterprimary'),text=single.textContent;
   const choices=[{id:'plate',label:text==='Download project'?(several?'This plate · 3MF':'Project · 3MF'):text,hint:several?'Only the plate you are viewing.':'Open it in your slicer.',disabled:single.disabled}];
   if(several)choices.push({id:'project',label:'All plates · one 3MF',hint:session.target==='prusa'?'PrusaSlicer projects hold one plate. Use print jobs instead.':'Keeps every plate together for editing.',disabled:projectPlates.saveDisabled('project')});
+  if(workspaceMode==='quick'&&!several)return choices;
   choices.push({id:'zip',label:'Print jobs · ZIP',hint:'A separate printer file and filament list per plate.',disabled:projectPlates.saveDisabled('zip')});
   return choices;
 }
@@ -141,13 +145,13 @@ function tick() {
   if(file&&file!==source){source=file;parentHost?.workbench?.sourceChanged(kind,file);}
   view.empty.hidden=loaded||busy;
   const batch=kind==='converter'&&!$('batchpanel').classList.contains('hidden');
-  const button=sequentialAction()||$(kind==='converter'?'converterprimary':'mainaction'),exports=loaded&&!studio?.pending?exportChoices():[],menu=exports.length>1;
+  const button=sequentialAction()||$(kind==='converter'?'converterprimary':'mainaction'),exports=loaded&&!studio?.pending&&!batch?exportChoices():[],menu=exports.length>1;
   let status=kind==='converter'?$('convertstatus').textContent:$('loadstatus').textContent||$('actionstatus').textContent;
   if(studio?.busy)status=document.querySelector('.studio-message')?.textContent||status;
   if(kind==='converter'&&loaded&&!busy&&status.includes('Nothing has been uploaded'))status=`${s.state.displayName}: ${s.capacityStatus().needed} filament${s.capacityStatus().needed===1?'':'s'} used on this plate. Files stay in your browser.`;
   const plateStatus=currentPanel==='layout'?document.querySelector('#printoptimiser [data-status]'):null,plateBusy=plateStatus?.dataset.busy==='true';
   if(plateStatus?.textContent)status=plateStatus.textContent;
-  const report={kind,loaded,pending:Boolean(studio?.pending),busy:busy||plateBusy,batch,title:file?.yab3dDisplayName||file?.name||'Untitled project',status:status||'Files stay in your browser.',exports:menu?exports:[],action:studio?.pending?'Finish edit to export':loaded?(menu?'Export':button.textContent):'Open a model to start',disabled:studio?.pending||busy||!loaded||(menu?exports.every(choice=>choice.disabled):button.disabled)||batch};
+  const report={kind,loaded,pending:Boolean(studio?.pending),busy:busy||plateBusy,batch,title:file?.yab3dDisplayName||file?.name||'Untitled project',status:status||'Files stay in your browser.',exports:menu?exports:[],action:batch?'Batch conversion':studio?.pending?'Finish edit to export':loaded?(menu?'Export':button.textContent):'Open a model to start',disabled:studio?.pending||busy||!loaded||(menu?exports.every(choice=>choice.disabled):button.disabled)||batch};
   const serial=JSON.stringify(report);if(serial!==lastReport){lastReport=serial;parentHost?.workbench?.report(report);}
   colourSummary?.sync();toolbox?.sync(currentPanel,studio?.mode,busy);
   let snapshot;try{snapshot=engine.workbenchPreview();}catch{}
@@ -202,6 +206,8 @@ function clarifyControls(){
     if(b.closest('.plate-tool-row')&&b.textContent==='Fill with whole sets')b.hidden=true;
     if(b.closest('.plate-tool-row')&&b.textContent==='Objects')b.textContent='Object list';
   }
+  // Earlier orientations of a turned object are kept for Undo, not offered as removed objects.
+  for(const row of document.querySelectorAll('#objectquantities .object-quantity')){const input=row.querySelector('input[data-object]'),hide=Boolean(input&&studio?.superseded?.has(input.dataset.object)&&Number(input.value)===0);if(row.hidden!==hide)row.hidden=hide;}
   text($('mergeapply'),'Replace this colour');text($('mergeundo'),'Undo colour replacement');
 }
 try {

@@ -26,8 +26,8 @@ export function createSessionStore({indexedDB=globalThis.indexedDB,storage=globa
     async setEnabled(value){try{storage?.setItem(PREF,value?'on':'off');}catch{}if(!value)await this.clear();},
     async save(record){if(!enabled())return false;try{await run('readwrite',store=>{store.delete(CONTEXT);return store.put(record,KEY);});return true;}catch{return false;}},
     // Settings change far more often than the model, so they are written on their own.
-    async saveContext(context){if(!enabled())return false;try{await run('readwrite',store=>store.put({context,savedAt:Date.now()},CONTEXT));return true;}catch{return false;}},
-    async read(){if(!enabled())return null;try{const record=await run('readonly',store=>store.get(KEY));if(!record?.blob)return null;const later=await run('readonly',store=>store.get(CONTEXT));return later?{...record,context:later.context,savedAt:Math.max(record.savedAt||0,later.savedAt||0)}:record;}catch{return null;}},
+    async saveContext(context,extra={}){if(!enabled())return false;try{await run('readwrite',store=>store.put({...extra,context,savedAt:Date.now()},CONTEXT));return true;}catch{return false;}},
+    async read(){if(!enabled())return null;try{const record=await run('readonly',store=>store.get(KEY));if(!record?.blob)return null;const later=await run('readonly',store=>store.get(CONTEXT));return later?{...record,...later,blob:record.blob,savedAt:Math.max(record.savedAt||0,later.savedAt||0)}:record;}catch{return null;}},
     async clear(){try{await run('readwrite',store=>{store.delete(CONTEXT);return store.delete(KEY);});}catch{}},
   };
 }

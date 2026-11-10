@@ -1,3 +1,46 @@
+## 2.6.64 — Painted objects stay put
+
+- Painting a whole object no longer moves it to a corner of the plate; it keeps its position, as repair and turn already did.
+- The original of a repainted or repaired object is kept for Undo but no longer listed in Plates with a Restore button.
+- Painting an object twice no longer names it "coloured · coloured".
+- File pickers in dialogs match the other controls.
+
+## 2.6.63 — Polish from a click-through
+
+- Quick conversion's header button downloads directly again for single-plate projects instead of opening the Export menu.
+- Batch conversion is laid out as a form of readable width, and the header says "Batch conversion" while it is open.
+- Redo's icon was missing on phones.
+- Copy controls in Objects take two rows instead of four.
+- Help is reorganised into short sections: the tools, working with objects, splitting in detail, keyboard, and your last model.
+
+## 2.6.62 — Click a selected object to open it
+
+- Clicking an object that is already selected now opens its Objects panel (copies, Turn & resize) from any tool. Dragging to orbit does not.
+
+## 2.6.61 — Resize objects
+
+- Resize a selected object from 10% to 1000% in the Turn & resize group. The panel shows the current and resulting dimensions before you apply.
+- Scaling is uniform, so painting follows the surface unchanged. Pins and sockets added earlier are resized with the object; check their fit afterwards.
+- An object that no longer fits the bed stays visible with the existing layout warning.
+
+## 2.6.60 — Turn objects for printing
+
+- Select an object to lay it flat on its largest flat face, tip it a quarter turn about X or Y, or spin it a quarter turn on the plate. All copies of that object turn together and keep their painting, modifiers and cutouts.
+- Lay flat only offers faces the object can actually rest on and says so when there is none, for example on a rounded model.
+- Earlier orientations are kept for Undo and Redo but no longer appear as removed objects in Plates.
+- "1 source colour(s)" now reads "1 source colour".
+
+## 2.6.59 — Redo
+
+- Add Redo beside Undo in the model toolstrip, with Ctrl/Cmd+Shift+Z and Ctrl+Y. It replays undone plate edits (copies, removals, arrangement) and model edits (splits, repairs, painted objects) in the order they were undone.
+- A new edit clears the redo trail. Redo is unavailable while a colour or split edit is waiting to be applied.
+
+## 2.6.58 — Reopen with your colour choices
+
+- Reopening the last model now restores colour work too: slot arrangement, repaints and filament profiles in Convert; reels, blends, priorities and palette choices in Full Spectrum.
+- A model last used in Full Spectrum reopens in Full Spectrum.
+- Unapplied previews are still not kept. If saved colour choices no longer fit the model, it opens without them and says so.
+
 ## 2.6.57 — Reopen your last model after a reload
 
 - Keep a copy of the last opened model in this browser. After a reload or a closed tab, a prompt offers to reopen it with its applied model edits (splits, repairs, painted objects), destination, plate and quantities.
