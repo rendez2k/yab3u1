@@ -1,4 +1,5 @@
-const snapshot=s=>({copies:s.copies,quantities:{...s.quantities},arrangement:s.arrangement,...Object.fromEntries(['spacing','width','depth','tower'].filter(k=>s.layout?.[k]!==undefined).map(k=>[k,s.layout[k]]))});
+// Hand-placed positions are part of a plate edit, so Undo and Redo carry them.
+const snapshot=s=>({copies:s.copies,quantities:{...s.quantities},arrangement:s.arrangement,manual:{...(s.layout?.manual||{})},...Object.fromEntries(['spacing','width','depth','tower'].filter(k=>s.layout?.[k]!==undefined).map(k=>[k,s.layout[k]]))});
 export function plateHistory(getState){
   let key,previous,stack=[],redo=[];const plates=new Map();
   const stamp=x=>JSON.stringify(x);

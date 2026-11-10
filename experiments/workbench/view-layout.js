@@ -73,6 +73,6 @@ export function composeView(doc,kind) {
     $('filamentbundles').open=true;
   }
   // Contextual help remains available without consuming the main viewport.
-  stage.append(make('div',{class:'stage-caption'},'Drag to orbit · Right-drag to pan · Shift/Ctrl/Cmd-click to select several · Delete to remove · Ctrl/Cmd+Z to undo'));
+  stage.append(make('div',{class:'stage-caption'},'Drag to orbit · Drag a selected object to move it · Right-drag to pan · Shift/Ctrl/Cmd-click to select several · Delete to remove · Ctrl/Cmd+Z to undo'));
   return {workspace,stage,inspector,panels,move,make,feedback,empty,parking};
 }

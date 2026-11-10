@@ -18,7 +18,7 @@ test('quarter turns are exact, keep volume and winding, and four of them return 
   let again=start;for(let i=0;i<4;i++)again=turnParts(again,{axis:1,degrees:90});
   assert.deepEqual(again[0].faces.map(f=>f.points),start[0].faces.map(f=>f.points));
   assert.deepEqual(turnParts(turnParts(start,{axis:0,degrees:180}),{axis:0,degrees:180})[0].faces.map(f=>f.points),start[0].faces.map(f=>f.points));
-  assert.throws(()=>turnParts(start,{axis:0,degrees:45}),/quarter or half turn/);
+  assert.throws(()=>turnParts(start,{axis:0,degrees:0}),/other than a full turn/);assert.throws(()=>turnParts(start,{axis:0,degrees:360}),/other than a full turn/);assert.throws(()=>turnParts(start,{axis:0,degrees:NaN}),/between -360/);
 });
 test('lay flat rests the object on its largest supporting face',()=>{
   const start=wedge(),faces=restingFaces(start);
@@ -40,4 +40,12 @@ test('uniform scale multiplies every dimension and the volume by its cube',()=>{
   const start=wedge(),big=turnParts(start,{scale:1.5});assert.deepEqual(box(big),[30,15,15]);assert.equal(volume(big),3375);
   assert.deepEqual(box(turnParts(start,{scale:.5})),[10,5,5]);
   assert.throws(()=>turnParts(start,{scale:1}),/already at 100%/);assert.throws(()=>turnParts(start,{scale:20}),/between 10% and 1000%/);assert.throws(()=>turnParts(start,{scale:NaN}),/between 10% and 1000%/);
+});
+test('free angles rotate rigidly: volume is kept and opposite turns cancel',()=>{
+  const start=wedge(),spun=turnParts(start,{axis:2,degrees:30});
+  assert(Math.abs(signedVolume(spun[0].faces)-1000)<1e-6);
+  // A 20 x 10 footprint spun 30 degrees spans 20cos30+10sin30 by 20sin30+10cos30.
+  const size=box(spun);assert(Math.abs(size[0]-(20*Math.cos(Math.PI/6)+5))<1e-6);assert(Math.abs(size[1]-(10+10*Math.cos(Math.PI/6)))<1e-6);assert.equal(size[2],10);
+  const back=turnParts(spun,{axis:2,degrees:-30});
+  for(const [i,f]of back[0].faces.entries())for(const [j,v]of f.points.entries())for(let k=0;k<3;k++)assert(Math.abs(v[k]-start[0].faces[i].points[j][k])<1e-9);
 });

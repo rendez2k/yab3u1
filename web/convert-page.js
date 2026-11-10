@@ -25,7 +25,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.6.64";
+const VERSION = "2.6.66";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -190,7 +190,7 @@ function renderOutput(entry) {
   // print settings and a support decision, and the sentence names them.
   const applied = entry.target === 'snapmaker' && entry.settings
     ? (entry.settings.carry
-      ? ` Carried ${entry.settings.carried.length} compatible print setting(s) from `
+      ? ` Carried ${entry.settings.carried.length} compatible print setting${entry.settings.carried.length===1?'':'s'} from `
         + "the source."
       : " The source's print settings were left at the U1 profile's own values.")
       + ` ${cap(entry.settings.support)}.`
@@ -198,7 +198,7 @@ function renderOutput(entry) {
   const filamentSummary = rearranged && entry.target === "snapmaker"
     && entry.colours.length > session.activeColourIds().length
     ? `${entry.colours.length} slot entries (${session.activeColourIds().length} selected colours; gaps are unused)`
-    : `${entry.colours.length} filament(s)`;
+    : `${entry.colours.length} filament${entry.colours.length===1?'':'s'}`;
   setStatus(`Wrote ${entry.name} with ${filamentSummary}`
     + (changed.length
       ? (rearranged
@@ -694,9 +694,9 @@ function syncRule() {
     ).join(", ")
       + (changes.length > 6 ? `, and ${changes.length - 6} more` : "")
       + (slots
-        ? `; ${session.activeColourIds().length - changes.length} other filament(s) keep their own `
+        ? `; ${session.activeColourIds().length - changes.length} other filament${session.activeColourIds().length - changes.length===1?' keeps its':'s keep their'} own `
           + "colour, and every colour keeps its appearance."
-        : `; ${session.activeColourIds().length - changes.length} other filament(s) keep their own `
+        : `; ${session.activeColourIds().length - changes.length} other filament${session.activeColourIds().length - changes.length===1?' keeps its':'s keep their'} own `
           + "colour.")
     : (slots
       ? "Chosen for export: every colour keeps its own filament and its own "
