@@ -86,7 +86,7 @@ async function offerResume(){
 
     let api=await ensure(active);
     // Saved settings are a convenience: if they no longer apply, open the model without them.
-    try{await api.load(restored,record.context||{});}catch{await api.load(restored);}
+    try{await api.load(restored,{...(record.context||{}),restored:true});}catch{await api.load(restored,{restored:true});}
     // Colour choices belong to the workspace that made them.
     if(record.kind==='spectrum'&&active!=='spectrum'){await window.workbench.switchMode('spectrum');if(active!=='spectrum')return;api=await ensure('spectrum');}
     if(record.hidden?.length&&record.kind===active)api.setHiddenObjects?.(record.hidden);
