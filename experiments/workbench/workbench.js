@@ -52,37 +52,43 @@ function ensure(kind){
 }
 async function guard(task){try{await task();}catch(error){$('workspace-status').textContent=error.message;$('primary').disabled=true;}}
 // Session restore: the last model is copied into this browser so a reload can reopen it.
-const session=createSessionStore();let savedMeta=null,savedContext='';
+const session=createSessionStore();let savedMeta=null,savedContext='',restoring=false;
 const resume=document.createElement('div');resume.className='session-resume';resume.hidden=true;resume.setAttribute('role','region');resume.setAttribute('aria-label','Reopen your last model');resume.innerHTML='<div><strong></strong><span></span></div><button type="button" class="primary" data-resume>Reopen</button><button type="button" data-forget>Forget</button><button type="button" data-later aria-label="Not now">×</button>';document.body.append(resume);
-const readContext=()=>{try{const record=frames.get(active);return record?.report?.busy||record?.report?.pending?null:plainContext(record?.api?.context());}catch{return null;}};
+const readContext=()=>{try{const record=frames.get(active);if(!record?.api||!record.report?.loaded||record.report.busy||record.report.pending)return null;return {kind:active,context:plainContext(record.api.context()),settings:record.api.captureSettings()};}catch{return null;}};
+const serialise=value=>{try{return JSON.stringify(value);}catch{return String(Date.now());}};
 function rememberSource(next){
   if(!session.enabled()||!next?.size||sameFile(savedMeta,next))return;
   savedMeta={name:next.name,size:next.size,lastModified:next.lastModified};
-  const context=readContext()||{};savedContext=JSON.stringify(context);
-  session.save({blob:next,name:next.name,type:next.type,lastModified:next.lastModified,displayName:next.yab3dDisplayName||'',workspace:workspaceMode,context,savedAt:Date.now()});
+  // Settings follow once the model has finished loading; see the interval below.
+  savedContext='';
+  session.save({blob:next,name:next.name,type:next.type,lastModified:next.lastModified,displayName:next.yab3dDisplayName||'',workspace:workspaceMode,kind:active,context:{},savedAt:Date.now()});
 }
 setInterval(()=>{
-  if(!file||!savedMeta||!session.enabled())return;
-  const context=readContext();if(!context)return;
-  const serial=JSON.stringify(context);if(serial===savedContext)return;
-  savedContext=serial;session.saveContext(context);
-},4000);
+  if(!file||!savedMeta||restoring||!session.enabled())return;
+  const current=readContext();if(!current)return;
+  const serial=serialise(current);if(serial===savedContext)return;
+  savedContext=serial;session.saveContext(current.context,{kind:current.kind,settings:current.settings,workspace:workspaceMode});
+},3000);
 async function offerResume(){
   const record=await session.read();if(!record||file)return;
   resume.querySelector('strong').textContent=`Reopen ${record.displayName||record.name}?`;
-  resume.querySelector('span').textContent=`Saved in this browser ${describeAge(record.savedAt)}. Colour assignments are not restored.`;
+  resume.querySelector('span').textContent=`Saved in this browser ${describeAge(record.savedAt)}. Unapplied previews are not restored.`;
   resume.hidden=false;
   resume.querySelector('[data-later]').onclick=()=>{resume.hidden=true;};
   resume.querySelector('[data-forget]').onclick=async()=>{resume.hidden=true;savedMeta=null;await session.clear();$('workspace-status').textContent='Saved model removed from this browser.';};
   resume.querySelector('[data-resume]').onclick=()=>guard(async()=>{
-    resume.hidden=true;
+    resume.hidden=true;restoring=true;try{
     const restored=new File([record.blob],record.name,{type:record.type||'',lastModified:record.lastModified});
     if(record.displayName)restored.yab3dDisplayName=record.displayName;
-    savedMeta={name:restored.name,size:restored.size,lastModified:restored.lastModified};savedContext=JSON.stringify(record.context||{});
+    savedMeta={name:restored.name,size:restored.size,lastModified:restored.lastModified};savedContext='';
     if(!chosen)await window.workbench.chooseWorkspace(record.workspace==='quick'?'quick':'studio');
-    const api=await ensure(active);
+    let api=await ensure(active);
     // Saved settings are a convenience: if they no longer apply, open the model without them.
     try{await api.load(restored,record.context||{});}catch{await api.load(restored);}
+    // Colour choices belong to the workspace that made them.
+    if(record.kind==='spectrum'&&active!=='spectrum'){await window.workbench.switchMode('spectrum');if(active!=='spectrum')return;api=await ensure('spectrum');}
+    if(record.settings&&record.kind===active){try{await api.restoreSettings(record.settings);}catch{$('workspace-status').textContent='Model reopened. Its colour choices could not be restored.';}}
+    }finally{restoring=false;}
   });
 }
 window.workbench={

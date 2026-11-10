@@ -59,6 +59,9 @@ function context() {
   const s=engine.state;return {capacity:s.capacity,bambuSetup:s.bambuSetup,target:s.target,plateId:String(s.plateId??''),supportInterface:s.supportInterface,interfaceSlot:s.interfacePosition+1,interfaceColor:s.reels[s.interfacePosition]?.color,layout:{quantities:{...s.quantities},copies:Number($('spectrumcopies').value),spacing:Number($('spectrumgap').value),width:Number($('spectrumwidth').value),depth:Number($('spectrumdepth').value),tower:$('spectrumtower').checked,arrangement:$('spectrumarrangement').value},u1Nozzle:s.u1Nozzle};
 }
 const api={kind,setPanel,context,
+  // Colour and export choices, as already captured for undoing a model edit.
+  captureSettings:()=>engine.workbenchCaptureSettings?.(),
+  restoreSettings:saved=>engine.workbenchRestoreSettings?.(saved),
   setWorkspaceMode(value){
     const next=value==='quick'&&kind==='converter'?'quick':'studio',changed=next!==workspaceMode;workspaceMode=next;
     document.body.dataset.workspaceMode=workspaceMode;

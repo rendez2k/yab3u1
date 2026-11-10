@@ -1,3 +1,9 @@
+## 2.6.58 — Reopen with your colour choices
+
+- Reopening the last model now restores colour work too: slot arrangement, repaints and filament profiles in Convert; reels, blends, priorities and palette choices in Full Spectrum.
+- A model last used in Full Spectrum reopens in Full Spectrum.
+- Unapplied previews are still not kept. If saved colour choices no longer fit the model, it opens without them and says so.
+
 ## 2.6.57 — Reopen your last model after a reload
 
 - Keep a copy of the last opened model in this browser. After a reload or a closed tab, a prompt offers to reopen it with its applied model edits (splits, repairs, painted objects), destination, plate and quantities.

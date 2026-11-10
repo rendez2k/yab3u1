@@ -26,8 +26,8 @@ test('the last model is saved, read back, forgotten and never kept once switched
   assert.equal(await store.read(),null);
   assert.equal(await store.save({blob:'bytes',name:'pumpkin.3mf',savedAt:1}),true);
   assert.equal((await store.read()).name,'pumpkin.3mf');
-  await store.saveContext({target:'bambu'});assert.deepEqual((await store.read()).context,{target:'bambu'});
-  await store.save({blob:'bytes',name:'next.3mf',savedAt:5,context:{target:'prusa'}});assert.deepEqual((await store.read()).context,{target:'prusa'});
+  await store.saveContext({target:'bambu'},{kind:'converter',settings:{rules:{arrange:{1:2,2:1}}}});let later=await store.read();assert.deepEqual(later.context,{target:'bambu'});assert.deepEqual(later.settings.rules.arrange,{1:2,2:1});assert.equal(later.kind,'converter');assert.equal(later.blob,'bytes');
+  await store.save({blob:'bytes',name:'next.3mf',savedAt:5,context:{target:'prusa'}});later=await store.read();assert.deepEqual(later.context,{target:'prusa'});assert.equal(later.settings,undefined);
   await store.clear();assert.equal(await store.read(),null);
   await store.save({blob:'bytes',name:'pumpkin.3mf',savedAt:1});await store.setEnabled(false);
   assert.equal(store.enabled(),false);assert.equal(indexedDB.data.size,0);
