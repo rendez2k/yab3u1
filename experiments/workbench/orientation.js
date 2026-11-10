@@ -48,12 +48,17 @@ export function restingFaces(parts, {minShare = .02, limit = 12} = {}) {
 }
 /** Turn whole objects rigidly about their centre. Quarter turns are exact;
  * `flat` rests the object on its largest supporting flat area. */
-export function turnParts(parts, {axis = 2, degrees = 90, flat = false} = {}) {
+export function turnParts(parts, {axis = 2, degrees = 90, flat = false, scale = null} = {}) {
   const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
   for (const part of parts) for (const face of part.faces) for (const p of face.points) for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], p[i]); hi[i] = Math.max(hi[i], p[i]); }
   const centre = lo.map((v, i) => (v + hi[i]) / 2);
   let m;
-  if (flat) {
+  if (scale != null) {
+    // Uniform only: painting is stored per triangle, so it follows the surface unchanged.
+    if (!Number.isFinite(scale) || scale < .1 || scale > 10) throw Error('Enter a size between 10% and 1000%.');
+    if (Math.abs(scale - 1) < 1e-9) throw Error('The object is already at 100%. Enter a different size.');
+    m = [[scale, 0, 0], [0, scale, 0], [0, 0, scale]];
+  } else if (flat) {
     const [best] = restingFaces(parts);
     if (!best) throw Error('No flat area large enough to rest on was found. Turn the object in quarter turns instead.');
     const n = best.normal, s = Math.hypot(n[0], n[1]), c = -n[2];

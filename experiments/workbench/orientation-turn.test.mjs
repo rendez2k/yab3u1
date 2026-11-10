@@ -36,3 +36,8 @@ test('flat areas inside a hollow or too small to matter are not offered',()=>{
   const sphere=[];for(let i=0;i<40;i++)for(let j=0;j<20;j++){const a=i/40*2*Math.PI,b=(i+1)/40*2*Math.PI,t=j/20*Math.PI,u=(j+1)/20*Math.PI,pt=(p,q)=>[Math.sin(q)*Math.cos(p),Math.sin(q)*Math.sin(p),Math.cos(q)];sphere.push({points:[pt(a,t),pt(a,u),pt(b,u)]},{points:[pt(a,t),pt(b,u),pt(b,t)]});}
   assert.throws(()=>turnParts([{subtype:'normal_part',faces:sphere}],{flat:true}),/No flat area/);
 });
+test('uniform scale multiplies every dimension and the volume by its cube',()=>{
+  const start=wedge(),big=turnParts(start,{scale:1.5});assert.deepEqual(box(big),[30,15,15]);assert.equal(volume(big),3375);
+  assert.deepEqual(box(turnParts(start,{scale:.5})),[10,5,5]);
+  assert.throws(()=>turnParts(start,{scale:1}),/already at 100%/);assert.throws(()=>turnParts(start,{scale:20}),/between 10% and 1000%/);assert.throws(()=>turnParts(start,{scale:NaN}),/between 10% and 1000%/);
+});

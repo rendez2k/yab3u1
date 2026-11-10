@@ -4,7 +4,7 @@ self.onmessage=async({data})=>{
   try{self.postMessage({progress:'Reading the selected geometry…'});const entries=await readZip(new Uint8Array(data.bytes));
     if(data.options.operation==='inspect-regions'){self.postMessage({regions:inspectRegions(entries,data.options,progress=>self.postMessage({progress}))});return;}
     if(data.options.operation==='inspect-shapes'){self.postMessage(inspectShapes(entries,data.options,progress=>self.postMessage({progress})));return;}
-    self.postMessage({progress:data.options.operation==='repair'?'Checking and repairing the selected mesh…':data.options.operation==='orient'?'Turning the selected objects…':data.options.operation==='colour'?'Applying colour to the selected copies…':'Separating and closing the selected geometry…'});
+    self.postMessage({progress:data.options.operation==='repair'?'Checking and repairing the selected mesh…':data.options.operation==='orient'?(data.options.turn?.scale?'Resizing the selected objects…':'Turning the selected objects…'):data.options.operation==='colour'?'Applying colour to the selected copies…':'Separating and closing the selected geometry…'});
     const result=editProject(entries,data.options,progress=>self.postMessage({progress}));self.postMessage({progress:'Checking the edited project…'});
     if(data.options.previewOnly){self.postMessage({joins:result.joins,reports:result.reports,assembly:result.assembly},result.assembly?[result.assembly.positions.buffer,result.assembly.colors.buffer]:[]);return;}
     if(!result.changes.length){self.postMessage({changes:[],reports:result.reports});return;}

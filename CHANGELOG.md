@@ -1,3 +1,9 @@
+## 2.6.61 — Resize objects
+
+- Resize a selected object from 10% to 1000% in the Turn & resize group. The panel shows the current and resulting dimensions before you apply.
+- Scaling is uniform, so painting follows the surface unchanged. Pins and sockets added earlier are resized with the object; check their fit afterwards.
+- An object that no longer fits the bed stays visible with the existing layout warning.
+
 ## 2.6.60 — Turn objects for printing
 
 - Select an object to lay it flat on its largest flat face, tip it a quarter turn about X or Y, or spin it a quarter turn on the plate. All copies of that object turn together and keep their painting, modifiers and cutouts.

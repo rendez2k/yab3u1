@@ -344,3 +344,7 @@ body[data-tips=off]:not([data-workspace-mode=quick]) #inspector .task-heading{ma
 #inspector .studio-turn-row [data-turn=flat]{background:var(--soft);color:var(--accent)}
 .studio-turn .hint{margin:8px 0 0}
 @media(max-width:760px){#inspector .studio-turn-row button{min-height:44px}}
+.studio-scale{display:flex;align-items:flex-end;gap:6px;margin-top:14px}
+.studio-scale label{flex:1;display:flex;flex-direction:column;gap:5px;font-size:12px}
+#inspector .studio-scale button{min-height:38px}
+@media(max-width:760px){#inspector .studio-scale button,#inspector .studio-scale input{min-height:44px}}
