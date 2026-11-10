@@ -8,6 +8,7 @@ import {mountProjectPlates} from './project-plates.js';
 import {installModelDrop} from './file-drop.js';
 import {mountModelColours} from './model-colours.js';
 import {mountFeatureToolbox} from './feature-toolbox.js';
+import {inspectPlates,trimProject,PICKER_THRESHOLD_BYTES} from './project-trim.js';
 const kind=document.body.dataset.engine,$=id=>document.getElementById(id);
 const view=composeView(document,kind);
 let engine, currentPanel='project', lastReport='', source=null, workspaceMode='studio', colourSummary, toolbox;
@@ -19,6 +20,53 @@ const fallback=view.make('div',{class:'software-preview',hidden:''},'<div><img a
 view.stage.append(fallback);
 const parentHost=window.parent!==window ? window.parent : null;
 const reportError=error=>{const p=document.createElement('p');p.setAttribute('role','alert');p.textContent=`The workspace could not complete that action: ${error.message}`;view.feedback.append(p);};
+// Large multi-plate projects: list the plates first and open only the chosen ones.
+let pickerBypass=false;
+const megabytes=bytes=>bytes>=10*1048576?Math.round(bytes/1048576):Math.max(.1,Math.round(bytes/104857.6)/10);
+async function choosePlates(file){
+  if(pickerBypass||!file||file.size<PICKER_THRESHOLD_BYTES||!/\.3mf$/i.test(file.name||''))return file;
+  let bytes,found;
+  try{bytes=new Uint8Array(await file.arrayBuffer());found=await inspectPlates(bytes);}catch{return file;}
+  if(!found)return file;
+  const dialog=view.make('dialog',{class:'plate-picker','aria-labelledby':'plate-picker-title'},`<h1 id="plate-picker-title">Choose plates to open</h1><p data-intro></p><div class="plate-picker-tools"><button type="button" data-all>Select all</button><button type="button" data-none>Clear</button><span data-total role="status"></span></div><ul class="plate-picker-list"></ul><p class="plate-picker-status" role="status" aria-live="polite"></p><div class="plate-picker-actions"><button type="button" data-cancel>Cancel</button><button type="button" data-everything>Open everything</button><button type="button" class="primary" data-open>Open selected</button></div>`);
+  dialog.querySelector('[data-intro]').textContent=`${file.name} is ${megabytes(file.size)} MB with ${found.plates.length} plates. Opening only the plates you need is faster and uses far less memory. The rest of the file is left out of this session; your original file is not changed.`;
+  const list=dialog.querySelector('ul'),urls=[];
+  found.plates.forEach((plate,index)=>{
+    const item=view.make('li'),label=view.make('label'),box=view.make('input',{type:'checkbox','data-plate':plate.id}),copy=view.make('span',{class:'plate-picker-copy'}),title=view.make('strong'),detail=view.make('span'),names=view.make('span',{class:'plate-picker-names'});
+    if(plate.thumbnail){const url=URL.createObjectURL(new Blob([plate.thumbnail],{type:'image/png'}));urls.push(url);label.append(box,view.make('img',{src:url,alt:'',width:'56',height:'56'}));}else label.append(box,view.make('span',{class:'plate-picker-blank','aria-hidden':'true'}));
+    title.textContent=plate.name?`Plate ${index+1} · ${plate.name}`:`Plate ${index+1}`;
+    detail.textContent=`${plate.objectIds.length} object${plate.objectIds.length===1?'':'s'} · about ${megabytes(plate.bytes)} MB unpacked`;
+    names.textContent=plate.objectNames.slice(0,6).join(', ')+(plate.objectNames.length>6?` and ${plate.objectNames.length-6} more`:'');
+    copy.append(title,detail,names);label.append(copy);item.append(label);list.append(item);
+  });
+  const boxes=[...dialog.querySelectorAll('[data-plate]')],status=dialog.querySelector('.plate-picker-status'),open=dialog.querySelector('[data-open]');
+  const sync=()=>{
+    const chosen=found.plates.filter((_,i)=>boxes[i].checked),total=chosen.reduce((sum,p)=>sum+p.bytes,0);
+    dialog.querySelector('[data-total]').textContent=chosen.length?`${chosen.length} of ${found.plates.length} selected · about ${megabytes(total)} MB`:'Nothing selected';
+    open.disabled=!chosen.length;open.textContent=chosen.length?`Open ${chosen.length} plate${chosen.length===1?'':'s'}`:'Open selected';
+  };
+  boxes.forEach(box=>box.addEventListener('change',sync));
+  dialog.querySelector('[data-all]').onclick=()=>{boxes.forEach(b=>{b.checked=true;});sync();};
+  dialog.querySelector('[data-none]').onclick=()=>{boxes.forEach(b=>{b.checked=false;});sync();};
+  sync();document.body.append(dialog);
+  try{
+    return await new Promise(resolve=>{
+      dialog.addEventListener('cancel',event=>{event.preventDefault();resolve(null);});
+      dialog.querySelector('[data-cancel]').onclick=()=>resolve(null);
+      dialog.querySelector('[data-everything]').onclick=()=>resolve(file);
+      open.onclick=async()=>{
+        const ids=found.plates.filter((_,i)=>boxes[i].checked).map(p=>p.id);
+        for(const b of dialog.querySelectorAll('button,input'))b.disabled=true;status.textContent='Preparing the chosen plates…';
+        await new Promise(next=>setTimeout(next,30));
+        try{
+          const trimmed=await trimProject(bytes,ids),picked=new File([trimmed.bytes],file.name,{type:file.type,lastModified:Date.now()});
+          resolve(picked);
+        }catch(error){status.textContent=`${error.message} Choose different plates, or Cancel.`;for(const b of dialog.querySelectorAll('button,input'))b.disabled=false;sync();}
+      };
+      dialog.showModal();
+    });
+  }finally{dialog.close();dialog.remove();for(const url of urls)URL.revokeObjectURL(url);}
+}
 function setPanel(panel) {
   if(!view.panels[panel])return;
   if(workspaceMode==='quick'&&!['project','output','help'].includes(panel)){
@@ -85,7 +133,9 @@ const api={kind,setPanel,context,
   batch:()=>{if(studio?.busy)throw Error('Finish or cancel the current model edit first.');if(kind==='converter')$('mode-bulk').click();},
   async load(file,options={}) {
     if(studio?.busy&&!options.edit)throw Error('Finish or cancel the current model edit first.');
-    loading=true;prepared?.reset();if(!options.edit)setPanel('project');tick();
+    // A fresh file from the user may be opened in part; internal reloads never ask.
+    if(!options.edit&&!options.fromMode&&!options.restored){file=await choosePlates(file);if(!file)return false;}
+    pickerBypass=true;loading=true;prepared?.reset();if(!options.edit)setPanel('project');tick();
     try{
     if(kind==='converter') {
       if(/\.(glb|zip)$/i.test(file.name)){engine.textureImporter.open(file);return;}
@@ -121,7 +171,7 @@ const api={kind,setPanel,context,
     setPanel(options.edit?'edit':options.purpose==='reel-changes'?'output':options.fromMode?'colours':'project');
     if(options.purpose==='reel-changes')$('plannercard').open=true;
     return kind==='converter'?Boolean(engine.session.state):Boolean(engine.state.project);
-    }finally{loading=false;tick();}
+    }finally{pickerBypass=false;loading=false;tick();}
   },
   // One Export button: the shell shows these choices as a menu when there is more than one.
   export(id){if(!exportChoices().some(choice=>choice.id===id&&!choice.disabled))return;if(id==='plate'){setPanel('output');$('converterprimary').click();return;}if(workspaceMode!=='quick')setPanel('layout');projectPlates.save(id);},
@@ -214,7 +264,11 @@ function clarifyControls(){
 }
 try {
   engine=await import(kind==='converter'?'./convert-page.js':'./recolour.js');
-  if(kind==='converter'){engine.session.selectionAware=true;filamentTools=mountFilamentTools(view.panels.colours.querySelector('[data-requires-model]'),engine.session);}
+  if(kind==='converter'){
+    // The page's own file picker goes straight to the session, so ask there too.
+    const loadSession=engine.session.load.bind(engine.session);
+    engine.session.load=async(file,...rest)=>{const picked=await choosePlates(file);return picked?loadSession(picked,...rest):undefined;};
+    engine.session.selectionAware=true;filamentTools=mountFilamentTools(view.panels.colours.querySelector('[data-requires-model]'),engine.session);}
   if(kind==='converter')projectPlates=mountProjectPlates({view,session:engine.session,editColours:()=>setPanel('colours'),select:async(id,refresh=false)=>{
     if(!refresh&&!engine.session.setPlate(id))return;
     await engine.session.refreshBounds();engine.refreshPreview?.();

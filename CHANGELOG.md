@@ -1,3 +1,10 @@
+## 2.6.72 — Choose which plates to open
+
+- Opening a multi-plate project of 40 MB or more now lists its plates first, with thumbnails, object names and approximate sizes. Tick the plates you want and only those are loaded.
+- The list is read from the project's small settings files, so it appears almost immediately even for a file too large to load whole.
+- The plates you leave out are simply not part of this session. Your file on disk is not changed, and the kept objects, including their painting, are byte-for-byte the originals.
+- Open everything keeps the previous behaviour. Reopening a saved session and reloading after an edit never ask again.
+
 ## 2.6.71 — Open larger projects
 
 - A single project can now be up to 512 MB as a file, and each model inside it up to 480 MB unpacked. The previous limits were 96 MB and 256 MB.
