@@ -205,6 +205,8 @@ function clarifyControls(){
     if(b.closest('.plate-tool-row')&&b.textContent==='Fill with whole sets')b.hidden=true;
     if(b.closest('.plate-tool-row')&&b.textContent==='Objects')b.textContent='Object list';
   }
+  // Earlier orientations of a turned object are kept for Undo, not offered as removed objects.
+  for(const row of document.querySelectorAll('#objectquantities .object-quantity')){const input=row.querySelector('input[data-object]'),hide=Boolean(input&&studio?.superseded?.has(input.dataset.object)&&Number(input.value)===0);if(row.hidden!==hide)row.hidden=hide;}
   text($('mergeapply'),'Replace this colour');text($('mergeundo'),'Undo colour replacement');
 }
 try {

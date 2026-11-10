@@ -1,3 +1,10 @@
+## 2.6.60 — Turn objects for printing
+
+- Select an object to lay it flat on its largest flat face, tip it a quarter turn about X or Y, or spin it a quarter turn on the plate. All copies of that object turn together and keep their painting, modifiers and cutouts.
+- Lay flat only offers faces the object can actually rest on and says so when there is none, for example on a rounded model.
+- Earlier orientations are kept for Undo and Redo but no longer appear as removed objects in Plates.
+- "1 source colour(s)" now reads "1 source colour".
+
 ## 2.6.59 — Redo
 
 - Add Redo beside Undo in the model toolstrip, with Ctrl/Cmd+Shift+Z and Ctrl+Y. It replays undone plate edits (copies, removals, arrangement) and model edits (splits, repairs, painted objects) in the order they were undone.

@@ -336,3 +336,11 @@ body[data-tips=off]:not([data-workspace-mode=quick]) #inspector .task-heading{ma
 .studio-toolstrip [data-studio-undo]{border-radius:0}
 .studio-toolstrip [data-studio-redo]{padding:6px;min-width:36px;border-radius:0 7px 7px 0}
 @media(max-width:760px){.studio-toolstrip [data-studio-redo]{min-width:44px}}
+/* Turn for printing. */
+.studio-turn{margin:0 0 22px}
+#inspector .studio-turn h2{margin:0 0 10px}
+.studio-turn-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+#inspector .studio-turn-row button{min-height:40px;padding:8px 6px}
+#inspector .studio-turn-row [data-turn=flat]{background:var(--soft);color:var(--accent)}
+.studio-turn .hint{margin:8px 0 0}
+@media(max-width:760px){#inspector .studio-turn-row button{min-height:44px}}
