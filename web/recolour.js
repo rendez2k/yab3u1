@@ -40,8 +40,9 @@ import { colourWeights } from './shared/surfaceWeights.js';
 import { mountCalibration } from './shared/calibrationPanel.js';
 import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } from './shared/supportInterface.js';
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
+import { DUAL_WALL_TARGETS, dualWallProblem } from './shared/dualWall.js';
 
-const VERSION = "2.6.68";
+const VERSION = "2.6.69";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -77,6 +78,35 @@ function layerChoice() {
 }
 $('useblendlayer').addEventListener('click',()=>{$('spectrumlayermode').value='height:0.10';clearReview();refresh();});
 $('subdividemix').addEventListener('change',()=>{clearReview();invalidateRecommendation();refresh();});
+// Dual-wall mixing: painted colour in the outer wall only, one chosen filament behind it.
+for(const id of ['dualwallon','dualwallinner','dualwalldepth'])$(id).addEventListener('change',()=>{clearReview();refresh();});
+function dualWallChoice() {
+  if(!DUAL_WALL_TARGETS.includes(state.target)||!$('dualwallon').checked)return null;
+  const slot=Number($('dualwallinner').value),depth=Number($('dualwalldepth').value);
+  return Number.isInteger(slot)&&slot>0?{slot,depth}:null;
+}
+function dualWallIssue() {
+  const choice=dualWallChoice();if(!choice)return '';
+  let physical=[];try{physical=resultPlan().physical||[];}catch{return '';}
+  return dualWallProblem({target:state.target,innerSlot:choice.slot,depth:choice.depth,filaments:physical.length}).replace(/\.$/,'');
+}
+function renderDualWall(physical) {
+  const available=DUAL_WALL_TARGETS.includes(state.target)&&Boolean(state.project);
+  $('dualwalloptions').hidden=!available;if(!available)return '';
+  const select=$('dualwallinner'),previous=select.value,list=JSON.stringify(physical.map(r=>[r.name,r.color]));
+  if(select.dataset.list!==list){
+    select.dataset.list=list;select.replaceChildren(...physical.map((reel,i)=>new Option(`Slot ${i+1} · ${reel.name||reel.color} · ${reel.color}`,String(i+1))));
+    // Keep the choice by position; default to the lightest reel, the usual backing for translucent colours.
+    const light=physical.map((r,i)=>[i,parseInt(String(r.color).slice(1,3),16)+parseInt(String(r.color).slice(3,5),16)+parseInt(String(r.color).slice(5,7),16)]).sort((a,b)=>b[1]-a[1])[0];
+    select.value=previous&&Number(previous)<=physical.length?previous:String((light?.[0]??0)+1);
+  }
+  $('dualwallfields').hidden=!$('dualwallon').checked;
+  const choice=dualWallChoice();if(!choice){$('dualwallnote').textContent='';return '';}
+  const problem=dualWallProblem({target:state.target,innerSlot:choice.slot,depth:choice.depth,filaments:physical.length});
+  const inner=physical[choice.slot-1];
+  $('dualwallnote').textContent=problem||`Inner walls and infill: slot ${choice.slot}, ${inner?.name||inner?.color}. Colours reach ${choice.depth} mm in from the surface. Unvalidated: not yet confirmed by a sliced or printed sample.`;
+  return problem;
+}
 function subdivideChoice() {
   return ['snapmaker','bambu','orca'].includes(state.target) && $('subdividemix').checked && Boolean(resultPlan().recipes.length);
 }
@@ -1417,6 +1447,7 @@ function renderExport() {
   $('spectrumlayermode').disabled=state.target==='orca';$('spectrumlayerheight').disabled=state.target==='orca';
   if(state.target==='orca')$('spectrumlayernote').textContent='Choose your printer, nozzle and regular layer height in OrcaSlicer 2.5. This portable project carries the recipes and subdivision setting.';
   $('subdividelayerhint').hidden=!subdivideChoice();
+  try{renderDualWall(resultPlan().physical||[]);}catch{$('dualwalloptions').hidden=true;}
   $('spectrumcustomlayer').hidden=$('spectrumlayermode').value!=='custom';
   $('layersummary').textContent='Layer height · '+($('spectrumlayermode').value.startsWith('height:') ? $('spectrumlayermode').selectedOptions[0].textContent : ({preserve:'preserve designer settings',preset:'printer preset',custom:`${$('spectrumlayerheight').value || '—'} mm custom`})[$('spectrumlayermode').value]);
   let profileError='';
@@ -1459,7 +1490,7 @@ function renderExport() {
   const reviewBox = $("review");
   const blocking = (activeReels().length>state.capacity && state.strategy!=="source" ? `Choose at most ${state.capacity} reels or increase capacity` : "") || (state.target==="bambu" && state.bambuRequired && !state.bambuSetup ? state.bambuError || "Choose a Bambu printer and wait for its profiles" : "") || state.layoutError || profileError || (negative && target === 'prusa' ? 'negative cutouts require Snapmaker Orca or Bambu Studio output' : '') || (!state.objects.length ? "tick at least one object"
     : state.strategy!=='source' && state.workflow==='model' && !state.modelApplied && state.reelView!=='recommended' ? "choose and apply a model palette"
-    : payload.blocked || (state.reelView==='recommended' ? 'apply the selected palette or blend settings' : null));
+    : payload.blocked || (state.reelView==='recommended' ? 'apply the selected palette or blend settings' : null)) || dualWallIssue() || null;
   const needsReview = state.strategy !== "source" && !blocking;
   renderActionBar(blocking,needsReview);
   reviewBox.parentElement.classList.toggle("hidden", !needsReview);
@@ -1480,6 +1511,7 @@ function renderExport() {
       : `Download a ${LABELS[target]} project using ${payload.physical.length} physical reels and the colour mapping above. Check the settings and slice it before printing.`;
   if(state.supportInterface && !blocking) $('exportnote').textContent=`Experimental PETG interface: three PLA model reels, ${mixtures} blend recipe(s), and PETG interfaces in slot ${interfaceSlot(payload.physical)}. Supports enabled; three dense contact layers at 0 mm Z gap; PLA prime-tower shell. Check the sliced result and test a small print first.`;
   if(!blocking && subdivideChoice()) $('exportnote').textContent+=' Subdivide Mix Layer is enabled for this export.';
+  if(!blocking && dualWallChoice()) $('exportnote').textContent+=` Dual-wall mixing is on: inner walls use slot ${dualWallChoice().slot}.`;
   if (!blocking && target === "prusa") {
     $("exportnote").textContent += " Open the file as a project in PrusaSlicer with a "
       + `${payload.physical.length}-extruder profile: the palette lives in the Full Spectrum description, `
@@ -1492,7 +1524,7 @@ function exportRevision() {
   return JSON.stringify({epoch: state.epoch, plate: state.plateId,
     objects: state.objects, layout:state.layout, layoutError:state.layoutError, target: state.target, reels: state.reels, u1Nozzle:state.u1Nozzle,
     physical: payload.physical, mapping: payload.mapping, recipes: payload.recipes,
-    bambuSetup:state.bambuSetup,capacity:state.capacity,strategy: state.strategy, reviewed: state.reviewed, reelView:state.reelView,layerHeight:layerChoice(),supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice()});
+    bambuSetup:state.bambuSetup,capacity:state.capacity,strategy: state.strategy, reviewed: state.reviewed, reelView:state.reelView,layerHeight:layerChoice(),supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice(),dualWall:dualWallChoice()});
 }
 
 $("export").addEventListener("click", async () => {
@@ -1535,7 +1567,7 @@ $("export").addEventListener("click", async () => {
       mapping: payload.mapping, recipes: payload.recipes,
       title: state.project.title, u1Nozzle:state.u1Nozzle, layout:state.layout,
       bambuSetup:state.bambuSetup,preserveSourceSettings:true,calibration:calibrationPanel?.active() || null,
-      layerHeight:layerChoice(),supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice(),
+      layerHeight:layerChoice(),supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice(),dualWall:dualWallChoice(),
       thumbnails: { main: rendered.main, small: rendered.small || null },
     });
     if (exportRevision() !== revision) return;
@@ -1815,7 +1847,7 @@ blendEditor=mountBlendEditor($('blendeditor'),{read:()=>{
 export const workbenchFocus={stop:()=>focusBrush?.stop(),key:event=>focusBrush?.key(event)};
 export {state, load, refresh, renderObjects, renderQuantityFields, layoutChanged, textureImporter};
 const workbenchSettingKeys=['capacity','capacityChosen','priority','paletteSource','importantColours','focusMarks','compareBundles','bambuSetup','bambuRequired','bambuError','target','u1Nozzle','supportInterface','interfacePosition','reels','strategy','overrides','manualBlends','workflow','modelType','keepExact','useOwned','modelApplied','modeReels','locked','appliedSlotOrder','loadedTuning','reelView'];
-export function workbenchCaptureSettings(){return {state:structuredClone(Object.fromEntries(workbenchSettingKeys.filter(k=>state[k]!==undefined).map(k=>[k,state[k]]))),controls:Object.fromEntries(['spectrumlayermode','spectrumlayerheight','subdividemix'].map(id=>[id,$(id).type==='checkbox'?$(id).checked:$(id).value]))};}
+export function workbenchCaptureSettings(){return {state:structuredClone(Object.fromEntries(workbenchSettingKeys.filter(k=>state[k]!==undefined).map(k=>[k,state[k]]))),controls:Object.fromEntries(['spectrumlayermode','spectrumlayerheight','subdividemix','dualwallon','dualwalldepth'].map(id=>[id,$(id).type==='checkbox'?$(id).checked:$(id).value]))};}
 export function workbenchRestoreSettings(saved){if(!saved||!state.project)return;Object.assign(state,saved.state);state.reviewed=false;for(const [id,value]of Object.entries(saved.controls))if($(id).type==='checkbox')$(id).checked=value;else $(id).value=value;renderReels();renderWorkflow();return refresh();}
 export async function workbenchSourceColours(){if(!state.project)return null;return (await background().preview(state.plateId,state.objects,'original',paletteOf(null,'original'),null,state.geometryId,state.assessed?.counts.triangles||0,state.layout)).colors;}
 export function workbenchObjects() {

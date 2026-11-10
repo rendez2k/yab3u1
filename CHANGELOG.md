@@ -1,3 +1,9 @@
+## 2.6.69 — Dual-wall mixing for real models (experimental)
+
+- Full Spectrum blends has a new export option, in Settings: **Dual-wall mixing**. Each colour is printed only in the outer wall, to a depth you set; the walls behind it and the infill use one inner filament you choose from your loaded reels.
+- Works for Snapmaker Orca, Bambu Studio and OrcaSlicer projects. The export gives every outside face explicit paint, moves each solid part onto the inner filament, and sets the slicer's paint depth. Geometry, supports, seams, modifiers and cutouts are untouched.
+- The option records what it did in the exported file. It has not been confirmed by a slice or a print: check the sliced wall colours before printing.
+
 ## 2.6.68 — One workspace
 
 - The start screen and the Quick / Full studio picker are gone. The app opens straight into the workspace, with Open a model, the samples and Reopen in front of you.
