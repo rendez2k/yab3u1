@@ -1,6 +1,7 @@
 import {interfaceDemoFile} from './shared/supportInterfaceDemo.js';
 import {receiveModel} from './shared/modelHandoff.js';
 import {installModelDrop} from './file-drop.js';
+import {createSessionStore,describeAge,plainContext,sameFile} from './session-store.js';
 const $=id=>document.getElementById(id),frames=new Map();
 const menu=document.createElement('details');menu.className='project-menu';menu.innerHTML='<summary>App menu</summary><div></div>';document.querySelector('.topbar').append(menu);for(const id of ['batch','help','theme'])menu.querySelector('div').append($(id));
 // Open stays one click away on wide screens; narrow screens keep it in the menu.
@@ -50,6 +51,40 @@ function ensure(kind){
   frames.set(kind,{frame,promise,resolve,reject,timer,api:null,file:null,report:null});$('engines').append(frame);return promise;
 }
 async function guard(task){try{await task();}catch(error){$('workspace-status').textContent=error.message;$('primary').disabled=true;}}
+// Session restore: the last model is copied into this browser so a reload can reopen it.
+const session=createSessionStore();let savedMeta=null,savedContext='';
+const resume=document.createElement('div');resume.className='session-resume';resume.hidden=true;resume.setAttribute('role','region');resume.setAttribute('aria-label','Reopen your last model');resume.innerHTML='<div><strong></strong><span></span></div><button type="button" class="primary" data-resume>Reopen</button><button type="button" data-forget>Forget</button><button type="button" data-later aria-label="Not now">×</button>';document.body.append(resume);
+const readContext=()=>{try{const record=frames.get(active);return record?.report?.busy||record?.report?.pending?null:plainContext(record?.api?.context());}catch{return null;}};
+function rememberSource(next){
+  if(!session.enabled()||!next?.size||sameFile(savedMeta,next))return;
+  savedMeta={name:next.name,size:next.size,lastModified:next.lastModified};
+  const context=readContext()||{};savedContext=JSON.stringify(context);
+  session.save({blob:next,name:next.name,type:next.type,lastModified:next.lastModified,displayName:next.yab3dDisplayName||'',workspace:workspaceMode,context,savedAt:Date.now()});
+}
+setInterval(()=>{
+  if(!file||!savedMeta||!session.enabled())return;
+  const context=readContext();if(!context)return;
+  const serial=JSON.stringify(context);if(serial===savedContext)return;
+  savedContext=serial;session.saveContext(context);
+},4000);
+async function offerResume(){
+  const record=await session.read();if(!record||file)return;
+  resume.querySelector('strong').textContent=`Reopen ${record.displayName||record.name}?`;
+  resume.querySelector('span').textContent=`Saved in this browser ${describeAge(record.savedAt)}. Colour assignments are not restored.`;
+  resume.hidden=false;
+  resume.querySelector('[data-later]').onclick=()=>{resume.hidden=true;};
+  resume.querySelector('[data-forget]').onclick=async()=>{resume.hidden=true;savedMeta=null;await session.clear();$('workspace-status').textContent='Saved model removed from this browser.';};
+  resume.querySelector('[data-resume]').onclick=()=>guard(async()=>{
+    resume.hidden=true;
+    const restored=new File([record.blob],record.name,{type:record.type||'',lastModified:record.lastModified});
+    if(record.displayName)restored.yab3dDisplayName=record.displayName;
+    savedMeta={name:restored.name,size:restored.size,lastModified:restored.lastModified};savedContext=JSON.stringify(record.context||{});
+    if(!chosen)await window.workbench.chooseWorkspace(record.workspace==='quick'?'quick':'studio');
+    const api=await ensure(active);
+    // Saved settings are a convenience: if they no longer apply, open the model without them.
+    try{await api.load(restored,record.context||{});}catch{await api.load(restored);}
+  });
+}
 window.workbench={
   drag:showDrop,
   dropError:showDropError,
@@ -57,7 +92,7 @@ window.workbench={
   failed(kind,message){const record=frames.get(kind);if(record){clearTimeout(record.timer);record.reject(Error(message));}},
   panelChanged(kind,value){if(kind===active)nav(value);},
   report(r){const record=frames.get(r.kind);if(record)record.report=r;showReport(r);},
-  sourceChanged(kind,next){const record=frames.get(kind);if(record){record.file=next;record.project=projectId(next);}if(kind===active){file=next;chosen=true;showWorkspace();clearDropError();}},
+  sourceChanged(kind,next){const record=frames.get(kind);if(record){record.file=next;record.project=projectId(next);}if(kind===active){file=next;chosen=true;showWorkspace();clearDropError();resume.hidden=true;rememberSource(next);}},
   async chooseWorkspace(value,{open=false,remember=false}={}){
     if(!['quick','studio'].includes(value))return;
     const current=frames.get(active);if(current?.report?.busy||current?.report?.pending){$('workspace-status').textContent='Finish or cancel the current edit before changing workspace.';showWorkspace();return false;}
@@ -113,9 +148,12 @@ exportMenu.addEventListener('keydown',event=>{
   else if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();items[(at+(event.key==='ArrowDown'?1:items.length-1))%items.length]?.focus();}
 });
 $('help').addEventListener('click',()=>$('help-dialog').showModal());
+$('keep-session').checked=session.enabled();
+$('keep-session').addEventListener('change',async()=>{await session.setEnabled($('keep-session').checked);if(!$('keep-session').checked){savedMeta=null;resume.hidden=true;}else if(file)rememberSource(file);});
 $('integrations').addEventListener('click',()=>{$('help-dialog').close();frames.get(active)?.api?.setPanel('help');});
 $('theme').addEventListener('click',()=>setTheme(theme==='light'?'dark':'light'));
 document.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key==='o'){event.preventDefault();$('open').click();}else frames.get(active)?.api?.key?.(event);});
 setTheme(theme);modeButtons();
 await guard(()=>ensure(active));
 receiveModel({mount:document.body,canReceive:()=>!file,load:async(incoming,context)=>{if(!chosen)await window.workbench.chooseWorkspace('quick');return (await ensure(active)).load(incoming,context);}});
+offerResume();

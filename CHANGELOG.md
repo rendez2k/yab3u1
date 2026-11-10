@@ -1,3 +1,9 @@
+## 2.6.57 — Reopen your last model after a reload
+
+- Keep a copy of the last opened model in this browser. After a reload or a closed tab, a prompt offers to reopen it with its applied model edits (splits, repairs, painted objects), destination, plate and quantities.
+- Colour assignments, Full Spectrum palettes and unapplied previews are not restored. The prompt says so.
+- Forget removes the stored copy. A switch in Help turns the feature off and deletes anything stored. Nothing is uploaded.
+
 ## 2.6.56 — A slimmer studio and one Export button
 
 - Replace the six large tool tiles with a narrow rail (Project, Colours, Paint, Split, Plates, Settings). Model colours shrink to one line of swatches. Panels gain roughly 340 px of height on a 900 px window; on a phone the tools fit one row without sideways scrolling.

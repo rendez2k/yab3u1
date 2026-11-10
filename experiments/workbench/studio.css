@@ -323,3 +323,12 @@ body[data-tips=off]:not([data-workspace-mode=quick]) #inspector .task-heading{ma
 @media(max-width:900px){.topbar>#open{display:none}.project-menu .menu-open{display:block!important}}
 /* Phone: view controls stay on one scrollable row so the model keeps its space. */
 @media(max-width:760px){#platecontrols .plate-tool-row{flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:none}#platecontrols .plate-tool-row>*{flex:none;white-space:nowrap}#platecontrols #convertpreviewtoolbar,#platecontrols .previewtoolbar{flex-wrap:nowrap}}
+/* Session restore prompt. */
+.session-resume{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);z-index:25;display:flex;align-items:center;gap:8px;width:max-content;max-width:calc(100vw - 24px);padding:10px 10px 10px 16px;background:var(--panel);border-radius:12px;box-shadow:0 8px 32px #172c3830}
+.session-resume>div{display:flex;flex-direction:column;min-width:0;margin-right:6px}
+.session-resume strong{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.session-resume span{font-size:11px;color:var(--muted)}
+.session-resume button{border:0;flex:none;min-height:40px}.session-resume .primary{min-width:0}
+.session-resume [data-later]{background:transparent;font-size:18px;line-height:1;padding:6px 10px}
+.keep-session{display:flex;gap:8px;align-items:flex-start}
+@media(max-width:560px){.session-resume{flex-wrap:wrap;width:auto;left:12px;right:12px;transform:none}.session-resume>div{flex-basis:100%}.session-resume button{min-height:44px}}
