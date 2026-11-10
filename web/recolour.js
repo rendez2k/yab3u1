@@ -43,7 +43,7 @@ import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 import { DUAL_WALL_TARGETS, dualWallProblem } from './shared/dualWall.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.6.74";
+const VERSION = "2.6.75";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -1460,6 +1460,13 @@ function renderExport() {
   $('spectrumlayermode').disabled=state.target==='orca';$('spectrumlayerheight').disabled=state.target==='orca';
   if(state.target==='orca')$('spectrumlayernote').textContent='Choose your printer, nozzle and regular layer height in OrcaSlicer 2.5. This portable project carries the recipes and subdivision setting.';
   $('subdividelayerhint').hidden=!subdivideChoice();
+  {
+    // The slicer divides each blended layer further, so a thin parent layer leaves sublayers it may not print well.
+    const choice=layerChoice(),height=choice?.mode==='custom'?Number(choice.value):choice?.mode==='preserve'?Number(state.project?.sourceSettings?.layer_height):NaN;
+    const thin=subdivideChoice()&&Number.isFinite(height)&&height<=0.1+1e-9;
+    $('subdividewarning').hidden=!thin;
+    $('subdividewarning').textContent=thin?`Subdivide Mix Layer with ${height} mm layers: the slicer will warn that the divided layers may be thinner than the printer supports. Use a taller layer height (0.12 mm or more) with Subdivide on, or turn Subdivide off to print at ${height} mm.`:'';
+  }
   try{renderDualWall(resultPlan().physical||[]);}catch{$('dualwalloptions').hidden=true;}
   $('spectrumcustomlayer').hidden=$('spectrumlayermode').value!=='custom';
   $('layersummary').textContent='Layer height · '+($('spectrumlayermode').value.startsWith('height:') ? $('spectrumlayermode').selectedOptions[0].textContent : ({preserve:'preserve designer settings',preset:'printer preset',custom:`${$('spectrumlayerheight').value || '—'} mm custom`})[$('spectrumlayermode').value]);
