@@ -1,3 +1,8 @@
+## 2.6.75 — Warn about thin layers with Subdivide Mix Layer
+
+- When Subdivide Mix Layer is on and the regular layer height is 0.10 mm or less, Settings now says that the slicer will warn about divided layers being thinner than the printer supports, and gives the two ways out: a taller layer with Subdivide on, or Subdivide off at the thin layer.
+- The exported defaults are unchanged: the model's own layer height with Subdivide on.
+
 ## 2.6.74 — Keep each colour's hue
 
 - Full Spectrum blends now prefers a blend of the right hue over a paler or greyer colour that is numerically closer. With cyan, magenta, yellow and white loaded, a light green is matched by cyan and yellow, where before it was matched by yellow and white and came out pale yellow.
