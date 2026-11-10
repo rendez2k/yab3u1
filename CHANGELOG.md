@@ -1,3 +1,10 @@
+## 2.6.66 — Move objects by hand
+
+- In Convert, drag a selected object across the plate to place it. Positions then stay fixed: new copies pack around them, and Auto arrange releases them and repacks everything.
+- A drop is refused, and the object returns, when it would sit closer to another object than the plate spacing or on the area reserved for the prime tower. Objects are kept on the bed.
+- Positions are part of Undo and Redo, are kept per plate, survive turning, repainting and repairing the object, come back when the model is reopened, and are cleared when a different file is opened.
+- Dragging anywhere else, or on an object that is not selected, still orbits the view.
+
 ## 2.6.65 — Turn by any angle
 
 - Tip and Spin now use an angle you enter, from -360° to 360°, instead of fixed quarter turns. Quarter turns remain exact.

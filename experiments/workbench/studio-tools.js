@@ -8,6 +8,7 @@ import {mountBoundaryTool} from './boundary-tool.js';
 import {mountSplitPreview} from './split-preview-tool.js';
 import {createInspectionView} from './inspection-view.js';
 import {noSplitReason} from './split-result.js';
+import {mountMoveTool} from './move-tool.js';
 export function mountStudio({view,engine,kind,api,objects,setPanel}){
   const doc=view.stage.ownerDocument,make=view.make;
   let multiple=false,preferredColour='',preferredShape=false,colourDirty=false,shape=null,jointTool=null,boundary=null,splitPreview=null;
@@ -255,7 +256,10 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
       // A full replacement can keep the original grouped positions. If an old
       // copy remains, pack it separately from the repaired copy at that position.
       const keepArrangement=(repairing||(turning||recolouring)&&Object.values(quantities).every(n=>n<=1))&&result.changes.every(c=>!quantities[c.oldId])&&Object.values(quantities).every(n=>n<=1);
-      const next={...before,file,context:{...before.context,layout:{...before.context.layout,copies:1,quantities,arrangement:keepArrangement?before.context.layout.arrangement:'objects'}}};
+      // A replaced object (turned, repainted, repaired) keeps the spot it was placed in by hand.
+      let manual=before.context.layout.manual;
+      if(manual&&(turning||recolouring||repairing)){manual={...manual};for(const c of result.changes){if(c.created.length!==1||quantities[c.oldId])continue;for(const key of Object.keys(manual)){const [id,ordinal]=key.split(':');if(id===String(c.oldId)){manual[`${c.created[0].id}:${ordinal}`]=manual[key];delete manual[key];}}}}
+      const next={...before,file,context:{...before.context,layout:{...before.context.layout,...(manual?{manual}:{}),copies:1,quantities,arrangement:keepArrangement?before.context.layout.arrangement:'objects'}}};
       committing=true;sync();
       restorePreview();
       try{await loadSnapshot(next);}catch(error){await loadSnapshot(before);throw error;}
@@ -303,7 +307,7 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
   async function undoCurrent(){if(working||state().busy||boundary?.pending)return;if(boundary?.canUndo)boundary.undo();else if(shape?.canUndo){shape.undo();}else if(colourDirty){show('select');message.textContent='Colour preview undone. Original paint restored.';}else if(undoKind()==='blend')engine.workbenchBlends.undo();else if(undoKind()==='plate'){await objects.act('undo');redoOrder.push('plate');}else await undoEdit();sync();}
   let listStamp='';
   function sync(){
-    const s=state();const byShape=mode==='split'&&splitMethod()==='by-shape';panel.querySelector('[data-multi-select]').hidden=byShape;panel.querySelector('[data-edit-heading]').textContent=byShape?'Shape selection':mode==='split'?'Split selection':mode==='colour'?'Colour selection':'Objects';tools.hidden=!s.objects.length;if(s.preview)s.preview.selectionToggle=multiple;
+    const s=state();mover?.sync(s.preview?.ok===false?null:s.preview);const byShape=mode==='split'&&splitMethod()==='by-shape';panel.querySelector('[data-multi-select]').hidden=byShape;panel.querySelector('[data-edit-heading]').textContent=byShape?'Shape selection':mode==='split'?'Split selection':mode==='colour'?'Colour selection':'Objects';tools.hidden=!s.objects.length;if(s.preview)s.preview.selectionToggle=multiple;
     panel.querySelector('[data-multi-select]').setAttribute('aria-pressed',String(multiple));panel.querySelector('[data-multi-hint]').hidden=!multiple;
     const guide=objects.element.querySelector('[data-object-message]');if(guide&&/Shift-click/.test(guide.textContent))guide.textContent='Use Select multiple to pick several copies. Keyboard: Shift adds, Ctrl/Cmd toggles; Delete removes; Ctrl/Cmd+Z undoes.';
     const currentSource=api.source();if(!working&&currentSource!==knownSource){knownSource=currentSource;undo=[];redo=[];redoOrder=[];superseded.clear();baseColours=null;message.textContent='';autoResult.hidden=true;outcome.hidden=true;}
@@ -330,6 +334,8 @@ export function mountStudio({view,engine,kind,api,objects,setPanel}){
     apply.disabled=apply.disabled||Boolean(jointTool?.pending)||Boolean(splitPreview?.pending)||Boolean(boundary?.pending);
     objects.element.inert=working;
   }
+  // Convert keeps a layout the arranger can pin; Full Spectrum has its own plate controls.
+  const mover=kind==='converter'&&objects.history?.apply?mountMoveTool({getState:state,enabled:()=>mode==='select'&&!working&&!state().busy&&doc.body.dataset.workspaceMode!=='quick',history:objects.history,say:text=>{message.textContent=text;},changed:()=>sync()}):null;
   // Clicking an object that is already selected changes nothing in the selection, so open its panel here.
   let pressed=null;
   view.stage.addEventListener('pointerdown',e=>{pressed=e.target.closest?.('canvas')?[e.clientX,e.clientY]:null;},true);

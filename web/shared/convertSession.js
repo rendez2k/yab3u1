@@ -447,6 +447,14 @@ export class ConvertSession {
       next[key] = value;
     }
     if (patch.tower !== undefined) next.tower = Boolean(patch.tower);
+    if (patch.manual !== undefined) {
+      // Hand-placed positions: "objectId:ordinal" -> footprint centre in bed millimetres.
+      const manual = {};
+      for (const [key, spot] of Object.entries(patch.manual || {}).slice(0, 512)) {
+        if (/^[^:]+:\d+$/.test(key) && Array.isArray(spot) && spot.length === 2 && spot.every(Number.isFinite)) manual[key] = [spot[0], spot[1]];
+      }
+      if (Object.keys(manual).length) next.manual = manual; else delete next.manual;
+    }
     this.layoutProblem = "";
     const changed = JSON.stringify(next) !== JSON.stringify(this.layout);
     this.layout = targetLayout(this.target, next);
@@ -636,6 +644,8 @@ export class ConvertSession {
       // A fresh file starts from a single copy. Keep the user's generic planning
       // area separately so it can never replace the U1 destination bed.
       this.layout = { ...this.layout, copies: 1, tower: true, arrangement:'auto', quantities:{} };
+      // Hand-placed positions belong to the previous file's objects.
+      delete this.layout.manual;
       // A source plate size is used only when the file really states one and the
       // user has not set their own box; otherwise the editable planning area stays.
       const plate = reply.summary && reply.summary.plateSize;
@@ -682,6 +692,8 @@ export class ConvertSession {
     this.boundsPending = true;
     const saved=this.plateCollection.get(found.id);
     this.layout = {...this.layout,...saved?.layout,quantities:{...saved?.layout?.quantities},copies:saved?.layout?.copies ?? 1};
+    // Each plate keeps its own hand-placed positions.
+    if (saved?.layout?.manual) this.layout.manual = {...saved.layout.manual}; else delete this.layout.manual;
     this.rules = saved?.rules || {[SLOTS]:identityRule(this.state.colours.length),[REPAINT]:identityRule(this.state.colours.length)};
     this.assignmentMode=saved?.assignmentMode || SLOTS;
     this.state.includeUnused=saved?.includeUnused || [];

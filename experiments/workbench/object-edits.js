@@ -18,7 +18,8 @@ export function editSelection(state,selection,amount){
 
 export function arrangeObjects(state,planLayout) {
   if(!state.bounds||!state.layout?.footprints?.length)throw Error('Wait for the object sizes to finish loading.');
-  const patch={copies:state.copies,quantities:{...state.quantities},arrangement:'objects'};
+  // Auto arrange is the explicit repack: it releases hand-placed positions.
+  const patch={copies:state.copies,quantities:{...state.quantities},arrangement:'objects',manual:{}};
   const plan=planLayout(state.bounds,{...state.layout,...patch,capacityLimit:state.copies});
   if(plan.blocked||plan.capped)throw Error('These quantities do not fit with the current spacing and reserved areas. Reduce copies or spacing, or choose a larger printer. Nothing has been removed.');
   return {patch,plan};

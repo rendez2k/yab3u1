@@ -313,32 +313,52 @@ function planObjects(bounds, options) {
     if (!Number.isInteger(count) || count < 0 || count > 64 || (count > 0 && !boxValid(f.bounds))) { invalid = true; return []; }
     if (count === 0) return [];
     const size = boxSize(f.bounds);
-    return Array.from({length:count},()=>({...f,w:size[0]+padding*2,h:size[1]+padding*2,z:size[2]+(Number(options.extraHeight)||0)}));
+    return Array.from({length:count},(_,k)=>({...f,k,count,w:size[0]+padding*2,h:size[1]+padding*2,z:size[2]+(Number(options.extraHeight)||0)}));
   });
   const asked = Math.max(1, Math.floor(Number(options.copies)||1));
+  const manual = options.manual && typeof options.manual === 'object' ? options.manual : {};
   let capacity = 0, chosen = [];
   // Bounded search of complete requested sets. Try several deterministic orders;
   // rectangle packing is conservative, so this is a fit found, not a maximum.
   if (!invalid && items.length && !items.some(i=>i.z > (options.maxHeight ?? Infinity))) {
     for (let count=1; count<=(options.capacityLimit || 64) && count*items.length<=512; count++) {
-      const all = Array.from({length:count},(_,copy)=>items.map(i=>({...i,copy}))).flat();
+      const all = Array.from({length:count},(_,copy)=>items.map(i=>({...i,copy,ordinal:copy*i.count+i.k}))).flat();
+      // Hand-placed objects keep their position; everything else packs around them.
+      const fixed = [], loose = [];
+      for (const item of all) {
+        const spot = manual[`${item.objectId}:${item.ordinal}`];
+        if (!spot) { loose.push(item); continue; }
+        fixed.push({...item,x:Math.max(0,Math.min(options.width-item.w,spot[0]-item.w/2)),
+          y:Math.max(0,Math.min(options.depth-item.h,spot[1]-item.h/2))});
+      }
+      const around = fixed.length ? {...options,keepoutBoxes:[...(options.keepoutBoxes||[]),
+        ...fixed.map(f=>({min:[f.x,f.y],max:[f.x+f.w,f.y+f.h]}))]} : options;
       let packed = null;
       for (const packingHeuristic of ['short','bottom','area','long']) {
         for (const score of [i=>i.w*i.h,i=>Math.max(i.w,i.h),i=>i.h,i=>i.w]) {
-          packed = packRectangles(all.slice().sort((a,b)=>score(b)-score(a)), {...options,packingHeuristic});
+          packed = packRectangles(loose.slice().sort((a,b)=>score(b)-score(a)), {...around,packingHeuristic});
           if (packed) break;
         }
         if(packed)break;
       }
       if (!packed) break;
+      // Stable order per object, so a hand-placed copy keeps its identity.
+      if (fixed.length) packed = [...fixed,...packed].sort((a,b)=>a.ordinal-b.ordinal);
       capacity = count;
       if (count<=asked) chosen = packed;
     }
   }
   const centre = options.centre || [0,0];
-  const placements = chosen.map(i=>({objectId:String(i.objectId),copy:i.copy,
-    offset:[centre[0]-options.width/2+i.x+padding-i.bounds.min[0],
-            centre[1]-options.depth/2+i.y+padding-i.bounds.min[1], -i.bounds.min[2]]}));
+  const placements = chosen.map(i=>{
+    const placement = {objectId:String(i.objectId),copy:i.copy,
+      offset:[centre[0]-options.width/2+i.x+padding-i.bounds.min[0],
+              centre[1]-options.depth/2+i.y+padding-i.bounds.min[1], -i.bounds.min[2]]};
+    // Editing aids for the Workbench. Not enumerable, so signatures, caches and
+    // structured clones of a plan are exactly what they were.
+    Object.defineProperty(placement,'ordinal',{value:i.ordinal});
+    Object.defineProperty(placement,'rect',{value:{x:i.x,y:i.y,w:i.w,h:i.h}});
+    return placement;
+  });
   return {arrangement:'objects',placements,copies:Math.min(asked,capacity),asked,capacity,
     problem:invalid ? 'Some object quantities or dimensions are invalid.' : !items.length ? 'Choose at least one object.'
       : items.length > 512 ? 'Choose at most 512 object groups per set.' : '',
