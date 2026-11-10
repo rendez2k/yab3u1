@@ -612,6 +612,10 @@
       <p class="hint" id="interfacehint" role="status">Reserve one slot for PETG; use the other three for model colours and blends.</p>
       <details id="interfacesettings" hidden><summary>PETG interface settings</summary><p class="hint">PLA support structure from slot 1, PETG contact layers from slot 4. Three dense interface layers, 0 mm top/bottom Z gap. Supports are enabled; source support style and painted areas are retained. The prime-tower shell uses PLA slot 1. These are starting settings: check the sliced interfaces and try a small print first.</p></details>
     </section>
+    <div id="blendstrengthfield">
+      <label class="field">Blend detail<select id="blendstrength" aria-describedby="blendstrengthhint"><option value="standard">Standard · 25 / 50 / 75%, up to 6 blends</option><option value="strong" selected>Strong · 9 ratios, up to 10 blends</option><option value="finest">Finest · 5% steps, up to 12 blends</option></select></label>
+      <p class="hint" id="blendstrengthhint" role="status"></p>
+    </div>
     <details id="colourpriorities" class="compact-options"><summary id="prioritysummary">Important details &amp; colours</summary>
       <div id="focusbrush">
         <p class="hint" data-focus-explanation>Mark important details on the model to give their colours more weight when comparing palettes. This guides the whole palette; it does not repaint the marked area or guarantee an exact match.</p>

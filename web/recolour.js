@@ -16,7 +16,7 @@ import {mountObjectActions} from './shared/objectActions.js';
 // The renderer is shared with the local page.
 
 import { comparison, distance, norm, suggestMapping } from "./shared/colour.js";
-import { describeColourMapping, mappingFromPlan, planBlends, plausibleBlend, swapPaletteSlots } from "./shared/mix.js";
+import { describeColourMapping, mappingFromPlan, planBlends, setBlendStrength, blendStrength, plausibleBlend, swapPaletteSlots } from "./shared/mix.js";
 import { Preview, mountPlateControls } from "./shared/preview.js";
 import { LABELS, RECOLOUR_TARGETS, colourLimit } from "./shared/targets.js";
 import {mountBlendEditor} from './shared/blendEditor.js';
@@ -42,7 +42,7 @@ import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } 
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 import { DUAL_WALL_TARGETS, dualWallProblem } from './shared/dualWall.js';
 
-const VERSION = "2.6.69";
+const VERSION = "2.6.70";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -78,6 +78,15 @@ function layerChoice() {
 }
 $('useblendlayer').addEventListener('click',()=>{$('spectrumlayermode').value='height:0.10';clearReview();refresh();});
 $('subdividemix').addEventListener('change',()=>{clearReview();invalidateRecommendation();refresh();});
+// Blend detail: how many ratios and recipes the planner may use to reach the model's shades.
+function describeBlendStrength() {
+  const chosen=blendStrength(),room=Math.max(0,colourLimit(state.target)-activeReels().length);
+  $('blendstrengthfield').hidden=state.strategy==='solid'||state.strategy==='source';
+  $('blendstrengthhint').textContent=`Up to ${Math.min(chosen.recipes,room)} blended colours from ${chosen.ratios.length} ratios. `
+    +(chosen.name==='standard'?'Each blend repeats within 4 layers.':`Finer ratios repeat over up to ${chosen.period} layers, so they can show as faint bands: use thin layers, and Subdivide Mix Layer in Settings where it is offered.`);
+}
+setBlendStrength($('blendstrength').value);
+$('blendstrength').addEventListener('change',()=>{setBlendStrength($('blendstrength').value);clearReview();invalidateRecommendation();refresh();});
 // Dual-wall mixing: painted colour in the outer wall only, one chosen filament behind it.
 for(const id of ['dualwallon','dualwallinner','dualwalldepth'])$(id).addEventListener('change',()=>{clearReview();refresh();});
 function dualWallChoice() {
@@ -410,7 +419,7 @@ function requestRecommendation() {
     supportInterface:state.supportInterface,capacity:state.capacity,visibleLimit:colourLimit(state.target),priority:state.priority,bundles:state.compareBundles,
     stock:state.workflow==='model' && state.useOwned ? [...(state.stock||[]),...state.bundleStock] : null,
     type:state.modelType,keepExact:state.workflow==='model'&&!state.compareBundles ? state.keepExact : [],
-    weights,importantColours:state.importantColours,focusWeights:focusWeights(state.focusMarks,focusGeometry?.ranges),blends:state.strategy!=='solid',calibration:calibrationPanel?.active() || null};
+    weights,importantColours:state.importantColours,focusWeights:focusWeights(state.focusMarks,focusGeometry?.ranges),blends:state.strategy!=='solid',blendStrength:blendStrength().name,calibration:calibrationPanel?.active() || null};
   // Model colours and slot arrangement do not alter the palette search. Applying
   // or moving a suggestion must not discard the palette the user just chose.
   const keyReels=compareModel && state.supportInterface
@@ -971,7 +980,8 @@ function useAssessed(assessed) {
     ? `${surfaceColours} colours found on the selected model; ${extraColours} other palette entries are not used on its surface. The sliced-file check can confirm which can be left out of the reel load, including support and purge use.`
     : "";
   state.mix = planBlends(assessed.sourceColors, activeReels(),activeApproximation(),
-    state.reelView==='recommended' ? state.recommendation?.slotOrder : state.appliedSlotOrder,calibrationPanel?.active() || null,Math.max(0,Math.min(6,colourLimit(state.target)-activeReels().length)));
+    state.reelView==='recommended' ? state.recommendation?.slotOrder : state.appliedSlotOrder,calibrationPanel?.active() || null,Math.max(0,Math.min(blendStrength().recipes,colourLimit(state.target)-activeReels().length)));
+  describeBlendStrength();
   state.recipes = state.mix.recipes.filter(recipe=>plausibleBlend(
     activeReels()[recipe.a-1].color,activeReels()[recipe.b-1].color,recipe.color));
   /* Ticking belongs to one recipe set. A new set starts fully ticked; an empty set
@@ -1847,8 +1857,8 @@ blendEditor=mountBlendEditor($('blendeditor'),{read:()=>{
 export const workbenchFocus={stop:()=>focusBrush?.stop(),key:event=>focusBrush?.key(event)};
 export {state, load, refresh, renderObjects, renderQuantityFields, layoutChanged, textureImporter};
 const workbenchSettingKeys=['capacity','capacityChosen','priority','paletteSource','importantColours','focusMarks','compareBundles','bambuSetup','bambuRequired','bambuError','target','u1Nozzle','supportInterface','interfacePosition','reels','strategy','overrides','manualBlends','workflow','modelType','keepExact','useOwned','modelApplied','modeReels','locked','appliedSlotOrder','loadedTuning','reelView'];
-export function workbenchCaptureSettings(){return {state:structuredClone(Object.fromEntries(workbenchSettingKeys.filter(k=>state[k]!==undefined).map(k=>[k,state[k]]))),controls:Object.fromEntries(['spectrumlayermode','spectrumlayerheight','subdividemix','dualwallon','dualwalldepth'].map(id=>[id,$(id).type==='checkbox'?$(id).checked:$(id).value]))};}
-export function workbenchRestoreSettings(saved){if(!saved||!state.project)return;Object.assign(state,saved.state);state.reviewed=false;for(const [id,value]of Object.entries(saved.controls))if($(id).type==='checkbox')$(id).checked=value;else $(id).value=value;renderReels();renderWorkflow();return refresh();}
+export function workbenchCaptureSettings(){return {state:structuredClone(Object.fromEntries(workbenchSettingKeys.filter(k=>state[k]!==undefined).map(k=>[k,state[k]]))),controls:Object.fromEntries(['spectrumlayermode','spectrumlayerheight','subdividemix','dualwallon','dualwalldepth','blendstrength'].map(id=>[id,$(id).type==='checkbox'?$(id).checked:$(id).value]))};}
+export function workbenchRestoreSettings(saved){if(!saved||!state.project)return;Object.assign(state,saved.state);state.reviewed=false;for(const [id,value]of Object.entries(saved.controls))if($(id).type==='checkbox')$(id).checked=value;else $(id).value=value;if(saved.controls.blendstrength)setBlendStrength($('blendstrength').value);renderReels();renderWorkflow();return refresh();}
 export async function workbenchSourceColours(){if(!state.project)return null;return (await background().preview(state.plateId,state.objects,'original',paletteOf(null,'original'),null,state.geometryId,state.assessed?.counts.triangles||0,state.layout)).colors;}
 export function workbenchObjects() {
   return {key:`${state.epoch}:${state.plateId}`,objects:quantityObjects(),quantities:state.quantities,

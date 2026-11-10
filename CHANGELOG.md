@@ -1,3 +1,9 @@
+## 2.6.70 — Stronger blending when reducing colours
+
+- Full Spectrum blends has a **Blend detail** setting in Colours. Strong, the new default, lets the planner use nine ratios (17% to 83%) and up to 10 blended colours instead of three ratios and six. Finest uses 5% steps and up to 12. Standard is the previous behaviour.
+- Both the palette suggestions and the final colour plan use the chosen detail, and it is saved with your other colour choices.
+- Finer ratios repeat over more layers and can show as faint bands; the setting says how many layers each level repeats over.
+
 ## 2.6.69 — Dual-wall mixing for real models (experimental)
 
 - Full Spectrum blends has a new export option, in Settings: **Dual-wall mixing**. Each colour is printed only in the outer wall, to a depth you set; the walls behind it and the infill use one inner filament you choose from your loaded reels.
