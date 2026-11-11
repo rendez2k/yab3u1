@@ -44,7 +44,7 @@ import { DUAL_WALL_TARGETS, dualWallProblem } from './shared/dualWall.js';
 import { INTERWEAVE_TARGETS, interweaveProblem } from './shared/topInterweave.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.6.78";
+const VERSION = "2.6.79";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -85,7 +85,7 @@ function describeBlendStrength() {
   const chosen=blendStrength(),room=Math.max(0,colourLimit(state.target)-activeReels().length);
   $('blendstrengthfield').hidden=state.strategy==='solid'||state.strategy==='source';
   $('blendstrengthhint').textContent=`Up to ${Math.min(chosen.recipes,room)} blended colours from ${chosen.ratios.length} ratios. `
-    +(chosen.name==='standard'?'Each blend repeats within 4 layers.':`Finer ratios repeat over up to ${chosen.period} layers, so they can show as faint bands: use thin layers, and Subdivide Mix Layer in Settings where it is offered.`);
+    +(chosen.name==='standard'?'Each blend repeats within 4 layers.':`Finer ratios repeat over up to ${chosen.period} layers, so they can show as faint bands: use thin layers, and Subdivide Mix Layer (step 3, Print options) where it is offered.`);
   const three=(state.recipes||[]).filter(r=>r.c).length;
   $('bakedhint').textContent=`Mixes three reels where that comes closer, such as skin tones and browns from cyan, magenta, yellow and white. Each is a repeat of up to ${chosen.layers} whole layers, one reel per layer, so thin layers (0.08–0.12 mm) blend it best; Subdivide Mix Layer does not apply to these.`
     +(three?` In use now: ${three} three-reel blend${three===1?'':'s'}.`:'')+' Not yet confirmed by a slice or a print.';

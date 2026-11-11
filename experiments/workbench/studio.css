@@ -423,3 +423,47 @@ dialog.plate-picker::backdrop{background:#10161acc}
 @media(max-width:760px){#inspector .bundle-cards button{min-height:56px}#inspector #bundlepanel .bundle-reel{min-height:44px}}
 /* A little more room for the panel on wide screens. */
 @media(min-width:1500px){#engine-workspace{grid-template-columns:440px minmax(0,1fr)}}
+/* 2.6.79 — guided steps. The rail is the four steps in order, then the editing tools; each step ends in one Back/Next bar. */
+#engine-workspace>#inspector{grid-template-rows:auto minmax(0,1fr) auto}
+.feature-toolbox .step-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.feature-toolbox .step-list li{position:relative;display:flex}
+.feature-toolbox .step-list li+li::before{content:'';position:absolute;left:50%;top:-6px;width:1px;height:10px;background:var(--line)}
+#inspector .feature-toolbox .step-list button{width:100%;min-height:60px}
+.step-dot{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;border:1.5px solid currentColor;font-style:normal;font-size:12px;font-weight:600;line-height:1;box-sizing:border-box}
+.step-dot b{font-weight:600}.step-dot svg{display:none;width:14px;height:14px;stroke-width:2.4}
+#inspector .feature-toolbox [data-step][data-done=true] .step-dot{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+[data-step][data-done=true] .step-dot b{display:none}[data-step][data-done=true] .step-dot svg{display:block}
+#inspector .feature-toolbox [data-step][aria-current=step]{background:var(--soft);color:var(--accent)}
+#inspector .feature-toolbox [data-step]:disabled{opacity:.45}
+.feature-toolbox .rail-label{margin:12px 0 2px;padding-top:10px;border-top:1px solid var(--line);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);text-align:center}
+.feature-toolbox .tool-list{display:flex;flex-direction:column;gap:4px}
+.step-eyebrow{display:block;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--accent);margin:0 0 6px}
+[data-workspace-mode=quick] .step-eyebrow,[data-task=layout] .step-eyebrow{display:none}
+#inspector>.step-footer{grid-column:2;grid-row:3;padding:10px 20px 12px;border-top:1px solid var(--line);background:var(--panel);display:grid;gap:8px}
+.step-footer .step-buttons{display:flex;gap:8px;align-items:center}
+#inspector .step-footer button{min-height:44px;padding:10px 16px;font-size:13px;font-weight:600}
+#inspector .step-footer [data-step-next]{flex:1;margin-left:auto}
+#inspector .step-footer [data-step-back]{background:transparent;border:1px solid var(--line)}
+.step-footer .step-note{margin:0;font-size:12px;line-height:1.45;color:var(--dim)}.step-footer .step-note:empty{display:none}
+.step-footer .step-downloads{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+#inspector .step-footer .step-downloads button{width:100%;display:grid;gap:2px;text-align:left;font-weight:500;padding:10px 12px}
+.step-downloads button span{font-size:11px;color:var(--dim);font-weight:400}
+.colour-workflow .colour-need{font-size:14px;line-height:1.5;font-weight:500;margin:0 0 14px}.colour-need:empty{display:none}
+.colour-workflow .colour-choices{display:grid;gap:8px}
+#inspector .colour-choices button{position:relative;display:grid;gap:4px;width:100%;text-align:left;padding:13px 14px;min-height:64px;border:1px solid var(--line);background:var(--panel);border-radius:10px;line-height:1.4}
+#inspector .colour-choices button:hover{border-color:var(--hover-line);background:var(--panel2)}
+#inspector .colour-choices button[aria-pressed=true]{border-color:var(--accent);background:var(--soft);box-shadow:none}
+.colour-choices strong{font-size:13px}.colour-choices span{font-size:12px;color:var(--dim);font-weight:400}
+.colour-choices em{justify-self:start;font-style:normal;font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--accent);border:1px solid var(--accent);border-radius:99px;padding:2px 8px;margin-top:2px}
+.colour-choices [hidden]{display:none!important}
+body[data-steps=on] #printercapacity #capacitystatus:not(.err),body[data-steps=on] #printercapacity #capacitynote,body[data-steps=on] #printercapacity #capacityoptions{display:none!important}
+body:not([data-steps=on]) [data-capacity-plain]{display:none}
+[data-capacity-plain]{font-size:13px;line-height:1.5;margin:10px 0}
+@media(max-width:760px){
+  .feature-toolbox .step-list,.feature-toolbox .tool-list{flex-direction:row;flex:3 1 0;gap:2px}.feature-toolbox .tool-list{flex:2.2 1 0}
+  .feature-toolbox .step-list li{flex:1 1 0;min-width:0}.feature-toolbox .step-list li+li::before{display:none}
+  #inspector .feature-toolbox .step-list button{min-height:52px}
+  .feature-toolbox .rail-label{display:none}.step-dot{width:20px;height:20px;font-size:11px}
+  #inspector>.step-footer{position:sticky;bottom:0;z-index:3;padding:8px 12px}
+}
+#inspector .colour-workflow .colour-choices{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;background:none;padding:0;border-radius:0}

@@ -25,10 +25,17 @@ test('colour summary updates with the plate and the visible toolbox opens every 
   toolbox.sync('project','select',true);assert([...toolbox.element.querySelectorAll('button')].every(b=>b.disabled));
   summary.element.querySelector('button').click();assert.equal(chosen,'colours');
 });
-test('slim rail keeps full tool names for assistive technology and offers a Tips switch',()=>{
+test('the rail lists the four steps in order, then the editing tools, and offers a Tips switch',()=>{
   const {document}=parseHTML('<html><body><aside></aside></body></html>'),view={inspector:document.querySelector('aside'),make(tag,attrs={},html=''){const n=document.createElement(tag);for(const [k,v]of Object.entries(attrs))n.setAttribute(k,v);n.innerHTML=html;return n;}};
   const toolbox=mountFeatureToolbox({view,choose(){}});
-  assert.deepEqual([...toolbox.element.querySelectorAll('button')].map(b=>[b.textContent,b.getAttribute('aria-label')]),[['Project','Open & convert'],['Colours','Colours & filaments'],['Paint','Paint objects'],['Split','Split & connect'],['Plates','Plates & arrange'],['Settings','Print settings & printer']]);
+  assert.deepEqual([...toolbox.element.querySelectorAll('[data-step]')].map(b=>[b.dataset.feature,b.querySelector('span').textContent,b.getAttribute('aria-label')]),[['project','Model','Step 1 of 4: Open your model and choose the printer'],['colours','Colours','Step 2 of 4: Choose how the colours print'],['output','Check','Step 3 of 4: Check the result and settings'],['download','Download','Step 4 of 4: Download the file for your slicer']]);
+  assert.deepEqual([...toolbox.element.querySelectorAll('.tool-list button')].map(b=>[b.textContent,b.getAttribute('aria-label')]),[['Paint','Paint objects'],['Split','Split & connect'],['Plates','Plates & arrange']]);
+  // Before a model is open only the first step can be chosen; ticks follow progress.
+  toolbox.sync('project','select',false,{loaded:false,done:{}});
+  assert.deepEqual([...toolbox.element.querySelectorAll('[data-step]')].map(b=>b.disabled),[false,true,true,true]);
+  toolbox.sync('colours','select',false,{loaded:true,done:{project:true},download:{disabled:false}});
+  const steps=[...toolbox.element.querySelectorAll('[data-step]')];
+  assert.equal(steps[0].dataset.done,'true');assert.equal(steps[1].getAttribute('aria-current'),'step');assert.equal(steps[0].getAttribute('aria-current'),null);assert(steps.every(b=>!b.disabled));
   const tips=toolbox.element.querySelector('[data-tips]');assert.equal(tips.checked,false);assert.equal(document.body.dataset.tips,'off');
   tips.checked=true;tips.dispatchEvent(new document.defaultView.Event('change'));assert.equal(document.body.dataset.tips,'on');
 });
