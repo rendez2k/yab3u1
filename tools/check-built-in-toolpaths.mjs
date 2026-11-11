@@ -12,6 +12,20 @@
 // the ten worst layers, writes the per-layer table as JSON when asked, and exits 1
 // when the check does not pass.
 //
+// Outline guard: outline that lies inside other solid (another part or shell, or a negative
+// part) is left out, and walls far from the kept outline are not judged ("hidden"). So
+// that a part cannot pass in any reel by losing its outline, the check stops and exits 1
+// when, counting only parts and layers with at least 20 mm of raw outline:
+// - a part's section, summed over the checked layers, has a signed area that is not
+//   positive (the part is wound inside out);
+// - a part keeps less than 5% of its outline and printed outer wall lies along more than
+//   90% of what was dropped (the slicer saw a surface there). A part keeping under 5%
+//   with less wall along it is taken as embedded in another part and only listed;
+// - a layer keeps less than 10% of its outline.
+// It prints, for information, hidden wall by tool and distance from the kept outline
+// (0.35-0.6, 0.6-1, over 1 mm), the hidden 0.35-0.6 mm wall in a reel other than the
+// outline's next to it, and outer wall lying along dropped outline by tool.
+//
 // Alignment stop: it stops when the median distance, over the outline, from each outline
 // point to the nearest outer-wall sample is above 0.35 mm (aligned files give about
 // 0.215-0.225 mm, half a 0.42 mm line). It also prints the brief's median, from visible
@@ -40,7 +54,7 @@
 // layer and a simple outward shape.
 import {writeFileSync, readFileSync, createReadStream} from 'node:fs';
 import {createInterface} from 'node:readline';
-import {crossSection, dropInside, wallReader, checkLayer, summarise, histogramMedian, SURFACE_BIN, REACH_BIN} from './builtInToolpathCheck.mjs';
+import {crossSection, splitInside, outlineGuard, wallReader, checkLayer, summarise, histogramMedian, SURFACE_BIN, REACH_BIN} from './builtInToolpathCheck.mjs';
 import {loadModel, sweeper} from './builtInModelReader.mjs';
 
 const ALIGN_LIMIT = 0.35;
@@ -68,7 +82,8 @@ async function modelMode(args) {
   const layers = [], surfaceHist = [], reachHist = [];
   const add = (into, h) => { h.forEach((v, i) => { into[i] = (into[i] || 0) + v; }); };
   let walls = [], prevZ = 0, checkedSoFar = 0, misaligned = false;
-  const counts = {lines: 0, M82: 0, M83: 0, layersSeen: 0, overhangWallMm: 0, droppedOutline: 0};
+  const counts = {lines: 0, M82: 0, M83: 0, layersSeen: 0, overhangWallMm: 0, droppedOutline: 0, nearOtherReel: 0};
+  const partOutline = {}, hiddenByTool = {}, alongDropped = {}, alongDroppedHidden = {}, nearOtherExamples = [];
   const reader = wallReader(w => walls.push(w), {types: ['Outer wall', 'Overhang wall']});
   const flush = () => {
     const {layer, z} = reader.state;
@@ -84,16 +99,24 @@ async function modelMode(args) {
     const mesh = {vertices: model.vertices, triangles: active.map(i => ({v: [model.tri[3 * i], model.tri[3 * i + 1], model.tri[3 * i + 2]], reel: model.reel[i], part: model.part[i], negative: model.parts[model.part[i]].negative}))};
     const whole = crossSection(mesh, cut);
     // Outline inside another part or another shell (or inside a negative part) is not printed surface.
-    const section = dropInside(whole);
+    const {kept: section, dropped: droppedSegments} = splitInside(whole);
     const segLength = list => list.reduce((t, s) => t + Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]), 0);
-    const dropped = segLength(whole.filter(s => !s.negative)) - segLength(section);
+    const raw = segLength(whole.filter(s => !s.negative)), dropped = raw - segLength(section);
     counts.droppedOutline += dropped;
+    for (const s of whole) if (!s.negative) { const p = partOutline[s.part] ??= {raw: 0, kept: 0, walled: 0, area: 0}; p.raw += Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]); p.area += (s.a[0] * s.b[1] - s.b[0] * s.a[1]) / 2; }
+    for (const s of section) partOutline[s.part].kept += Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]);
     const outer = current.filter(w => w.type === 'Outer wall'), overhang = current.filter(w => w.type === 'Overhang wall');
-    const r = checkLayer(section, outer);
+    const r = checkLayer(section, outer, {dropped: droppedSegments});
+    for (const [tool, h] of Object.entries(r.hiddenByTool)) { const t = hiddenByTool[tool] ??= {near: 0, mid: 0, far: 0}; t.near += h.near; t.mid += h.mid; t.far += h.far; }
+    for (const [tool, mm] of Object.entries(r.alongDropped)) alongDropped[tool] = (alongDropped[tool] || 0) + mm;
+    for (const [tool, mm] of Object.entries(r.alongDroppedHidden)) alongDroppedHidden[tool] = (alongDroppedHidden[tool] || 0) + mm;
+    counts.nearOtherReel += r.nearOtherReel;
+    for (const [part, mm] of Object.entries(r.droppedWalled)) partOutline[part].walled += mm;
+    if (nearOtherExamples.length < 40) nearOtherExamples.push(...r.examples.nearOtherReel.slice(0, 2).map(e => ({layer, ...e})));
     const overhangMm = overhang.reduce((t, w) => t + Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]), 0);
     counts.overhangWallMm += overhangMm;
-    const row = {layer, z, cut: Number(cut.toFixed(4)), sectionSegments: section.length, droppedOutline: dropped, sectionLength: r.sectionLength, covered: r.covered, visible: r.visible, matched: r.matched, wrong: r.wrong,
-      mixed: r.mixed, hidden: r.hidden, matchedShare: r.matched + r.wrong ? r.matched / (r.matched + r.wrong) : null, coveredShare: r.sectionLength ? r.covered / r.sectionLength : null,
+    const row = {layer, z, cut: Number(cut.toFixed(4)), sectionSegments: section.length, rawOutline: raw, droppedOutline: dropped, sectionLength: r.sectionLength, covered: r.covered, visible: r.visible, matched: r.matched, wrong: r.wrong,
+      mixed: r.mixed, hidden: r.hidden, hiddenByTool: r.hiddenByTool, nearOtherReel: r.nearOtherReel, alongDropped: r.alongDropped, matchedShare: r.matched + r.wrong ? r.matched / (r.matched + r.wrong) : null, coveredShare: r.sectionLength ? r.covered / r.sectionLength : null,
       overhangWallLength: overhangMm, examples: r.examples};
     if (withOverhang && overhang.length) {
       const o = checkLayer(section, current);
@@ -118,12 +141,25 @@ async function modelMode(args) {
   const medianSurface = histogramMedian(surfaceHist, SURFACE_BIN), medianReach = histogramMedian(reachHist, REACH_BIN);
   console.log(`  median distance, visible outer-wall samples to the outline: ${medianSurface == null ? 'none' : medianSurface.toFixed(3) + ' mm'}`);
   console.log(`  median distance, outline to the nearest outer-wall sample: ${medianReach == null ? 'none' : medianReach.toFixed(3) + ' mm'}`);
-  if (misaligned || medianReach == null || medianReach > ALIGN_LIMIT || medianSurface == null || medianSurface > ALIGN_LIMIT) {
+  const guardParts = Object.entries(partOutline).map(([part, o]) => ({part: Number(part), name: model.parts[part]?.id, ...o}));
+  const guard = outlineGuard({parts: guardParts, layers: layers.map(l => ({layer: l.layer, raw: l.rawOutline, kept: l.sectionLength}))});
+  // A part or layer whose outline was dropped almost entirely would let walls of any reel
+  // pass as "hidden": stop before anything else is reported.
+  if (!guard.ok && !misaligned) {
+    console.log(`Outline guard: FAIL: ${guard.problems.slice(0, 10).join('; ')}${guard.problems.length > 10 ? `; and ${guard.problems.length - 10} more` : ''}`);
+    console.log('Almost all of this outline was taken as inside other solid; check the mesh winding and placement.');
+    process.exitCode = 1;
+    return;
+  }
+  // Only the outline-to-wall median decides; the visible-sample median is printed for
+  // information (it is below 0.35 mm by definition, so it cannot show misalignment).
+  if (misaligned || medianReach == null || medianReach > ALIGN_LIMIT) {
     console.log(ALIGN_MESSAGE);
     process.exitCode = 1;
     return;
   }
-  const s = summarise(layers);
+  const brief = summarise(layers);
+  const s = {...brief, pass: brief.pass && guard.ok, briefPass: brief.pass, outlineGuard: guard};
   const total = k => layers.reduce((t, l) => t + l[k], 0);
   const seconds = (Date.now() - started) / 1000;
   const pct = x => (100 * x).toFixed(2) + '%';
@@ -133,8 +169,14 @@ async function modelMode(args) {
   console.log(`  covered share ${pct(s.coveredShare)} of ${total('sectionLength').toFixed(0)} mm of outline`);
   console.log(`  mixed share ${pct(s.mixedShare)} of ${total('visible').toFixed(0)} mm visible; hidden (not judged) ${total('hidden').toFixed(0)} mm`);
   console.log(`  outline inside another part or shell, not judged for coverage: ${counts.droppedOutline.toFixed(0)} mm; overhang-wall moves (not counted as outer wall): ${counts.overhangWallMm.toFixed(0)} mm`);
+  const mm = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [`T${k}`, typeof v === 'number' ? Number(v.toFixed(1)) : Object.fromEntries(Object.entries(v).map(([b, x]) => [b, Number(x.toFixed(1))]))]));
+  console.log(`  hidden by tool and distance from the kept outline (near 0.35-0.6, mid 0.6-1, far over 1 mm): ${JSON.stringify(mm(hiddenByTool))}`);
+  console.log(`  hidden 0.35-0.6 mm away in a reel other than the outline's next to it: ${counts.nearOtherReel.toFixed(1)} mm`);
+  console.log(`  outer wall along dropped outline, by tool: ${JSON.stringify(mm(alongDropped))}; of it hidden: ${JSON.stringify(mm(alongDroppedHidden))}`);
+  console.log(`  outline guard: no part inside out, none lost its outline under printed wall, no layer lost its outline`
+    + (guard.embedded.length ? `; parts taken as embedded in others (listed, not judged): ${guard.embedded.join('; ')}` : ''));
   if (withOverhang) console.log(`  with overhang walls counted: covered share ${pct(layers.reduce((t, l) => t + l.withOverhang.covered, 0) / total('sectionLength'))}`);
-  console.log(`  ${s.pass ? 'PASS' : 'FAIL'} (matched at least 99%, no layer with over 20 mm judged below 95%, covered at least 90%)`);
+  console.log(`  ${s.pass ? 'PASS' : 'FAIL'} (matched at least 99%, no layer with over 20 mm judged below 95%, covered at least 90%, and the outline guard)`);
   const judged = l => l.matched + l.wrong;
   const worst = [...layers].filter(l => judged(l) > 0).sort((a, b) => a.matchedShare - b.matchedShare || b.wrong - a.wrong).slice(0, 10);
   console.log('ten worst layers by matched share:');
@@ -148,6 +190,7 @@ async function modelMode(args) {
     const r6 = x => typeof x === 'number' ? Number(x.toFixed(6)) : x;
     writeFileSync(jsonOut, JSON.stringify({gcode: file, model: modelPath, every, thresholds: {surface: 0.35, mixed: 0.6, step: 0.2}, checkedAt: new Date().toISOString(), seconds,
       summary: s, medianSurfaceDistance: medianSurface, medianOutlineToWall: medianReach,
+      hiddenByTool, nearOtherReel: counts.nearOtherReel, nearOtherReelExamples: nearOtherExamples, alongDropped, alongDroppedHidden, partOutline: guardParts,
       totals: {matched: total('matched'), wrong: total('wrong'), mixed: total('mixed'), visible: total('visible'), hidden: total('hidden'), covered: total('covered'), sectionLength: total('sectionLength'), droppedOutline: counts.droppedOutline, overhangWall: counts.overhangWallMm},
       gcodeReading: {lines: counts.lines, layers: counts.layersSeen, M82: counts.M82, M83: counts.M83, arcs: reader.state.arcs, outerWallArcs: reader.state.extrudingArcs},
       modelReading: {...model.stats, parts: model.parts.map(({member, id, subtype, extruder, droppedBy}) => ({member, id, subtype, extruder, droppedBy})), itemMinWorldZ: model.itemMinWorldZ, offset},

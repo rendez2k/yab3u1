@@ -10,6 +10,9 @@
 //
 // Pure functions, no dependencies.
 
+/** Tolerance in layers for a face exactly at a slice height (as layerBands.js's EDGE). */
+const EDGE = 1e-6;
+
 /** A face whose normal is within this many degrees of vertical counts as flat. */
 export const FLAT_FACE_DEGREES = 30;
 
@@ -25,7 +28,10 @@ export function sliceMid(n, first, height) {
  */
 export function flatFaceLayer(z, up, first, height) {
   if (z < sliceMid(0, first, height)) return 0;
-  const k = Math.floor((z - first) / height + 0.5);       // highest n >= 1 with sliceMid(n) <= z, or 0
+  // Highest n >= 1 with sliceMid(n) <= z, or 0. A face within EDGE of a slice counts as on
+  // it (the tie: facing up it tops that layer, facing down it is the next layer's bottom),
+  // the same tolerance in layers as layerBands.js uses at band boundaries.
+  const k = Math.floor((z - first) / height + 0.5 + EDGE);
   return up ? Math.max(0, k) : Math.max(1, k + 1);
 }
 

@@ -471,8 +471,13 @@ in the reel of a nearly flat face next to them, from the neighbouring layer's ba
   - Super Man layer 101: a top face at 12.32, 5.2 mm in T0, at (165.96, 184.50).
   - Underside faces do the same upwards: Super Man layer 1 (faces at z 0.08) and They
     Live layer 112 (a face at 13.49).
-- **Mid-layer is the right height to cut at:** cutting at a quarter or three quarters of
-  the layer instead gives slightly lower coverage on Flirty (`cut-height-check.mjs`).
+- **The cut is at mid-layer because that is where the slicer cuts.** Orca, like
+  PrusaSlicer, slices each layer at its print height minus half the layer height
+  (`slice_z = print_z - height / 2`). That is from knowledge of the slicer's code; its
+  source was not re-read for this spike. Coverage hardly depends on the cut height:
+  cutting at a quarter or three quarters of the layer gives 97.29% and 97.39% on Flirty
+  against 97.43% (`cut-height-check.mjs`). It therefore cannot confirm the convention
+  either way.
 
 So the slicer prints these walls in the reel painted on the flat face beside them. It
 does not print them in the reel painted on the side of that layer. At every ledge, top
@@ -582,13 +587,23 @@ Two variants, both at 30°:
 - Layers that passed before and fail with flat30:
   - They Live layer 239 (61.88%, 98.4 mm wrong).
   - Flirty layers 219 (94.72%), 781 (93.97%) and 782 (94.14%).
-- Mixed share rose to 4–9%, so less wall was judged at all.
+- Mixed share rose to 4–9%, so less wall was judged at all. Hidden (unjudged) length
+  rose too: Flirty from 4.1 m to 52.0 m, They Live from 296 m to 312 m and Super Man from
+  11.0 m to 15.8 m.
 - The cause, on They Live layer 239: gently sloped up-facing pieces cross the layer's own
   slice plane at 28.82 mm but have their centroid below it. The rule moved them to layer
   238's reel, but the slicer prints them as part of layer 239's outline, in layer 239's
   band reel.
 
-**flat30-extreme passes all four files, and no layer that passed before fails.**
+**flat30-extreme: what was shown.**
+- Wrong visible wall falls from 96.8 to 27.7 mm on Super Man, from 448.6 to 9.7 mm on
+  They Live, and from 121.2 to 0 mm on Flirty. The test solid stays at 0.
+- At the nominal height all four pass, and no layer that passed before fails.
+- The pass is not firm under a small z shift of the model (see "Sensitivity to the cut
+  height" below):
+  - Super Man fails at −0.02 and −0.03 mm.
+  - They Live fails at −0.03, +0.02 and +0.03 mm.
+  - Only Flirty passes at all four offsets.
 - Coverage is the same or slightly higher, and mixed share stays 0.
 - The judged (matched) length is within 0.6% of the length without the rule.
 - What remains on Super Man (27.5 of 27.7 mm) still sits next to a near-flat face in the
@@ -609,3 +624,104 @@ Two variants, both at 30°:
 
 Reproduce: `bash $G/flat-run.sh flat30-extreme --flat-rule=30 --flat-z=extreme`, then
 `(cd $G && node flat-compare.mjs flat30 flat30-extreme)`.
+
+#### Sensitivity to the cut height (Task 12 fix round 1)
+
+The flat30-extreme slices were checked again with the model moved in z after the bed drop
+(`--offset 0,0,dz`). Moving the model up by dz moves the check's cut dz lower on the model;
+the slicer's own cut does not move. A result that flips under a small dz means some piece
+lies within a few hundredths of a millimetre of a slice plane. Whether the slicer counts
+that piece in the layer is then decided by that margin. Each cell gives the worst layer
+with over 20 mm judged and the result. The log is `gapfix/fix1-runs.log`.
+
+| File | dz −0.03 mm | dz −0.02 mm | nominal | dz +0.02 mm | dz +0.03 mm |
+|---|---|---|---|---|---|
+| Super Man | 102 at 94.11%, **fail** | 102 at 94.67%, **fail** | 100 at 97.23%, pass | 103 at 98.20%, pass | 103 at 97.61%, pass |
+| They Live | 231 at 78.63%, **fail** | 52 at 98.43%, pass | 52 at 98.45%, pass | 239 at 29.03%, **fail** | 239 at 19.99%, **fail** |
+| Flirty | 219 at 96.00%, pass | 200 at 98.67%, pass | 1 at 100.00%, pass | 783 at 99.03%, pass | 780 at 97.84%, pass |
+
+- **They Live layer 239 fails at +0.02 mm.** This is the same place that failed under
+  the centroid rule: the gently sloped top at 28.76–28.84 mm, around the layer's slice
+  plane at 28.82 mm.
+- **Super Man layer 102 fails at −0.02 mm.** It is next to the top face at 12.32 mm that
+  failed layer 101 without the rule.
+- **So the pass at the nominal height is narrow** on Super Man and They Live. This shows
+  that the paint and the check's cut agree to within the layer; it does not show any
+  margin.
+
+#### Hidden and dropped wall (Task 12 fix round 1)
+
+Walls that are not judged are where a wrong visible wall could hide, so they are now
+broken down. The check reports them in the console and in the JSON (`hiddenByTool`,
+`nearOtherReel`, `alongDropped`, `alongDroppedHidden`, `partOutline`).
+
+Hidden wall, by tool and by distance from the kept outline, in metres. Each cell gives
+0.35–0.6 / 0.6–1 / over 1 mm (no rule):
+
+| File | Hidden | T0 | T1 | T2 | T3 | 0.35–0.6 mm in another reel | Outline dropped (kept) | Outer wall along dropped outline (of it hidden) |
+|---|---|---|---|---|---|---|---|---|
+| Test solid | 107.7 | 0 / 0 / 0.24 | 0 / 0 / 0.38 | — | 0 / 106.75 / 0.37 | 0 mm | 0 (110.7) | none |
+| Super Man | 11.0 | 0.39 / 0.50 / 2.53 | 0.47 / 0.72 / 1.93 | 0.40 / 0.46 / 2.15 | 0.01 / 0.07 / 1.41 | 146 mm | 18.2 (29.9) | 9.1 (6.1) |
+| They Live | 295.9 | 0.57 / 0.26 / 50.64 | 0.99 / 0.38 / 49.73 | 0.56 / 0.17 / 49.55 | 0 / 0.01 / 143.03 | 257 mm | 13.0 (249.3) | 8.1 (0.19) |
+| Flirty | 4.1 | 0.27 / 0.54 / 0.43 | 0.25 / 0.81 / 0.42 | 0.25 / 0.52 / 0.61 | — | 191 mm | 0.57 (153.8) | 0.58 (0.12) |
+
+With flat30-extreme, the 0.35–0.6 mm wall in another reel falls to 68 mm (Super Man),
+8 mm (They Live) and 13 mm (Flirty).
+
+**What the hidden wall is**
+- **"Hidden = the inner reel's own outer wall" was shown on the test solid only.** There
+  it is T3 at 0.6–1 mm (106.7 of 107.7 m).
+- **The figurines carry their own per-object colour-region width.** Their exported
+  `Metadata/model_settings.config` has an object-level `mmu_segmented_region_max_width`:
+  5 on They Live, 0 on Super Man and Flirty. This overrides the global 0.45 mm that
+  `applyDualWall` writes; the test solid has no object-level value. So **only the test
+  solid was sliced with the 0.45 mm colour shell.**
+  - On They Live the colour region is about 5 mm deep. Layer 500 shows it: one 208 mm
+    outline, and the G-code has the outer T2 loop, a second T2 "Outer wall" loop
+    4.8 mm in, and a T3 loop just inside that (`far-hidden.mjs`). That second colour
+    loop plus the T3 loop, on every layer, is why They Live's hidden length (296 m)
+    exceeds its outline (249 m).
+  - Super Man and Flirty have no width limit (0). Flirty prints no T3 at all, and Super
+    Man only 1.5 m.
+- **Super Man's other hidden colour wall lies mostly along dropped outline.** 6.1 m of
+  its 9.5 m hidden colour wall lies within 0.35 mm of outline that was dropped. That is
+  the boundaries of its 26 overlapping parts, inside the other parts. Orca prints outer
+  walls round each part, inside the union, where they cannot be seen.
+
+**The 0.35–0.6 mm wall in another reel**
+- On Super Man (every layer, 146 mm) and Flirty (every 5th layer, 63 mm), the outline
+  triangle next to it is mostly near-flat. On Super Man its normal is within 25° of
+  vertical for 125 of 146 mm; on Flirty within 35° for 56 of 63 mm
+  (`near-other-reel.mjs` and `.log`). So this wall sits on shallow tops and undersides,
+  not on steep sides.
+- The wall is in a neighbouring layer's reel: 139.7 of 146 mm, and 63.2 of 63.2 mm. In
+  the `[1,2,3]` pattern any other colour reel is, so this alone proves little.
+- Painting flat faces by the layer they top or bottom cuts this wall by 53% on Super
+  Man, 93% on Flirty and 97% on They Live. So it is the same flat-face effect.
+- Whether these walls show from above on the stepped top was not established. Under the
+  brief's 0.35 mm they are not judged.
+- If the surface distance were 0.6 mm, they would be judged as wrong, adding 146, 191
+  and 257 mm without the rule, or 68, 13 and 8 mm with flat30-extreme. With the rule,
+  that would still keep every file above 99% matched overall. The per-layer effect was
+  not computed. The threshold was not changed.
+
+**Outline guard (new).** A mirrored placement used to keep its original winding, so its
+whole outline was dropped and every wall became hidden. A 10 mm cube cut at 5 mm kept
+0 mm of its 40 mm. The reader now reverses the winding for a placement with a negative
+determinant, and the check stops and exits 1 when, counting parts and layers with at
+least 20 mm of raw outline:
+- a part's summed section area is not positive (it is inside out);
+- a part keeps less than 5% of its outline and printed outer wall lies along more than
+  90% of what was dropped;
+- a layer keeps less than 10% of its outline.
+
+The guard trips on none of the four files.
+- **Super Man lists four parts as embedded and does not fail them.** They are parts 12,
+  13, 24 and 25 (by object id), keeping 0.6–7.4 mm of 31–163 mm, with printed outer wall
+  along only 22–65% of what was dropped.
+- **A plain "kept under 5%" rule would have failed them.** That is why printed wall
+  along the dropped outline is part of the rule.
+
+**Bed drop.** The spike tool drops each build item by its painted meshes; the check drops
+it by every non-negative part. They agree when every printed part carries paint, as on
+these four files after the dual wall. Both tools' comments say so.

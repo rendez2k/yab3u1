@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {crossSection, outerWalls, checkLayer, summarise, dropInside} from '../../tools/builtInToolpathCheck.mjs';
+import {crossSection, outerWalls, checkLayer, summarise, dropInside, splitInside, outlineGuard} from '../../tools/builtInToolpathCheck.mjs';
 
 // A size x size square centred on the origin as four section segments, one reel per
 // side, in the order bottom, right, top, left.
@@ -193,4 +193,59 @@ test('section segments inside another part are dropped', () => {
   assert.ok(cut.every(s => s.part === 0));
   const cutLength = cut.reduce((t, s) => t + Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]), 0);
   assert.ok(Math.abs(cutLength - 76) < 1.01, `the hole takes 4 mm of the left side, got ${cutLength}`);
+});
+
+test('hidden walls are broken down by tool and by distance from the outline', () => {
+  // Reel 1 outline; walls at 0.21 (visible), 0.45 in T1 (another reel, 0.35-0.6),
+  // 0.8 in T0 (0.6-1) and 1.5 in T3 (over 1 mm).
+  const walls = [...ring(20, 0.21, [0, 0, 0, 0]), ...ring(20, 0.45, [1, 1, 1, 1]), ...ring(20, 0.8, [0, 0, 0, 0]), ...ring(20, 1.5, [3, 3, 3, 3])];
+  const r = checkLayer(square(20, [1, 1, 1, 1]), walls);
+  const side = inset => 4 * (20 - 2 * inset);
+  assert.ok(Math.abs(r.hiddenByTool[1].near - side(0.45)) < 1e-6);
+  assert.ok(Math.abs(r.hiddenByTool[0].mid - side(0.8)) < 1e-6);
+  assert.ok(Math.abs(r.hiddenByTool[3].far - side(1.5)) < 1e-6);
+  assert.equal(r.hiddenByTool[0].near, 0);
+  assert.ok(Math.abs(r.hidden - (side(0.45) + side(0.8) + side(1.5))) < 1e-6);
+  // The 0.35-0.6 mm band in a reel other than the outline's next to it, with examples.
+  assert.ok(Math.abs(r.nearOtherReel - side(0.45)) < 1e-6);
+  assert.ok(r.examples.nearOtherReel.length > 0 && r.examples.nearOtherReel.every(e => e.tool === 1 && e.reel === 1));
+});
+
+test('walls lying along dropped outline are counted by tool', () => {
+  // Square A's right side lies inside square B and is dropped; a T2 wall runs along it.
+  const a = square(20, [1, 1, 1, 1]);
+  const b = square(20, [2, 2, 2, 2]).map(s => ({...s, a: [s.a[0] + 10, s.a[1] + 5], b: [s.b[0] + 10, s.b[1] + 5]}));
+  const {kept, dropped} = splitInside([...a, ...b], {piece: 0.5});
+  const len = list => list.reduce((t, s) => t + Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]), 0);
+  assert.ok(Math.abs(len(kept) - 110) < 1.01 && Math.abs(len(dropped) - 50) < 1.01, `kept ${len(kept)} dropped ${len(dropped)}`);
+  assert.deepEqual(dropInside([...a, ...b], {piece: 0.5}), kept);
+  const along = [{layer: 1, z: 0.32, tool: 2, a: [9.79, -4], b: [9.79, 9]}];        // 0.21 inside A's dropped right side
+  const r = checkLayer(kept, along, {dropped});
+  assert.ok(Math.abs(r.alongDropped[2] - 13) < 1e-6, JSON.stringify(r.alongDropped));
+  assert.ok(Math.abs(r.alongDroppedHidden[2] - 13) < 1e-6, 'it is far from the kept outline, so hidden');
+});
+
+test('the outline guard fails a part or layer whose outline was lost, not an embedded part', () => {
+  const opts = {minRaw: 20, partKeep: 0.05, walledShare: 0.9, layerKeep: 0.1};
+  const good = {part: 0, raw: 400, kept: 390, walled: 5, area: 1000};
+  assert.equal(outlineGuard({parts: [good], layers: [{layer: 1, raw: 40, kept: 39}]}, opts).ok, true);
+  // Inside out: negative signed area fails, whatever was kept.
+  const inverted = outlineGuard({parts: [good, {part: 1, raw: 300, kept: 0, walled: 300, area: -900}]}, opts);
+  assert.equal(inverted.ok, false);
+  assert.match(inverted.problems[0], /part 1 is wound inside out/);
+  // Almost all dropped, with printed wall along nearly all of it: fails.
+  const lost = outlineGuard({parts: [good, {part: 2, raw: 300, kept: 3, walled: 290, area: 700}]}, opts);
+  assert.equal(lost.ok, false);
+  assert.match(lost.problems[0], /part 2 keeps 3\.0 of 300\.0 mm/);
+  // Almost all dropped but little wall along it: a part embedded in another, listed only.
+  const embedded = outlineGuard({parts: [good, {part: 3, raw: 82.5, kept: 0.6, walled: 21.2, area: 50}]}, opts);
+  assert.equal(embedded.ok, true);
+  assert.match(embedded.embedded[0], /part 3 keeps 0\.6 of 82\.5 mm/);
+  // A layer that keeps almost nothing fails.
+  const layer = outlineGuard({parts: [], layers: [{layer: 7, raw: 50, kept: 2}]}, opts);
+  assert.equal(layer.ok, false);
+  assert.match(layer.problems[0], /layer 7/);
+  // Small parts and layers are not judged by the guard.
+  assert.equal(outlineGuard({parts: [{part: 1, raw: 10, kept: 0, walled: 10, area: -1}], layers: [{layer: 7, raw: 10, kept: 0}]}, opts).ok, true);
+  assert.equal(outlineGuard({parts: [{part: 1, raw: 300, kept: 0, walled: 0, area: -5}]}).ok, false, 'the defaults fail an inverted part');
 });

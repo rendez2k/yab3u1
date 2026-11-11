@@ -5,10 +5,12 @@
 // from, with the reel each triangle is painted. Every "Outer wall" extrusion of that
 // layer is sampled along its length; a sample close to the outline is on the visible
 // surface and is judged against the reel of the outline next to it, and a sample far
-// from it is counted but not judged. On the spike's files the far ones are the inner
-// reel's own walls, which Orca also types "Outer wall" (about 0.66 mm in); the inner edge
-// of the 0.45 mm colour shell is printed as a second loop about 0.24 mm in, in the
-// colour reel, and is judged. All lengths are in millimetres, in bed coordinates.
+// from it is counted but not judged. On the spike's test solid the far ones are the
+// inner reel's own walls, which Orca also types "Outer wall" (about 0.66 mm in), and the
+// inner edge of the 0.45 mm colour shell is a second loop about 0.24 mm in, in the colour
+// reel, and is judged. On other files the far walls can be other things (a deeper colour
+// region's inner edge, boundaries of overlapping parts); checkLayer reports them by tool
+// and distance so they can be looked at. All lengths are in millimetres, in bed coordinates.
 //
 // A toolpath check only shows where the slicer puts each reel. It says nothing about
 // the colour of a printed part.
@@ -126,30 +128,64 @@ function windingIndex(edges, bin = 0.5) {
  * are dropped (they carry no paint). Segments must run with the solid on their left, as
  * crossSection makes them; they are tested in pieces of at most `piece` mm.
  */
-export function dropInside(segments, {piece = 0.25, offset = 0.05} = {}) {
+export function dropInside(segments, options = {}) {
+  return splitInside(segments, options).kept;
+}
+
+/** As dropInside, but also returns the dropped pieces: {kept, dropped}. */
+export function splitInside(segments, {piece = 0.25, offset = 0.05} = {}) {
   const solid = segments.filter(s => !s.negative), negative = segments.filter(s => s.negative);
   const solidWinding = windingIndex(solid), negativeWinding = negative.length ? windingIndex(negative) : () => 0;
-  const out = [];
+  const kept = [], dropped = [];
   for (const s of solid) {
     const dx = s.b[0] - s.a[0], dy = s.b[1] - s.a[1], length = Math.hypot(dx, dy);
     if (!(length > 0)) continue;
     const n = Math.max(1, Math.ceil(length / piece)), ox = dy / length * offset, oy = -dx / length * offset;
     const pt = f => [s.a[0] + f * dx, s.a[1] + f * dy];
-    let start = null;
-    for (let k = 0; k <= n; k++) {
-      let keep = false;
-      if (k < n) {
-        const [x, y] = pt((k + 0.5) / n);
-        keep = solidWinding(x + ox, y + oy) === 0 && negativeWinding(x, y) === 0;
-      }
-      if (keep && start === null) start = k;
-      if (!keep && start !== null) {
-        out.push(start === 0 && k === n ? s : {...s, a: pt(start / n), b: pt(k / n)});
-        start = null;
-      }
+    let start = 0, state = null;
+    const close = k => {
+      if (state === null || k === start) return;
+      (state ? kept : dropped).push(start === 0 && k === n ? s : {...s, a: pt(start / n), b: pt(k / n)});
+    };
+    for (let k = 0; k < n; k++) {
+      const [x, y] = pt((k + 0.5) / n);
+      const keep = solidWinding(x + ox, y + oy) === 0 && negativeWinding(x, y) === 0;
+      if (keep !== state) { close(k); start = k; state = keep; }
+    }
+    close(n);
+  }
+  return {kept, dropped};
+}
+
+/**
+ * Stops a check where walls of any reel could pass unjudged as "hidden" because the
+ * outline was lost: a part wound inside out, or one whose outline was taken as inside
+ * other solid although the slicer printed walls along it. `parts` give, over the checked
+ * layers, the raw outline (mm, solid parts only), the length kept by splitInside, the
+ * dropped length with printed outer wall within 0.35 mm (`walled`) and the summed signed
+ * area of the raw outline (`area`, mm^2, positive with the solid on the left); `layers`
+ * give raw and kept per layer. With at least `minRaw` mm of raw outline:
+ * - a part whose signed area is not positive is wound inside out, and fails;
+ * - a part keeping less than `partKeep` of its outline fails when printed outer wall lies
+ *   along more than `walledShare` of what was dropped; otherwise (a part embedded in
+ *   another) it is only listed in `embedded`;
+ * - a layer keeping less than `layerKeep` of its outline fails.
+ */
+export function outlineGuard({parts = [], layers = []}, {minRaw = 20, partKeep = 0.05, walledShare = 0.9, layerKeep = 0.1} = {}) {
+  const problems = [], embedded = [];
+  for (const p of parts) {
+    if (!(p.raw >= minRaw)) continue;
+    const name = `part ${p.part}${p.name ? ` (${p.name})` : ''}`;
+    if (p.area !== undefined && !(p.area > 0)) { problems.push(`${name} is wound inside out (signed area ${p.area.toFixed(1)} mm²)`); continue; }
+    if (p.kept < partKeep * p.raw) {
+      const dropped = p.raw - p.kept, walled = p.walled ?? dropped;
+      const text = `${name} keeps ${p.kept.toFixed(1)} of ${p.raw.toFixed(1)} mm of outline, printed outer wall along ${(100 * walled / dropped).toFixed(0)}% of the rest`;
+      (walled > walledShare * dropped ? problems : embedded).push(text);
     }
   }
-  return out;
+  for (const l of layers) if (l.raw >= minRaw && l.kept < layerKeep * l.raw)
+    problems.push(`layer ${l.layer} keeps ${l.kept.toFixed(1)} of ${l.raw.toFixed(1)} mm of outline`);
+  return {ok: problems.length === 0, problems, embedded};
 }
 
 // ----------------------------------------------------------------- G-code ----
@@ -273,11 +309,14 @@ export const SURFACE_BIN = 0.001, REACH_BIN = 0.01, REACH = 2;
  * receives every judged sample as {kind: 'matched' | 'wrong' | 'mixed', x, y, length,
  * tool, reel} (for investigation).
  */
-export function checkLayer(section, walls, {surface = 0.35, mixed = 0.6, step = 0.2, onSample = null} = {}) {
+export function checkLayer(section, walls, {surface = 0.35, mixed = 0.6, step = 0.2, onSample = null, dropped = []} = {}) {
   const r = {visible: 0, matched: 0, wrong: 0, mixed: 0, hidden: 0, covered: 0, sectionLength: 0,
     surfaceHistogram: new Float64Array(Math.ceil(surface / SURFACE_BIN) + 1), reachHistogram: new Float64Array(Math.round(REACH / REACH_BIN) + 1),
-    examples: {wrong: [], uncovered: []}};
+    hiddenByTool: {}, nearOtherReel: 0, alongDropped: {}, alongDroppedHidden: {},
+    examples: {wrong: [], uncovered: [], nearOtherReel: []}};
   const reach = Math.max(surface, mixed);
+  const dropGrid = grid(0.5);
+  dropped.forEach((s, i) => dropGrid.add(i, Math.min(s.a[0], s.b[0]), Math.min(s.a[1], s.b[1]), Math.max(s.a[0], s.b[0]), Math.max(s.a[1], s.b[1])));
   const segGrid = grid(Math.max(reach, 0.5));
   section.forEach((s, i) => segGrid.add(i, Math.min(s.a[0], s.b[0]), Math.min(s.a[1], s.b[1]), Math.max(s.a[0], s.b[0]), Math.max(s.a[1], s.b[1])));
   const stamp = new Int32Array(section.length).fill(-1);
@@ -295,7 +334,23 @@ export function checkLayer(section, walls, {surface = 0.35, mixed = 0.6, step = 
       if (d <= mixed) reels.add(section[i].reel);
       if (d < best) { best = d; nearest = i; }
     });
-    if (!(best <= surface)) { r.hidden += len; return; }
+    let alongDropped = false;
+    if (dropped.length) dropGrid.near(x, y, surface, i => { if (!alongDropped && pointSegment(x, y, dropped[i].a, dropped[i].b) <= surface) alongDropped = true; });
+    if (alongDropped) r.alongDropped[w.tool] = (r.alongDropped[w.tool] || 0) + len;
+    if (!(best <= surface)) {
+      r.hidden += len;
+      if (alongDropped) r.alongDroppedHidden[w.tool] = (r.alongDroppedHidden[w.tool] || 0) + len;
+      // How far: 0.35-0.6 mm (near), 0.6-1 mm (mid) or over 1 mm (far) from the kept outline.
+      if (best > mixed) segGrid.near(x, y, 1, i => { const d = pointSegment(x, y, section[i].a, section[i].b); if (d < best) { best = d; nearest = i; } });
+      const band = best <= mixed ? 'near' : best <= 1 ? 'mid' : 'far';
+      const h = r.hiddenByTool[w.tool] ??= {near: 0, mid: 0, far: 0};
+      h[band] += len;
+      if (band === 'near' && section[nearest].reel && section[nearest].reel !== w.tool + 1) {
+        r.nearOtherReel += len;
+        if (r.examples.nearOtherReel.length < 5) r.examples.nearOtherReel.push({x: round(x), y: round(y), tool: w.tool, reel: section[nearest].reel, distance: round(best)});
+      }
+      return;
+    }
     r.visible += len;
     r.surfaceHistogram[Math.min(r.surfaceHistogram.length - 1, Math.floor(best / SURFACE_BIN))] += len;
     const reel = section[nearest].reel;
@@ -323,6 +378,17 @@ export function checkLayer(section, walls, {surface = 0.35, mixed = 0.6, step = 
     if (best <= surface) { r.covered += len; gap = null; }
     else if (r.examples.uncovered.length < 5 && !gap) { gap = true; r.examples.uncovered.push({x: round(x), y: round(y), reel: s.reel}); }
     r.reachHistogram[Math.min(last, Math.floor(best / REACH_BIN))] += len;
+  });
+  // Dropped outline with an outer-wall sample within `surface`, by part: printed wall
+  // along outline that the check took as inside other solid.
+  r.droppedWalled = {};
+  r.droppedLength = {};
+  for (const s of dropped) samples(s.a, s.b, step / 2, (x, y, len) => {
+    const key = s.part ?? 0;
+    r.droppedLength[key] = (r.droppedLength[key] || 0) + len;
+    let near = false;
+    wallGrid.near(x, y, surface, i => { if (!near && Math.hypot(xs[i] - x, ys[i] - y) <= surface) near = true; });
+    if (near) r.droppedWalled[key] = (r.droppedWalled[key] || 0) + len;
   });
   return r;
 }

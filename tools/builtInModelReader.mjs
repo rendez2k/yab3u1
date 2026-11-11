@@ -112,7 +112,10 @@ export async function loadModel(path, offset = [0, 0, 0]) {
         } else if (t[1] === 'triangle') {
           if (!cur) continue;
           const a = t[2], found = PAINT_RE.exec(a);
-          T.push(cur.base + Number(attr(a, 'v1')), cur.base + Number(attr(a, 'v2')), cur.base + Number(attr(a, 'v3')));
+          // A mirroring placement (determinant < 0) turns the winding inside out; swap two
+          // corners so that the triangle still faces outwards in bed coordinates.
+          if (cur.mirrored) T.push(cur.base + Number(attr(a, 'v1')), cur.base + Number(attr(a, 'v3')), cur.base + Number(attr(a, 'v2')));
+          else T.push(cur.base + Number(attr(a, 'v1')), cur.base + Number(attr(a, 'v2')), cur.base + Number(attr(a, 'v3')));
           let reel;
           if (found && found[1]) { stats.painted += 1; reel = reelOf(found[1], cur.extruder); } else { stats.unpainted += 1; reel = cur.extruder; }
           R.push(reel); P.push(cur.index);
@@ -127,7 +130,9 @@ export async function loadModel(path, offset = [0, 0, 0]) {
           const info = {member: m.name, id, item: place.item, subtype, negative: subtype === 'negative_part', extruder: part?.extruder || object?.extruder || 1,
             vertexStart: V.length / 3, triangleStart: T.length / 3};
           parts.push(info);
-          cur = {place, base: info.vertexStart, index: parts.length - 1, extruder: info.extruder};
+          const M = place.m;
+          info.mirrored = M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1]) - M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0]) + M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0]) < 0;
+          cur = {place, base: info.vertexStart, index: parts.length - 1, extruder: info.extruder, mirrored: info.mirrored};
         } else cur = null;                                                  // </object>
       }
     }
@@ -135,6 +140,8 @@ export async function loadModel(path, offset = [0, 0, 0]) {
   const vertices = V.done(), tri = T.done(), reel = R.done(), part = P.done();
   stats.triangles = reel.length;
   // Drop each build item onto the bed: its lowest point of a printed (not negative) part goes to z = 0.
+  // tools/built-in-colours-spike.mjs bands by painted meshes only; the two agree when every
+  // printed part is painted (true of the spike's files after applyDualWall).
   const itemMin = new Map();
   parts.forEach((p, i) => {
     p.vertexEnd = i + 1 < parts.length ? parts[i + 1].vertexStart : vertices.length / 3;

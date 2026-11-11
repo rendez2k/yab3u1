@@ -194,7 +194,11 @@ async function spike(input, height, output, {wholeSplits = false, noBand = false
       if (!m[2].includes('<triangle')) continue;
       const place = where.get(`${name}#${attr(m[1], 'id')}`);
       // Only printed (painted, after dual wall) meshes set the bed height; a negative
-      // volume carries no paint and does not touch the bed.
+      // volume carries no paint and does not touch the bed. The toolpath check
+      // (tools/builtInModelReader.mjs) drops by every non-negative part instead, painted or
+      // not. The two agree when every printed part carries paint, as after applyDualWall
+      // on the spike's files; an unpainted printed part lower than the painted ones would
+      // make them differ.
       if (!place || !PAINT_RE.test(m[2])) continue;
       for (const v of m[2].matchAll(VERTEX_RE)) {
         const z = applyMatrix(place.m, [Number(v[1]), Number(v[2]), Number(v[3])])[2];

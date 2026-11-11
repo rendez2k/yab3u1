@@ -61,3 +61,20 @@ test('a piece within 30 degrees of vertical takes the layer it tops or bottoms, 
   assert.equal(pieceLayer({normal: [1, 0, 0], zHigh: 2.29, zLow: 2.25, layer: 18}, FIRST, H), 18);
   assert.equal(pieceLayer({normal: [0, 0, 0], zHigh: 2.29, zLow: 2.25, layer: 18}, FIRST, H), 18, 'a zero normal keeps its band');
 });
+
+test('a face exactly at a slice height is decided the same way at every layer', () => {
+  // The tie: a face within EDGE (1e-6 layer) of layer n's slice counts as on it, so facing
+  // up it tops layer n and facing down it is the bottom of layer n + 1. Without the
+  // tolerance, rounding in (z - first) / height flipped about 4% of these.
+  for (const h of [0.12, 0.08, 0.2]) {
+    for (let n = 1; n <= 1199; n++) {
+      const z = sliceMid(n, FIRST, h);
+      assert.equal(flatFaceLayer(z, true, FIRST, h), n, `up, h ${h}, n ${n}`);
+      assert.equal(flatFaceLayer(z, false, FIRST, h), n + 1, `down, h ${h}, n ${n}`);
+      // A hundredth of a layer either side is not a tie.
+      assert.equal(flatFaceLayer(z - h / 100, true, FIRST, h), n - 1 < 1 ? 0 : n - 1, `up just below, h ${h}, n ${n}`);
+      assert.equal(flatFaceLayer(z + h / 100, false, FIRST, h), n + 1, `down just above, h ${h}, n ${n}`);
+      assert.equal(flatFaceLayer(z - h / 100, false, FIRST, h), n, `down just below, h ${h}, n ${n}`);
+    }
+  }
+});
