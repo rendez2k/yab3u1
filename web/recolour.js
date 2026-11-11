@@ -45,7 +45,7 @@ import { FINE_BLEND_TARGETS, FINE_BLEND } from './shared/fineBlend.js';
 import { INTERWEAVE_TARGETS, interweaveProblem } from './shared/topInterweave.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.6.83";
+const VERSION = "2.6.84";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({

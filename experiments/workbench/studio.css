@@ -501,3 +501,7 @@ body[data-steps=on] #inspector #bundlepanel [data-use]{display:none!important}
 .view-caption-reels{display:flex;gap:4px}.view-caption-reels:empty{display:none}
 .view-caption-reels i{width:16px;height:16px;border-radius:4px;border:1px solid #8886}
 .view-caption [data-caption-detail]{color:var(--dim)}
+/* 2.6.84 — no separate agreement tick: pressing Download is the confirmation. */
+#inspector [data-task=output] label:has(>#review){display:none!important}
+[data-change-note]{margin:10px 0 14px}[data-change-note] p{margin:0 0 10px;font-size:12px;line-height:1.5}[data-change-note] p:empty{display:none}
+#inspector [data-see-changes]{min-height:40px;padding:8px 12px;background:transparent;border:1px solid var(--line);color:var(--accent)}
