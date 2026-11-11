@@ -64,3 +64,12 @@ test('a three-reel blend is written as an explicit layer-cycle row',()=>{
   const cfg=snapmakerConfig({},reels.map(r=>r.color),reels.map(r=>r.type),[{a:1,b:3,percent:33,c:4,percentC:17}]);
   assert.equal(cfg.mixed_filament_definitions.split(';').length,7);
 });
+
+test('keeping hue does not trade a clear colour for grey',()=>{
+  reset();setBlendStrength('strong');setHueFidelity(true);setBakedColours(true);
+  const plan=planBlends({1:'#6B7044'},reels,true),mixed=plan.rows[0].mixture.color;
+  const [r,g,b]=[1,3,5].map(i=>parseInt(mixed.slice(i,i+2),16));
+  // An olive stays a muted green: green clearly leads and the three channels are not level.
+  assert.ok(g-b>=30&&Math.max(r,g,b)-Math.min(r,g,b)>=40,`${mixed} keeps its green`);
+  reset();
+});

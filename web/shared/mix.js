@@ -45,13 +45,16 @@ export function huePenalty(target, candidate) {
   const a = labOf(target), b = labOf(candidate);
   if (!a || !b) return 0;
   const ca = Math.hypot(a[1], a[2]), cb = Math.hypot(b[1], b[2]);
-  // A near-neutral colour has no hue to keep; plain distance already covers lost saturation.
-  if (ca < 8 || cb < 8) return 0;
+  // A colour with a clear hue must not be traded for a grey: a grey has no hue at
+  // all, so it is marked down by how much of the colour's saturation it gives up.
+  const washed = Math.max(0, 0.6 * ca - cb) * Math.max(0, Math.min(1, (ca - 14) / 20));
+  // A near-neutral colour has no hue to keep.
+  if (ca < 8 || cb < 8) return washed;
   let degrees = Math.abs(Math.atan2(a[2], a[1]) - Math.atan2(b[2], b[1])) * 180 / Math.PI;
   if (degrees > 180) degrees = 360 - degrees;
   // Hue only counts once a colour is clearly saturated: pastels and skin tones
   // sit close to neutral, where a small drift changes the angle a lot.
-  return 0.5 * degrees * Math.max(0, Math.min(1, (Math.min(ca, cb) - 14) / 20));
+  return washed + 0.5 * degrees * Math.max(0, Math.min(1, (Math.min(ca, cb) - 14) / 20));
 }
 
 // Truncation, not rounding: the Python oracle is the reference and the two must
