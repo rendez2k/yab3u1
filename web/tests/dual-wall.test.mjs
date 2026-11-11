@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import * as paint from '../shared/paint.js';
-import {applyDualWall,dualWallProblem,DUAL_WALL_PATH} from '../shared/dualWall.js';
+import {applyDualWall,explicitOuterPaint,dualWallProblem,DUAL_WALL_PATH} from '../shared/dualWall.js';
 
 const enc=new TextEncoder(),dec=new TextDecoder();
 const leaf=n=>paint.encode({kind:'leaf',state:n});
@@ -91,4 +92,36 @@ test('a real Full Spectrum export stays a valid project with every face painted 
   for(const id of usedBefore)assert(usedAfter.includes(id),`colour ${id} still used`);
   const cfg=JSON.parse(new TextDecoder().decode(built.entries.get('Metadata/project_settings.config')));
   assert.equal(cfg.mmu_segmented_region_max_width,'0.45');
+});
+test('characterisation: every entry applyDualWall writes is byte-for-byte what it was before the paint step was shared',()=>{
+  const entries=project();applyDualWall(entries,{target:'snapmaker',innerSlot:4,depth:0.45});
+  const hashes=Object.fromEntries([...entries].sort((a,b)=>a[0]<b[0]?-1:1).map(([name,data])=>[name,createHash('sha256').update(data).digest('hex')]));
+  assert.deepEqual(hashes,{
+    '3D/Objects/figure.model':'f83589c9dfdf1360e5c3065e349dfbc4ba78833aae1209c48b42733ea1e72ce6',
+    'Metadata/YAB3D_dual_wall.json':'b308fadb0c71701c8b164ec66aa95beb2e9eee7b45788bb09cbc45302b95b41b',
+    'Metadata/model_settings.config':'4bc806380e7980d6f646eb8849db34575e8317f23ca47d123d110e59a2d7d235',
+    'Metadata/project_settings.config':'3a3cbc40e107f7884e7bab4e143653746e418e4a17ddc90a63b7858efc518419'});
+});
+test('the shared paint step changes the project but leaves the dual-wall record to its caller',()=>{
+  const entries=project();
+  const out=explicitOuterPaint(entries,{target:'snapmaker',innerSlot:4,depth:0.45});
+  assert.equal(entries.has(DUAL_WALL_PATH),false);
+  assert.equal(out.process.mmu_segmented_region_max_width,'0.45');
+  assert.ok(out.facesGivenExplicitPaint>0);
+});
+
+test('per-object and per-part paint depth overrides are replaced, and counted only when there are any', () => {
+  const entries = project(), settings = dec.decode(entries.get('Metadata/model_settings.config'))
+    .replace('<metadata key="wall_loops" value="1"/>', '<metadata key="wall_loops" value="1"/><metadata key="mmu_segmented_region_max_width" value="5"/>')
+    .replace('<metadata key="name" value="Hat"/><metadata key="extruder" value="2"/>', '<metadata key="name" value="Hat"/><metadata key="extruder" value="2"/><metadata key="mmu_segmented_region_max_width" value="0"/><metadata key="mmu_segmented_region_interlocking_depth" value="2"/>');
+  entries.set('Metadata/model_settings.config', enc.encode(settings));
+  const report = applyDualWall(entries, {target: 'snapmaker', innerSlot: 4, depth: 0.6});
+  const after = dec.decode(entries.get('Metadata/model_settings.config'));
+  assert.deepEqual([...after.matchAll(/key="mmu_segmented_region_max_width" value="([^"]*)"/g)].map(m => m[1]), ['0.6', '0.6']);
+  assert.deepEqual([...after.matchAll(/key="mmu_segmented_region_interlocking_depth" value="([^"]*)"/g)].map(m => m[1]), ['0']);
+  assert.equal(report.overridesReplaced, 3);
+  assert.equal(JSON.parse(dec.decode(entries.get(DUAL_WALL_PATH))).overridesReplaced, 3);
+  const plain = project();
+  assert.equal('overridesReplaced' in applyDualWall(plain, {target: 'snapmaker', innerSlot: 4, depth: 0.45}), false);
+  assert.equal(explicitOuterPaint(project(), {target: 'snapmaker', innerSlot: 4, depth: 0.45}).overridesReplaced, 0);
 });
