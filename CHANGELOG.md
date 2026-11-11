@@ -1,3 +1,10 @@
+## 2.6.80 — A shorter Colours step
+
+- Once a method is in use, the three method cards shrink to one line with a **Change** button.
+- **Blend the extra colours** now reads top to bottom: reels to load, the suggested set, then what each colour becomes. Only the chosen set is shown; **Compare other reel sets** brings back the alternatives. Blend detail, Baked colours, slot order, the blend editor, important colours, PETG interface, colour preferences, Spool Studio and printed samples are together under **Fine-tune · advanced**.
+- **Merge similar colours** leads with "What each colour prints as". A new button, **Merge the closest colours for me**, switches to repainting and gives the two closest colours the same filament until the model fits the printer; it says what it merged, and Reset assignments undoes it. Removing a colour and PETG support are folded below.
+- The duplicate "Use this palette" button is hidden; the bar at the bottom applies the palette.
+
 ## 2.6.79 — Guided steps
 
 - The Workbench is now four numbered steps down the left side: **1 Model, 2 Colours, 3 Check, 4 Download**. A tick marks each finished step, and a bar at the bottom of the panel always shows the one next action, with Back beside it.

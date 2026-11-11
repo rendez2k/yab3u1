@@ -467,3 +467,20 @@ body:not([data-steps=on]) [data-capacity-plain]{display:none}
   #inspector>.step-footer{position:sticky;bottom:0;z-index:3;padding:8px 12px}
 }
 #inspector .colour-workflow .colour-choices{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;background:none;padding:0;border-radius:0}
+/* 2.6.80 — a shorter Colours step: method on one line once chosen, the main task first, the rest folded. */
+.colour-workflow[data-folded=true] .colour-choices,.colour-workflow[data-folded=true] .colour-workflow-note{display:none!important}
+.colour-workflow[data-folded=true] .colour-need{margin-bottom:10px}
+.colour-method{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px}.colour-method[hidden]{display:none}
+.colour-method span{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim)}.colour-method strong{font-size:13px;flex:1;min-width:0}
+#inspector .colour-method button{min-height:36px;padding:6px 12px;background:transparent;color:var(--accent);border:1px solid var(--line)}
+#inspector h2.colour-section{margin:20px 0 10px}
+#palettechoices:not([data-all]):has(.palettechoice[aria-pressed=true]) .palettechoice[aria-pressed=false],
+#palettechoices:not([data-all]):not(:has(.palettechoice[aria-pressed=true])) .palettechoice:not(:first-child),
+#palettechoices:not([data-all])~#morepalettes{display:none!important}
+#inspector [data-other-palettes]{width:100%;min-height:40px;margin:8px 0}
+#inspector fieldset.repaint{margin-top:4px}
+#inspector .colour-fold>*:not(summary){margin-left:2px}
+@media(max-width:760px){#inspector .colour-method button{min-height:44px}}
+body[data-steps=on] #inspector #userecommended{display:none!important}
+.auto-merge{margin:0 0 18px}.auto-merge[hidden]{display:none}#inspector .auto-merge button{width:100%;min-height:44px;font-weight:600}.auto-merge p{margin:8px 0 0}.auto-merge p:empty{display:none}
+#inspector .auto-merge button[hidden]{display:none}.auto-merge:has(button[hidden]):has(p:empty){display:none}

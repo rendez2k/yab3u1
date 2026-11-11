@@ -9,10 +9,12 @@ import {installModelDrop} from './file-drop.js';
 import {mountModelColours,modelColours} from './model-colours.js';
 import {mountFeatureToolbox,STEPS} from './feature-toolbox.js';
 import {inspectPlates,trimProject,PICKER_THRESHOLD_BYTES} from './project-trim.js';
+import {distance} from './shared/colour.js';
+import {colourName} from './shared/assignment.js';
 const kind=document.body.dataset.engine,$=id=>document.getElementById(id);
 const view=composeView(document,kind);
 let engine, currentPanel='project', lastReport='', source=null, workspaceMode='studio', colourSummary, toolbox;
-let lastStep='project', readColours=null, currentReport=null;
+let lastStep='project', readColours=null, currentReport=null, methodOpen=false;
 let fallbackKey='',fallbackPending=false,fallbackUrl=null;
 let objectTools, filamentTools, studio, prepared, projectPlates, loading=false, busySince=0,previewSettledAt=0;
 const progress=view.make('div',{class:'workbench-progress',hidden:'',role:'status','aria-live':'polite'},'<span class="working-orb" aria-hidden="true"></span><div><strong>Preparing your model…</strong><p></p></div>');
@@ -98,6 +100,9 @@ document.addEventListener('click',event=>{
     else parentHost?.workbench?.switchMode(b.dataset.colourWorkflow,purpose);
   }
   if(b.matches('[data-close-batch]'))setPanel('project');
+  if(b.matches('[data-auto-merge]'))autoMerge();
+  if(b.matches('[data-change-method]')){methodOpen=true;stepKey='';tick();document.querySelector('.colour-choices button[aria-pressed=true]')?.focus();}
+  if(b.matches('[data-other-palettes]')){const list=$('palettechoices'),all=list.toggleAttribute('data-all');b.setAttribute('aria-expanded',String(all));b.textContent=all?'Show only the chosen set':'Compare other reel sets';}
   if(['petgfullspectrum','capacityblend','capacityswaps'].includes(b.id)||b.matches('[data-model-workflow]')) {
     event.preventDefault();event.stopImmediatePropagation();parentHost?.workbench?.switchMode('spectrum',b.id==='capacityswaps'?'reel-changes':'blends');return;
   }
@@ -214,6 +219,26 @@ function nextStep(){
 stepBar.querySelector('[data-step-next]').onclick=()=>{try{nextStep().run();}catch(error){reportError(error);}};
 stepBar.querySelector('[data-step-back]').onclick=()=>setPanel(stepPanels[Math.max(0,stepPanels.indexOf(currentPanel)-1)]);
 stepBar.querySelector('.step-downloads').addEventListener('click',event=>{const b=event.target.closest('[data-export]');if(!b)return;stepBar.querySelector('.step-downloads').hidden=true;api.export(b.dataset.export);});
+// Merge similar colours, done for the user: the two closest colours share a filament, until the model fits the printer.
+async function autoMerge(){
+  const say=text=>{document.querySelector('[data-auto-merge-status]').textContent=text;},session=engine.session,pause=()=>new Promise(resolve=>setTimeout(resolve,60));
+  try{
+    const repaint=document.querySelector('.repaint .modes input[value=repaint]');if(!repaint.checked){repaint.click();await pause();}
+    const done=[];
+    for(let guard=0;guard<32&&session.capacityStatus().unresolved;guard+=1){
+      const selects=[...document.querySelectorAll('#convertmap select[data-source]')],colours=session.state.colours;
+      const used=[...new Set(selects.map(s=>Number(s.value)))].filter(slot=>/^#[0-9a-f]{6}$/i.test(colours[slot-1]||''));
+      let best=null;
+      for(const a of used)for(const b of used)if(a<b){const d=distance(colours[a-1],colours[b-1]);if(!best||d<best.d)best={a,b,d};}
+      if(!best)break;
+      for(const select of selects)if(Number(select.value)===best.b){select.value=String(best.a);select.dispatchEvent(new Event('change',{bubbles:true}));await pause();}
+      done.push(`${colourName(colours[best.b-1])} ${colours[best.b-1]} now prints as ${colourName(colours[best.a-1])} ${colours[best.a-1]}`);
+    }
+    say(done.length?`${done.join('. ')}. Check the preview; Reset assignments undoes this.`:'Nothing needed merging.');
+    if(session.capacityStatus().unresolved)say(`${done.join('. ')}${done.length?'. ':''}Some colours still need a decision: choose their filament below.`);
+  }catch(error){say(`Could not merge automatically: ${error.message}`);}
+  stepKey='';tick();
+}
 let stepKey='';
 function syncSteps(loaded,busy,batch,report){
   let coloursDone=false;
@@ -236,13 +261,18 @@ function syncSteps(loaded,busy,batch,report){
       :check.excess?`This file lists ${check.needed} filaments and your printer holds ${check.capacity}. Step 2 sorts out the other ${check.excess}.`
       :check.outsideSlots?'Some colours sit outside slots 1–4. Step 2 moves them.':`All ${check.needed} filament${check.needed===1?'':'s'} fit your printer.`);
   }catch{}}
-  const key=JSON.stringify([show,currentPanel,next.label,next.disabled,next.note,several&&report.exports,need,recommend,target,keepShown,plain]);
+  const key=JSON.stringify([show,currentPanel,next.label,next.disabled,next.note,several&&report.exports,need,recommend,target,keepShown,plain,methodOpen]);
   if(key===stepKey)return;stepKey=key;
   stepBar.hidden=!show;document.body.dataset.steps=show?'on':'off';
   const needNode=document.querySelector('[data-colour-need]');if(needNode)needNode.textContent=need;
   for(const b of document.querySelectorAll('[data-recommended]'))b.hidden=!recommend;
   for(const b of document.querySelectorAll('[data-colour-purpose="reel-changes"]'))b.hidden=target!=='snapmaker';
   const keep=document.querySelector('.keep-all-colours');if(keep)keep.hidden=!keepShown;
+  // Once a method is in use the three cards shrink to one line; Change brings them back.
+  const merge=document.querySelector('.auto-merge');if(merge){merge.hidden=false;merge.querySelector('button').hidden=!keepShown||$('capacitykeep').checked;}
+  const flow=document.querySelector('.colour-workflow');
+  if(flow){const settled=kind==='spectrum'||(loaded&&!keepShown),folded=settled&&!methodOpen;flow.dataset.folded=String(folded);
+    flow.querySelector('.colour-method').hidden=!folded;flow.querySelector('[data-method-name]').textContent=kind==='converter'&&!recommend?'Solid colours, as painted':flow.querySelector('.colour-choices button[aria-pressed=true] strong')?.textContent||'';}
   if(kind==='converter'){let line=document.querySelector('[data-capacity-plain]');if(!line){line=view.make('p',{'data-capacity-plain':'',role:'status'});$('capacitystatus').after(line);}line.textContent=plain;}
   // A warning inside the folded print options must not stay out of sight.
   const warned=$('subdividewarning'),folded=document.querySelector('.print-options');if(folded&&warned&&!warned.hidden&&!folded.dataset.warned){folded.open=true;folded.dataset.warned='true';}
@@ -335,7 +365,8 @@ try {
     // The page's own file picker goes straight to the session, so ask there too.
     const loadSession=engine.session.load.bind(engine.session);
     engine.session.load=async(file,...rest)=>{const picked=await choosePlates(file);return picked?loadSession(picked,...rest):undefined;};
-    engine.session.selectionAware=true;filamentTools=mountFilamentTools(view.panels.colours.querySelector('[data-requires-model]'),engine.session);}
+    engine.session.selectionAware=true;filamentTools=mountFilamentTools(view.panels.colours.querySelector('[data-requires-model]'),engine.session);
+    const tools=view.panels.colours.querySelector('.filament-tools'),fold=view.panels.colours.querySelector('[data-remove-colour]');if(tools&&fold)fold.append(tools);}
   if(kind==='converter')projectPlates=mountProjectPlates({view,session:engine.session,editColours:()=>setPanel('colours'),select:async(id,refresh=false)=>{
     if(!refresh&&!engine.session.setPlate(id))return;
     await engine.session.refreshBounds();engine.refreshPreview?.();

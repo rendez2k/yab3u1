@@ -44,7 +44,7 @@ import { DUAL_WALL_TARGETS, dualWallProblem } from './shared/dualWall.js';
 import { INTERWEAVE_TARGETS, interweaveProblem } from './shared/topInterweave.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.6.79";
+const VERSION = "2.6.80";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
