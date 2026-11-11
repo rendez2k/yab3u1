@@ -42,6 +42,9 @@ import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } 
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 import { DUAL_WALL_TARGETS, dualWallProblem } from './shared/dualWall.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
+import { builtInPlan, builtInModelSlots, defaultBackingSlot, builtInFixed } from './shared/builtInWorkflow.js';
+import { builtInProblem } from './shared/builtInColours.js';
+import { shallowWarning } from './shared/builtInPreview.js';
 
 const VERSION = "2.6.75";
 
@@ -66,6 +69,9 @@ const state = {
   // Bumped on every upload so a slow read of the previous file cannot land on top
   // of the new one and re-approve colours the user never reviewed.
   epoch: 0,
+  // How colours reach the print: the slicer's own blends (the default), or built-in colours
+  // (experimental): a layer pattern of the physical reels written into the model.
+  construction: "slicer", builtInBacking: null, builtInShallow: null,
 };
 
 window.__recolour = state;                    // the QA harness and the console
@@ -82,7 +88,7 @@ $('subdividemix').addEventListener('change',()=>{clearReview();invalidateRecomme
 // Blend detail: how many ratios and recipes the planner may use to reach the model's shades.
 function describeBlendStrength() {
   const chosen=blendStrength(),room=Math.max(0,colourLimit(state.target)-activeReels().length);
-  $('blendstrengthfield').hidden=state.strategy==='solid'||state.strategy==='source';
+  $('blendstrengthfield').hidden=state.strategy==='solid'||state.strategy==='source'||builtInOn();
   $('blendstrengthhint').textContent=`Up to ${Math.min(chosen.recipes,room)} blended colours from ${chosen.ratios.length} ratios. `
     +(chosen.name==='standard'?'Each blend repeats within 4 layers.':`Finer ratios repeat over up to ${chosen.period} layers, so they can show as faint bands: use thin layers, and Subdivide Mix Layer in Settings where it is offered.`);
 }
@@ -92,7 +98,62 @@ $('keephue').addEventListener('change',()=>{setHueFidelity($('keephue').checked)
 $('blendstrength').addEventListener('change',()=>{setBlendStrength($('blendstrength').value);clearReview();invalidateRecommendation();refresh();});
 // Dual-wall mixing: painted colour in the outer wall only, one chosen filament behind it.
 for(const id of ['dualwallon','dualwallinner','dualwalldepth'])$(id).addEventListener('change',()=>{clearReview();refresh();});
+// Built-in colours (experimental): saved with the session and, as a convenience, in this browser.
+const CONSTRUCTION_KEY='yab3d-colour-construction';
+try{const saved=JSON.parse(localStorage.getItem(CONSTRUCTION_KEY)||'null');if(saved?.construction==='built-in'){state.construction='built-in';state.builtInBacking=Number.isInteger(saved.backing)?saved.backing:null;}}catch{/* damaged or blocked storage: the default stays */}
+function saveConstruction(){try{localStorage.setItem(CONSTRUCTION_KEY,JSON.stringify({construction:state.construction,backing:state.builtInBacking}));}catch{/* fine */}}
+const builtInOn=()=>state.construction==='built-in';
+$('construction').value=state.construction;
+$('construction').addEventListener('change',()=>{state.construction=$('construction').value==='built-in'?'built-in':'slicer';saveConstruction();clearReview();refresh();});
+$('builtinbacking').addEventListener('change',()=>{state.builtInBacking=Number($('builtinbacking').value)||null;saveConstruction();clearReview();refresh();});
+/** The interior reel: the chosen one while it is a model reel, otherwise the lightest model reel. */
+function builtInBackingSlot(reels) {
+  return builtInModelSlots(reels).includes(state.builtInBacking) ? state.builtInBacking : defaultBackingSlot(reels);
+}
+/** Weights by source for the phase alignment: surface area, plus any marked detail of that colour. */
+function builtInWeights(sourceColors) {
+  const focus=focusWeights(state.focusMarks,focusGeometry?.ranges),areas=state.assessed?.surfaceAreas||{},weights={};
+  for(const [source,colour] of Object.entries(sourceColors||{})) {
+    const w=(Number(areas[source])||0)+(Number(focus[norm(colour)])||0);
+    if(w>0)weights[source]=w;
+  }
+  return weights;
+}
+let builtInMemo={key:'',plan:null};
+/** The built-in plan for the selection (cached: it is asked for on every render). */
+function builtInPayload(assessed,reels) {
+  const weights=builtInWeights(assessed.sourceColors);
+  const key=JSON.stringify([assessed.sourceColors,reels.map(r=>[r.color,r.type,r.role]),weights]);
+  if(builtInMemo.key!==key)builtInMemo={key,plan:builtInPlan(assessed.sourceColors,reels,weights)};
+  const plan=builtInMemo.plan,backingSlot=builtInBackingSlot(reels),fixed=builtInFixed();
+  const problem=builtInProblem({target:state.target,reels,backingSlot,depth:fixed.depth,layerHeight:fixed.layerHeight});
+  return {mapping:{...plan.mapping},recipes:[],kept:[],physical:reels,
+    builtIn:{rows:plan.rows,recipes:plan.recipes,shades:plan.shades,backingSlot,modelReels:builtInModelSlots(reels).length,...fixed},
+    ...(problem?{blocked:problem.replace(/\.$/,'')}:{})};
+}
+/** What the worker needs to colour the preview or thumbnail face by face. */
+function builtInPreviewSpec(payload) {
+  if(!payload?.builtIn)return null;
+  return {recipes:payload.builtIn.recipes,mapping:payload.mapping,reels:payload.physical.map(r=>norm(r.color)||'#FFFFFF'),
+    layerHeight:payload.builtIn.layerHeight,firstLayer:payload.builtIn.firstLayer};
+}
+function renderBuiltIn(payload) {
+  $('construction').value=state.construction;
+  $('builtinfields').hidden=!builtInOn();
+  if(!builtInOn()){$('builtinnote').textContent='';return;}
+  const reels=payload.physical||[],select=$('builtinbacking'),slots=builtInModelSlots(reels);
+  const list=JSON.stringify(slots.map(slot=>[slot,reels[slot-1].name,reels[slot-1].color]));
+  if(select.dataset.list!==list){
+    select.dataset.list=list;
+    select.replaceChildren(...slots.map(slot=>new Option(`Slot ${slot} · ${reels[slot-1].name||colourName(reels[slot-1].color)} · ${norm(reels[slot-1].color)}`,String(slot))));
+  }
+  const backing=payload.builtIn?.backingSlot ?? builtInBackingSlot(reels);
+  if(backing)select.value=String(backing);
+  const warning=Number.isFinite(state.builtInShallow)?shallowWarning(state.builtInShallow):'';
+  $('builtinnote').textContent=[payload.blocked && payload.builtIn ? `${payload.blocked}.` : '',warning].filter(Boolean).join(' ');
+}
 function dualWallChoice() {
+  if(builtInOn())return null;
   if(!DUAL_WALL_TARGETS.includes(state.target)||!$('dualwallon').checked)return null;
   const slot=Number($('dualwallinner').value),depth=Number($('dualwalldepth').value);
   return Number.isInteger(slot)&&slot>0?{slot,depth}:null;
@@ -105,6 +166,9 @@ function dualWallIssue() {
 function renderDualWall(physical) {
   const available=DUAL_WALL_TARGETS.includes(state.target)&&Boolean(state.project);
   $('dualwalloptions').hidden=!available;if(!available)return '';
+  // Never both: built-in colours writes its own outer shell and backing reel.
+  $('dualwallon').disabled=builtInOn();$('dualwallbuiltin').hidden=!builtInOn();
+  if(builtInOn()){$('dualwallfields').hidden=true;$('dualwallnote').textContent='';return '';}
   const select=$('dualwallinner'),previous=select.value,list=JSON.stringify(physical.map(r=>[r.name,r.color]));
   if(select.dataset.list!==list){
     select.dataset.list=list;select.replaceChildren(...physical.map((reel,i)=>new Option(`Slot ${i+1} · ${reel.name||reel.color} · ${reel.color}`,String(i+1))));
@@ -120,7 +184,7 @@ function renderDualWall(physical) {
   return problem;
 }
 function subdivideChoice() {
-  return ['snapmaker','bambu','orca'].includes(state.target) && $('subdividemix').checked && Boolean(resultPlan().recipes.length);
+  return !builtInOn() && ['snapmaker','bambu','orca'].includes(state.target) && $('subdividemix').checked && Boolean(resultPlan().recipes.length);
 }
 ['spectrumlayermode','spectrumlayerheight'].forEach(id=>$(id).addEventListener('input',()=>{clearReview();refresh();}));
 let fillPrevious = null;
@@ -1032,6 +1096,12 @@ function resultPlan() {
   }
   if(modelPalettePending()) return {mapping:{},recipes:[],kept:[],physical:reels,
     blocked:"choose and apply a suggested palette"};
+  if (builtInOn()) {
+    if (state.strategy === "source") return {mapping:{},recipes:[],kept:[],physical:reels,
+      blocked:"built-in colours recolours the model: choose Predicted blends or Solid colours in Advanced, or choose Slicer blends"};
+    try { return builtInPayload(assessed, reels); }
+    catch (error) { return {mapping:{},recipes:[],kept:[],physical:reels,blocked:error.message.replace(/\.$/,'')}; }
+  }
   if (state.strategy === "source") {
     const used = assessed.used;
     if (used.length > state.capacity) {
@@ -1102,6 +1172,19 @@ function editBlend(source,recipe){
 function undoBlend(){if(!blendCanUndo()||state.loading||state.exporting)return false;const last=state.blendHistory.pop();state.manualBlends[last.key]=last.before;$('subdividemix').checked=last.subdivide;updateBlendView();return true;}
 export const workbenchBlends={get canUndo(){return blendCanUndo();},undo:undoBlend};
 
+/** A built-in shade swatch: always carries the estimated marker. */
+function builtInShadeChip(hex) {
+  return `<span class="change-colour"><span class="change-label">Estimated shade</span><i class="change-swatch" style="background:${esc(hex)}" aria-hidden="true"></i><strong>${esc(colourName(hex))}</strong><small>${esc(hex)} · estimated</small></span>`;
+}
+const builtInLayers=sequence=>sequence.map(slot=>`reel ${slot}`).join(', ');
+function builtInOutcome(payload) {
+  const {rows,shades,modelReels}=payload.builtIn;
+  const chip=hex=>`<span class="change-colour"><span class="change-label">Original</span><i class="change-swatch" style="background:${esc(hex)}" aria-hidden="true"></i><strong>${esc(colourName(hex))}</strong><small>${esc(hex)}</small></span>`;
+  return `<h3>Original → built-in colours <span class="hint">· experimental</span></h3><strong>${rows.length} source colours · ${shades} shade${shades===1?'':'s'} from ${modelReels} reels</strong>
+    <p class="hint">Every shade below is estimated from the reels' nominal colours. Nothing here is measured, and this mode has not yet been validated by a print.</p>
+    <ul>${rows.map(row=>`<li><span class="colour-change"><span class="change-pair">${chip(row.original)}<span class="change-arrow" aria-hidden="true">→</span>${builtInShadeChip(row.shade)}</span><span class="change-recipe">Layer pattern, repeating: ${esc(builtInLayers(row.sequence))} · estimated difference ${esc(row.error)}</span></span></li>`).join('')}</ul>`;
+}
+
 function renderOutcome(payload=resultPlan()) {
   const host=$("colouroutcome");
   if(!state.assessed || !state.objects.length) { host.replaceChildren(); return; }
@@ -1109,6 +1192,7 @@ function renderOutcome(payload=resultPlan()) {
     host.innerHTML='<strong>Original model colours</strong><p class="hint">No palette has been applied yet. Select a suggestion to preview its blend recipes and colour changes.</p>';
     return;
   }
+  if(payload.builtIn) { host.innerHTML=builtInOutcome(payload); return; }
   const outcome=payload.outcome || describeColourMapping(state.assessed.sourceColors,payload);
   const {counts,rows}=outcome;
   const tally=[`${counts.preserved} matched to reels`,
@@ -1128,6 +1212,19 @@ function renderMix(assessed) {
   const payload = resultPlan();
   renderOutcome(payload);
   blendEditor?.render();
+  if (payload.builtIn) {
+    // Built-in colours: each source colour's own layer pattern; no slicer blends, no slot overrides.
+    $("strategyhint").textContent = "Built-in colours (experimental) is chosen in Export settings: every source colour gets its own layer pattern of the model reels. Shades are estimates.";
+    $("maptable").innerHTML = "<table><thead><tr><th>Source</th><th>In the file</th><th>Estimated shade</th><th>Layer pattern</th><th>Estimated difference</th></tr></thead><tbody>"
+      + payload.builtIn.rows.map((row) => `<tr><td>colour ${row.source}</td>`
+        + `<td><span class="swatch" style="background:${esc(row.original)}"></span>${esc(row.original)}</td>`
+        + `<td><span class="swatch" style="background:${esc(row.shade)}"></span>${esc(row.shade)} · estimated</td>`
+        + `<td>${esc(builtInLayers(row.sequence))}</td><td>${esc(row.error)}</td></tr>`).join("")
+      + "</tbody></table>";
+    $("mixlist").innerHTML = "";
+    $("mixnote").textContent = `${payload.builtIn.shades} built-in shade(s) from ${payload.builtIn.modelReels} model reels. The slicer receives only the physical reels; every shade is an estimate.`;
+    return;
+  }
   const slots = activeReels().map((reel) => norm(reel.color));
   const rows = comparison(assessed.sourceColors, payload.mapping, [...slots,...payload.kept.map(r=>r.color)]);
   const blendMode = state.strategy === "blend";
@@ -1289,6 +1386,16 @@ async function refreshPreview() {
   if (!state.preview.ok) {
     $("previewnote").textContent = state.preview.error;
     previewWarning(state.preview.error);
+    // Without a 3D view the shallow-surface share is still measured on the model's faces.
+    if (builtInOn() && state.assessed && state.objects.length) {
+      const payload = resultPlan();
+      background().preview(state.plateId, state.objects, 'original', {}, null, state.geometryId,
+        state.assessed.counts?.triangles || 0, state.layout, builtInPreviewSpec(payload) || {recipes:[],mapping:{},reels:[]})
+        .then((soup) => {
+          const share = soup.builtIn ? soup.builtIn.shallowShare : null;
+          if (token === previewToken && share !== state.builtInShallow) { state.builtInShallow = share; renderExport(); }
+        }).catch(() => {});
+    }
     return;
   }
   if (!state.objects.length || !state.assessed) {
@@ -1318,7 +1425,8 @@ async function refreshPreview() {
                                       state.previewMode, table, mapping,
                                       state.geometryId,
                                       (state.assessed && state.assessed.counts
-                                       && state.assessed.counts.triangles) || 0,state.layout);
+                                       && state.assessed.counts.triangles) || 0,state.layout,
+                                      builtInPreviewSpec(payload));
     // A newer request (another palette, another selection, another file) wins.
     if (token !== previewToken) return;
     state.previewFailed = "";
@@ -1339,6 +1447,9 @@ async function refreshPreview() {
   const fit = geometry !== state.previewGeometry;
   state.previewGeometry = geometry;
   applyPreview(soup, fit);
+  // The shallow-surface share is measured on the selection's own faces in the worker.
+  const share = soup.builtIn ? soup.builtIn.shallowShare : null;
+  if (share !== state.builtInShallow) { state.builtInShallow = share; renderExport(); }
 }
 
 /** Show one prepared soup: the only place the renderer and its note are updated. */
@@ -1499,6 +1610,11 @@ function renderExport() {
   } catch(error) { profileError=error.message; $('spectrumprofilenote').textContent=profileError; $('spectrumlayernote').textContent=profileError; $('layeroptions').open=true; }
   const payload = resultPlan();
   renderOutcome(payload);
+  renderBuiltIn(payload);
+  if(builtInOn()) {
+    // The mode fixes its own layer heights; slicer-blend controls and their warnings do not apply.
+    for(const id of ['layeroptions','subdivideoptions','subdividewarning','subdividelayerhint','blendlayerhint'])$(id).hidden=true;
+  }
   $('spectrumfilaments').parentElement.classList.toggle('hidden',state.strategy==='source');
   if(state.project && state.strategy!=='source')renderFilamentPicker($('spectrumfilaments'),{types:state.reels.map(r=>r.type),source:state.project.filamentProfiles,
     selected:state.reels.map(r=>r.profile),target:state.target,nozzle:state.u1Nozzle,sourceSettings:state.project.sourceSettings,
@@ -1515,7 +1631,9 @@ function renderExport() {
   renderActionBar(blocking,needsReview);
   reviewBox.parentElement.classList.toggle("hidden", !needsReview);
   reviewBox.checked = state.reviewed;
-  $("reviewtext").textContent=activeApproximation() && state.strategy==='blend'
+  $("reviewtext").textContent=payload.builtIn
+    ? 'I accept the estimated built-in shades shown above. They are not measured, and built-in colours has not yet been validated by a print.'
+    : activeApproximation() && state.strategy==='blend'
     ? 'I accept the approximate colour changes shown above, including any noticeable or large differences from the original.'
     : 'I have checked the colour mapping and accept the substitutions and predicted blends.';
   $("export").disabled = state.loading || state.exporting || Boolean(blocking)
@@ -1532,6 +1650,11 @@ function renderExport() {
   if(state.supportInterface && !blocking) $('exportnote').textContent=`Experimental PETG interface: three PLA model reels, ${mixtures} blend recipe(s), and PETG interfaces in slot ${interfaceSlot(payload.physical)}. Supports enabled; three dense contact layers at 0 mm Z gap; PLA prime-tower shell. Check the sliced result and test a small print first.`;
   if(!blocking && subdivideChoice()) $('exportnote').textContent+=' Subdivide Mix Layer is enabled for this export.';
   if(!blocking && dualWallChoice()) $('exportnote').textContent+=` Dual-wall mixing is on: inner walls use slot ${dualWallChoice().slot}.`;
+  if(!blocking && payload.builtIn) {
+    const warning=Number.isFinite(state.builtInShallow)?shallowWarning(state.builtInShallow):'';
+    $('exportnote').textContent=`Built-in colours: ${payload.builtIn.shades} shades from ${payload.builtIn.modelReels} reels, ${payload.builtIn.layerHeight} mm layers. Do not change layer height in the slicer.`
+      +(state.supportInterface?` Slot ${interfaceSlot(payload.physical)} stays the PETG support interface.`:'')+(warning?` ${warning}`:'');
+  }
   if (!blocking && target === "prusa") {
     $("exportnote").textContent += " Open the file as a project in PrusaSlicer with a "
       + `${payload.physical.length}-extruder profile: the palette lives in the Full Spectrum description, `
@@ -1544,7 +1667,14 @@ function exportRevision() {
   return JSON.stringify({epoch: state.epoch, plate: state.plateId,
     objects: state.objects, layout:state.layout, layoutError:state.layoutError, target: state.target, reels: state.reels, u1Nozzle:state.u1Nozzle,
     physical: payload.physical, mapping: payload.mapping, recipes: payload.recipes,
-    bambuSetup:state.bambuSetup,capacity:state.capacity,strategy: state.strategy, reviewed: state.reviewed, reelView:state.reelView,layerHeight:layerChoice(),supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice(),dualWall:dualWallChoice()});
+    bambuSetup:state.bambuSetup,capacity:state.capacity,strategy: state.strategy, reviewed: state.reviewed, reelView:state.reelView,layerHeight:layerChoice(),supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice(),dualWall:dualWallChoice(),
+    construction:state.construction,builtIn:builtInExport(payload)});
+}
+/** The worker's built-in option (recipes, interior reel and the mode's fixed heights), or null. */
+function builtInExport(payload) {
+  if(!payload.builtIn)return null;
+  const {recipes,backingSlot,depth,layerHeight,firstLayer}=payload.builtIn;
+  return {recipes,backingSlot,depth,layerHeight,firstLayer};
 }
 
 $("export").addEventListener("click", async () => {
@@ -1574,7 +1704,8 @@ $("export").addEventListener("click", async () => {
       state.plateId, state.objects, table, previewMapping,
       { size: sizes.main, small: sizes.small,
         estimate: (state.assessed && state.assessed.counts
-                   && state.assessed.counts.triangles) || 0,layout:state.layout });
+                   && state.assessed.counts.triangles) || 0,layout:state.layout,
+        builtIn: builtInPreviewSpec(payload) });
     if (exportRevision() !== revision) return;
     if (!rendered || !rendered.main) {
       throw new Error("the output thumbnail could not be rendered, so this project "
@@ -1587,19 +1718,23 @@ $("export").addEventListener("click", async () => {
       mapping: payload.mapping, recipes: payload.recipes,
       title: state.project.title, u1Nozzle:state.u1Nozzle, layout:state.layout,
       bambuSetup:state.bambuSetup,preserveSourceSettings:true,calibration:calibrationPanel?.active() || null,
-      layerHeight:layerChoice(),supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice(),dualWall:dualWallChoice(),
+      // Built-in colours fixes its own layer heights (applied after the export), so the
+      // layer-height choice is not read; it never travels with dual-wall mixing.
+      layerHeight:payload.builtIn?null:layerChoice(),supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice(),dualWall:dualWallChoice(),
+      ...(payload.builtIn ? { builtIn: builtInExport(payload) } : {}),
       thumbnails: { main: rendered.main, small: rendered.small || null },
     });
     if (exportRevision() !== revision) return;
     const bytes = new Uint8Array(built.bytes);
     const blob = new Blob([bytes], { type: "application/vnd.ms-package.3dmanufacturing-3dmodel+xml" });
     const name = (state.project.title || "model").replace(/[^\w.-]+/g, "-")
-      + `-${state.target}${state.supportInterface?'-petg-interface':''}-recoloured.3mf`;
+      + `-${state.target}${state.supportInterface?'-petg-interface':''}${payload.builtIn?'-built-in':''}-recoloured.3mf`;
     log.innerHTML = `<span class="ok">wrote ${esc(name)} `
       + `(${(blob.size / 1048576).toFixed(2)} MB in `
       + `${((performance.now() - started) / 1000).toFixed(1)}s)</span>`;
     window.__lastExport = { target: state.target, recipes: payload.recipes,
                             mapping: payload.mapping, strategy: state.strategy,
+                            construction: state.construction, builtIn: built.builtIn || null,
                             bytes: blob.size, name,
                             thumbnails: built.thumbnails || null };
     download(blob, name, $("exportlog"));
@@ -1862,11 +1997,11 @@ focusBrush=mountFocusBrush($('focusbrush'),{read:()=>state.focusMarks,write:mark
 blendEditor=mountBlendEditor($('blendeditor'),{read:()=>{
   const payload=resultPlan();return {key:blendContextKey(),sources:state.assessed?.sourceColors||{},reels:activeReels(),target:state.target,
     manual:manualRecipes(),current:Object.fromEntries((payload.outcome?.rows||[]).filter(r=>r.recipe).map(r=>[r.source,r.recipe])),canUndo:blendCanUndo(),busy:state.loading||state.exporting,
-    blocked:state.loading||state.exporting?'Wait for the current operation to finish.':state.strategy!=='blend'?'Choose Predicted blends in Advanced to edit recipes.':modelPalettePending()||state.reelView==='recommended'?'Apply your filament palette first, then edit its blends.':''};
+    blocked:state.loading||state.exporting?'Wait for the current operation to finish.':builtInOn()?'Built-in colours does not use slicer blend recipes. Choose Slicer blends in Export settings to edit them.':state.strategy!=='blend'?'Choose Predicted blends in Advanced to edit recipes.':modelPalettePending()||state.reelView==='recommended'?'Apply your filament palette first, then edit its blends.':''};
 },apply:editBlend,undo:undoBlend});
 export const workbenchFocus={stop:()=>focusBrush?.stop(),key:event=>focusBrush?.key(event)};
 export {state, load, refresh, renderObjects, renderQuantityFields, layoutChanged, textureImporter};
-const workbenchSettingKeys=['capacity','capacityChosen','priority','paletteSource','importantColours','focusMarks','compareBundles','bambuSetup','bambuRequired','bambuError','target','u1Nozzle','supportInterface','interfacePosition','reels','strategy','overrides','manualBlends','workflow','modelType','keepExact','useOwned','modelApplied','modeReels','locked','appliedSlotOrder','loadedTuning','reelView'];
+const workbenchSettingKeys=['capacity','capacityChosen','priority','paletteSource','importantColours','focusMarks','compareBundles','bambuSetup','bambuRequired','bambuError','target','u1Nozzle','supportInterface','interfacePosition','reels','strategy','overrides','manualBlends','workflow','modelType','keepExact','useOwned','modelApplied','modeReels','locked','appliedSlotOrder','loadedTuning','reelView','construction','builtInBacking'];
 export function workbenchCaptureSettings(){return {state:structuredClone(Object.fromEntries(workbenchSettingKeys.filter(k=>state[k]!==undefined).map(k=>[k,state[k]]))),controls:Object.fromEntries(['spectrumlayermode','spectrumlayerheight','subdividemix','dualwallon','dualwalldepth','blendstrength','keephue'].map(id=>[id,$(id).type==='checkbox'?$(id).checked:$(id).value]))};}
 export function workbenchRestoreSettings(saved){if(!saved||!state.project)return;Object.assign(state,saved.state);state.reviewed=false;for(const [id,value]of Object.entries(saved.controls))if($(id).type==='checkbox')$(id).checked=value;else $(id).value=value;if(saved.controls.blendstrength)setBlendStrength($('blendstrength').value);setHueFidelity($('keephue').checked);renderReels();renderWorkflow();return refresh();}
 export async function workbenchSourceColours(){if(!state.project)return null;return (await background().preview(state.plateId,state.objects,'original',paletteOf(null,'original'),null,state.geometryId,state.assessed?.counts.triangles||0,state.layout)).colors;}
@@ -1888,13 +2023,15 @@ export function workbenchPreview() {
   if(!state.project || !state.preview || state.preview.ok || state.loading || !state.assessed)return null;
   const payload=resultPlan(),colours=paletteOf(payload,state.previewMode);
   const mapping=state.previewMode==='result'&&state.strategy!=='source'?payload.mapping:null;
-  return {key:JSON.stringify([state.epoch,state.plateId,state.objects,colours,mapping,state.layout]),
-    render:()=>background().thumbnail(state.plateId,state.objects,colours,mapping,{size:768,layout:state.layout})};
+  const builtIn=state.previewMode==='result'?builtInPreviewSpec(payload):null;
+  return {key:JSON.stringify([state.epoch,state.plateId,state.objects,colours,mapping,state.layout,builtIn]),
+    render:()=>background().thumbnail(state.plateId,state.objects,colours,mapping,{size:768,layout:state.layout,builtIn})};
 }
 
 printOptimiser=mountSequential($('printoptimiser'),()=>{
   if(!state.project||state.loading||state.exporting||!state.assessed||!state.bounds)throw Error('Load a model and wait for its analysis to finish.');
   const payload=resultPlan();
+  if(payload.builtIn)throw Error('Print comparison is not available with built-in colours yet. Choose Slicer blends to compare.');
   if(payload.blocked)throw Error(payload.blocked);
   if($('export').disabled)throw Error('Apply and review the palette and export settings before comparing.');
   const options={target:state.target,reels:state.reels,physical:payload.physical,mapping:payload.mapping,

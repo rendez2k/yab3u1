@@ -75,18 +75,21 @@ export class RecolourWorker {
   }
 
   preview(plateId, objects, mode, colors, mapping, haveGeometry = null,
-          estimate = 0, layout = null) {
+          estimate = 0, layout = null, builtIn = null) {
+    // builtIn (built-in colours, experimental): the plan that colours each face by its layers.
     return this.request("preview", { plateId, objects, mode, colors, mapping,
-                                     haveGeometry, estimate, layout })
+                                     haveGeometry, estimate, layout,
+                                     ...(builtIn ? { builtIn } : {}) })
       .then((reply) => reply.preview);
   }
 
   /** Render the saved thumbnail (output colours) without any canvas or WebGL. */
   thumbnail(plateId, objects, colors, mapping, { size = 512, small = null,
                                                  estimate = 0,
-                                                 layout = null } = {}) {
+                                                 layout = null, builtIn = null } = {}) {
     return this.request("thumbnail", { plateId, objects, colors, mapping, size,
-                                       small, estimate, layout })
+                                       small, estimate, layout,
+                                       ...(builtIn ? { builtIn } : {}) })
       .then((reply) => ({ main: reply.main, small: reply.small, ms: reply.ms,
                           width: reply.width, triangles: reply.triangles }));
   }
@@ -94,7 +97,8 @@ export class RecolourWorker {
   export(plateId, objects, options) {
     return this.request("export", { plateId, objects, options })
       .then((reply) => ({ bytes: reply.bytes, ms: reply.ms,
-                          thumbnails: reply.thumbnails || null }));
+                          thumbnails: reply.thumbnails || null,
+                          dualWall: reply.dualWall || null, builtIn: reply.builtIn || null }));
   }
 
   convert(plateId, objects, target, mapping, title, options = {}) {

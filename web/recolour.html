@@ -693,8 +693,20 @@
       <div id="printoptimiser"></div>
     </details>
     <h2 id="exportsettingsheading">Export settings</h2>
+    <div id="constructionoptions">
+      <label class="field">Colour construction<select id="construction" aria-describedby="constructionhelp"><option value="slicer" selected>Slicer blends</option><option value="built-in">Built-in colours (experimental)</option></select></label>
+      <div id="constructionhelp">
+        <p class="hint">Writes each colour into the model as a layer-by-layer pattern of your loaded reels. Only the physical reels are used in the slicer, so there is no limit on the number of shades. Not yet validated by a print.</p>
+        <p class="hint">Uses fixed 0.12 mm layers and a 0.2 mm first layer. Large models may be too big to export at this height.</p>
+      </div>
+      <div id="builtinfields" hidden>
+        <label class="field">Interior and backing reel<select id="builtinbacking"></select></label>
+        <p id="builtinnote" class="hint" role="status" aria-live="polite"></p>
+      </div>
+    </div>
     <div id="dualwalloptions" hidden>
       <label class="check"><input type="checkbox" id="dualwallon">Dual-wall mixing <span class="hint">· experimental</span></label>
+      <p id="dualwallbuiltin" class="hint" role="status" hidden>Dual-wall mixing is not available with built-in colours yet.</p>
       <div id="dualwallfields" hidden>
         <div class="row"><label class="field">Inner wall filament<select id="dualwallinner" aria-label="Filament for the inner walls"></select></label><label class="field">Outer colour depth (mm)<input id="dualwalldepth" type="number" min="0.3" max="1.2" step="0.05" value="0.45"></label></div>
         <p id="dualwallnote" class="hint" role="status"></p>

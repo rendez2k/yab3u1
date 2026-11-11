@@ -1,0 +1,54 @@
+{
+  "note": "Slicer-blend exports of four-colours.3mf captured from the worker at commit 0b4d051, before the Built-in colours choice was added. built-in-workflow.test.mjs exports the same cases with the current worker and compares every member of the 3MF byte for byte. Each case's file was written by that commit's own web/shared/recolour-worker.js (git archive 0b4d051 web), driven with exactly the requests below (load, then thumbnail and export for each case) by tools/capture-slicer-blend-baseline.mjs, with object UUIDs from a counter reset for each case.",
+  "source": "four-colours.3mf",
+  "cases": [
+    {
+      "name": "slicer blends with Subdivide Mix Layer",
+      "file": "slicer-blend-baseline-blends.3mf",
+      "plateId": 1,
+      "objects": null,
+      "thumbnail": {"colors": {"1": "#00FFFF", "2": "#FF00FF", "3": "#FFFF00", "4": "#FFFFFF", "5": "#80FF80", "6": "#FF8080"}, "mapping": {"1": 4, "2": 4, "3": 6, "4": 5}},
+      "options": {
+        "target": "snapmaker",
+        "reels": [{"color": "#00FFFF", "type": "PLA"}, {"color": "#FF00FF", "type": "PLA"}, {"color": "#FFFF00", "type": "PLA"}, {"color": "#FFFFFF", "type": "PLA"}],
+        "physical": [{"color": "#00FFFF", "type": "PLA"}, {"color": "#FF00FF", "type": "PLA"}, {"color": "#FFFF00", "type": "PLA"}, {"color": "#FFFFFF", "type": "PLA"}],
+        "mapping": {"1": 4, "2": 4, "3": 6, "4": 5},
+        "recipes": [{"a": 1, "b": 3, "percent": 50, "model": "prusa-fdm-v7"}, {"a": 2, "b": 3, "percent": 50, "model": "prusa-fdm-v7"}],
+        "title": "Slicer blend baseline",
+        "u1Nozzle": "auto",
+        "layout": null,
+        "bambuSetup": null,
+        "preserveSourceSettings": true,
+        "calibration": null,
+        "layerHeight": {"mode": "preserve", "value": "0.20"},
+        "supportInterface": false,
+        "subdivideMixLayer": true,
+        "dualWall": null
+      }
+    },
+    {
+      "name": "slicer blends with dual-wall mixing",
+      "file": "slicer-blend-baseline-dual-wall.3mf",
+      "plateId": 1,
+      "objects": null,
+      "thumbnail": {"colors": {"1": "#00FFFF", "2": "#FF00FF", "3": "#FFFF00", "4": "#FFFFFF", "5": "#80FF80"}, "mapping": {"1": 4, "2": 1, "3": 2, "4": 5}},
+      "options": {
+        "target": "snapmaker",
+        "reels": [{"color": "#00FFFF", "type": "PLA"}, {"color": "#FF00FF", "type": "PLA"}, {"color": "#FFFF00", "type": "PLA"}, {"color": "#FFFFFF", "type": "PLA"}],
+        "physical": [{"color": "#00FFFF", "type": "PLA"}, {"color": "#FF00FF", "type": "PLA"}, {"color": "#FFFF00", "type": "PLA"}, {"color": "#FFFFFF", "type": "PLA"}],
+        "mapping": {"1": 4, "2": 1, "3": 2, "4": 5},
+        "recipes": [{"a": 1, "b": 3, "percent": 50, "model": "prusa-fdm-v7"}],
+        "title": "Slicer blend baseline",
+        "u1Nozzle": "auto",
+        "layout": null,
+        "bambuSetup": null,
+        "preserveSourceSettings": true,
+        "calibration": null,
+        "layerHeight": {"mode": "custom", "value": "0.12"},
+        "supportInterface": false,
+        "subdivideMixLayer": false,
+        "dualWall": {"slot": 4, "depth": 0.45}
+      }
+    }
+  ]
+}

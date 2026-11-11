@@ -15,16 +15,19 @@ import { cluster, clusterWithinBudget } from "./simplify.js";
 import { encodePng } from "./png.js";
 import { downscale, renderIso } from "./raster.js";
 import { applyDualWall } from "./dualWall.js";
+import { builtInRefusal, builtInExportOptions, applyBuiltInExport, BUILT_IN_DUAL_WALL } from "./builtInWorkflow.js";
+import { builtInFaceColour, shallowShare } from "./builtInPreview.js";
 import { layoutOffsets, planLayout } from "./layout.js";
 import { surfaceAreas } from './surfaceWeights.js';
 import {exportComparisonJob} from './comparisonExport.js';
 import {focusFingerprint} from './focusRegions.js';
-import {planProjectPlates,projectPalette,buildProjectPlate,mergeNativePlates} from './multiPlateProject.js';
+import {planProjectPlates,projectPalette,buildProjectPlate,mergeNativePlates,builtInPlateSpec,buildBuiltInPlate} from './multiPlateProject.js';
 
-async function plateThumbnail(job,size=512) {
+async function plateThumbnail(job,size=512,builtIn=null) {
   const current=instanceView(job.plateId,job.ids,job.settings.layout);
   const colours=Object.fromEntries(job.plan.physical.map((r,i)=>[i+1,r.color]));
-  const image=renderIso(current.positions,colourFacets(current.states,colours,job.plan.mapping),{size});
+  const facets=builtIn?builtInFacets(current,builtIn):colourFacets(current.states,colours,job.plan.mapping);
+  const image=renderIso(current.positions,facets,{size});
   const small=downscale(image,128);
   return {main:await encodePng(image.data,image.width,image.height),small:await encodePng(small.data,small.width,small.height),plateName:job.name};
 }
@@ -130,6 +133,69 @@ function colourFacets(states, colours, mapping) {
   return out;
 }
 
+/**
+ * Built-in colours: each face's colour from its own normal and bed heights
+ * (builtInPreview.js). The view's positions are bed coordinates; each copy of an
+ * object (one pick range) is set on the bed by its lowest point, as the slicer does.
+ * spec: {recipes:[{id,sequence,color}], mapping:{source: recipe id}, reels:[hex by slot],
+ * layerHeight, firstLayer}.
+ */
+function builtInFacets(view, spec) {
+  const { positions, states } = view;
+  const out = new Float32Array(states.length * 9);
+  const recipes = new Map((spec.recipes || []).map((recipe) => [Number(recipe.id), recipe]));
+  const reels = (spec.reels || []).map((color) => ({ color }));
+  const channelsOf = new Map();
+  const channels = (hex) => {
+    if (!channelsOf.has(hex)) channelsOf.set(hex, rgb(hex));
+    return channelsOf.get(hex);
+  };
+  const low = new Float64Array(states.length).fill(Infinity);
+  const ranges = view.pickRanges && view.pickRanges.length ? view.pickRanges
+    : [{ start: 0, count: positions.length / 3 }];
+  for (const range of ranges) {
+    let z = Infinity;
+    for (let v = range.start; v < range.start + range.count; v += 1) z = Math.min(z, positions[3 * v + 2]);
+    for (let f = range.start / 3; f < (range.start + range.count) / 3; f += 1) low[f] = z;
+  }
+  for (let f = 0; f < states.length; f += 1) {
+    const state = states[f];
+    const recipe = state < 0 ? null : recipes.get(Number(spec.mapping?.[state || 1]));
+    let colour = [0.69, 0.19, 0.38];
+    if (recipe) {
+      const i = 9 * f, base = Number.isFinite(low[f]) ? low[f] : 0;
+      const ux = positions[i + 3] - positions[i], uy = positions[i + 4] - positions[i + 1], uz = positions[i + 5] - positions[i + 2];
+      const wx = positions[i + 6] - positions[i], wy = positions[i + 7] - positions[i + 1], wz = positions[i + 8] - positions[i + 2];
+      const za = positions[i + 2] - base, zb = positions[i + 5] - base, zc = positions[i + 8] - base;
+      colour = channels(builtInFaceColour({ normal: [uy * wz - uz * wy, uz * wx - ux * wz, ux * wy - uy * wx],
+        zMid: (za + zb + zc) / 3, zHigh: Math.max(za, zb, zc), zLow: Math.min(za, zb, zc), recipe, reels,
+        firstLayer: spec.firstLayer, layerHeight: spec.layerHeight }));
+    }
+    for (let corner = 0; corner < 3; corner += 1) out.set(colour, 9 * f + 3 * corner);
+  }
+  return out;
+}
+
+/** The share of a full-detail surface that is flat or gently sloped, with the surface's area. */
+function shallowStats(positions, states) {
+  let area = 0;
+  function* faces() {
+    for (let f = 0; f < states.length; f += 1) {
+      if (states[f] < 0) continue;
+      const i = 9 * f;
+      const ux = positions[i + 3] - positions[i], uy = positions[i + 4] - positions[i + 1], uz = positions[i + 5] - positions[i + 2];
+      const wx = positions[i + 6] - positions[i], wy = positions[i + 7] - positions[i + 1], wz = positions[i + 8] - positions[i + 2];
+      const normal = [uy * wz - uz * wy, uz * wx - ux * wz, ux * wy - uy * wx];
+      const a = Math.hypot(normal[0], normal[1], normal[2]) / 2;
+      if (!(a > 0)) continue;
+      area += a;
+      yield { normal, area: a };
+    }
+  }
+  const share = shallowShare(faces());
+  return { share, area };
+}
+
 /** The soup the page draws: simplified once per selection, recoloured after that.
  *
  * A palette, recipe or Original/Result change reuses the geometry and the facet
@@ -137,7 +203,7 @@ function colourFacets(states, colours, mapping) {
  * parse.  Only a different plate/object selection re-reads the model.
  */
 function preparePreview(plateId, objectIds, mode, colors, mapping, haveGeometry,
-                        estimate, layout) {
+                        estimate, layout, builtIn = null) {
   const original = mode === "original";
   let current, layoutWarning = '';
   try {
@@ -158,8 +224,8 @@ function preparePreview(plateId, objectIds, mode, colors, mapping, haveGeometry,
   const had = current.reused;
   // One colour lookup per facet: a palette, recipe, layout or Original/Result
   // change is a pass over the view's facets, never another parse.
-  const colours = colourFacets(current.states, colors || {},
-                               original ? null : mapping);
+  const colours = builtIn && !original ? builtInFacets(current, builtIn)
+    : colourFacets(current.states, colors || {}, original ? null : mapping);
   // The page says which geometry it already holds.  Only when that is *this*
   // geometry can the positions be left out; otherwise they are sent (and then
   // the buffer is detached here, which is why this is driven by the page's ack
@@ -185,6 +251,7 @@ function preparePreview(plateId, objectIds, mode, colors, mapping, haveGeometry,
     soup_triangles: current.soupTriangles,
     reused: had,
     prepare_ms: current.ms,
+    ...(builtIn ? { builtIn: { shallowShare: current.shallow } } : {}),
   };
 }
 
@@ -203,6 +270,7 @@ function buildGeometry(key, plateId, objectIds, estimate) {
   return {
     id: (geometrySeq += 1),
     surfaceAreas: surfaceAreas(soup.positions, soup.states),
+    shallow: shallowStats(soup.positions, soup.states),
     key,
     positions,focusKey:`${key}|${focusFingerprint(positions,states)}`,
     // The buffer is detached the moment it is transferred, so the count has to
@@ -272,7 +340,10 @@ function objectView(plateId, objectIds, layout) {
     for(let f=0;f<mesh.states.length;f++)sourceFaces[at/9+f]=mesh.sourceFaces?.[f]??f;
     states.set(mesh.states,at/9); at+=mesh.positions.length;
   }
-  const view = {id:++geometrySeq,positions,states,sourceFaces,pickRanges,triangles:length/9,simplified:true,
+  // Built-in colours' shallow share, from each object's full-detail faces, weighted by area over every copy.
+  const area = parts.reduce((n,p)=>n+p.base.shallow.area,0);
+  const shallow = area>0 ? parts.reduce((n,p)=>n+p.base.shallow.share*p.base.shallow.area,0)/area : 0;
+  const view = {id:++geometrySeq,positions,states,sourceFaces,pickRanges,shallow,triangles:length/9,simplified:true,
     subdivided:parts.reduce((n,p)=>n+p.base.subdivided,0),unknown:parts.reduce((n,p)=>n+p.base.unknown,0),
     total:parts.reduce((n,p)=>n+p.base.total,0),soupTriangles:length/9,ms:0,reused:false,
     copies:plan?.copies || 1,capacity:plan?.capacity,planCopies:plan?.copies || 1};
@@ -403,7 +474,7 @@ self.onmessage = async (event) => {
       const preview = preparePreview(message.plateId, message.objects, message.mode,
                                      message.colors || {}, message.mapping,
                                      message.haveGeometry, message.estimate,
-                                     message.layout || null);
+                                     message.layout || null, message.builtIn || null);
       post({ type: "preview", id, preview, ms: Date.now() - started },
            transferOf(preview));
       return;
@@ -415,8 +486,8 @@ self.onmessage = async (event) => {
       const started = Date.now();
       const current = instanceView(message.plateId, message.objects,
                                    message.layout || null);
-      const colors = colourFacets(current.states, message.colors || {},
-                                  message.mapping);
+      const colors = message.builtIn ? builtInFacets(current, message.builtIn)
+        : colourFacets(current.states, message.colors || {}, message.mapping);
       const image = renderIso(current.positions, colors,
                               { size: message.size || 512 });
       const main = await encodePng(image.data, image.width, image.height);
@@ -433,9 +504,19 @@ self.onmessage = async (event) => {
     }
     if (type === "export") {
       const started = Date.now();
+      // Built-in colours (experimental): shade ids in the export, then the layer pattern.
+      // Never together with dual-wall mixing; the engine's own refusals are shown as written.
+      const builtIn = message.options.builtIn || null;
+      const reels = message.options.physical || message.options.reels || [];
+      const refusal = builtInRefusal({ target: message.options.target, reels, builtIn, dualWall: message.options.dualWall });
+      if (refusal) {
+        post({ type: "error", id, message: refusal });
+        return;
+      }
+      const options = builtIn ? builtInExportOptions(message.options) : message.options;
       const built = project.exportProject(parsed, message.plateId, message.objects,
-                                          { ...message.options,
-                                            layout: message.options.layout || null });
+                                          { ...options,
+                                            layout: options.layout || null });
       if (built.problems.length) {
         post({ type: "error", id, message: built.problems[0] });
         return;
@@ -444,10 +525,12 @@ self.onmessage = async (event) => {
       const dualWall = message.options.dualWall
         ? applyDualWall(built.entries, { target: message.options.target, innerSlot: message.options.dualWall.slot, depth: message.options.dualWall.depth })
         : null;
+      // Built-in colours rewrites it at the same point: paint in an outer shell, banded by layer.
+      const builtInRecord = builtIn ? applyBuiltInExport(built.entries, { target: message.options.target, reels, builtIn }) : null;
       const bytes = await writeZip([...built.entries].map(([name, data]) =>
         ({ name, data })));
       post({ type: "exported", id, bytes, ms: Date.now() - started,
-             recipes: built.recipes.length, thumbnails: built.thumbnails, dualWall },
+             recipes: built.recipes.length, thumbnails: built.thumbnails, dualWall, builtIn: builtInRecord },
            [bytes.buffer]);
       return;
     }
@@ -461,9 +544,14 @@ self.onmessage = async (event) => {
       post({type:'reviewed-plates',id,plates});return;
     }
     if(type==='export-plates') {
-      const started=Date.now(),options=message.options,jobs=planProjectPlates(parsed,message.jobs,options);
+      // Built-in colours (experimental) plans each plate from its own colours on the chosen
+      // reels, so the slot-capacity check does not apply; each plate is its own print job.
+      const {builtIn=null,...rest}=message.options;
+      if(builtIn&&rest.dualWall)throw Error(BUILT_IN_DUAL_WALL);
+      if(builtIn&&message.format!=='zip')throw Error('Built-in colours saves each plate as its own print job for now. Choose Export print jobs.');
+      const started=Date.now(),options=builtIn?rest:message.options,jobs=planProjectPlates(parsed,message.jobs,options);
       if(!jobs.length)throw Error('Keep at least one plate to export.');
-      const failure=jobs.find(job=>!job.plan || message.format==='zip'&&job.blocked);
+      const failure=jobs.find(job=>!job.plan || message.format==='zip'&&job.blocked&&!builtIn);
       if(failure)throw Error(`${failure.name}: ${failure.problem}`);
       const merged=message.format==='project'?projectPalette(parsed,jobs,options.target):null;
       const outputs=[],files=[],report={version:1,target:options.target,plates:[],notes:[
@@ -472,12 +560,16 @@ self.onmessage = async (event) => {
       ]};
       for(let index=0;index<jobs.length;index++){
         const job=jobs[index];post({type:'progress',id,stage:`Preparing plate ${index+1} of ${jobs.length}`,ms:Date.now()-started});
-        const thumbnails=await plateThumbnail(job);
-        const built=buildProjectPlate(parsed,job,merged?.physical || job.plan.physical,merged?.mappings[index] || job.plan.mapping,thumbnails);
+        const plate=builtIn?builtInPlateSpec(parsed,job,builtIn):null;
+        const thumbnails=await plateThumbnail(job,512,plate&&{...plate.spec,mapping:plate.plan.mapping,reels:builtIn.reels.map(r=>r.color)});
+        let built;
+        try{built=plate?buildBuiltInPlate(parsed,job,plate,thumbnails):buildProjectPlate(parsed,job,merged?.physical || job.plan.physical,merged?.mappings[index] || job.plan.mapping,thumbnails);}
+        catch(error){if(!plate)throw error;throw Error(`${job.name}: ${error.message}`);}
         if(built.problems.length)throw Error(`${job.name}: ${built.problems.join(' ')}`);
         if(merged)outputs.push({built,name:job.name,plateId:job.plateId});
         const stem=job.name.replace(/[^\w.-]+/g,'-').slice(0,70)||'plate',name=`${String(index+1).padStart(2,'0')}-${stem}-${options.target}.3mf`;
-        report.plates.push({name:job.name,file:name,sourcePlate:job.plateId,objects:job.objectCount,filaments:job.activeSlots.map(slot=>({slot,...job.plan.physical[slot-1]})),settings:built.settings});
+        const filaments=plate?builtIn.reels.map((reel,i)=>({slot:i+1,...reel})):job.activeSlots.map(slot=>({slot,...job.plan.physical[slot-1]}));
+        report.plates.push({name:job.name,file:name,sourcePlate:job.plateId,objects:job.objectCount,filaments,settings:built.settings,...(plate?{builtIn:built.record}:{})});
         if(message.format==='zip')files.push({name,data:await writeZip([...built.entries].map(([name,data])=>({name,data})))});
       }
       let bytes,notes=report.notes;

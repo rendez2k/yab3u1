@@ -106,6 +106,45 @@ test('multipart and modifier roles survive joining two plates with shared source
   for(const plate of again.plates){assert.equal(p.selectionInstances(again,plate.id,null).length,1);const meta=again.meta.get(plate.objectIds[0]);assert.equal(meta.parts.find(v=>v.subtype==='modifier_part').settings.sparse_infill_density,'25%');}
 });
 
+test('each plate of a built-in multi-plate export carries the pattern and one record',async()=>{
+  const {BUILT_IN_PATH,BUILT_IN_LAYERS}=await import('../shared/builtInColours.js');
+  const {builtInFixed}=await import('../shared/builtInWorkflow.js');
+  const {reelSet}=await import('../../tools/export-built-in.mjs');
+  const paint=await import('../shared/paint.js');
+  const replies=[];globalThis.self={postMessage:m=>replies.push(m)};
+  await import('../shared/recolour-worker.js');
+  let n=0;const request=async data=>{const id=++n;await self.onmessage({data:{...data,id}});return replies.findLast(r=>r.id===id&&r.type!=='progress');};
+  const bytes=new Uint8Array(readFileSync('web/tests/five-colours.3mf'));
+  assert.equal((await request({type:'load',bytes:bytes.buffer.slice(0),light:true})).type,'loaded');
+  const reels=reelSet('cmyw'),builtIn={reels,backingSlot:4,...builtInFixed()};
+  const zip=await request({type:'export-plates',format:'zip',jobs,options:{...options,builtIn}});
+  assert.equal(zip.type,'exported-plates',zip.message);
+  const files=await readZip(new Uint8Array(zip.bytes)),plates=[...files.keys()].filter(name=>name.endsWith('.3mf'));
+  assert.equal(plates.length,source.plates.length);
+  const report=JSON.parse(dec.decode(files.get('print-jobs.json')));
+  for(const [index,name] of plates.entries()){
+    const entries=await readZip(files.get(name));
+    assert.equal([...entries.keys()].filter(k=>k===BUILT_IN_PATH).length,1,name);
+    const record=JSON.parse(dec.decode(entries.get(BUILT_IN_PATH)));
+    assert.equal(record.layerHeight,BUILT_IN_LAYERS.standard);assert.equal(record.backingSlot,4);
+    assert.ok(record.recipes.length>=1&&record.recipes.every(r=>r.estimated===true));
+    const cfg=JSON.parse(dec.decode(entries.get(p.SRC_BBL_PROJECT)));
+    assert.equal(cfg.filament_colour.length,4);assert.equal(cfg.layer_height,'0.12');
+    const states=new Set();
+    for(const [member,data] of entries)if(member.endsWith('.model'))for(const m of dec.decode(data).matchAll(/paint_color="([0-9A-Fa-f]+)"/g))for(const s of paint.walkStates(paint.decode(m[1])))states.add(s);
+    assert.ok(states.size>0&&[...states].every(s=>s>=1&&s<=4),`${name}: ${[...states]}`);
+    // Each plate is planned from its own colours, and the job list names the four reels.
+    const used=p.analyse(source,source.plates[index].id,null).used.length;
+    assert.ok(record.recipes.length<=used,name);
+    assert.deepEqual(report.plates[index].filaments.map(f=>f.slot),[1,2,3,4]);
+  }
+  const merged=await request({type:'export-plates',format:'project',jobs,options:{...options,builtIn}});
+  assert.equal(merged.type,'error');
+  assert.equal(merged.message,'Built-in colours saves each plate as its own print job for now. Choose Export print jobs.');
+  const both=await request({type:'export-plates',format:'zip',jobs,options:{...options,builtIn,dualWall:{slot:4,depth:.45}}});
+  assert.equal(both.message,'Dual-wall mixing is not available with built-in colours yet.');
+});
+
 test('a repaint affects only its edited plate in the combined palette',()=>{
   const altered=structuredClone(jobs);altered[0].assignmentMode=REPAINT;altered[0].autoSlots=false;
   altered[0].mapping={1:1,2:1,3:1,4:1,5:1,6:1};

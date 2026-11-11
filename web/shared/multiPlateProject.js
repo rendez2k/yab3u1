@@ -1,5 +1,6 @@
 import {conversionPlanForPlate,conversionUsage,selectionFootprints,selectionBounds,
-  selectionInstances,eligibleObjects,supportPaintPresent,exportProject,MODEL_FILE,MODEL_RELS,SRC_BBL_MODEL,SRC_BBL_PROJECT} from './project.js';
+  selectionInstances,eligibleObjects,supportPaintPresent,exportProject,analyse,MODEL_FILE,MODEL_RELS,SRC_BBL_MODEL,SRC_BBL_PROJECT} from './project.js';
+import {builtInPlan,builtInRefusal,builtInExportOptions,applyBuiltInExport} from './builtInWorkflow.js';
 import {selectionUsage} from './selectionUsage.js';
 import {SLOTS,identityRule} from './assignment.js';
 import {targetLayout,planLayout} from './layout.js';
@@ -123,6 +124,26 @@ export function projectPalette(project,prepared,target) {
   });
   if(physical.length>colourLimit(target))throw Error(`The complete project has ${physical.length} filaments, above this format's ${colourLimit(target)} limit. Export separate print jobs.`);
   return {physical,mappings};
+}
+
+/** Built-in colours for one prepared plate: a plan from that plate's own colours on the
+ * chosen reels (weights by painted triangles, as the command-line export does). */
+export function builtInPlateSpec(project,job,builtIn) {
+  const analysis=analyse(project,job.plateId,job.ids),weights={};
+  for(const o of analysis.objects.filter(o=>o.selected))for(const c of o.colours)weights[c.extruder]=(weights[c.extruder]||0)+c.painted_triangles;
+  const plan=builtInPlan(analysis.sourceColors,builtIn.reels,weights);
+  return {plan,spec:{...builtIn,recipes:plan.recipes}};
+}
+
+/** One plate's built-in export: shade ids, then the layer pattern and its one record. */
+export function buildBuiltInPlate(project,job,{plan,spec},thumbnails) {
+  const target=job.settings.target || 'snapmaker',reels=spec.reels;
+  const refusal=builtInRefusal({target,reels,builtIn:spec});
+  if(refusal)throw Error(refusal);
+  const built=exportProject(project,job.plateId,job.ids,builtInExportOptions({...job.settings,target,reels,physical:reels,mapping:plan.mapping,
+    builtIn:spec,thumbnails,title:job.name}));
+  if(!built.problems.length)built.record=applyBuiltInExport(built.entries,{target,reels,builtIn:spec});
+  return built;
 }
 
 export function buildProjectPlate(project,job,physical,mapping,thumbnails) {
