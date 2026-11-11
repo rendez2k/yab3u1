@@ -90,6 +90,27 @@ export function composeView(doc,kind) {
     help.append(panels.colours.querySelector('.colour-workflow-note'));
     $('filamentbundles').open=true;
   }
+  // Step 2 leads with the one task of the chosen method; everything else folds away.
+  const body=panels.colours.querySelector('[data-requires-model]'),workflow=panels.colours.querySelector('.colour-workflow');
+  workflow.append(make('div',{class:'colour-method',hidden:''},'<span>Method</span><strong data-method-name></strong><button type="button" data-change-method>Change</button>'));
+  if(kind==='converter'){
+    const assignment=doc.querySelector('fieldset.repaint'),remove=make('details',{class:'colour-fold','data-remove-colour':''},'<summary>Remove a colour from the model</summary>'),more=make('details',{class:'colour-fold'},'<summary>More options · advanced</summary>');
+    $('filamentassignment').textContent='What each colour prints as';
+    more.append($('petgsupport'));
+    body.prepend(assignment);body.append(remove,more);
+    assignment.before(make('div',{class:'auto-merge',hidden:''},'<button type="button" class="primary" data-auto-merge>Merge the closest colours for me</button><p class="hint" data-auto-merge-status role="status" aria-live="polite"></p>'));
+    const how=[...panels.colours.querySelectorAll('details.workflow-explanation')].pop();if(how)body.append(how);
+  }else{
+    const tune=make('details',{class:'colour-fold colour-finetune'},'<summary>Fine-tune · advanced</summary>');
+    const others=make('button',{type:'button','data-other-palettes':'','aria-expanded':'false'},'Compare other reel sets');
+    $('palettechoices').after(others);
+    body.prepend($('filamentbundles'),$('recommendation'),$('colouroutcome'));
+    $('filamentbundles').before(make('h2',{class:'colour-section'},'Reels to load'));
+    $('recommendheading').textContent='Suggested set';
+    tune.append($('blendstrengthfield'),$('slotoptions'),$('blendeditor'),$('colourpriorities'),$('supportinterface'),$('modelchoices'),$('spoolimport'),$('blendcalibration'),$('advanced'));
+    body.append(tune);
+    const help=[...panels.colours.querySelectorAll('details.workflow-explanation')].pop();if(help)body.append(help);
+  }
   // Contextual help remains available without consuming the main viewport.
   stage.append(make('div',{class:'stage-caption'},'Drag to orbit · Drag a selected object to move it · Right-drag to pan · Shift/Ctrl/Cmd-click to select several · Delete to remove · Ctrl/Cmd+Z to undo'));
   return {workspace,stage,inspector,panels,move,make,feedback,empty,parking};
