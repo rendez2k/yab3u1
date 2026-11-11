@@ -24,7 +24,10 @@ test('manual recipes compact virtual IDs without changing physical slots or unre
 test('invalid ingredients, percentages, materials and unsupported formats stop export',()=>{
   for(const r of [{...two,b:1},{...two,b:5},{...three,percentC:75},{...three,percentC:NaN},{...two,percent:12.5}])
     assert.throws(()=>validateRecipe(r,4,'orca'));
-  for(const target of ['snapmaker','prusa'])assert.throws(()=>exportProject(project,1,null,{target,reels,mapping:{1:5},recipes:[three]}),/Three-filament/);
+  assert.throws(()=>exportProject(project,1,null,{target:'prusa',reels,mapping:{1:5},recipes:[three]}),/Three-filament/);
+  // Snapmaker writes a three-filament blend as an explicit run of layers.
+  const baked=cfg(exportProject(project,1,null,{target:'snapmaker',reels,mapping:{1:5},recipes:[three]}));
+  assert.match(baked.mixed_filament_definitions.split(';')[0],/^1,2,1,1,\d+,0,g123,w[\d/]+,m0,.*,cm1,[123]+$/);
   assert.throws(()=>exportProject(project,1,null,{target:'bambu',reels,mapping:{1:5},recipes:[gradient],subdivideMixLayer:true}),/Gradients need OrcaSlicer/);
   assert.throws(()=>exportProject(project,1,null,{target:'orca',reels:[reels[0],{...reels[1],type:'PETG'},...reels.slice(2)],mapping:{1:5},recipes:[three]}),/same material/);
   assert.throws(()=>applyManualRecipes({kept:[],mapping:{1:1}},{1:two},reels.map((r,i)=>i===2?{...r,role:'support-interface'}:r),'orca',16),/Reserved support/);

@@ -3,7 +3,7 @@ import {norm} from './colour.js';
 import {FDM_MODEL, mixFdmHex} from './fdmMix.js';
 import {mixFilaments} from './vendor/prusa-fdm/prusa-fdm-mixer.js';
 
-export const blendCapabilities = target => ({third:['bambu','orca'].includes(target), gradient:target==='orca'});
+export const blendCapabilities = target => ({third:['bambu','orca','snapmaker'].includes(target), gradient:target==='orca'});
 export function recipeParts(r) {
   return [{slot:r.a,percent:100-r.percent-(r.c ? r.percentC : 0)},
     {slot:r.b,percent:r.percent},...(r.c ? [{slot:r.c,percent:r.percentC}] : [])];
@@ -15,7 +15,7 @@ export function validateRecipe(r, physical, target) {
   if(parts.some(p=>!Number.isInteger(p.percent)||p.percent<1||p.percent>99))
     throw Error('Use whole percentages above zero that add up to 100%.');
   if(r.c && target && !blendCapabilities(target).third)
-    throw Error('Three-filament blends need Bambu Studio or OrcaSlicer 2.5. Use two filaments for this output.');
+    throw Error('Three-filament blends are not available for this output. Use two filaments.');
   if(r.gradient) {
     if(target && !blendCapabilities(target).gradient)throw Error('Gradients need OrcaSlicer 2.5 output. Choose that format or remove the gradient.');
     if(r.c)throw Error('A gradient uses two filaments. Remove the third ingredient first.');
