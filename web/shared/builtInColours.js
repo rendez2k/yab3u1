@@ -64,6 +64,13 @@ export function builtInProblem({target, reels, backingSlot, depth, layerHeight} 
   return '';
 }
 
+/** The refusal when a nozzle profile's layer limits exclude the pattern's layer or first-layer height, or ''. */
+export function builtInLayerProblem({minLayer, maxLayer}, layerHeight, firstLayer) {
+  const inside = v => !(Number.isFinite(minLayer) && v < minLayer - EPS) && !(Number.isFinite(maxLayer) && v > maxLayer + EPS);
+  if (inside(layerHeight) && inside(firstLayer)) return '';
+  return `Built-in colours uses ${layerHeight} mm layers and a ${firstLayer} mm first layer, which this nozzle profile does not allow. Choose the 0.4 mm nozzle.`;
+}
+
 /** Recipes by shade id, each using model reels only. */
 function recipesById(recipes, reels) {
   if (!Array.isArray(recipes) || !recipes.length) throw Error('Built-in colours needs a recipe for every shade.');
@@ -195,6 +202,17 @@ export function applyBuiltInColours(entries, {target, reels, recipes, backingSlo
   const height = layerHeight, first = firstLayer;
   if (entries.has(HEIGHT_RANGES) && dec.decode(entries.get(HEIGHT_RANGES)).includes('layer_height'))
     throw Error('This project has height ranges that change the layer height. Built-in colours needs one fixed layer height; remove those ranges and export again.');
+
+  // The slicer clamps (or refuses) a layer height outside its nozzle profile's limits, which
+  // would move every band: check each model reel's limits in the project.
+  if (entries.has(PROJECT)) {
+    const limits = JSON.parse(dec.decode(entries.get(PROJECT)));
+    const at = (key, slot) => { const v = limits[key]; return Number(Array.isArray(v) ? v[slot - 1] : v); };
+    for (const slot of modelSlots(reels)) {
+      const problem = builtInLayerProblem({minLayer: at('min_layer_height', slot), maxLayer: at('max_layer_height', slot)}, height, first);
+      if (problem) throw Error(problem);
+    }
+  }
 
   // A copy, so that a refusal at any step leaves the caller's entries as they were.
   const work = new Map(entries);

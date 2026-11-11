@@ -1412,6 +1412,10 @@ export function previewSoup(project, plateId, objectIds, colours, mapping,
   const capacityGuess = Math.max(64, Math.ceil((options.estimate || 1)));
   let positions = full ? new Float32Array(capacityGuess * 9) : [];
   let states = full ? new Int32Array(capacityGuess) : [];
+  // Full mode only: 1 for a face of a mirrored placement (negative determinant), whose
+  // stored winding faces inward once placed. The soup itself is left as it was.
+  let mirrored = full ? new Uint8Array(capacityGuess) : null;
+  let mirroring = 0;
   let count = 0;
   const grow = () => {
     if (!full) return;
@@ -1422,6 +1426,9 @@ export function previewSoup(project, plateId, objectIds, colours, mapping,
     const more = new Int32Array(states.length * 2);
     more.set(states);
     states = more;
+    const flags = new Uint8Array(mirrored.length * 2);
+    flags.set(mirrored);
+    mirrored = flags;
   };
   const emit = (ids, points, state) => {
     if (full) {
@@ -1434,6 +1441,7 @@ export function previewSoup(project, plateId, objectIds, colours, mapping,
         at += 3;
       }
       states[count] = state;
+      mirrored[count] = mirroring;
       count += 1;
       return;
     }
@@ -1481,6 +1489,9 @@ export function previewSoup(project, plateId, objectIds, colours, mapping,
   const stride = full ? 1 : Math.max(1, Math.ceil(total / cap));
   const cursor = { seen: 0 };
   for (const part of allParts) {
+    const m = part.matrix;
+    mirroring = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+      + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]) < 0 ? 1 : 0;
     const result = meshSoup(project.entries, part, part.base, stride, cursor,
                             { subdivided, unknown }, emit);
     subdivided = result.subdivided;
@@ -1498,6 +1509,7 @@ export function previewSoup(project, plateId, objectIds, colours, mapping,
   if (full) {
     positions = positions.subarray(0, count * 9);
     states = states.subarray(0, count);
+    mirrored = mirrored.subarray(0, count);
   }
   const truncated = stride > 1;
   const colors = full ? new Float32Array(count * 9) : [];
@@ -1532,7 +1544,7 @@ export function previewSoup(project, plateId, objectIds, colours, mapping,
            stride, sampled: truncated, total,
            // The per-facet state list, so a caller can recolour the same geometry
            // for a new palette without re-reading the model.
-           states };
+           states, ...(full ? { mirrored } : {}) };
 }
 
 function transformOf(componentTransform, itemTransform) {

@@ -1,6 +1,6 @@
 import {conversionPlanForPlate,conversionUsage,selectionFootprints,selectionBounds,
   selectionInstances,eligibleObjects,supportPaintPresent,exportProject,analyse,MODEL_FILE,MODEL_RELS,SRC_BBL_MODEL,SRC_BBL_PROJECT} from './project.js';
-import {builtInPlan,builtInRefusal,builtInExportOptions,applyBuiltInExport} from './builtInWorkflow.js';
+import {builtInPlan,builtInRefusal,builtInExportOptions,applyBuiltInExport,builtInNozzleProblem} from './builtInWorkflow.js';
 import {selectionUsage} from './selectionUsage.js';
 import {SLOTS,identityRule} from './assignment.js';
 import {targetLayout,planLayout} from './layout.js';
@@ -138,7 +138,7 @@ export function builtInPlateSpec(project,job,builtIn) {
 /** One plate's built-in export: shade ids, then the layer pattern and its one record. */
 export function buildBuiltInPlate(project,job,{plan,spec},thumbnails) {
   const target=job.settings.target || 'snapmaker',reels=spec.reels;
-  const refusal=builtInRefusal({target,reels,builtIn:spec});
+  const refusal=builtInRefusal({target,reels,builtIn:spec})||builtInNozzleProblem(project.sourceSettings,job.settings.u1Nozzle);
   if(refusal)throw Error(refusal);
   const built=exportProject(project,job.plateId,job.ids,builtInExportOptions({...job.settings,target,reels,physical:reels,mapping:plan.mapping,
     builtIn:spec,thumbnails,title:job.name}));

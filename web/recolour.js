@@ -42,7 +42,7 @@ import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } 
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 import { DUAL_WALL_TARGETS, dualWallProblem } from './shared/dualWall.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
-import { builtInPlan, builtInModelSlots, defaultBackingSlot, builtInFixed } from './shared/builtInWorkflow.js';
+import { builtInPlan, builtInModelSlots, defaultBackingSlot, builtInFixed, builtInNozzleProblem, profileLayerChoice } from './shared/builtInWorkflow.js';
 import { builtInProblem } from './shared/builtInColours.js';
 import { shallowWarning } from './shared/builtInPreview.js';
 
@@ -98,14 +98,13 @@ $('keephue').addEventListener('change',()=>{setHueFidelity($('keephue').checked)
 $('blendstrength').addEventListener('change',()=>{setBlendStrength($('blendstrength').value);clearReview();invalidateRecommendation();refresh();});
 // Dual-wall mixing: painted colour in the outer wall only, one chosen filament behind it.
 for(const id of ['dualwallon','dualwallinner','dualwalldepth'])$(id).addEventListener('change',()=>{clearReview();refresh();});
-// Built-in colours (experimental): saved with the session and, as a convenience, in this browser.
-const CONSTRUCTION_KEY='yab3d-colour-construction';
-try{const saved=JSON.parse(localStorage.getItem(CONSTRUCTION_KEY)||'null');if(saved?.construction==='built-in'){state.construction='built-in';state.builtInBacking=Number.isInteger(saved.backing)?saved.backing:null;}}catch{/* damaged or blocked storage: the default stays */}
-function saveConstruction(){try{localStorage.setItem(CONSTRUCTION_KEY,JSON.stringify({construction:state.construction,backing:state.builtInBacking}));}catch{/* fine */}}
+// Built-in colours (experimental). Like the dual-wall controls, the choice lives in the
+// page's own control (which the browser may keep across a reload) and in the saved session;
+// nothing else stores it, so a restored session is the only other source.
 const builtInOn=()=>state.construction==='built-in';
-$('construction').value=state.construction;
-$('construction').addEventListener('change',()=>{state.construction=$('construction').value==='built-in'?'built-in':'slicer';saveConstruction();clearReview();refresh();});
-$('builtinbacking').addEventListener('change',()=>{state.builtInBacking=Number($('builtinbacking').value)||null;saveConstruction();clearReview();refresh();});
+state.construction=$('construction').value==='built-in'?'built-in':'slicer';
+$('construction').addEventListener('change',()=>{state.construction=$('construction').value==='built-in'?'built-in':'slicer';clearReview();refresh();});
+$('builtinbacking').addEventListener('change',()=>{state.builtInBacking=Number($('builtinbacking').value)||null;clearReview();refresh();});
 /** The interior reel: the chosen one while it is a model reel, otherwise the lightest model reel. */
 function builtInBackingSlot(reels) {
   return builtInModelSlots(reels).includes(state.builtInBacking) ? state.builtInBacking : defaultBackingSlot(reels);
@@ -126,7 +125,9 @@ function builtInPayload(assessed,reels) {
   const key=JSON.stringify([assessed.sourceColors,reels.map(r=>[r.color,r.type,r.role]),weights]);
   if(builtInMemo.key!==key)builtInMemo={key,plan:builtInPlan(assessed.sourceColors,reels,weights)};
   const plan=builtInMemo.plan,backingSlot=builtInBackingSlot(reels),fixed=builtInFixed();
-  const problem=builtInProblem({target:state.target,reels,backingSlot,depth:fixed.depth,layerHeight:fixed.layerHeight});
+  // The nozzle check the export makes, known early (`auto` resolved as the export resolves it).
+  const problem=builtInProblem({target:state.target,reels,backingSlot,depth:fixed.depth,layerHeight:fixed.layerHeight})
+    || builtInNozzleProblem(state.project?.sourceSettings,state.u1Nozzle);
   return {mapping:{...plan.mapping},recipes:[],kept:[],physical:reels,
     builtIn:{rows:plan.rows,recipes:plan.recipes,shades:plan.shades,backingSlot,modelReels:builtInModelSlots(reels).length,...fixed},
     ...(problem?{blocked:problem.replace(/\.$/,'')}:{})};
@@ -1500,7 +1501,10 @@ function applyPreview(soup, fit) {
        : (state.strategy === "source"
          ? " Showing the file's own colours, which this export keeps."
          : resultPlan().outcome?.counts.unresolved ? " Pink regions are unresolved; export is blocked."
-         : " Showing the colours this export would write."));
+         : " Showing the colours this export would write."))
+    // Built-in colours: a simplified preview averages vertices, so a flat face's layer can shift.
+    + (soup.builtIn?.simplified && state.previewMode === "result"
+       ? " On flat and gently sloped areas the reel shown is approximate in the simplified preview." : "");
 }
 
 function paletteOf(payload, mode) {
@@ -1585,18 +1589,19 @@ function renderExport() {
   try {
     const payload=resultPlan();
     if(state.project && state.target==='bambu' && state.bambuSetup) {
-      const height=resolveBambuLayerHeight(state.project.sourceSettings,state.bambuSetup,layerChoice());
+      const height=resolveBambuLayerHeight(state.project.sourceSettings,state.bambuSetup,profileLayerChoice(builtInOn(),layerChoice()));
       $('spectrumlayernote').textContent=`${height} mm regular layers. Bambu uses the selected printer and nozzle limits. Sublayers do not change this regular height.`;
       $('subdivideoptions').hidden=payload.recipes.length===0;
       $('spectrumlayermode').querySelectorAll('option[value^="height:"]').forEach(option=>{try{resolveBambuLayerHeight({},state.bambuSetup,{mode:'custom',value:option.value.slice(7)});option.disabled=false;}catch{option.disabled=true;}});
     }
     if(state.project && state.target==='snapmaker') {
       const types=(payload.physical || state.reels).map(r=>r.type || 'PLA');
-      const profile=buildU1Profile(state.project.sourceSettings,types,state.u1Nozzle,{blends:payload.recipes.length>0,layerHeight:layerChoice()});
+      // Built-in colours fixes its own heights: the hidden layer-height choice is not validated.
+      const profile=buildU1Profile(state.project.sourceSettings,types,state.u1Nozzle,{blends:payload.recipes.length>0,layerHeight:profileLayerChoice(builtInOn(),layerChoice())});
       $('spectrumprofilenote').textContent=profileDescription(profile);
       const sources=state.objects.map(id=>state.project.meta.get(String(id))||{});
       $('spectrumlayernote').innerHTML=(sources.length?sources:[{}]).map(meta=>{
-        const layer=resolveLayerHeight({...state.project.sourceSettings,...meta.settings},profile.match,layerChoice());
+        const layer=resolveLayerHeight({...state.project.sourceSettings,...meta.settings},profile.match,profileLayerChoice(builtInOn(),layerChoice()));
         return `<p>${meta.name?`${esc(meta.name)}: `:''}${esc(layer.text)}</p>`;
       }).join('');
       $('subdivideoptions').hidden=payload.recipes.length===0;

@@ -134,14 +134,46 @@ function colourFacets(states, colours, mapping) {
 }
 
 /**
+ * Built-in colours only, measured once per object on its full-detail soup (so nothing is
+ * spent while Slicer blends is chosen): the shallow-surface share and area, and the
+ * object's lowest point, which sets each copy on the bed as the slicer does.
+ */
+function builtInObject(base) {
+  if (!base.builtIn) {
+    const soup = project.previewSoup(loaded.project, base.plateId, base.objectIds, {}, null, Infinity, { full: true });
+    let zmin = Infinity;
+    for (let i = 2; i < soup.positions.length; i += 3) zmin = Math.min(zmin, soup.positions[i]);
+    base.builtIn = { ...shallowStats(soup.positions, soup.states), zmin };
+    self.__shallowPasses = (self.__shallowPasses || 0) + 1;
+  }
+  return base.builtIn;
+}
+
+/** A view's built-in data: the area-weighted shallow share over every copy, and each copy's bed height. */
+function builtInView(view) {
+  if (!view.builtInCache.stats) {
+    const parts = view.parts.map((p) => ({ ...builtInObject(p.base), lift: Number(p.offset?.[2]) || 0 }));
+    const area = parts.reduce((n, p) => n + p.area, 0);
+    view.builtInCache.stats = {
+      shallow: area > 0 ? parts.reduce((n, p) => n + p.share * p.area, 0) / area : 0,
+      bases: parts.map((p) => p.zmin + p.lift),
+    };
+  }
+  return view.builtInCache.stats;
+}
+
+/**
  * Built-in colours: each face's colour from its own normal and bed heights
  * (builtInPreview.js). The view's positions are bed coordinates; each copy of an
- * object (one pick range) is set on the bed by its lowest point, as the slicer does.
+ * object (one pick range) is set on the bed by its full-detail lowest point. A face of a
+ * mirrored placement keeps its stored winding, so its normal is turned round here, as
+ * the export does with the sign of the placement's determinant.
  * spec: {recipes:[{id,sequence,color}], mapping:{source: recipe id}, reels:[hex by slot],
  * layerHeight, firstLayer}.
  */
 function builtInFacets(view, spec) {
   const { positions, states } = view;
+  const stats = view.parts ? builtInView(view) : null;
   const out = new Float32Array(states.length * 9);
   const recipes = new Map((spec.recipes || []).map((recipe) => [Number(recipe.id), recipe]));
   const reels = (spec.reels || []).map((color) => ({ color }));
@@ -153,11 +185,11 @@ function builtInFacets(view, spec) {
   const low = new Float64Array(states.length).fill(Infinity);
   const ranges = view.pickRanges && view.pickRanges.length ? view.pickRanges
     : [{ start: 0, count: positions.length / 3 }];
-  for (const range of ranges) {
-    let z = Infinity;
-    for (let v = range.start; v < range.start + range.count; v += 1) z = Math.min(z, positions[3 * v + 2]);
+  ranges.forEach((range, r) => {
+    let z = stats ? stats.bases[r] : Infinity;
+    if (!stats) for (let v = range.start; v < range.start + range.count; v += 1) z = Math.min(z, positions[3 * v + 2]);
     for (let f = range.start / 3; f < (range.start + range.count) / 3; f += 1) low[f] = z;
-  }
+  });
   for (let f = 0; f < states.length; f += 1) {
     const state = states[f];
     const recipe = state < 0 ? null : recipes.get(Number(spec.mapping?.[state || 1]));
@@ -167,7 +199,8 @@ function builtInFacets(view, spec) {
       const ux = positions[i + 3] - positions[i], uy = positions[i + 4] - positions[i + 1], uz = positions[i + 5] - positions[i + 2];
       const wx = positions[i + 6] - positions[i], wy = positions[i + 7] - positions[i + 1], wz = positions[i + 8] - positions[i + 2];
       const za = positions[i + 2] - base, zb = positions[i + 5] - base, zc = positions[i + 8] - base;
-      colour = channels(builtInFaceColour({ normal: [uy * wz - uz * wy, uz * wx - ux * wz, ux * wy - uy * wx],
+      const sign = view.mirrored?.[f] ? -1 : 1;
+      colour = channels(builtInFaceColour({ normal: [sign * (uy * wz - uz * wy), sign * (uz * wx - ux * wz), sign * (ux * wy - uy * wx)],
         zMid: (za + zb + zc) / 3, zHigh: Math.max(za, zb, zc), zLow: Math.min(za, zb, zc), recipe, reels,
         firstLayer: spec.firstLayer, layerHeight: spec.layerHeight }));
     }
@@ -251,7 +284,7 @@ function preparePreview(plateId, objectIds, mode, colors, mapping, haveGeometry,
     soup_triangles: current.soupTriangles,
     reused: had,
     prepare_ms: current.ms,
-    ...(builtIn ? { builtIn: { shallowShare: current.shallow } } : {}),
+    ...(builtIn ? { builtIn: { shallowShare: builtInView(current).shallow, simplified: current.reduced } } : {}),
   };
 }
 
@@ -270,7 +303,9 @@ function buildGeometry(key, plateId, objectIds, estimate) {
   return {
     id: (geometrySeq += 1),
     surfaceAreas: surfaceAreas(soup.positions, soup.states),
-    shallow: shallowStats(soup.positions, soup.states),
+    plateId, objectIds,
+    // 1 for each kept face of a mirrored placement (built-in colours turns its normal round).
+    mirrored: simple.sourceFaces ? Uint8Array.from(simple.sourceFaces, (f) => soup.mirrored[f]) : Uint8Array.from(soup.mirrored),
     key,
     positions,focusKey:`${key}|${focusFingerprint(positions,states)}`,
     // The buffer is detached the moment it is transferred, so the count has to
@@ -331,19 +366,19 @@ function objectView(plateId, objectIds, layout) {
     p.mesh = meshes.get(id);
   }
   const length = parts.reduce((n,p)=>n+p.mesh.positions.length,0);
-  const positions = new Float32Array(length), states = new Int32Array(length/9), sourceFaces=new Uint32Array(length/9);
+  const positions = new Float32Array(length), states = new Int32Array(length/9), sourceFaces=new Uint32Array(length/9), mirrored=new Uint8Array(length/9);
   let at = 0;
   const pickRanges=[];
   for (const {mesh,offset,objectId,base} of parts) {
     pickRanges.push({objectId,focusKey:base.focusKey,start:at/3,count:mesh.positions.length/3});
     for(let i=0;i<mesh.positions.length;i++) positions[at+i] = mesh.positions[i]+offset[i%3];
-    for(let f=0;f<mesh.states.length;f++)sourceFaces[at/9+f]=mesh.sourceFaces?.[f]??f;
+    for(let f=0;f<mesh.states.length;f++){sourceFaces[at/9+f]=mesh.sourceFaces?.[f]??f;mirrored[at/9+f]=base.mirrored[sourceFaces[at/9+f]];}
     states.set(mesh.states,at/9); at+=mesh.positions.length;
   }
-  // Built-in colours' shallow share, from each object's full-detail faces, weighted by area over every copy.
-  const area = parts.reduce((n,p)=>n+p.base.shallow.area,0);
-  const shallow = area>0 ? parts.reduce((n,p)=>n+p.base.shallow.share*p.base.shallow.area,0)/area : 0;
-  const view = {id:++geometrySeq,positions,states,sourceFaces,pickRanges,shallow,triangles:length/9,simplified:true,
+  // Built-in colours reads these lazily (builtInView); the cache is shared by every reuse of this view.
+  const reduced = parts.some(p=>p.base.simplified || p.mesh.positions.length!==p.base.positions.length);
+  const view = {id:++geometrySeq,positions,states,sourceFaces,pickRanges,mirrored,reduced,builtInCache:{},
+    parts:parts.map(p=>({base:p.base,offset:p.offset})),triangles:length/9,simplified:true,
     subdivided:parts.reduce((n,p)=>n+p.base.subdivided,0),unknown:parts.reduce((n,p)=>n+p.base.unknown,0),
     total:parts.reduce((n,p)=>n+p.base.total,0),soupTriangles:length/9,ms:0,reused:false,
     copies:plan?.copies || 1,capacity:plan?.capacity,planCopies:plan?.copies || 1};

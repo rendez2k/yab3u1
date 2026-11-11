@@ -2,7 +2,8 @@
 // options it sends to the worker, and the worker's own export step. Pure apart from the
 // entries applyBuiltInColours rewrites. Every shade here is an estimate, never a measurement.
 import {planBuiltIn, alignPhases} from './builtInRecipes.js';
-import {applyBuiltInColours, builtInProblem, BUILT_IN_DEPTH, BUILT_IN_LAYERS, BUILT_IN_FIRST_LAYER} from './builtInColours.js';
+import {applyBuiltInColours, builtInProblem, builtInLayerProblem, BUILT_IN_DEPTH, BUILT_IN_LAYERS, BUILT_IN_FIRST_LAYER} from './builtInColours.js';
+import {matchU1Profile} from './u1Profiles.js';
 import {norm, toLab} from './colour.js';
 
 export const BUILT_IN_DUAL_WALL = 'Dual-wall mixing is not available with built-in colours yet.';
@@ -53,3 +54,16 @@ export function applyBuiltInExport(entries, {target, reels, builtIn}) {
   return applyBuiltInColours(entries, {target, reels, recipes: builtIn.recipes, backingSlot: builtIn.backingSlot,
     depth: builtIn.depth, layerHeight: builtIn.layerHeight, firstLayer: builtIn.firstLayer});
 }
+
+/**
+ * The nozzle refusal the export would give, known before exporting: the U1 nozzle is
+ * resolved as the export resolves it (`auto` follows the source's own nozzle, else 0.4 mm).
+ */
+export function builtInNozzleProblem(sourceSettings, u1Nozzle = 'auto') {
+  let match;
+  try { match = matchU1Profile(sourceSettings || {}, u1Nozzle || 'auto', {blends: false}); } catch (error) { return error.message; }
+  return builtInLayerProblem(match, BUILT_IN_LAYERS.standard, BUILT_IN_FIRST_LAYER);
+}
+
+/** The layer-height choice the page validates: none in built-in mode, which fixes its own heights. */
+export const profileLayerChoice = (builtIn, choice) => (builtIn ? undefined : choice);

@@ -151,6 +151,8 @@ export function cluster(positions, colors, states, target) {
     positions: Float32Array.from(rebuilt.positions),
     colors: Float32Array.from(rebuilt.colors),
     states: states ? Int32Array.from(rebuilt.states) : null,
+    // Which input facet each kept facet is, for callers that carry per-facet data alongside.
+    sourceFaces: Uint32Array.from(rebuilt.sourceFaces),
     simplified: true,
     cells: best.cells,
     dropped: rebuilt.collapsed,
