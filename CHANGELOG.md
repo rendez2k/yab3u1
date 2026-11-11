@@ -1,3 +1,8 @@
+## 2.6.83 — The 3D view says what it is showing
+
+- In Full Spectrum blends, a caption above the Original / Applied / Suggested switch now names the view and shows its reels: "Applied · 4 reels + 1 blend. This is what will be downloaded." or "Suggested · not applied yet · 4 reels + 5 blends. Press Apply palette to use this set."
+- The Suggested caption is outlined so a preview is not mistaken for the set that will be exported.
+
 ## 2.6.82 — A wider panel and a shorter pack chooser
 
 - On wide screens the left panel now grows with the window, up to 580 px, instead of staying at 404 px.

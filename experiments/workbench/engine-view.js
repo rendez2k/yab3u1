@@ -242,8 +242,26 @@ async function autoMerge(){
   }catch(error){say(`Could not merge automatically: ${error.message}`);}
   stepKey='';tick();
 }
+// Says which reel set the 3D view is showing, so Applied and Suggested cannot be mistaken for each other.
+let captionKey='';
+function syncViewCaption(loaded){
+  if(kind!=='spectrum')return;
+  let caption=document.querySelector('.view-caption');
+  if(!caption){caption=view.make('div',{class:'view-caption',role:'status','aria-live':'polite'},'<strong></strong><span class="view-caption-reels" aria-hidden="true"></span><span data-caption-detail></span>');$('platecontrols').prepend(caption);}
+  const s=engine.state,suggested=s.reelView==='recommended'&&Boolean(s.recommendation);
+  const mode=!loaded?'':s.strategy==='source'||s.previewMode==='original'?'original':suggested?'suggested':s.workflow==='model'&&!s.modelApplied?'none':'applied';
+  const reels=mode==='suggested'?s.recommendation.reels:mode==='applied'?s.reels:[],blends=mode==='suggested'||mode==='applied'?(s.recipes||[]).length:0;
+  const key=JSON.stringify([mode,reels.map(r=>r.color),blends]);if(key===captionKey)return;captionKey=key;
+  caption.hidden=!mode;caption.dataset.mode=mode;
+  const mix=blends?` + ${blends} blend${blends===1?'':'s'}`:'';
+  caption.querySelector('strong').textContent={original:'Original',suggested:'Suggested · not applied yet',applied:'Applied',none:'Nothing applied yet'}[mode]||'';
+  caption.querySelector('[data-caption-detail]').textContent={original:'The colours in your file.',suggested:`${reels.length} reels${mix}. Press Apply palette to use this set.`,applied:`${reels.length} reels${mix}. This is what will be downloaded.`,none:'Choose a suggested set, then apply it.'}[mode]||'';
+  const chips=caption.querySelector('.view-caption-reels');chips.replaceChildren(...reels.map(r=>{const i=view.make('i');i.style.backgroundColor=r.color;return i;}));
+  caption.setAttribute('aria-label',`${caption.querySelector('strong').textContent}. ${caption.querySelector('[data-caption-detail]').textContent}`);
+}
 let stepKey='';
 function syncSteps(loaded,busy,batch,report){
+  try{syncViewCaption(loaded);}catch{}
   let coloursDone=false;
   if(loaded){try{coloursDone=kind==='converter'?!engine.session.capacityStatus().unresolved:!applying();}catch{}}
   const done={project:loaded,colours:loaded&&coloursDone,output:loaded&&coloursDone&&!report.disabled&&!report.pending&&!/review/i.test(report.action||''),download:false};
