@@ -17,6 +17,13 @@
 // --no-band       export and dual-wall only, no banding (control: the source's own
 //                 open edges, for comparing with the banded output)
 // --plate=N       export plate N instead of the first plate
+// --flat-rule=D   experiment (Task 12 follow-up): a painted piece of a face whose normal is
+//                 within D degrees of vertical takes the reel of the layer the face tops
+//                 (facing up) or bottoms (facing down), by tools/flatFaceRule.mjs, instead
+//                 of its band's; the geometry is unchanged. Faces below the first layer's
+//                 slice (0.1 mm) stay in the first layer, so a face on the bed stays there.
+// --flat-z=Z      height of a piece used by --flat-rule: centroid (default), min, max, or
+//                 extreme (highest point if facing up, lowest if facing down)
 // --raw           accepted so that earlier command lines still run; it prints a notice and
 //                 has no effect, because there is no weld any more
 // Negative volumes are kept (readProject allowNegative); they carry no paint and
@@ -32,6 +39,7 @@ import {bandMesh} from '../web/shared/paintBands.js';
 import {wallTestSetup} from '../web/shared/wallComparison.js';
 import * as paint from '../web/shared/paint.js';
 import {placements} from './builtInToolpathCheck.mjs';
+import {flatFaceLayer, isNearFlat} from './flatFaceRule.mjs';
 
 const enc = new TextEncoder(), dec = new TextDecoder();
 const FIRST = 0.2, PATTERN = [1, 2, 3];
@@ -161,7 +169,7 @@ function chunkedWriter() {
   };
 }
 
-async function spike(input, height, output, {wholeSplits = false, noBand = false, plate = null} = {}) {
+async function spike(input, height, output, {wholeSplits = false, noBand = false, plate = null, flatRule = null} = {}) {
   const started = Date.now();
   const source = await readZip(readFileSync(input));
   // Negative volumes are kept as they are (minimal fix for the owner's Super Man file).
@@ -197,6 +205,7 @@ async function spike(input, height, output, {wholeSplits = false, noBand = false
 
   const stats = {trianglesBefore: 0, trianglesAfter: 0, paintedBefore: 0, splitPaintedBefore: 0, unpaintedBefore: 0, meshesBanded: 0, meshesKept: 0,
     verticesBefore: 0, verticesAfter: 0, duplicateAppendedVertices: 0, zeroAreaPieces: 0, smallestPieceAreaMm2: Infinity, layersSpanned: [Infinity, -Infinity], wholeSplits, noBand,
+    flatRule: {rule: flatRule, flatPieces: 0, movedDown: 0, movedUp: 0, movedMoreThanOne: 0},
     before: {openEdges: 0, edgesOnMoreThanTwoFaces: 0}, after: {openEdges: 0, edgesOnMoreThanTwoFaces: 0}};
   const reelFaces = {1: 0, 2: 0, 3: 0};
   const codes = Object.fromEntries(PATTERN.map(s => [s, paint.encode({kind: 'leaf', state: s})]));
@@ -249,11 +258,38 @@ async function spike(input, height, output, {wholeSplits = false, noBand = false
       writer.push(`<object${m[1]}><mesh><vertices>`);
       for (const p of banded.vertices) writer.push(`<vertex x="${p[0]}" y="${p[1]}" z="${p[2]}"/>`);
       writer.push('</vertices><triangles>');
+      // --flat-rule: a near-flat face's pieces take the reel of the layer the face tops or bottoms.
+      const bedZ = p => applyMatrix(M, p)[2] - zmin;
+      const det = M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1]) - M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0]) + M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0]);
+      const flatOf = new Map();
+      const faceFlat = f => {
+        if (!flatOf.has(f)) {
+          const [p, q, r] = faces[f].v.map(i => applyMatrix(M, pts[i]));
+          const u = [q[0] - p[0], q[1] - p[1], q[2] - p[2]], w = [r[0] - p[0], r[1] - p[1], r[2] - p[2]], s = det < 0 ? -1 : 1;
+          flatOf.set(f, isNearFlat([s * (u[1] * w[2] - u[2] * w[1]), s * (u[2] * w[0] - u[0] * w[2]), s * (u[0] * w[1] - u[1] * w[0])], flatRule.degrees));
+        }
+        return flatOf.get(f);
+      };
       for (const piece of banded.pieces) {
         const [a, b, c] = piece.v;
         let code = '';
         if (painted[piece.face]) {
-          const reel = PATTERN[piece.layer % 3];
+          let layer = piece.layer;
+          if (flatRule) {
+            const {flat, up} = faceFlat(piece.face);
+            if (flat) {
+              const zs = piece.v.map(i => bedZ(banded.vertices[i]));
+              // extreme: an up-facing piece by its highest point, a down-facing one by its lowest, so a
+              // piece that reaches the slice plane of its own band keeps its band.
+              const mode = flatRule.z === 'extreme' ? (up ? 'max' : 'min') : flatRule.z;
+              const z = mode === 'min' ? Math.min(...zs) : mode === 'max' ? Math.max(...zs) : (zs[0] + zs[1] + zs[2]) / 3;
+              layer = flatFaceLayer(z, up, FIRST, height);
+              stats.flatRule.flatPieces += 1;
+              if (layer < piece.layer) stats.flatRule.movedDown += 1; else if (layer > piece.layer) stats.flatRule.movedUp += 1;
+              if (Math.abs(layer - piece.layer) > 1) stats.flatRule.movedMoreThanOne += 1;
+            }
+          }
+          const reel = PATTERN[layer % 3];
           reelFaces[reel] += 1; code = ` paint_color="${codes[reel]}"`;
           stats.layersSpanned[0] = Math.min(stats.layersSpanned[0], piece.layer); stats.layersSpanned[1] = Math.max(stats.layersSpanned[1], piece.layer);
         }
@@ -294,11 +330,13 @@ async function spike(input, height, output, {wholeSplits = false, noBand = false
 
 const args = process.argv.slice(2);
 if (args[0] === '--make-test-solid' && args[1]) console.log(JSON.stringify(await makeTestSolid(args[1]), null, 2));
-else if (args.length >= 3 && Number(args[1]) > 0 && args.slice(3).every(a => ['--raw', '--whole-splits', '--no-band'].includes(a) || /^--plate=\d+$/.test(a))) {
+else if (args.length >= 3 && Number(args[1]) > 0 && args.slice(3).every(a => ['--raw', '--whole-splits', '--no-band'].includes(a) || /^--plate=\d+$/.test(a) || /^--flat-rule=\d+(\.\d+)?$/.test(a) || /^--flat-z=(centroid|min|max|extreme)$/.test(a))) {
   if (args.includes('--raw')) console.error('--raw has no effect: the output is never welded.');
+  const flatDegrees = Number(args.find(a => a.startsWith('--flat-rule='))?.slice(12)) || null;
   const flags = new Set(args.slice(3)), plate = Number(args.slice(3).find(a => a.startsWith('--plate='))?.slice(8)) || null;
-  const r = await spike(args[0], Number(args[1]), args[2], {wholeSplits: flags.has('--whole-splits'), noBand: flags.has('--no-band'), plate});
-  console.log(JSON.stringify({output: r.output, trianglesBefore: r.trianglesBefore, trianglesAfter: r.trianglesAfter, splitPaintedBefore: r.splitPaintedBefore, modelHeightMm: r.modelHeightMm,
+  const r = await spike(args[0], Number(args[1]), args[2], {wholeSplits: flags.has('--whole-splits'), noBand: flags.has('--no-band'), plate,
+    flatRule: flatDegrees ? {degrees: flatDegrees, z: args.find(a => a.startsWith('--flat-z='))?.slice(9) || 'centroid'} : null});
+  console.log(JSON.stringify({output: r.output, flatRule: r.flatRule, trianglesBefore: r.trianglesBefore, trianglesAfter: r.trianglesAfter, splitPaintedBefore: r.splitPaintedBefore, modelHeightMm: r.modelHeightMm,
     before: r.before, after: r.after, duplicateAppendedVertices: r.duplicateAppendedVertices, zeroAreaPieces: r.zeroAreaPieces, smallestPieceAreaMm2: r.smallestPieceAreaMm2,
     uncompressedModelBytes: r.uncompressedModelBytes, outputBytes: r.outputBytes, seconds: r.seconds}, null, 2));
 } else {

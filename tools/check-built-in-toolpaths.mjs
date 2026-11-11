@@ -10,13 +10,27 @@
 // reel painted on the outline next to them; walls far from the outline (the inner
 // reel's own outer walls, out of sight) are counted but not judged. Prints the summary and
 // the ten worst layers, writes the per-layer table as JSON when asked, and exits 1
-// when the check does not pass. If model and G-code do not line up (the median
-// distance from the outline to the nearest outer-wall sample is above 0.35 mm) it
-// stops. The G-code is read as a stream and the mesh is swept upwards once, so a
+// when the check does not pass.
+//
+// Alignment stop: it stops when the median distance, over the outline, from each outline
+// point to the nearest outer-wall sample is above 0.35 mm (aligned files give about
+// 0.215-0.225 mm, half a 0.42 mm line). It also prints the brief's median, from visible
+// samples to the outline, but that one cannot show misalignment: a visible sample is by
+// definition within 0.35 mm, so its median stays below 0.35 mm (0.205 mm with the model
+// 1 mm out). What the stop does not catch, measured on Super Man and Flirty with --offset:
+// - x/y shifts up to about 0.5-0.6 mm (Super Man: 0.5 mm in x gives 0.285 mm and 0.6 mm in
+//   y 0.325 mm; Flirty: 0.6 mm in x gives 0.335 mm). It stops from 0.6-0.7 mm. Those
+//   smaller shifts still fail the check, because coverage falls to 52-64%.
+// - Any error in z. The model is dropped onto the bed (its lowest printed point to z = 0)
+//   and the median is measured in x/y only. A z error shows only in the reels: on Super
+//   Man, 0.06 mm drops matched share to 60% and 0.12 mm (one layer) to 0.1%, but 0.03 mm
+//   still passes (it only moves the cut within the layer).
+//
+// The G-code is read as a stream and the mesh is swept upwards once, so a
 // multi-million-triangle model and a multi-hundred-megabyte G-code fit in memory.
 // Extra options, for investigation only: --with-overhang also reports coverage with
-// "Overhang wall" moves counted; --offset dx,dy,dz moves the model before checking (to
-// show that the alignment stop works).
+// "Overhang wall" moves counted; --offset dx,dy,dz moves the model before checking (dz
+// after the bed drop), to measure what the alignment stop and the other rules catch.
 //
 // Fixed-pattern mode (Task 2): for every layer above the first, among extrusions typed
 // "Outer wall", the tool with the most extruded length must be [0,1,2][layer % 3], and
@@ -40,7 +54,9 @@ async function modelMode(args) {
   const file = args[0], modelPath = opt('--model'), every = Number(opt('--every') ?? 1), jsonOut = opt('--json');
   const withOverhang = args.includes('--with-overhang'), offset = (opt('--offset') ?? '0,0,0').split(',').map(Number);
   if (!file || file.startsWith('--') || !modelPath || !(every >= 1) || !Number.isInteger(every) || offset.length !== 3 || offset.some(x => !Number.isFinite(x))) {
-    console.error('usage: node tools/check-built-in-toolpaths.mjs <gcode> --model <exported.3mf> [--every <n>] [--json <out>]');
+    console.error('usage: node tools/check-built-in-toolpaths.mjs <gcode> --model <exported.3mf> [--every <n>] [--json <out>]\n'
+      + 'The alignment stop measures x/y only (median outline-to-wall distance above 0.35 mm). It misses x/y\n'
+      + 'shifts up to about 0.5-0.6 mm (coverage then fails instead) and any z error (shown only by matched share).');
     process.exitCode = 2;
     return;
   }

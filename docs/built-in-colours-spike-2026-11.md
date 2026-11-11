@@ -514,3 +514,98 @@ for f in test-solid superman theylive flirty; do
 done
 node --max-old-space-size=12000 $G/wrong-near-flat-faces.mjs $G/gc-theylive-0.12/plate_1.gcode $G/theylive-0.12.3mf
 ```
+
+#### What the alignment stop measures
+
+- **What it measures.** The stop is the median distance, over the outline, from each
+  outline point to the nearest outer-wall sample, measured in x/y only. It stops above
+  0.35 mm. Aligned files give 0.215–0.225 mm.
+- **The brief's median does not work as a check.** The median over visible samples is
+  printed too, but a visible sample is within 0.35 mm by definition, so that median
+  stays under 0.35 mm whatever happens. It was 0.205 mm with the model 1 mm out.
+- **What it misses in x/y.** Measured with `--offset` (log `gapfix/alignment-offsets.log`):
+  - x/y shifts up to about 0.5–0.6 mm get through. Super Man: 0.5 mm in x gives
+    0.285 mm and 0.6 mm in y gives 0.325 mm. Flirty: 0.5 and 0.6 mm in x give 0.275 and
+    0.335 mm.
+  - The stop trips from 0.6–0.7 mm (0.6 mm in x on Super Man, 0.7 mm in x on Flirty,
+    0.5 mm in both x and y on either).
+  - Every shift that got through still failed the check, on coverage (52–64%).
+- **It misses any z error.** The model is dropped onto the bed before checking, so the
+  median never sees z (log `gapfix/alignment-z.log`, with the offset applied after the
+  drop). A z error shows only in the reels. On Super Man:
+  - 0.06 mm drops matched share to 60.36%.
+  - 0.12 mm (one layer) drops it to 0.11%.
+  - 0.03 mm still passes, because it only moves the cut within the layer. With it the
+    Super Man fail goes, so the mid-layer result is sensitive to where in the layer the
+    cut falls.
+- The tool's comment header and usage message say the same.
+
+#### Flat-face rule experiment (Task 12 follow-up)
+
+- **What was tried.** The slicer builds layer n from the cross-section at its mid height
+  (the first layer's at 0.1 mm). So an up-facing near-flat face tops the highest layer
+  whose slice is at or below it, and a down-facing one bottoms the lowest layer whose
+  slice is above it.
+- **The rule.** `tools/built-in-colours-spike.mjs --flat-rule=<degrees>` (default off)
+  repaints each banded piece of a painted face whose normal (in bed orientation) is
+  within that angle of vertical. The piece takes the reel of that layer, worked out by
+  `tools/flatFaceRule.mjs`. The geometry and `web/shared/paintBands.js` are unchanged.
+- **The bed.** A face below the first slice (z < 0.1 mm) stays in the first layer
+  whichever way it faces, so a face on the bed stays there. A down-facing face between
+  0.1 and 0.26 mm moves to layer 1.
+- **The runs.** All four files were re-banded, re-sliced (Orca command line, no GUI) and
+  re-checked at 0.12 mm. Outputs are in `gapfix/flat30/` and `gapfix/flat30-extreme/`;
+  the comparison script is `gapfix/flat-compare.mjs`.
+
+Two variants, both at 30°:
+- **flat30**: each piece is placed by its centroid height.
+- **flat30-extreme**: an up-facing piece by its highest point and a down-facing one by
+  its lowest. A piece that reaches its own band's slice plane therefore keeps its band.
+  This was tried because of what flat30 left.
+
+| File | Rule | Matched share (wrong mm) | Covered share | Mixed share | Worst layer (judged > 20 mm) | Result | Pieces repainted |
+|---|---|---|---|---|---|---|---|
+| Test solid | none | 100.00% (0) | 100.00% | 0.00% | 1 at 100.00% | pass | — |
+| | flat30 | 100.00% (0) | 100.00% | 0.00% | 1 at 100.00% | pass | 0 of 723 flat |
+| | flat30-extreme | 100.00% (0) | 100.00% | 0.00% | 1 at 100.00% | pass | 0 of 723 flat |
+| Super Man | none | 99.67% (96.8) | 99.32% | 0.00% | 101 at 92.08% | **fail** | — |
+| | flat30 | 99.81% (49.1) | 98.85% | 9.22% | 98 at 98.02% | pass | 70,232 of 144,189 flat |
+| | flat30-extreme | 99.91% (27.7) | 99.33% | 0.00% | 100 at 97.23% | pass | 44,097 of 144,189 flat |
+| They Live | none | 99.81% (448.6) | 95.53% | 0.00% | 17 at 0.00% | **fail** | — |
+| | flat30 | 99.95% (118.6) | 95.38% | 4.33% | 239 at 61.88% | **fail** | 131,397 of 263,254 flat |
+| | flat30-extreme | 100.00% (9.7) | 95.80% | 0.00% | 52 at 98.45% | pass | 89,236 of 263,254 flat |
+| Flirty | none | 99.92% (121.2) | 98.45% | 0.00% | 220 at 70.94% | **fail** | — |
+| | flat30 | 99.98% (26.8) | 97.95% | 4.03% | 781 at 93.97% | **fail** | 114,341 of 228,027 flat |
+| | flat30-extreme | 100.00% (0.0) | 98.95% | 0.00% | 1 at 100.00% | pass | 79,528 of 228,027 flat |
+
+**flat30 cleared every layer that failed before, but made things worse elsewhere.**
+- Layers that passed before and fail with flat30:
+  - They Live layer 239 (61.88%, 98.4 mm wrong).
+  - Flirty layers 219 (94.72%), 781 (93.97%) and 782 (94.14%).
+- Mixed share rose to 4–9%, so less wall was judged at all.
+- The cause, on They Live layer 239: gently sloped up-facing pieces cross the layer's own
+  slice plane at 28.82 mm but have their centroid below it. The rule moved them to layer
+  238's reel, but the slicer prints them as part of layer 239's outline, in layer 239's
+  band reel.
+
+**flat30-extreme passes all four files, and no layer that passed before fails.**
+- Coverage is the same or slightly higher, and mixed share stays 0.
+- The judged (matched) length is within 0.6% of the length without the rule.
+- What remains on Super Man (27.5 of 27.7 mm) still sits next to a near-flat face in the
+  wall's reel, in pieces of 0.1–1.2 mm per layer (`flat30-extreme/wrong-near-flat-faces.log`).
+- Of They Live's 9.7 mm, 7.1 mm has no near-flat face nearby; it is mostly the inner reel
+  beside the plinth slots.
+
+**What this does and does not show.**
+- It shows that, in these four slices, the visible outer walls follow the paint when
+  near-flat faces are painted by the layer the slicer slices them into.
+- It does not show that the colours print correctly. **A toolpath check says where the
+  slicer puts each reel; it is not a print.** Nothing was printed, nothing was sent to a
+  printer, and no slice was opened in the GUI.
+- Only 30° and 0.12 mm were tried. Super Man is plate 1 only.
+- The same `[1,2,3]` pattern was used. In it, the reel a flat face is moved to is always
+  the neighbouring layer's.
+- `paintBands.js` itself is not changed.
+
+Reproduce: `bash $G/flat-run.sh flat30-extreme --flat-rule=30 --flat-z=extreme`, then
+`(cd $G && node flat-compare.mjs flat30 flat30-extreme)`.

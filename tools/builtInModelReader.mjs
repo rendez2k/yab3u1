@@ -108,7 +108,7 @@ export async function loadModel(path, offset = [0, 0, 0]) {
         if (t[1] === 'vertex') {
           if (!cur) continue;
           const a = t[2], p = applyMatrix(cur.place.m, [Number(attr(a, 'x')), Number(attr(a, 'y')), Number(attr(a, 'z'))]);
-          V.push(p[0] + offset[0], p[1] + offset[1], p[2] + offset[2]);
+          V.push(p[0] + offset[0], p[1] + offset[1], p[2]);
         } else if (t[1] === 'triangle') {
           if (!cur) continue;
           const a = t[2], found = PAINT_RE.exec(a);
@@ -143,7 +143,8 @@ export async function loadModel(path, offset = [0, 0, 0]) {
     for (let v = p.vertexStart; v < p.vertexEnd; v++) lo = Math.min(lo, vertices[3 * v + 2]);
     itemMin.set(p.item, lo);
   });
-  for (const p of parts) { const lo = itemMin.get(p.item) ?? 0; p.droppedBy = lo; for (let v = p.vertexStart; v < p.vertexEnd; v++) vertices[3 * v + 2] -= lo; }
+  // The z offset (investigation only) is applied after the drop, so it really moves the model off the bed.
+  for (const p of parts) { const lo = itemMin.get(p.item) ?? 0; p.droppedBy = lo; for (let v = p.vertexStart; v < p.vertexEnd; v++) vertices[3 * v + 2] += offset[2] - lo; }
   return {vertices, tri, reel, part, parts, stats, itemMinWorldZ: Object.fromEntries(itemMin)};
 }
 

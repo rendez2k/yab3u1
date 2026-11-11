@@ -1,0 +1,46 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {sliceMid, flatFaceLayer, isNearFlat} from '../../tools/flatFaceRule.mjs';
+
+const FIRST = 0.2, H = 0.12;
+
+test('slice heights are mid-layer, with the thicker first layer at half its height', () => {
+  assert.equal(sliceMid(0, FIRST, H), 0.1);
+  assert.ok(Math.abs(sliceMid(1, FIRST, H) - 0.26) < 1e-12);
+  assert.ok(Math.abs(sliceMid(18, FIRST, H) - 2.30) < 1e-12);
+});
+
+test('an up-facing flat face tops the highest layer whose slice is below it', () => {
+  // They Live's plinth ledge: z 2.29 lies in layer 18's band (2.24-2.36) but below its slice (2.30).
+  assert.equal(flatFaceLayer(2.29, true, FIRST, H), 17);
+  assert.equal(flatFaceLayer(2.31, true, FIRST, H), 18);
+  // A face exactly on a band boundary (Super Man layer 101's top at 12.32) tops that layer.
+  assert.equal(flatFaceLayer(12.32, true, FIRST, H), 101);
+  // In the first layer and just above it: the first slice is at 0.10, the second at 0.26.
+  assert.equal(flatFaceLayer(0.25, true, FIRST, H), 0);
+  assert.equal(flatFaceLayer(0.27, true, FIRST, H), 1);
+  assert.equal(flatFaceLayer(0.05, true, FIRST, H), 0, 'below the first slice there is no lower layer; it stays in the first');
+});
+
+test('a down-facing flat face is the bottom of the lowest layer whose slice is above it', () => {
+  // They Live layer 112: an underside at 13.49 is in band 111 (13.40-13.52) but above its slice (13.46).
+  assert.equal(flatFaceLayer(13.49, false, FIRST, H), 112);
+  assert.equal(flatFaceLayer(13.44, false, FIRST, H), 111);
+  // On the bed, and anywhere below the first slice: the first layer.
+  assert.equal(flatFaceLayer(0, false, FIRST, H), 0);
+  assert.equal(flatFaceLayer(0.08, false, FIRST, H), 0);
+  // Between the first and second slices: the second layer (Super Man layer 1's undersides at 0.08 are below 0.10, so stay in 0).
+  assert.equal(flatFaceLayer(0.12, false, FIRST, H), 1);
+  assert.equal(flatFaceLayer(0.25, false, FIRST, H), 1);
+  assert.equal(flatFaceLayer(0.27, false, FIRST, H), 2);
+});
+
+test('near-flat means the normal is within the angle of vertical, up or down', () => {
+  const tilt = deg => [Math.sin(deg * Math.PI / 180), 0, Math.cos(deg * Math.PI / 180)];
+  assert.deepEqual(isNearFlat(tilt(29), 30), {flat: true, up: true});
+  assert.deepEqual(isNearFlat(tilt(31), 30), {flat: false, up: true});
+  assert.deepEqual(isNearFlat(tilt(170), 30), {flat: true, up: false});
+  assert.deepEqual(isNearFlat([0, 0, -5], 30), {flat: true, up: false}, 'normals need not be unit length');
+  assert.deepEqual(isNearFlat([1, 0, 0], 30), {flat: false, up: false});
+  assert.deepEqual(isNearFlat([0, 0, 0], 30), {flat: false, up: false}, 'a zero normal is never flat');
+});
