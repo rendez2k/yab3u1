@@ -1,3 +1,7 @@
+## 2.6.89 — Baked colours no longer turns olive grey
+
+- With Baked colours on, a dark muted green could be replaced by a plain grey (equal parts cyan, magenta and yellow), because grey was numerically closer and has no hue for "Keep each colour's hue" to compare. Keeping hue now also marks down a blend that gives up most of a colour's saturation, so an olive stays a muted yellow-green.
+
 ## 2.6.88 — A friendlier wait
 
 - While a model is read or the view is redrawn, the previous view now stays in place, softened and blurred, instead of the stage going blank.
