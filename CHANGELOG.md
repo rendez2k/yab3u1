@@ -1,3 +1,10 @@
+## 2.6.82 — A wider panel and a shorter pack chooser
+
+- On wide screens the left panel now grows with the window, up to 580 px, instead of staying at 404 px.
+- Picking a filament pack folds the list down to that pack, with **Choose a different pack** to bring the list back. The list no longer scrolls inside the panel, and shows in two columns on wide screens.
+- The "Preview on the model" button is gone: choosing a pack or its reels already previews it, and the bar at the bottom applies it.
+- On wide screens the three method cards sit side by side.
+
 ## 2.6.81 — Fine blend profile (experimental)
 
 - A new export option for Snapmaker Orca, in step 3 under Print options: **Fine blend profile**. One switch sets 0.10 mm layers, five walls 0.3 mm wide and Subdivide Mix Layer off, and restores your previous layer height and Subdivide choice when turned off.
