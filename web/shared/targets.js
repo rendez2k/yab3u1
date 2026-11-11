@@ -123,13 +123,76 @@ export function row(a, b, { enabled, custom, percent, deleted, stableId }) {
     + `xa0,xb0,d${deleted ? 1 : 0},o${custom ? 0 : 1},u${stableId}`;
 }
 
+/**
+ * A blend as an explicit run of layers: which reel prints each layer of a short
+ * repeat. Shares become whole layers; the repeat is the shortest that keeps
+ * every share within about a point and a half, up to `maxLength` layers. Reels
+ * are spread through the repeat so no reel prints more layers in a row than it
+ * has to.
+ */
+export function layerPattern(parts, maxLength = 10) {
+  let best = null;
+  for (let n = parts.length; n <= maxLength; n += 1) {
+    const counts = parts.map(p => Math.max(1, Math.floor(p.percent * n / 100)));
+    while (counts.reduce((a, b) => a + b, 0) < n) {
+      // Give the next layer to the reel furthest below its share.
+      let pick = 0;
+      parts.forEach((p, i) => { if (p.percent * n / 100 - counts[i] > parts[pick].percent * n / 100 - counts[pick]) pick = i; });
+      counts[pick] += 1;
+    }
+    if (counts.reduce((a, b) => a + b, 0) !== n) continue;
+    const error = Math.max(...parts.map((p, i) => Math.abs(p.percent - 100 * counts[i] / n)));
+    if (!best || error < best.error - 1e-9) best = { counts, error, n };
+    if (error <= 1.5) break;
+  }
+  if (!best) throw new MixError('this blend cannot be written as a run of layers');
+  // Every ordering of so short a repeat can be tried. The best keeps each
+  // reel's layers as evenly spaced as possible around the repeat.
+  const left = best.counts.slice(), order = [], n = best.n;
+  let chosen = null, lowest = Infinity;
+  const cost = () => {
+    // The longest run of one reel matters most: that is the visible stripe.
+    let run = 1, longest = 1;
+    for (let k = 1; k < 2 * n; k += 1) { run = order[k % n] === order[(k - 1) % n] ? run + 1 : 1; longest = Math.max(longest, run); }
+    let total = longest * 10000;
+    parts.forEach((_, i) => {
+      const at = order.flatMap((slot, layer) => (slot === i ? [layer] : []));
+      at.forEach((layer, k) => { const gap = (at[(k + 1) % at.length] - layer + n - 1) % n + 1; total += gap * gap; });
+    });
+    return total;
+  };
+  const place = () => {
+    if (order.length === n) { const c = cost(); if (c < lowest) { lowest = c; chosen = order.slice(); } return; }
+    for (let i = 0; i < parts.length; i += 1) {
+      if (!left[i]) continue;
+      left[i] -= 1; order.push(i); place(); order.pop(); left[i] += 1;
+    }
+  };
+  // Start on the largest share: rotations of a repeat are the same repeat.
+  const first = best.counts.indexOf(Math.max(...best.counts));
+  left[first] -= 1; order.push(first); place();
+  return chosen.map(i => parts[i].slot);
+}
+
+/** One blend of three reels, as the slicer's explicit layer-cycle row. In such
+ * a row the reels are named by slot number in the pattern itself, and the pair
+ * at the front is always slots 1 and 2. */
+export function patternRow(recipe, stableId) {
+  const parts = recipeParts(recipe).slice().sort((x, y) => x.slot - y.slot);
+  const pattern = layerPattern(parts);
+  const share = slot => Math.round(100 * pattern.filter(s => s === slot).length / pattern.length);
+  if (parts.some(p => p.slot > 9)) throw new MixError('a layer-pattern blend can only use slots 1 to 9');
+  return `1,2,1,1,${share(2)},0,g${parts.map(p => p.slot).join('')},w${parts.map(p => share(p.slot)).join('/')},m0,z0,`
+    + `xa0,xb0,d0,o0,u${stableId},cm1,${pattern.join('')}`;
+}
+
 export function definitions(physical, recipes) {
   check(physical, recipes);
   recipes.forEach(r=>validateRecipe(r,physical,'snapmaker'));
   const rows = [];
   let stable = 1;
   for (const recipe of recipes) {
-    rows.push(row(recipe.a, recipe.b, { enabled: true, custom: true,
+    rows.push(recipe.c ? patternRow(recipe, stable) : row(recipe.a, recipe.b, { enabled: true, custom: true,
                                         percent: recipe.percent, deleted: false,
                                         stableId: stable }));
     stable += 1;
@@ -300,8 +363,10 @@ export function validate(target, cfg, physical, recipes, members = {}) {
       });
       recipes.forEach((recipe, index) => {
         const tokens = (visible[index] || "").split(",");
-        if (tokens[0] !== String(recipe.a) || tokens[1] !== String(recipe.b)
-            || tokens[4] !== String(recipe.percent)) {
+        if (recipe.c ? (tokens[0] !== "1" || tokens[1] !== "2" || !/^[1-9]+$/.test(tokens[tokens.length - 1])
+              || recipeParts(recipe).some(p => !tokens[tokens.length - 1].includes(String(p.slot))))
+            : (tokens[0] !== String(recipe.a) || tokens[1] !== String(recipe.b)
+            || tokens[4] !== String(recipe.percent))) {
           problems.push(`filament id ${physical + 1 + index} does not resolve to `
             + `recipe ${index + 1}`);
         }

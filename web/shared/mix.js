@@ -9,6 +9,7 @@ import { distance, nearest, norm, toLab } from "./colour.js";
 import { MIX_COEFFICIENTS, MIX_INTERCEPT, MIX_POWERS } from "./mix_model.js";
 import { mixFdmHex, FDM_MODEL, approximateDistance } from './fdmMix.js';
 import { calibratedPredictor } from './blendCalibration.js';
+import { mixFilaments } from './vendor/prusa-fdm/prusa-fdm-mixer.js';
 
 export const RATIOS = [25, 50, 75];
 export const MIN_IMPROVEMENT = 2.0;
@@ -20,9 +21,9 @@ export const MAX_RECIPES = 12;
 // repeat over more layers, so they band more visibly without thin layers.
 // RATIOS above stays the reference set shared with the Python oracle.
 export const BLEND_STRENGTHS = {
-  standard: { ratios: RATIOS, recipes: 6, period: 4 },
-  strong: { ratios: [17, 25, 33, 40, 50, 60, 67, 75, 83], recipes: 10, period: 6 },
-  finest: { ratios: [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90], recipes: 12, period: 20 },
+  standard: { ratios: RATIOS, recipes: 6, period: 4, layers: 4 },
+  strong: { ratios: [17, 25, 33, 40, 50, 60, 67, 75, 83], recipes: 10, period: 6, layers: 6 },
+  finest: { ratios: [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90], recipes: 12, period: 20, layers: 8 },
 };
 let strength = 'standard';
 export function setBlendStrength(name) {
@@ -92,6 +93,42 @@ export function mixHex(first, second, percent) {
   return rgb ? hex(rgb) : "";
 }
 
+// Baked colours. A blend of three reels is written as an explicit run of
+// layers (for example reel 1, 2, 1, 3), so its shares are whole layers out of a
+// short repeat. Off by default: the reference planner mixes pairs only.
+let baked = false;
+export function setBakedColours(on) { baked = Boolean(on); }
+export const bakedColours = () => baked;
+/** One blend's identity: its reels and shares. */
+export const recipeKey = (r) => `${r.a},${r.b},${r.percent}` + (r.c ? `,${r.c},${r.percentC}` : '');
+const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+/** Whole-layer shares of three reels over repeats of up to `layers` layers. */
+export function layerShares(layers) {
+  const out = new Map();
+  for (let n = 3; n <= layers; n += 1) {
+    for (let i = 1; i <= n - 2; i += 1) {
+      for (let j = 1; j <= n - i - 1; j += 1) {
+        const k = n - i - j;
+        if (gcd(gcd(i, j), k) !== 1) continue;
+        const percent = Math.round(100 * j / n), percentC = Math.round(100 * k / n);
+        const key = `${percent},${percentC}`;
+        if (!out.has(key)) out.set(key, { percent, percentC, counts: [i, j, k] });
+      }
+    }
+  }
+  return [...out.values()];
+}
+const tripleCache = new Map();
+function mixThree(colours, counts) {
+  const key = colours.join() + counts.join();
+  if (!tripleCache.has(key)) {
+    if (tripleCache.size > 20000) tripleCache.clear();
+    const total = counts[0] + counts[1] + counts[2];
+    tripleCache.set(key, mixFilaments(colours.map((hex, i) => ({ hex, ratio: counts[i] / total }))).hex.toUpperCase());
+  }
+  return tripleCache.get(key);
+}
+
 const material = (reel) => String((reel || {}).type || "PLA").trim().toUpperCase();
 
 export function candidateRecipes(reels, ratios = RATIOS, predictor = mixHex) {
@@ -109,6 +146,18 @@ export function candidateRecipes(reels, ratios = RATIOS, predictor = mixHex) {
       }
     }
   }
+  if (!baked) return out;
+  const usable = colors.map((c, i) => i).filter(i => colors[i] && reels[i]?.role !== 'support-interface');
+  const shares = layerShares(blendStrength().layers);
+  for (let x = 0; x < usable.length; x += 1) for (let y = x + 1; y < usable.length; y += 1) for (let z = y + 1; z < usable.length; z += 1) {
+    const [a, b, c] = [usable[x], usable[y], usable[z]];
+    if (material(reels[a]) !== material(reels[b]) || material(reels[a]) !== material(reels[c])) continue;
+    if (new Set([colors[a], colors[b], colors[c]]).size < 3) continue;
+    for (const share of shares) {
+      out.push({ a: a + 1, b: b + 1, percent: share.percent, c: c + 1, percentC: share.percentC,
+                 color: mixThree([colors[a], colors[b], colors[c]], share.counts), materials: material(reels[a]) });
+    }
+  }
   return out;
 }
 
@@ -117,7 +166,7 @@ export function planMixtures(sourceColors, reels, ratios = RATIOS,
                              maxRecipes = 6, credibleOnly = false, predictor = mixHex, allowApproximate = false) {
   const slotColors = reels.map((r) => norm((r || {}).color));
   const candidates = candidateRecipes(reels, ratios, predictor).filter(recipe=>(!allowApproximate || slotColors[recipe.a-1]!==slotColors[recipe.b-1]) && (!credibleOnly ||
-    plausibleBlend(slotColors[recipe.a-1],slotColors[recipe.b-1],recipe.color)));
+    plausibleBlend(slotColors[recipe.a-1],slotColors[recipe.b-1],recipe.color,recipe.c ? slotColors[recipe.c-1] : null)));
   const rows = [];
   const used = new Map();
   const approximateColours = new Map(slotColors.filter((_,i)=>reels[i].role!=='support-interface').map(color=>[color,color]));
@@ -134,7 +183,8 @@ export function planMixtures(sourceColors, reels, ratios = RATIOS,
       if(allowApproximate && approximateColours.has(recipe.color) && approximateColours.get(recipe.color)!==original) continue;
       const error = (allowApproximate ? approximateDistance : distance)(original, recipe.color);
       // Ranked with the hue penalty; the reported error stays the plain distance.
-      const score = error + huePenalty(original, recipe.color);
+      // A third reel has to earn its place over a simpler pair.
+      const score = error + huePenalty(original, recipe.color) + (recipe.c ? 0.75 : 0);
       if (!best || score < best.score) best = { recipe, error, score };
     }
     const solid = {
@@ -145,6 +195,7 @@ export function planMixtures(sourceColors, reels, ratios = RATIOS,
     let mixture = null;
     if (best) {
       mixture = { a: best.recipe.a, b: best.recipe.b, percent: best.recipe.percent,
+                  ...(best.recipe.c ? { c: best.recipe.c, percentC: best.recipe.percentC } : {}),
                   color: best.recipe.color, error: Math.round(best.error * 10) / 10 };
     }
     const improvement = (mixture && solid.error !== null)
@@ -162,7 +213,8 @@ export function planMixtures(sourceColors, reels, ratios = RATIOS,
     } else if (mixture && improvement !== null && improvement >= MIN_IMPROVEMENT
                && mixture.error <= POOR_COVERAGE) {
       choice = "mixture";
-      reason = `a ${mixture.a}/${mixture.b} mix at ${mixture.percent}% is `
+      reason = mixture.c ? `a ${mixture.a}/${mixture.b}/${mixture.c} mix is ${improvement} closer than the nearest reel`
+        : `a ${mixture.a}/${mixture.b} mix at ${mixture.percent}% is `
         + `${improvement} closer than the nearest reel`;
     } else if (mixture && improvement !== null && improvement >= MIN_IMPROVEMENT) {
       choice = "solid";
@@ -174,8 +226,9 @@ export function planMixtures(sourceColors, reels, ratios = RATIOS,
     }
     if (choice === "mixture") {
       if(allowApproximate) approximateColours.set(mixture.color,original);
-      used.set(`${mixture.a},${mixture.b},${mixture.percent}`, {
+      used.set(recipeKey(mixture), {
         a: mixture.a, b: mixture.b, percent: mixture.percent, color: mixture.color,
+        ...(mixture.c ? { c: mixture.c, percentC: mixture.percentC } : {}),
         materials: material(reels[mixture.a - 1]),
       });
     }
@@ -185,8 +238,7 @@ export function planMixtures(sourceColors, reels, ratios = RATIOS,
 
   const ranked = [...used.values()].map((recipe) => {
     const count = rows.filter((row) => row.choice === "mixture" && row.mixture
-      && row.mixture.a === recipe.a && row.mixture.b === recipe.b
-      && row.mixture.percent === recipe.percent).length;
+      && recipeKey(row.mixture) === recipeKey(recipe)).length;
     return { ...recipe, count };
   }).sort((x, y) => (y.count - x.count) || (x.a - y.a) || (x.b - y.b)
             || (x.percent - y.percent));
@@ -194,13 +246,14 @@ export function planMixtures(sourceColors, reels, ratios = RATIOS,
   const recipes = ranked.slice(0, maxRecipes).map((recipe, index) => ({
     id: slotColors.length + index + 1,
     a: recipe.a, b: recipe.b, percent: recipe.percent, color: recipe.color,
+    ...(recipe.c ? { c: recipe.c, percentC: recipe.percentC } : {}),
     materials: recipe.materials,
   }));
-  const byKey = new Map(recipes.map((r) => [`${r.a},${r.b},${r.percent}`, r]));
+  const byKey = new Map(recipes.map((r) => [recipeKey(r), r]));
   const kept = [];
   for (const row of rows) {
     if (row.choice !== "mixture") continue;
-    const recipe = byKey.get(`${row.mixture.a},${row.mixture.b},${row.mixture.percent}`);
+    const recipe = byKey.get(recipeKey(row.mixture));
     if (!recipe) {
       row.choice = "solid";
       row.predicted = false;
@@ -266,12 +319,12 @@ export function mappingFromPlan(plan, useMixtures = true) {
 // A basic physical sanity check, not a substitute for filament calibration.
 // Two neutral reels cannot yield a strongly chromatic shade. The uncalibrated
 // polynomial occasionally predicts one; never present that as printable coverage.
-export function plausibleBlend(first, second, predicted) {
+export function plausibleBlend(first, second, predicted, third = null) {
   const spread=value=>{
     const rgb=hexToRgb(value);
     return rgb ? Math.max(...rgb)-Math.min(...rgb) : Infinity;
   };
-  return !(spread(first)<=8 && spread(second)<=8 && spread(predicted)>16);
+  return !(spread(first)<=8 && spread(second)<=8 && (!third || spread(third)<=8) && spread(predicted)>16);
 }
 
 /** Interactive Full Spectrum planning rejects implausible predictions before
@@ -284,7 +337,7 @@ export function planBlends(sourceColors,reels,approximate=false,slotOrder=null,c
     const original=slotOrder.map((_,old)=>reels[slotOrder.indexOf(old)]);
     const plan=planBlends(sourceColors,original,approximate,null,calibration,maxRecipes);
     const slot=id=>id==null ? id : slotOrder.indexOf(id-1)+1;
-    const recipe=r=>r ? {...r,a:slot(r.a),b:slot(r.b)} : r;
+    const recipe=r=>r ? {...r,a:slot(r.a),b:slot(r.b),...(r.c?{c:slot(r.c)}:{})} : r;
     return {...plan,reels:reels.map((r,i)=>({slot:i+1,color:norm(r.color),type:material(r)})),
       recipes:plan.recipes.map(recipe),rows:plan.rows.map(row=>({...row,
         solid:{...row.solid,slot:slot(row.solid.slot)},mixture:recipe(row.mixture)}))};
@@ -293,7 +346,7 @@ export function planBlends(sourceColors,reels,approximate=false,slotOrder=null,c
   const plan=planMixtures(sourceColors,reels,blendStrength().ratios,maxRecipes,true,predictor.predict,approximate);
   plan.recipes.forEach(recipe=>{
     recipe.model=FDM_MODEL;
-    const measured=predictor.measured(recipe.a,recipe.b,recipe.percent);
+    const measured=recipe.c ? null : predictor.measured(recipe.a,recipe.b,recipe.percent);
     if(measured) recipe.measuredColor=measured;
     if(approximate) recipe.approximate=true;
   });
@@ -316,7 +369,7 @@ export function swapPaletteSlots(palette,from,to) {
   const slot=id=>id===from+1 ? to+1 : id===to+1 ? from+1 : id;
   return {...palette,reels,slotOrder,outcome:{...palette.outcome,
     rows:palette.outcome.rows.map(row=>({...row,slot:slot(row.slot),
-      recipe:row.recipe ? {...row.recipe,a:slot(row.recipe.a),b:slot(row.recipe.b)} : row.recipe}))}};
+      recipe:row.recipe ? {...row.recipe,a:slot(row.recipe.a),b:slot(row.recipe.b),...(row.recipe.c?{c:slot(row.recipe.c)}:{})} : row.recipe}))}};
 }
 
 /** Describe the effective export mapping, including overrides and unticked recipes.

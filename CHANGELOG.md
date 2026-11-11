@@ -1,3 +1,12 @@
+## 2.6.78 — Baked colours: three-reel blends (experimental)
+
+- Full Spectrum blends has a new option under Blend detail: **Baked colours**. With it on, a colour can be mixed from three reels instead of two, where that comes closer. From cyan, magenta, yellow and white this reaches skin tones, browns and muted shades that no pair can.
+- Each three-reel blend is written for Snapmaker Orca as an explicit run of layers: which reel prints each layer of a short repeat (up to 4, 6 or 8 layers for Standard, Strong and Finest). Reels are spread through the repeat so no reel prints more layers in a row than its share needs. Nothing in the model's geometry or paint changes.
+- A pair is still used wherever a pair is as close. Two-reel blends are written exactly as before.
+- The blend editor now accepts a third filament for Snapmaker output too.
+- These repeats are whole layers, so thin layers (0.08–0.12 mm) blend them best. Subdivide Mix Layer does not divide them.
+- Still at most 12 blended colours per export on the U1. Not yet confirmed by a slice or a print.
+
 ## 2.6.77 — Models from later plates land on the plate in Full Spectrum
 
 - Opening one plate of a multi-plate project and switching to Full Spectrum blends showed the models beside the bed, because a single copy kept its position from the source file. A single set that sits outside the plate is now centred on it, in the preview and in the export. Sets already on the plate stay exactly where they were.

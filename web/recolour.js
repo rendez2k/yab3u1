@@ -16,7 +16,7 @@ import {mountObjectActions} from './shared/objectActions.js';
 // The renderer is shared with the local page.
 
 import { comparison, distance, norm, suggestMapping } from "./shared/colour.js";
-import { describeColourMapping, mappingFromPlan, planBlends, setBlendStrength, blendStrength, plausibleBlend, swapPaletteSlots } from "./shared/mix.js";
+import { describeColourMapping, mappingFromPlan, planBlends, setBlendStrength, blendStrength, setBakedColours, bakedColours, plausibleBlend, swapPaletteSlots } from "./shared/mix.js";
 import { Preview, mountPlateControls } from "./shared/preview.js";
 import { LABELS, RECOLOUR_TARGETS, colourLimit } from "./shared/targets.js";
 import {mountBlendEditor} from './shared/blendEditor.js';
@@ -44,7 +44,7 @@ import { DUAL_WALL_TARGETS, dualWallProblem } from './shared/dualWall.js';
 import { INTERWEAVE_TARGETS, interweaveProblem } from './shared/topInterweave.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.6.77";
+const VERSION = "2.6.78";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -86,9 +86,15 @@ function describeBlendStrength() {
   $('blendstrengthfield').hidden=state.strategy==='solid'||state.strategy==='source';
   $('blendstrengthhint').textContent=`Up to ${Math.min(chosen.recipes,room)} blended colours from ${chosen.ratios.length} ratios. `
     +(chosen.name==='standard'?'Each blend repeats within 4 layers.':`Finer ratios repeat over up to ${chosen.period} layers, so they can show as faint bands: use thin layers, and Subdivide Mix Layer in Settings where it is offered.`);
+  const three=(state.recipes||[]).filter(r=>r.c).length;
+  $('bakedhint').textContent=`Mixes three reels where that comes closer, such as skin tones and browns from cyan, magenta, yellow and white. Each is a repeat of up to ${chosen.layers} whole layers, one reel per layer, so thin layers (0.08–0.12 mm) blend it best; Subdivide Mix Layer does not apply to these.`
+    +(three?` In use now: ${three} three-reel blend${three===1?'':'s'}.`:'')+' Not yet confirmed by a slice or a print.';
 }
 setBlendStrength($('blendstrength').value);
 setHueFidelity($('keephue').checked);
+// Baked colours: blends of three reels, written as explicit runs of layers.
+setBakedColours($('bakedon').checked);
+$('bakedon').addEventListener('change',()=>{setBakedColours($('bakedon').checked);clearReview();invalidateRecommendation();refresh();});
 $('keephue').addEventListener('change',()=>{setHueFidelity($('keephue').checked);clearReview();invalidateRecommendation();refresh();});
 $('blendstrength').addEventListener('change',()=>{setBlendStrength($('blendstrength').value);clearReview();invalidateRecommendation();refresh();});
 // Top surface interweave: flat tops of blended colours become a chequer of the blend's two filaments.
@@ -448,7 +454,7 @@ function requestRecommendation() {
     supportInterface:state.supportInterface,capacity:state.capacity,visibleLimit:colourLimit(state.target),priority:state.priority,bundles:state.compareBundles,
     stock:state.workflow==='model' && state.useOwned ? [...(state.stock||[]),...state.bundleStock] : null,
     type:state.modelType,keepExact:state.workflow==='model'&&!state.compareBundles ? state.keepExact : [],
-    weights,importantColours:state.importantColours,focusWeights:focusWeights(state.focusMarks,focusGeometry?.ranges),blends:state.strategy!=='solid',blendStrength:blendStrength().name,keepHue:hueFidelity(),calibration:calibrationPanel?.active() || null};
+    weights,importantColours:state.importantColours,focusWeights:focusWeights(state.focusMarks,focusGeometry?.ranges),blends:state.strategy!=='solid',blendStrength:blendStrength().name,keepHue:hueFidelity(),bakedColours:bakedColours(),calibration:calibrationPanel?.active() || null};
   // Model colours and slot arrangement do not alter the palette search. Applying
   // or moving a suggestion must not discard the palette the user just chose.
   const keyReels=compareModel && state.supportInterface
@@ -1010,9 +1016,9 @@ function useAssessed(assessed) {
     : "";
   state.mix = planBlends(assessed.sourceColors, activeReels(),activeApproximation(),
     state.reelView==='recommended' ? state.recommendation?.slotOrder : state.appliedSlotOrder,calibrationPanel?.active() || null,Math.max(0,Math.min(blendStrength().recipes,colourLimit(state.target)-activeReels().length)));
-  describeBlendStrength();
   state.recipes = state.mix.recipes.filter(recipe=>plausibleBlend(
-    activeReels()[recipe.a-1].color,activeReels()[recipe.b-1].color,recipe.color));
+    activeReels()[recipe.a-1].color,activeReels()[recipe.b-1].color,recipe.color,recipe.c ? activeReels()[recipe.c-1].color : null));
+  describeBlendStrength();
   /* Ticking belongs to one recipe set. A new set starts fully ticked; an empty set
      means the user turned every blend off, and that must stay off. */
   const key = JSON.stringify(state.recipes.map((r) => [r.id, r.a, r.b, r.percent, r.color, r.measuredColor]));
@@ -1210,8 +1216,9 @@ function renderMix(assessed) {
     ? '<ul class="reciperows">' + state.recipes.map((recipe) =>
       `<li><span class="swatch" style="background:${esc(recipe.color)}"></span>`
       + `<label class="check"><input type="checkbox" data-recipe="${recipe.id}"`
-      + `${state.ticked.has(recipe.id) ? " checked" : ""}> reel ${recipe.a} + `
-      + `${recipe.percent}% of reel ${recipe.b} · predicted ${esc(recipe.color)}`
+      + `${state.ticked.has(recipe.id) ? " checked" : ""}> `
+      + (recipe.c ? `${esc(recipeLabel(recipe))} · baked layers` : `reel ${recipe.a} + ${recipe.percent}% of reel ${recipe.b}`)
+      + ` · predicted ${esc(recipe.color)}`
       + "</label></li>").join("") + "</ul>"
     : "";
   $("mixlist").querySelectorAll("input[data-recipe]").forEach((box) => {
@@ -1895,8 +1902,8 @@ blendEditor=mountBlendEditor($('blendeditor'),{read:()=>{
 export const workbenchFocus={stop:()=>focusBrush?.stop(),key:event=>focusBrush?.key(event)};
 export {state, load, refresh, renderObjects, renderQuantityFields, layoutChanged, textureImporter};
 const workbenchSettingKeys=['capacity','capacityChosen','priority','paletteSource','importantColours','focusMarks','compareBundles','bambuSetup','bambuRequired','bambuError','target','u1Nozzle','supportInterface','interfacePosition','reels','strategy','overrides','manualBlends','workflow','modelType','keepExact','useOwned','modelApplied','modeReels','locked','appliedSlotOrder','loadedTuning','reelView'];
-export function workbenchCaptureSettings(){return {state:structuredClone(Object.fromEntries(workbenchSettingKeys.filter(k=>state[k]!==undefined).map(k=>[k,state[k]]))),controls:Object.fromEntries(['spectrumlayermode','spectrumlayerheight','subdividemix','dualwallon','dualwalldepth','blendstrength','keephue','interweaveon','interweavecell'].map(id=>[id,$(id).type==='checkbox'?$(id).checked:$(id).value]))};}
-export function workbenchRestoreSettings(saved){if(!saved||!state.project)return;Object.assign(state,saved.state);state.reviewed=false;for(const [id,value]of Object.entries(saved.controls))if($(id).type==='checkbox')$(id).checked=value;else $(id).value=value;if(saved.controls.blendstrength)setBlendStrength($('blendstrength').value);setHueFidelity($('keephue').checked);renderReels();renderWorkflow();return refresh();}
+export function workbenchCaptureSettings(){return {state:structuredClone(Object.fromEntries(workbenchSettingKeys.filter(k=>state[k]!==undefined).map(k=>[k,state[k]]))),controls:Object.fromEntries(['spectrumlayermode','spectrumlayerheight','subdividemix','dualwallon','dualwalldepth','blendstrength','keephue','bakedon','interweaveon','interweavecell'].map(id=>[id,$(id).type==='checkbox'?$(id).checked:$(id).value]))};}
+export function workbenchRestoreSettings(saved){if(!saved||!state.project)return;Object.assign(state,saved.state);state.reviewed=false;for(const [id,value]of Object.entries(saved.controls))if($(id).type==='checkbox')$(id).checked=value;else $(id).value=value;if(saved.controls.blendstrength)setBlendStrength($('blendstrength').value);setHueFidelity($('keephue').checked);setBakedColours($('bakedon').checked);renderReels();renderWorkflow();return refresh();}
 export async function workbenchSourceColours(){if(!state.project)return null;return (await background().preview(state.plateId,state.objects,'original',paletteOf(null,'original'),null,state.geometryId,state.assessed?.counts.triangles||0,state.layout)).colors;}
 export function workbenchObjects() {
   return {key:`${state.epoch}:${state.plateId}`,objects:quantityObjects(),quantities:state.quantities,
