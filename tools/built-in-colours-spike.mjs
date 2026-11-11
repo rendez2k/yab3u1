@@ -1,22 +1,24 @@
-// Throwaway spike (built-in colours, Task 2). Not wired into the app.
+// Throwaway spike (built-in colours, Task 2; banding replaced in Task 11). Not wired into the app.
 //
-//   node tools/built-in-colours-spike.mjs <input.3mf> <layerHeight> <output.3mf> [--raw] [--whole-splits] [--no-band] [--plate=N]
+//   node tools/built-in-colours-spike.mjs <input.3mf> <layerHeight> <output.3mf> [--whole-splits] [--no-band] [--plate=N]
 //   node tools/built-in-colours-spike.mjs --make-test-solid <output.3mf>
 //
 // The first form exports the input for the Snapmaker U1 with four reels and no
 // recipes, limits paint to the outer shell with applyDualWall (inner slot 4,
-// depth 0.45 mm), then cuts every painted triangle into strips at the slicer's
-// layer boundaries and paints each strip with reel [1,2,3][layer % 3]. Split
-// paint is first expanded into its leaf sub-triangles (standard.leafTriangles,
-// the exact port of the slicer's own split geometry). Strip corners closer than
-// 1e-6 mm are welded into one vertex unless --raw is given (see the findings in
-// docs/built-in-colours-spike-2026-11.md). A JSON report is written next to the
+// depth 0.45 mm), then bands every mesh that carries paint with bandMesh
+// (web/shared/paintBands.js): each face is cut into its paint leaves and each leaf
+// into strips at the slicer's layer boundaries, joined by vertex index. Strips of
+// painted faces get reel [1,2,3][layer % 3]; unpainted faces of a painted mesh are
+// cut too, so their edges match, but stay unpainted. The output is indexed as it
+// comes from bandMesh; nothing is welded. A JSON report is written next to the
 // output.
 //
 // --whole-splits  band split-painted triangles whole (control: no split midpoints)
 // --no-band       export and dual-wall only, no banding (control: the source's own
 //                 open edges, for comparing with the banded output)
 // --plate=N       export plate N instead of the first plate
+// --raw           accepted so that earlier command lines still run; it has no effect,
+//                 because there is no weld any more
 // Negative volumes are kept (readProject allowNegative); they carry no paint and
 // are not banded.
 //
@@ -26,8 +28,7 @@ import {readFileSync, writeFileSync} from 'node:fs';
 import {readZip, writeZip} from '../web/zip.js';
 import {readProject, exportProject, matrixFromText, matmul, applyMatrix, SRC_BBL_PROJECT} from '../web/shared/project.js';
 import {applyDualWall} from '../web/shared/dualWall.js';
-import {bandTriangle} from '../web/shared/layerBands.js';
-import {leafTriangles} from '../web/shared/standard.js';
+import {bandMesh} from '../web/shared/paintBands.js';
 import {wallTestSetup} from '../web/shared/wallComparison.js';
 import * as paint from '../web/shared/paint.js';
 
@@ -132,33 +133,44 @@ function placements(entries) {
   return out;
 }
 
+/** Open edges (used by one triangle) and edges used by more than two, by vertex index. */
 function edgeStats(tris) {
-  const edges = new Map();
+  const keys = new Float64Array(tris.length * 3);
+  let n = 0;
   for (const t of tris) for (let k = 0; k < 3; k++) {
-    const a = t[k], b = t[(k + 1) % 3], key = a < b ? `${a},${b}` : `${b},${a}`;
-    edges.set(key, (edges.get(key) || 0) + 1);
+    const a = t[k], b = t[(k + 1) % 3];
+    keys[n++] = a < b ? a * 2 ** 26 + b : b * 2 ** 26 + a;
   }
-  let open = 0, over = 0;
-  for (const n of edges.values()) { if (n === 1) open += 1; else if (n > 2) over += 1; }
-  return {edges: edges.size, openEdges: open, edgesOnMoreThanTwoFaces: over};
+  keys.sort();
+  let edges = 0, open = 0, over = 0;
+  for (let i = 0; i < n;) {
+    let j = i + 1;
+    while (j < n && keys[j] === keys[i]) j++;
+    edges += 1;
+    if (j - i === 1) open += 1; else if (j - i > 2) over += 1;
+    i = j;
+  }
+  return {edges, openEdges: open, edgesOnMoreThanTwoFaces: over};
 }
 
-/** Chunked UTF-8 encoding, so a model larger than one JS string can be written. */
-function encodeParts(parts) {
+/** UTF-8 encoding in chunks, so a model larger than one JS string can be written. */
+function chunkedWriter() {
   const chunks = [];
   let buf = [], len = 0, total = 0;
   const flush = () => { if (!buf.length) return; const b = enc.encode(buf.join('')); chunks.push(b); total += b.length; buf = []; len = 0; };
-  for (const p of parts) { buf.push(p); len += p.length; if (len > 8e6) flush(); }
-  flush();
-  const out = new Uint8Array(total);
-  let at = 0;
-  for (const c of chunks) { out.set(c, at); at += c.length; }
-  return out;
+  return {
+    push(text) { buf.push(text); len += text.length; if (len > 8e6) flush(); },
+    bytes() {
+      flush();
+      const out = new Uint8Array(total);
+      let at = 0;
+      for (const c of chunks) { out.set(c, at); at += c.length; }
+      return out;
+    },
+  };
 }
 
-const WELD = 1e-6;   // mm; far below any printer resolution
-
-async function spike(input, height, output, {raw = false, wholeSplits = false, noBand = false, plate = null} = {}) {
+async function spike(input, height, output, {wholeSplits = false, noBand = false, plate = null} = {}) {
   const started = Date.now();
   const source = await readZip(readFileSync(input));
   // Negative volumes are kept as they are (minimal fix for the owner's Super Man file).
@@ -176,92 +188,90 @@ async function spike(input, height, output, {raw = false, wholeSplits = false, n
   const where = placements(entries);
   // Bed height = world z above the lowest point of the build item.
   const itemMin = new Map(), itemMax = new Map();
-  const meshes = [];
   for (const [name, data] of entries) {
     if (!/^3D\/.*\.model$/i.test(name)) continue;
     const text = dec.decode(data);
     for (const m of text.matchAll(OBJECT_RE)) {
       if (!m[2].includes('<triangle')) continue;
-      const key = `${name}#${attr(m[1], 'id')}`, place = where.get(key);
+      const place = where.get(`${name}#${attr(m[1], 'id')}`);
       // Only printed (painted, after dual wall) meshes set the bed height; a negative
       // volume carries no paint and does not touch the bed.
       if (!place || !PAINT_RE.test(m[2])) continue;
-      const pts = [...m[2].matchAll(VERTEX_RE)].map(v => [Number(v[1]), Number(v[2]), Number(v[3])]);
-      for (const p of pts) { const z = applyMatrix(place.m, p)[2]; itemMin.set(place.item, Math.min(itemMin.get(place.item) ?? Infinity, z)); itemMax.set(place.item, Math.max(itemMax.get(place.item) ?? -Infinity, z)); }
-      meshes.push({name, id: attr(m[1], 'id'), place});
+      for (const v of m[2].matchAll(VERTEX_RE)) {
+        const z = applyMatrix(place.m, [Number(v[1]), Number(v[2]), Number(v[3])])[2];
+        itemMin.set(place.item, Math.min(itemMin.get(place.item) ?? Infinity, z)); itemMax.set(place.item, Math.max(itemMax.get(place.item) ?? -Infinity, z));
+      }
     }
   }
 
-  const stats = {trianglesBefore: 0, trianglesAfter: 0, paintedBefore: 0, splitPaintedBefore: 0, leafSubTriangles: 0, stripsWritten: 0,
-    unpaintedKept: 0, stripsCollapsedByWeld: 0, verticesBefore: 0, verticesAfter: 0, layersSpanned: [Infinity, -Infinity], weldMm: raw ? 0 : WELD, wholeSplits, noBand,
-    before: {openEdges: 0, edgesOnMoreThanTwoFaces: 0}, after: {openEdges: 0, edgesOnMoreThanTwoFaces: 0}, afterWithoutWeld: {openEdges: 0, edgesOnMoreThanTwoFaces: 0}};
+  const stats = {trianglesBefore: 0, trianglesAfter: 0, paintedBefore: 0, splitPaintedBefore: 0, unpaintedBefore: 0, meshesBanded: 0, meshesKept: 0,
+    verticesBefore: 0, verticesAfter: 0, layersSpanned: [Infinity, -Infinity], wholeSplits, noBand,
+    before: {openEdges: 0, edgesOnMoreThanTwoFaces: 0}, after: {openEdges: 0, edgesOnMoreThanTwoFaces: 0}};
   const reelFaces = {1: 0, 2: 0, 3: 0};
   const codes = Object.fromEntries(PATTERN.map(s => [s, paint.encode({kind: 'leaf', state: s})]));
+  const unpainted = {kind: 'leaf', state: 0};
   let modelBytes = 0;
 
   for (const [name, data] of [...entries]) {
     if (!/^3D\/.*\.model$/i.test(name)) continue;
     const text = dec.decode(data);
-    const parts = [];
-    let last = 0;
+    const writer = chunkedWriter();
+    let last = 0, changed = false;
     for (const m of text.matchAll(OBJECT_RE)) {
       const id = attr(m[1], 'id'), place = where.get(`${name}#${id}`);
       if (!place || !m[2].includes('<triangle')) continue;
-      const zmin = itemMin.get(place.item) ?? 0, M = place.m;
-      const zOf = p => applyMatrix(M, p)[2] - zmin;
       const pts = [...m[2].matchAll(VERTEX_RE)].map(v => [Number(v[1]), Number(v[2]), Number(v[3])]);
-      stats.verticesBefore += pts.length;
-      // bandTriangle clips the already-clipped polygon at the upper plane, so the cut
-      // point shared by consecutive strips of one triangle can differ in the last bits. Points within WELD mm are merged unless --raw; both counts are reported.
-      const index = new Map(), exact = new Map(), verts = [];
-      const exactId = p => { const k = `${p[0]},${p[1]},${p[2]}`; let i = exact.get(k); if (i === undefined) { i = exact.size; exact.set(k, i); } return i; };
-      const vid = p => {
-        const k = raw ? `${p[0]},${p[1]},${p[2]}` : `${Math.round(p[0] / WELD)},${Math.round(p[1] / WELD)},${Math.round(p[2] / WELD)}`;
-        let i = index.get(k); if (i === undefined) { i = verts.length; index.set(k, i); verts.push(p); } return i;
-      };
-      const beforeTris = [], afterTris = [], exactTris = [], triText = [];
+      // Every triangle of a painted mesh is banded, so an unpainted face beside a painted
+      // one is cut at the same points; its pieces stay unpainted.
+      const faces = [], rests = [], painted = [];
       for (const t of m[2].matchAll(TRIANGLE_RE)) {
-        const a = t[1], ids = ['v1', 'v2', 'v3'].map(k => Number(attr(a, k)));
-        const corners = ids.map(i => pts[i]);
-        const cornerIds = corners.map(vid);
-        beforeTris.push(cornerIds);
-        stats.trianglesBefore += 1;
-        const found = PAINT_RE.exec(a);
-        const rest = a.replace(/\s(?:v1|v2|v3)="[^"]*"/g, '').replace(PAINT_RE, '');
-        if (!found || !found[1] || noBand) { stats.unpaintedKept += 1; afterTris.push(cornerIds); exactTris.push(corners.map(exactId)); triText.push(`<triangle v1="${cornerIds[0]}" v2="${cornerIds[1]}" v3="${cornerIds[2]}"${rest}/>`); continue; }
-        stats.paintedBefore += 1;
-        const node = paint.decode(found[1]);
-        if (node.kind !== 'leaf') stats.splitPaintedBefore += 1;
-        // --whole-splits: a split-painted triangle is banded as one triangle (control run
-        // that adds no split midpoints, so its open edges are not from split expansion).
-        const leaves = wholeSplits ? [{triangle: corners, state: 0}] : leafTriangles(corners, node);
-        stats.leafSubTriangles += leaves.length;
-        for (const leaf of leaves) for (const strip of bandTriangle(leaf.triangle, zOf, FIRST, height)) {
-          const reel = PATTERN[strip.layer % 3], s = strip.points.map(vid);
-          exactTris.push(strip.points.map(exactId));
-          if (s[0] === s[1] || s[1] === s[2] || s[0] === s[2]) { stats.stripsCollapsedByWeld += 1; continue; }
-          reelFaces[reel] += 1; stats.stripsWritten += 1;
-          stats.layersSpanned[0] = Math.min(stats.layersSpanned[0], strip.layer); stats.layersSpanned[1] = Math.max(stats.layersSpanned[1], strip.layer);
-          afterTris.push(s);
-          triText.push(`<triangle v1="${s[0]}" v2="${s[1]}" v3="${s[2]}" paint_color="${codes[reel]}"${rest}/>`);
+        const a = t[1], found = PAINT_RE.exec(a), hasPaint = Boolean(found && found[1]);
+        let node = hasPaint ? paint.decode(found[1]) : unpainted;
+        if (hasPaint) { stats.paintedBefore += 1; if (node.kind !== 'leaf') stats.splitPaintedBefore += 1; } else stats.unpaintedBefore += 1;
+        // --whole-splits: a split-painted triangle is banded as one leaf (control run with no split midpoints).
+        if (wholeSplits && node.kind !== 'leaf') node = {kind: 'leaf', state: 0};
+        faces.push({v: ['v1', 'v2', 'v3'].map(k => Number(attr(a, k))), paint: node});
+        rests.push(a.replace(/\s(?:v1|v2|v3)="[^"]*"/g, '').replace(PAINT_RE, ''));
+        painted.push(hasPaint);
+      }
+      stats.trianglesBefore += faces.length;
+      stats.verticesBefore += pts.length;
+      const e0 = edgeStats(faces.map(f => f.v));
+      stats.before.openEdges += e0.openEdges; stats.before.edgesOnMoreThanTwoFaces += e0.edgesOnMoreThanTwoFaces;
+      // A mesh with no paint (a negative volume), and every mesh under --no-band, is written back unchanged.
+      if (noBand || !painted.some(Boolean)) {
+        stats.meshesKept += 1; stats.trianglesAfter += faces.length; stats.verticesAfter += pts.length;
+        stats.after.openEdges += e0.openEdges; stats.after.edgesOnMoreThanTwoFaces += e0.edgesOnMoreThanTwoFaces;
+        continue;
+      }
+      const zmin = itemMin.get(place.item) ?? 0, M = place.m;
+      const banded = bandMesh(pts, faces, {zOf: p => applyMatrix(M, p)[2] - zmin, first: FIRST, height});
+      stats.meshesBanded += 1;
+      stats.trianglesAfter += banded.pieces.length;
+      stats.verticesAfter += banded.vertices.length;
+      const e1 = edgeStats(banded.pieces.map(p => p.v));
+      stats.after.openEdges += e1.openEdges; stats.after.edgesOnMoreThanTwoFaces += e1.edgesOnMoreThanTwoFaces;
+      writer.push(text.slice(last, m.index));
+      writer.push(`<object${m[1]}><mesh><vertices>`);
+      for (const p of banded.vertices) writer.push(`<vertex x="${p[0]}" y="${p[1]}" z="${p[2]}"/>`);
+      writer.push('</vertices><triangles>');
+      for (const piece of banded.pieces) {
+        const [a, b, c] = piece.v;
+        let code = '';
+        if (painted[piece.face]) {
+          const reel = PATTERN[piece.layer % 3];
+          reelFaces[reel] += 1; code = ` paint_color="${codes[reel]}"`;
+          stats.layersSpanned[0] = Math.min(stats.layersSpanned[0], piece.layer); stats.layersSpanned[1] = Math.max(stats.layersSpanned[1], piece.layer);
         }
+        writer.push(`<triangle v1="${a}" v2="${b}" v3="${c}"${code}${rests[piece.face]}/>`);
       }
-      stats.trianglesAfter += afterTris.length;
-      stats.verticesAfter += verts.length;
-      for (const [k, list] of [['before', beforeTris], ['after', afterTris], ['afterWithoutWeld', exactTris]]) {
-        const e = edgeStats(list);
-        stats[k].openEdges += e.openEdges; stats[k].edgesOnMoreThanTwoFaces += e.edgesOnMoreThanTwoFaces;
-      }
-      parts.push(text.slice(last, m.index), `<object${m[1]}><mesh><vertices>`);
-      for (const p of verts) parts.push(`<vertex x="${p[0]}" y="${p[1]}" z="${p[2]}"/>`);
-      parts.push('</vertices><triangles>');
-      for (const t of triText) parts.push(t);
-      parts.push('</triangles></mesh></object>');
+      writer.push('</triangles></mesh></object>');
       last = m.index + m[0].length;
+      changed = true;
     }
-    if (!parts.length) { modelBytes += data.length; continue; }
-    parts.push(text.slice(last));
-    const bytes = encodeParts(parts);
+    if (!changed) { modelBytes += data.length; continue; }
+    writer.push(text.slice(last));
+    const bytes = writer.bytes();
     modelBytes += bytes.length;
     entries.set(name, bytes);
   }
@@ -292,11 +302,11 @@ const args = process.argv.slice(2);
 if (args[0] === '--make-test-solid' && args[1]) console.log(JSON.stringify(await makeTestSolid(args[1]), null, 2));
 else if (args.length >= 3 && Number(args[1]) > 0 && args.slice(3).every(a => ['--raw', '--whole-splits', '--no-band'].includes(a) || /^--plate=\d+$/.test(a))) {
   const flags = new Set(args.slice(3)), plate = Number(args.slice(3).find(a => a.startsWith('--plate='))?.slice(8)) || null;
-  const r = await spike(args[0], Number(args[1]), args[2], {raw: flags.has('--raw'), wholeSplits: flags.has('--whole-splits'), noBand: flags.has('--no-band'), plate});
+  const r = await spike(args[0], Number(args[1]), args[2], {wholeSplits: flags.has('--whole-splits'), noBand: flags.has('--no-band'), plate});
   console.log(JSON.stringify({output: r.output, trianglesBefore: r.trianglesBefore, trianglesAfter: r.trianglesAfter, splitPaintedBefore: r.splitPaintedBefore, modelHeightMm: r.modelHeightMm,
-    stripsCollapsedByWeld: r.stripsCollapsedByWeld, before: r.before, after: r.after, afterWithoutWeld: r.afterWithoutWeld,
+    before: r.before, after: r.after,
     uncompressedModelBytes: r.uncompressedModelBytes, outputBytes: r.outputBytes, seconds: r.seconds}, null, 2));
 } else {
-  console.error('usage: node tools/built-in-colours-spike.mjs <input.3mf> <layerHeight> <output.3mf> [--raw] [--whole-splits] [--no-band] [--plate=N]\n       node tools/built-in-colours-spike.mjs --make-test-solid <output.3mf>');
+  console.error('usage: node tools/built-in-colours-spike.mjs <input.3mf> <layerHeight> <output.3mf> [--whole-splits] [--no-band] [--plate=N]\n       node tools/built-in-colours-spike.mjs --make-test-solid <output.3mf>');
   process.exitCode = 2;
 }

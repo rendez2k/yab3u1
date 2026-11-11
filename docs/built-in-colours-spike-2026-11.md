@@ -312,3 +312,69 @@ Figurines: `$O/run-figurines.sh` (spike runs, including `--no-band` and
 `--whole-splits` for each model), then `$O/slice.sh <name>` for each banded output,
 `--info` on each output, and the checker as above (`--max-old-space-size=12288` for the
 spike on They Live Alien).
+
+## After the gap fix (11 November 2026)
+
+The spike tool now bands every painted mesh with `bandMesh` (`web/shared/paintBands.js`).
+Split paint is no longer expanded into loose triangles. Every point made on a straight
+line (an input edge, or a line a split created) is registered against that line and made
+once: split midpoints by their position along the line, layer crossings by their plane,
+computed from the line's own two end points. Every piece then walks its sides through all
+the points registered on its line, so pieces meet by vertex index. Nothing is welded.
+Unpainted faces of a painted mesh are cut too, so their edges match, but stay unpainted.
+
+All runs are at 0.12 mm, in Node's default heap, with the same export, dual wall and
+`[1,2,3][layer % 3]` pattern as before. "Source" is the same export with `--no-band`
+(unbanded, and now unwelded). Open edges and parts are Orca's `--info`; Orca prints no
+open-edge count when the mesh is manifold, shown here as 0. Outputs, `--info` text,
+G-code and logs are in `spike-output/gapfix/`.
+
+| File | Triangles before → after | 3MF | Open edges, source → banded | Parts, source → banded | Spike | Slice | Slicer warnings (besides exclude-triangles) | Tool changes | Print time (estimate) | Tower g / total g |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Test solid | 200,160 → 1,408,650 | 23.3 MB | 0 → 0 (manifold = yes) | 1 → 1 | 6.4 s | 14.8 s, exit 0 | none | 1,250 | 16 h 0 m | 71.8 / 120.0 |
+| Super Man (plate 1) | 327,952 → 1,284,792 | 22.9 MB | 0 → 0 (manifold = yes) | 26 → 26 | 6.4 s | 12.8 s, exit 0 | "Detected missing Voronoi vertex even after the rotation of input." | 224 | 2 h 51 m | 13.6 / 21.3 |
+| They Live Alien | 1,333,448 → 5,728,308 | 98.3 MB | **364 → 842** (manifold = no) | 77 → 77 | 40.3 s | 89.4 s, exit 0 | none | 2,017 | 31 h 44 m | 119.7 / 236.6 |
+| Flirty Figures Alien | 608,046 → 3,283,930 | 64.9 MB | 0 → 0 (manifold = yes) | 3 → 3 | 25.6 s | 29.1 s, exit 0 | none | 934 | 13 h 20 m | 64.2 / 111.8 |
+
+Super Man's triangle counts include its negative part (3,072 triangles), which is not
+banded; Orca counts 324,880 → 1,281,720 facets without it.
+
+What this shows:
+- **Flirty no longer breaks apart.** Before the fix it had 472,861 open edges and 53,446
+  parts at 0.12 mm; now it is manifold with its 3 parts.
+- **The test solid and Super Man are manifold**, where before they had 6,325 and 3 open
+  edges.
+- **They Live has more open edges than its source by count (842 against 364), but no new
+  gap.** Its source is open: 364 open edges and 77 parts in Orca, the same for the
+  owner's original file read directly. (The 120 open edges and 18 parts recorded above
+  were for the old `--no-band` output, which was welded at 1e-6 mm.) Banding cuts each
+  open source edge at the layer planes it crosses, so one open edge becomes several. A
+  separate check (`gapfix/open-check.mjs`, results in `gapfix/open-check.log`) found
+  that every one of the 824 open edges the spike counts by index lies along one of the
+  346 open edges of the source mesh. No open edge appears anywhere else, and the part
+  count is unchanged.
+- Flirty's source has 18 edges used by more than two faces (back-to-back duplicate
+  faces); banded, there are 27. 23 lie along those source edges; the other 4 lie inside
+  duplicated faces, which both get the same cuts.
+- Strict-rule results from `tools/check-built-in-toolpaths.mjs` (same rules as above):
+  test solid 831 of 832 layers fail (the inner reel's walls, as before), Super Man 48 of
+  123, They Live 1,118 of 1,164, Flirty 16 of 877. Colour-only view: 4, 15, 10 and 16
+  layers with another colour reel above 5%. These were not inspected.
+
+Not verified:
+- **Nothing was printed** and no slice was opened in the GUI. Print times are the
+  slicer's estimates; tower grams are computed from the G-code.
+- Whether Orca repairs anything while slicing, and whether the colours look right on the
+  visible surface.
+- 0.08 mm was not re-run; nor were the `--whole-splits` controls or Super Man plates 2–4.
+- They Live's open edges are the source's own; they were not repaired.
+
+Reproduce (from the repo root):
+
+```
+G=.superpowers/sdd/2026-11-10-built-in-colours-1a/spike-output/gapfix
+bash $G/run-gapfix.sh > $G/run-gapfix.log 2>&1     # spike runs, --no-band and banded, default heap
+cd $G && ./info.sh test-solid-noband test-solid-0.12 superman-noband superman-0.12 theylive-noband theylive-0.12 flirty-noband flirty-0.12
+./slice.sh test-solid-0.12    # and superman-0.12, theylive-0.12, flirty-0.12
+node --max-old-space-size=14000 open-check.mjs theylive-noband.3mf theylive-0.12.3mf
+```

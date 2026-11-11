@@ -33,7 +33,8 @@ export function layerBounds(n, first, height) {
 }
 
 /** Height of boundary k (the top of layer k). Always by multiplication, so every caller gets the identical value. */
-const plane = (k, first, height) => first + k * height;
+export const layerPlane = (k, first, height) => first + k * height;
+const plane = layerPlane;
 
 /** The boundary heights strictly between zMin and zMax, ascending. */
 export function layerPlanes(zMin, zMax, first, height) {
@@ -52,7 +53,7 @@ export function layerPlanes(zMin, zMax, first, height) {
  * (within EDGE), 2n - 1 means strictly inside layer n. Worked out from the height
  * alone, so every triangle that shares a vertex classifies it the same way.
  */
-function position(z, first, height) {
+export function layerPosition(z, first, height) {
   const s = (z - first) / height, k = Math.round(s);
   if (k >= 0 && Math.abs(s - k) <= EDGE) return 2 * k;
   // Not within EDGE of a boundary, so plain floor: layerIndex's EDGE shift could put
@@ -77,7 +78,7 @@ export function bandTriangle(points, zOf, first, height) {
   checkHeights(first, height);
   const zs = points.map(zOf);
   checkVertexHeights(...zs);
-  const pos = zs.map(z => position(z, first, height));
+  const pos = zs.map(z => layerPosition(z, first, height));
   const lowPos = Math.min(...pos), highPos = Math.max(...pos);
   const low = Math.floor(lowPos / 2) + 1, high = Math.max(low, Math.ceil(highPos / 2));
   if (low === high) return [{ points: [...points], layer: low }];
