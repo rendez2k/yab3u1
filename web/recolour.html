@@ -698,9 +698,9 @@
     <div id="interweaveoptions" hidden>
       <label class="check"><input type="checkbox" id="interweaveon">Top surface interweave <span class="hint">· experimental</span></label>
       <div id="interweavefields" hidden>
-        <label class="field">Pattern size (mm)<input id="interweavecell" type="number" min="0.8" max="2.4" step="0.1" value="1.2"></label>
+        <label class="field">Stripe width (mm)<input id="interweavecell" type="number" min="0.4" max="1.6" step="0.1" value="0.5"></label>
         <p id="interweavenote" class="hint" role="status"></p>
-        <p class="hint">Blends are made by alternating layers, which shows as bands on flat tops and shallow slopes. This paints those faces as a fine chequer of the blend's two filaments instead, so they mix across the surface. Walls are unchanged. Layers that include these faces use both filaments, so expect more tool changes. The 3D preview does not show the pattern: check the top layers in the slicer.</p>
+        <p class="hint">Blends are made by alternating layers, which shows as bands on flat tops and shallow slopes. This paints those faces as narrow diagonal stripes of the blend's two filaments instead, about one printed line wide, so they mix across the surface. A first print with squares came out speckled; stripes are untested. Walls are unchanged. Layers that include these faces use both filaments, so expect more tool changes. The 3D preview does not show the pattern: check the top layers in the slicer.</p>
       </div>
     </div>
     <div id="fineblendoptions" hidden>

@@ -1,3 +1,12 @@
+## 2.6.92 — After the first Baked colours print
+
+A test print with Baked colours and Top surface interweave at 0.16 mm layers came out as plain stripes and speckle. These changes follow from it.
+
+- **Baked colours now needs thin layers.** Turning it on also turns on the Fine blend profile (0.10 mm layers, five thin walls). A project with three-reel blends cannot be downloaded without it.
+- **Shorter repeats.** A three-reel blend now repeats every 3 or 4 layers at most, down from up to 8. Fewer shades are reachable, so some colours improve less than before, and a colour a pair already matches as well keeps the pair.
+- **The option says what to expect:** domes and gentle slopes show rings of the separate reels even with thin layers; it suits upright walls best.
+- **Top surface interweave prints stripes, not squares.** The 1.2 mm squares printed as separate blobs. The pattern is now narrow diagonal stripes about one printed line wide (0.5 mm, adjustable from 0.4 to 1.6 mm), so each reel lays continuous lines. Untested in print.
+
 ## 2.6.91 — Removing an object no longer re-reads the model
 
 - Deleting or restoring an object, or changing a quantity, used to measure, count and simplify every remaining object again. On a 1.2-million-triangle test project that took 5 to 7 seconds per delete; it now takes about 1 second, in both colour methods.

@@ -2,31 +2,32 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as paint from '../shared/paint.js';
 import {leafTriangles} from '../shared/standard.js';
-import {applyTopInterweave,cellFilament,weave,interweaveProblem,INTERWEAVE_PATH} from '../shared/topInterweave.js';
+import {applyTopInterweave,stripeFilament,weave,interweaveProblem,INTERWEAVE_PATH} from '../shared/topInterweave.js';
 
 const enc=new TextEncoder(),dec=new TextDecoder();
 const area=t=>{const u=t[1].map((v,i)=>v-t[0][i]),w=t[2].map((v,i)=>v-t[0][i]);return Math.hypot(u[1]*w[2]-u[2]*w[1],u[2]*w[0]-u[0]*w[2],u[0]*w[1]-u[1]*w[0])/2;};
 const shares=(triangle,node)=>{const by=new Map();for(const leaf of leafTriangles(triangle,node))by.set(leaf.state,(by.get(leaf.state)||0)+area(leaf.triangle));const total=[...by.values()].reduce((a,b)=>a+b,0);return new Map([...by].map(([k,v])=>[k,v/total]));};
 
-test('a 50% blend is an exact chequer and other shares come out in proportion',()=>{
+test('a 50% blend alternates stripe by stripe and other shares come out in proportion',()=>{
   const half={a:1,b:3,percent:50};
-  for(let i=0;i<6;i++)for(let j=0;j<6;j++)assert.equal(cellFilament(i,j,half),(i+j)%2?1:3);
-  assert.equal(cellFilament(-1,0,half),cellFilament(3,0,half));
+  for(let i=0;i<8;i++)assert.equal(stripeFilament(i,half),i%2?1:3);
+  assert.equal(stripeFilament(-1,half),stripeFilament(7,half));
   for(const percent of [17,25,33,50,67,83]){
-    let b=0;for(let i=0;i<16;i++)for(let j=0;j<16;j++)if(cellFilament(i,j,{a:1,b:2,percent})===2)b++;
-    assert(Math.abs(b/256-percent/100)<0.04,`${percent}% gave ${b/256}`);
+    let b=0;for(let i=0;i<8;i++)if(stripeFilament(i,{a:1,b:2,percent})===2)b++;
+    assert(Math.abs(b/8-percent/100)<=0.09,`${percent}% gave ${b/8}`);
   }
 });
-test('a large flat face becomes a chequer whose printed areas match the blend',()=>{
+test('a large flat face becomes stripes whose printed areas match the blend',()=>{
   const face=[[0,0,5],[24,0,5],[0,24,5]];
   for(const percent of [25,50,75]){
     const node=weave(face,{a:1,b:2,percent},1.2,0,{leaves:1}),got=shares(face,node);
-    assert(Math.abs((got.get(2)||0)-percent/100)<0.06,`${percent}% printed ${(got.get(2)||0).toFixed(3)}`);
+    assert(Math.abs((got.get(2)||0)-percent/100)<0.08,`${percent}% printed ${(got.get(2)||0).toFixed(3)}`);
     // The tree is one the slicer's reader accepts, and only the two reels appear.
     assert.deepEqual(paint.decode(paint.encode(node)),node);assert.deepEqual([...got.keys()].sort(),[1,2]);
   }
-  // A face inside one cell needs no subdivision at all.
+  // A face inside one stripe needs no subdivision at all, however long it is along the stripe.
   assert.deepEqual(weave([[0.1,0.1,0],[0.5,0.1,0],[0.1,0.5,0]],{a:1,b:2,percent:50},1.2,0,{leaves:1}),{kind:'leaf',state:2});
+  assert.equal(weave([[0,0.2,0],[30,-29.8,0],[0.2,0,0]],{a:1,b:2,percent:50},1.2,0,{leaves:1}).kind,'leaf');
 });
 
 function project({transform='1 0 0 0 1 0 0 0 1 100 100 0'}={}){
@@ -71,6 +72,6 @@ test('gradients, solid colours and unsuitable requests are left alone',()=>{
   const none=applyTopInterweave(entries,{target:'snapmaker',cell:1.2,recipes:[recipes[2]],physical:4});
   assert.equal(none.facesInterwoven,0);assert.equal(none.blends,0);
   assert.match(interweaveProblem({target:'prusa',cell:1.2}),/Snapmaker Orca, Bambu Studio or OrcaSlicer/);
-  assert.match(interweaveProblem({target:'snapmaker',cell:5}),/0.8 to 2.4 mm/);
+  assert.match(interweaveProblem({target:'snapmaker',cell:5}),/0.4 to 1.6 mm/);
   assert.throws(()=>applyTopInterweave(new Map(),{target:'snapmaker',cell:1.2,recipes,physical:4}),/native slicer project/);
 });

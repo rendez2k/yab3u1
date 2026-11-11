@@ -21,9 +21,9 @@ export const MAX_RECIPES = 12;
 // repeat over more layers, so they band more visibly without thin layers.
 // RATIOS above stays the reference set shared with the Python oracle.
 export const BLEND_STRENGTHS = {
-  standard: { ratios: RATIOS, recipes: 6, period: 4, layers: 4 },
-  strong: { ratios: [17, 25, 33, 40, 50, 60, 67, 75, 83], recipes: 10, period: 6, layers: 6 },
-  finest: { ratios: [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90], recipes: 12, period: 20, layers: 8 },
+  standard: { ratios: RATIOS, recipes: 6, period: 4, layers: 3 },
+  strong: { ratios: [17, 25, 33, 40, 50, 60, 67, 75, 83], recipes: 10, period: 6, layers: 4 },
+  finest: { ratios: [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90], recipes: 12, period: 20, layers: 4 },
 };
 let strength = 'standard';
 export function setBlendStrength(name) {
@@ -98,7 +98,8 @@ export function mixHex(first, second, percent) {
 
 // Baked colours. A blend of three reels is written as an explicit run of
 // layers (for example reel 1, 2, 1, 3), so its shares are whole layers out of a
-// short repeat. Off by default: the reference planner mixes pairs only.
+// short repeat. Off by default: the reference planner mixes pairs only. The repeat is
+// kept to four layers at most: a first print at six 0.16 mm layers came out as plain stripes.
 let baked = false;
 export function setBakedColours(on) { baked = Boolean(on); }
 export const bakedColours = () => baked;
