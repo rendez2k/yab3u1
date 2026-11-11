@@ -101,6 +101,9 @@ document.addEventListener('click',event=>{
   }
   if(b.matches('[data-close-batch]'))setPanel('project');
   if(b.matches('[data-auto-merge]'))autoMerge();
+  // Pack chooser: once a pack is picked the list folds to that pack.
+  if(b.matches('[data-card]')){const list=b.closest('[data-cards]');if(list)list.dataset.folded='true';}
+  if(b.matches('[data-change-pack]')){const list=document.querySelector('#bundlepanel [data-cards]');if(list){list.dataset.folded='false';list.querySelector('[aria-checked=true]')?.focus();}}
   if(b.matches('[data-change-method]')){methodOpen=true;stepKey='';tick();document.querySelector('.colour-choices button[aria-pressed=true]')?.focus();}
   if(b.matches('[data-other-palettes]')){const list=$('palettechoices'),all=list.toggleAttribute('data-all');b.setAttribute('aria-expanded',String(all));b.textContent=all?'Show only the chosen set':'Compare other reel sets';}
   if(['petgfullspectrum','capacityblend','capacityswaps'].includes(b.id)||b.matches('[data-model-workflow]')) {
@@ -276,6 +279,8 @@ function syncSteps(loaded,busy,batch,report){
   if(kind==='converter'){let line=document.querySelector('[data-capacity-plain]');if(!line){line=view.make('p',{'data-capacity-plain':'',role:'status'});$('capacitystatus').after(line);}line.textContent=plain;}
   // A warning inside the folded print options must not stay out of sight.
   const warned=$('subdividewarning'),folded=document.querySelector('.print-options');if(folded&&warned&&!warned.hidden&&!folded.dataset.warned){folded.open=true;folded.dataset.warned='true';}
+  const packs=document.querySelector('#bundlepanel [data-cards]');
+  if(packs&&!packs.nextElementSibling?.matches('[data-change-pack]')){packs.after(view.make('button',{type:'button','data-change-pack':''},'Choose a different pack'));if(!packs.dataset.folded)packs.dataset.folded=String(Boolean(packs.querySelector('[aria-checked=true]')));}
   if(!show)return;
   const back=stepBar.querySelector('[data-step-back]'),forward=stepBar.querySelector('[data-step-next]'),list=stepBar.querySelector('.step-downloads');
   back.hidden=!stepPanels.includes(currentPanel)||currentPanel==='project';

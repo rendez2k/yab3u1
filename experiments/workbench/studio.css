@@ -484,3 +484,12 @@ body:not([data-steps=on]) [data-capacity-plain]{display:none}
 body[data-steps=on] #inspector #userecommended{display:none!important}
 .auto-merge{margin:0 0 18px}.auto-merge[hidden]{display:none}#inspector .auto-merge button{width:100%;min-height:44px;font-weight:600}.auto-merge p{margin:8px 0 0}.auto-merge p:empty{display:none}
 #inspector .auto-merge button[hidden]{display:none}.auto-merge:has(button[hidden]):has(p:empty){display:none}
+/* 2.6.82 — a wider panel on wide screens, and a pack chooser that folds to the chosen pack instead of scrolling inside the panel. */
+@media(min-width:1051px){#engine-workspace{grid-template-columns:clamp(404px,30vw,580px) minmax(0,1fr)}}
+#inspector .bundle-cards{max-height:none;overflow:visible}
+#inspector .bundle-cards[data-folded=true]:has([aria-checked=true]) button[aria-checked=false]{display:none}
+#inspector [data-change-pack]{display:none;width:100%;min-height:40px;margin:6px 0 0;background:transparent;border:1px solid var(--line);color:var(--accent)}
+#inspector .bundle-cards[data-folded=true]:has([aria-checked=true])+[data-change-pack]{display:block}
+@media(min-width:1500px){#inspector .bundle-cards:not([data-folded=true]),#inspector .bundle-cards[data-folded=true]:not(:has([aria-checked=true])){grid-template-columns:repeat(2,minmax(0,1fr))}#inspector .colour-workflow .colour-choices{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){#inspector [data-change-pack]{min-height:44px}}
+body[data-steps=on] #inspector #bundlepanel [data-use]{display:none!important}
