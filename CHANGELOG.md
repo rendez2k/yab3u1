@@ -1,3 +1,9 @@
+## 2.6.87 — Dual-wall depth fix and a toolpath checker
+
+- **Dual-wall mixing now keeps the depth you choose.** A model that carried its own colour-depth setting (for example 5 mm, or 0 for unlimited) silently replaced the outer colour depth. The chosen depth is now written onto every object and part as well, and the interlocking depth is set to 0. Re-export older dual-wall files of such models to get the fix.
+- **A command-line toolpath checker** (`tools/check-built-in-toolpaths.mjs`) compares sliced G-code with the exported model and reports which reel the slicer puts on the visible outer wall. A new `--blends` mode judges Baked colours and Fine blend profile exports against their layer patterns. See `docs/toolpath-check.md`. It is not part of the app.
+- Both were brought across from the Built-in colours draft. That engine itself is not included.
+
 ## 2.6.86 — Top surface interweave leaves the first layer alone
 
 - Top surface interweave also patterned faces that look down, including the face resting on the bed. That turned the first layer into small squares of two reels, which does not stick and can jam a head. It now patterns upward faces only; downward faces keep their single blend.
