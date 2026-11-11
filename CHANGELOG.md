@@ -1,3 +1,9 @@
+## 2.6.91 — Removing an object no longer re-reads the model
+
+- Deleting or restoring an object, or changing a quantity, used to measure, count and simplify every remaining object again. On a 1.2-million-triangle test project that took 5 to 7 seconds per delete; it now takes about 1 second, in both colour methods.
+- Each mesh's bounds, facet counts, support-paint check and painted surface area are now worked out once per open project, and an object's simplified preview mesh is reused when its share of the preview budget changes only a little.
+- The first load of a project is not faster: that is where this work is done.
+
 ## 2.6.90 — White squares show in the waiting figure
 
 - The waiting figure uses the model's colours, so a white filament drew a row of white squares on a white card and looked like a gap. Every square now has a faint outline.

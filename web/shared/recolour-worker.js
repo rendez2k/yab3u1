@@ -225,6 +225,18 @@ function buildGeometry(key, plateId, objectIds, estimate) {
  * The key deliberately excludes the layout: a spacing or copy change must reuse
  * this, never re-read the model.  Copies are assembled from it by `instanceView`.
  */
+/** Painted surface area per source colour for a selection, summed from each object's own
+ * cached geometry: removing or restoring an object reads no mesh again. */
+function selectionSurfaceAreas(plateId, objectIds) {
+  const ids = objectIds && objectIds.length ? objectIds.map(String) : project.eligibleObjects(loaded.project, plateId);
+  const total = {};
+  for (const objectId of ids) {
+    const id = `${plateId}|${objectId}`;
+    if (!objectGeometry.has(id)) { objectGeometry.set(id, buildGeometry(id, plateId, [objectId])); self.__geometryBuilds = ++geometryBuilds; }
+    for (const [state, area] of Object.entries(objectGeometry.get(id).surfaceAreas)) total[state] = (total[state] || 0) + area;
+  }
+  return total;
+}
 function ensureGeometry(plateId, objectIds, estimate) {
   const key = `${plateId}|${(objectIds || []).join(",")}`;
   if (geometry && geometry.key === key) return geometry;
@@ -239,6 +251,7 @@ let boundsCache = null;
 let viewCache = null;
 let detailCache = null;
 let objectGeometry = new Map();
+let simplifiedCache = new Map();
 
 function objectView(plateId, objectIds, layout) {
   const key = `${plateId}|${(objectIds||[]).join(',')}|${JSON.stringify(layout)}`;
@@ -261,7 +274,14 @@ function objectView(plateId, objectIds, layout) {
   for (const p of parts) {
     const budget = Math.max(1,Math.floor(previewBudget*p.base.triangleCount/Math.max(1,total)));
     const id = `${p.base.id}|${budget}`;
-    if (!meshes.has(id)) meshes.set(id,clusterWithinBudget(p.base.positions,p.base.states,budget));
+    if (!meshes.has(id)) {
+      // Removing an object or changing a quantity shifts every other object's share of the
+      // preview budget a little. A mesh already simplified to between half of the new budget
+      // and all of it is kept, so the remaining objects are not simplified again.
+      const kept = simplifiedCache.get(p.base.id);
+      if (kept && kept.budget <= budget && kept.budget >= budget / 2) meshes.set(id, kept.mesh);
+      else { const mesh = clusterWithinBudget(p.base.positions,p.base.states,budget); simplifiedCache.set(p.base.id,{budget,mesh}); meshes.set(id,mesh); }
+    }
     p.mesh = meshes.get(id);
   }
   const length = parts.reduce((n,p)=>n+p.mesh.positions.length,0);
@@ -337,7 +357,7 @@ self.onmessage = async (event) => {
       loaded = { entries, project: parsed };
       geometry = null;                    // a new file has new geometry
       boundsCache = viewCache = detailCache = null;
-      objectGeometry.clear();
+      objectGeometry.clear();simplifiedCache.clear();
       geometryBuilds = self.__geometryBuilds = 0;
       const meta = metaOf(parsed);
       const plateId = parsed.plates.length ? parsed.plates[0].id : null;
@@ -357,7 +377,7 @@ self.onmessage = async (event) => {
       const initial = parsed.plates.length
         ? (parsed.plates[0].objectIds || []).map(String) : [];
       const preview = preparePreview(plateId, initial, "result", {}, null, null, 0);
-      assessed.surfaceAreas = ensureGeometry(plateId, initial, 0).surfaceAreas;
+      assessed.surfaceAreas = selectionSurfaceAreas(plateId, initial);
       post({ type: "loaded", id, meta, assessed, preview, ms: Date.now() - started },
            transferOf(preview));
       return;
@@ -396,7 +416,7 @@ self.onmessage = async (event) => {
     }
     if (type === "assess") {
       const assessed = project.analyse(parsed, message.plateId, message.objects);
-      assessed.surfaceAreas = ensureGeometry(message.plateId, message.objects, assessed.counts.triangles).surfaceAreas;
+      assessed.surfaceAreas = selectionSurfaceAreas(message.plateId, message.objects);
       post({ type: "assessed", id, assessed });
       return;
     }
