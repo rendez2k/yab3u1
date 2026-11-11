@@ -4,12 +4,13 @@
 import {planBuiltIn, alignPhases} from './builtInRecipes.js';
 import {applyBuiltInColours, builtInProblem, builtInLayerProblem, BUILT_IN_NOZZLE, BUILT_IN_NOZZLE_PROBLEM, BUILT_IN_DEPTH, BUILT_IN_LAYERS, BUILT_IN_FIRST_LAYER} from './builtInColours.js';
 import {matchU1Profile} from './u1Profiles.js';
-import {norm, toLab} from './colour.js';
+import {toLab} from './colour.js';
+import {builtInModelSlots} from './builtInReels.js';
 
 export const BUILT_IN_DUAL_WALL = 'Dual-wall mixing is not available with built-in colours yet.';
 
-/** Model reels only: a PETG support reel never carries a colour. 1-based slots. */
-export const builtInModelSlots = reels => (reels || []).flatMap((reel, i) => (reel && reel.role !== 'support-interface' && norm(reel.color) ? [i + 1] : []));
+/** Model reels only (builtInReels.js): a PETG support reel never carries a colour. 1-based slots. */
+export {builtInModelSlots};
 
 /** The default interior and backing reel: the lightest model reel by CIE L* (the first on a tie). */
 export function defaultBackingSlot(reels) {
@@ -42,10 +43,10 @@ export function builtInRefusal({target, reels, builtIn, dualWall}) {
   return builtInProblem({target, reels, backingSlot: builtIn.backingSlot, depth: builtIn.depth, layerHeight: builtIn.layerHeight});
 }
 
-/** exportProject's options for a built-in export: shade ids in place of slicer blends. */
+/** exportProject's options for a built-in export: shade ids in place of slicer blends, and no slicer-blend calibration. */
 export function builtInExportOptions(options) {
   const recipes = options.builtIn.recipes || [];
-  return {...options, recipes: [], subdivideMixLayer: false, dualWall: null,
+  return {...options, recipes: [], subdivideMixLayer: false, dualWall: null, calibration: null,
     builtIn: {shades: recipes.reduce((n, r) => Math.max(n, Number(r.id) || 0), 0)}};
 }
 

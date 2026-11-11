@@ -7,7 +7,16 @@ const material = r => String(r.type || 'PLA').trim().toUpperCase();
 const reelKey = reelIdentity;
 /** How a sample was made. Versions 1 and 2 predate the key and are always the slicer's own blend. */
 export const CONSTRUCTIONS = ['slicer-blend', 'built-in'];
+/** The longest recipe sequence, for built-in colours (builtInRecipes.js re-exports it). */
 export const MAX_SEQUENCE = 40;
+/**
+ * Version 3 holds built-in colours sequences, which nothing applies yet: it validates and
+ * imports, but the panel refuses to enable it (Slicer blends would show it as in use while
+ * no sample applied).
+ */
+export const BUILT_IN_CALIBRATION_REFUSAL = 'This calibration file is for built-in colours, which cannot use measured samples yet.';
+/** The reason this profile cannot be enabled, or ''. */
+export const calibrationEnableProblem = profile => (profile?.version === 3 ? BUILT_IN_CALIBRATION_REFUSAL : '');
 const text = (value, max) => typeof value === 'string' && value.trim().length > 0 && value.length <= max;
 
 export function sampleKey(first, second, percent) {

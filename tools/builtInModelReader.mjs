@@ -1,5 +1,5 @@
-// Reads an exported 3MF for the model-aware toolpath check (built-in colours spike,
-// Task 12): the mesh in bed coordinates with each triangle's reel, streamed member by
+// Reads an exported 3MF for the model-aware toolpath check (built-in colours spike):
+// the mesh in bed coordinates with each triangle's reel, streamed member by
 // member so that a model member larger than readZip will hold (They Live's is 571 MB)
 // can still be read; and an upward sweep over its triangles. Node only.
 import {readFileSync} from 'node:fs';

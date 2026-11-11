@@ -1,4 +1,4 @@
-import {CALIBRATION_KEY,validateCalibration,matchesCalibration} from './blendCalibration.js';
+import {CALIBRATION_KEY,validateCalibration,matchesCalibration,calibrationEnableProblem} from './blendCalibration.js';
 import {reelIdentity} from './filamentIdentity.js';
 import {mountWallComparison} from './wallComparisonPanel.js';
 
@@ -33,7 +33,8 @@ export function mountCalibration(host,{getSetup,onChange}) {
   const wallComparison=mountWallComparison($('[data-wall-comparison]'));
   function setup(){try{return getSetup($('[data-surface]').value);}catch(error){return {error:error.message};}}
   function contextMatches(){const current=setup();return profile && !current.error && current.context===profile.context;}
-  function compatible(){const current=setup();return contextMatches() && matchesCalibration(profile,current.reels,$('[data-surface]').value);}
+  // A version-3 (built-in colours) profile is never compatible: no sample of it applies to Slicer blends.
+  function compatible(){const current=setup();return contextMatches() && !calibrationEnableProblem(profile) && matchesCalibration(profile,current.reels,$('[data-surface]').value);}
   function persist() {
     try {if(profile)localStorage.setItem(CALIBRATION_KEY,JSON.stringify(profile));else localStorage.removeItem(CALIBRATION_KEY);return true;}
     catch {status('Browser storage is unavailable. Download the calibration JSON to keep a backup.');return false;}
@@ -102,7 +103,10 @@ export function mountCalibration(host,{getSetup,onChange}) {
       enabled=false;const saved=persist();renderProfile();render();onChange();if(saved)status('Measurements saved. Confirm the setup below to use them in suggestions and previews.');
     }catch(error){status(error.message);}
   };
-  $('[data-enable]').onchange=()=>{enabled=$('[data-enable]').checked&&compatible()&&profile?.surface==='wall';render();onChange();status(enabled?'Recorded measurements enabled for the matching reel set.':'Recorded measurements disabled; using estimates.');};
+  $('[data-enable]').onchange=()=>{
+    const refused=calibrationEnableProblem(profile);
+    if(refused){enabled=false;render();onChange();status(refused);return;}
+    enabled=$('[data-enable]').checked&&compatible()&&profile?.surface==='wall';render();onChange();status(enabled?'Recorded measurements enabled for the matching reel set.':'Recorded measurements disabled; using estimates.');};
   $('[data-surface]').onchange=()=>{enabled=false;render();onChange();};
   $('[data-backup]').onclick=()=>download(JSON.stringify(profile,null,2),'yab3d-blend-calibration.json','application/json');
   $('[data-clear]').onclick=()=>{profile=null;enabled=false;persist();renderProfile();render();onChange();status('Saved calibration cleared. Predictions use estimates again.');};

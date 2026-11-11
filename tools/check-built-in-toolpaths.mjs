@@ -4,7 +4,7 @@
 //   node tools/check-built-in-toolpaths.mjs <gcode> --model <exported.3mf> [--every <n>] [--json <out>]
 //   node tools/check-built-in-toolpaths.mjs <gcode> <first> <height>
 //
-// Model mode (Task 12): the G-code is compared with the exported model's own paint
+// Model mode (the model-aware check): the G-code is compared with the exported model's own paint
 // (tools/builtInToolpathCheck.mjs). Every nth layer above the first (default every
 // layer) is cut at mid-layer height and its "Outer wall" moves are judged against the
 // reel painted on the outline next to them; walls far from the outline (the inner
@@ -46,7 +46,7 @@
 // "Overhang wall" moves counted; --offset dx,dy,dz moves the model before checking (dz
 // after the bed drop), to measure what the alignment stop and the other rules catch.
 //
-// Fixed-pattern mode (Task 2): for every layer above the first, among extrusions typed
+// Fixed-pattern mode (the first spike's fixed test pattern): for every layer above the first, among extrusions typed
 // "Outer wall", the tool with the most extruded length must be [0,1,2][layer % 3], and
 // no other tool may exceed 5% of that layer's outer-wall length. Layer n is the one
 // whose top is at first + n * height. Prints pass/fail counts and the first ten

@@ -1,4 +1,4 @@
-// Model-aware toolpath check for built-in colours (spike, Task 12). Not wired into the app.
+// Model-aware toolpath check for built-in colours (spike). Not wired into the app.
 //
 // The sliced G-code is compared with the exported model's own paint: each checked
 // layer of the model is cut at mid-layer height, giving the outline the slicer works

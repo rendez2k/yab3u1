@@ -1722,7 +1722,8 @@ $("export").addEventListener("click", async () => {
       target: state.target, reels: state.reels, physical: payload.physical,
       mapping: payload.mapping, recipes: payload.recipes,
       title: state.project.title, u1Nozzle:state.u1Nozzle, layout:state.layout,
-      bambuSetup:state.bambuSetup,preserveSourceSettings:true,calibration:calibrationPanel?.active() || null,
+      // A slicer-blend calibration never describes a built-in export, so none is sent with one.
+      bambuSetup:state.bambuSetup,preserveSourceSettings:true,calibration:payload.builtIn?null:calibrationPanel?.active() || null,
       // Built-in colours fixes its own layer heights (applied after the export), so the
       // layer-height choice is not read; it never travels with dual-wall mixing.
       layerHeight:payload.builtIn?null:layerChoice(),supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice(),dualWall:dualWallChoice(),

@@ -16,6 +16,8 @@ import {bandMesh} from './paintBands.js';
 import {layerPosition, layerPlane} from './layerBands.js';
 import {pieceLayer} from './flatFaceRule.js';
 import {matrixFromText, matmul} from './project.js';
+import {builtInModelSlots as modelSlots, builtInMaterialProblem} from './builtInReels.js';
+import {EXPORT_PLAN_PATH} from './exportPlan.js';
 import {norm} from './colour.js';
 import {MAX_MEMBER_BYTES} from '../zip.js';
 
@@ -43,8 +45,6 @@ const EPS = 1e-9;
 
 const attr = (text, name) => new RegExp(`(?:^|\\s)${name.replace(/[.:]/g, '\\$&')}="([^"]*)"`).exec(text)?.[1];
 const unescape = text => String(text).replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
-const isModelReel = reel => Boolean(reel) && reel.role !== 'support-interface';
-const modelSlots = reels => (Array.isArray(reels) ? reels.map((reel, i) => (isModelReel(reel) ? i + 1 : 0)).filter(Boolean) : []);
 const inRange = (value, {min, max}) => typeof value === 'number' && value >= min - EPS && value <= max + EPS;
 const count = (text, needle, from = 0, to = text.length) => {
   let n = 0;
@@ -56,6 +56,8 @@ const grouped = n => n.toLocaleString('en-GB');
 /** The reason built-in colours cannot be exported with these choices, or '' when they are fine. */
 export function builtInProblem({target, reels, backingSlot, depth, layerHeight} = {}) {
   if (target !== 'snapmaker') return 'Built-in colours currently exports for the Snapmaker U1 only.';
+  const material = builtInMaterialProblem(reels);
+  if (material) return material;
   const slots = modelSlots(reels);
   if (slots.length < 2) return 'Built-in colours needs at least two model reels.';
   if (!slots.includes(backingSlot)) return 'Choose one of the model reels for the interior.';
@@ -314,7 +316,7 @@ export function applyBuiltInColours(entries, {target, reels, recipes, backingSlo
     if (!keys.length) continue;
     const text = dec.decode(work.get(member));
     let need = memberTriangles.get(member);
-    const tooLarge = n => Error(`This model would need ${grouped(n)} triangles at ${height} mm layers, which is too large to export. Choose a thicker layer height.`);
+    const tooLarge = n => Error(`This model would need ${grouped(n)} triangles at ${height} mm layers, which is too large for built-in colours. Export fewer objects at a time, or use Slicer blends.`);
     const writer = memberWriter(maxMemberBytes, () => { throw tooLarge(need); });
     let last = 0;
     for (const m of text.matchAll(OBJECT_RE)) {
@@ -512,6 +514,13 @@ export function applyBuiltInColours(entries, {target, reels, recipes, backingSlo
     if (Number(m[1]) > reels.length) throw Error(`The project still names filament ${m[1]}, beyond the ${reels.length} reels, so built-in colours stopped.`);
   work.set(SETTINGS, enc.encode(modelSettings));
   work.delete(HEIGHTS_PROFILE);
+
+  // The colour plan file records the heights the pattern is cut for, and never a slicer-blend
+  // calibration: no measured sample applies to built-in colours.
+  if (work.has(EXPORT_PLAN_PATH)) {
+    const plan = JSON.parse(dec.decode(work.get(EXPORT_PLAN_PATH)));
+    work.set(EXPORT_PLAN_PATH, enc.encode(JSON.stringify({...plan, layerHeight: {mode: 'custom', value: String(height)}, firstLayer: first, calibration: null})));
+  }
 
   // ---- the record ----
   const layers = layerReels.size ? Math.max(...layerReels.keys()) + 1 : 0;

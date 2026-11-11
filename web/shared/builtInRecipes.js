@@ -4,12 +4,12 @@
 import { mixManyHex, FDM_MODEL } from './fdmMix.js';
 import { distance, norm } from './colour.js';
 import { MIN_IMPROVEMENT } from './mix.js';
+import { builtInModelSlots } from './builtInReels.js';
 
 export const DENOMINATORS = [2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 40];
-export const MAX_SEQUENCE = 40;
+export { MAX_SEQUENCE } from './blendCalibration.js';
 const PERIOD_CAP = 240;
 
-const material = (reel) => String((reel || {}).type || 'PLA').trim().toUpperCase();
 const gcd = (a, b) => (b ? gcd(b, a % b) : a);
 const lcm = (a, b) => (a / gcd(a, b)) * b;
 const popcount = (n) => { let c = 0; for (let v = n; v; v &= v - 1) c += 1; return c; };
@@ -38,23 +38,11 @@ export function spreadSequence(counts) {
   return sequence;
 }
 
-/** Reels that may take part: not support, a usable colour, and the majority material. */
-function modelReelIndexes(reels) {
-  const usable = [];
-  reels.forEach((reel, i) => {
-    if (reel?.role === 'support-interface' || !norm((reel || {}).color)) return;
-    usable.push(i);
-  });
-  const tally = new Map();
-  usable.forEach((i) => tally.set(material(reels[i]), (tally.get(material(reels[i])) || 0) + 1));
-  let majority = null;
-  let most = 0;
-  for (const i of usable) { // the first-seen material wins a tie
-    const m = material(reels[i]);
-    if (tally.get(m) > most) { majority = m; most = tally.get(m); }
-  }
-  return usable.filter((i) => material(reels[i]) === majority);
-}
+/**
+ * The model reels (builtInReels.js), 0-based: not support and a usable colour. Mixed
+ * materials among them are refused by builtInProblem, never silently left out here.
+ */
+const modelReelIndexes = (reels) => builtInModelSlots(reels).map((slot) => slot - 1);
 
 function* compositions(total, parts) {
   if (parts === 1) { yield [total]; return; }

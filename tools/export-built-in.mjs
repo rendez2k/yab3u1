@@ -1,5 +1,5 @@
 // Built-in colours (experimental) from the command line, through the real export path:
-// readProject -> planBuiltIn + alignPhases -> exportProject (builtIn) -> applyBuiltInColours.
+// readProject -> builtInPlan (the page's planBuiltIn + alignPhases) -> exportProject (builtIn) -> applyBuiltInColours.
 //
 //   node tools/export-built-in.mjs <input.3mf> <output.3mf> --reels=cmyw|cmyk [--plate=<n>]
 //        [--objects=<name or id, comma separated>] [--backing=<slot>] [--layer-height=<mm>]
@@ -7,9 +7,11 @@
 // Reel sets, slots 1-4: cmyw is ELEGOO Rilievo cyan, magenta, yellow and white (the
 // repository's own definitions); cmyk is the same cyan, magenta and yellow with a generic
 // black PLA (#000000) in slot 4, because the repository has no ELEGOO Rilievo black. The
-// interior (backing) reel defaults to the lightest reel: white in cmyw, yellow in cmyk.
-// The layer height is 0.12 mm (BUILT_IN_LAYERS.standard) unless --layer-height is given,
-// with a 0.2 mm first layer and a 0.45 mm outer colour shell.
+// interior (backing) reel defaults to the lightest model reel, as in the app: white in cmyw,
+// yellow in cmyk.
+// The layer height is 0.12 mm (BUILT_IN_LAYERS.standard), with a 0.2 mm first layer and a
+// 0.45 mm outer colour shell. --layer-height is an unchecked experiment: only 0.12 mm has been
+// toolpath-checked, and the app always uses 0.12 mm.
 //
 // Writes <output>.plan.json beside the output: each source colour's hex, the recipe
 // sequence written for it, the estimated shade, the estimated ΔE2000 error, all marked
@@ -23,10 +25,10 @@ import {readFileSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
 import {readZip, writeZip} from '../web/zip.js';
 import {readProject, exportProject, analyse, ProjectError} from '../web/shared/project.js';
-import {planBuiltIn, alignPhases} from '../web/shared/builtInRecipes.js';
+import {builtInPlan, defaultBackingSlot, builtInModelSlots} from '../web/shared/builtInWorkflow.js';
 import {applyBuiltInColours, BUILT_IN_LAYERS, BUILT_IN_FIRST_LAYER, BUILT_IN_DEPTH} from '../web/shared/builtInColours.js';
 import {wallTestSetup} from '../web/shared/wallComparison.js';
-import {norm, toLab} from '../web/shared/colour.js';
+import {norm} from '../web/shared/colour.js';
 
 export const REEL_SETS = ['cmyw', 'cmyk'];
 
@@ -46,13 +48,6 @@ export function reelSet(name) {
   return name === 'cmyw' ? elegoo.map(r => ({...r})) : [...elegoo.slice(0, 3).map(r => ({...r})), {...GENERIC_BLACK}];
 }
 
-/** The slot (1-based) of the lightest reel by CIE L*. */
-export function lightestSlot(reels) {
-  let best = 0;
-  reels.forEach((r, i) => { if (toLab(r.color)[0] > toLab(reels[best].color)[0]) best = i; });
-  return best + 1;
-}
-
 /**
  * The plan for these source colours with a reel set. sourceColours is an array of hex
  * (sources 1..n) or an object {source: hex}; weights (by source) steer the phase alignment.
@@ -61,12 +56,11 @@ export function lightestSlot(reels) {
 export function planFor(sourceColours, set, {weights = {}, backing} = {}) {
   const reels = reelSet(set);
   const colours = Array.isArray(sourceColours) ? Object.fromEntries(sourceColours.map((hex, i) => [i + 1, hex])) : {...sourceColours};
-  const plan = planBuiltIn(colours, reels, weights);
-  const recipes = alignPhases(plan.recipes);
-  const byId = new Map(recipes.map(r => [r.id, r]));
-  const backingSlot = backing ?? lightestSlot(reels);
-  if (!Number.isInteger(backingSlot) || backingSlot < 1 || backingSlot > reels.length) throw new Refusal(`Choose a backing slot from 1 to ${reels.length}.`);
-  const rows = plan.rows.map(r => ({source: r.source, hex: norm(r.original), sequence: [...byId.get(r.recipe).sequence], counts: [...r.counts],
+  // The page's own plan and default interior (builtInWorkflow.js): the lightest model reel.
+  const {rows: planned, recipes} = builtInPlan(colours, reels, weights);
+  const backingSlot = backing ?? defaultBackingSlot(reels);
+  if (!builtInModelSlots(reels).includes(backingSlot)) throw new Refusal(`Choose a backing slot from 1 to ${reels.length}.`);
+  const rows = planned.map(r => ({source: r.source, hex: norm(r.original), sequence: [...r.sequence], counts: [...r.counts],
     shade: norm(r.shade), error: r.error, recipe: r.recipe, estimated: true}));
   return {reelSet: set, reels, backingSlot, rows, recipes};
 }
@@ -167,7 +161,8 @@ function parseArgs(argv) {
 
 async function main() {
   const usage = 'usage: node tools/export-built-in.mjs <input.3mf> <output.3mf> --reels=cmyw|cmyk [--plate=<n>] '
-    + '[--objects=<name or id, comma separated>] [--backing=<slot>] [--layer-height=<mm>]';
+    + '[--objects=<name or id, comma separated>] [--backing=<slot>] [--layer-height=<mm>]\n'
+    + '  --layer-height is an unchecked experiment: only 0.12 mm has been toolpath-checked, and the app always uses 0.12 mm.';
   let args;
   try { args = parseArgs(process.argv.slice(2)); } catch (error) { console.error(`${error.message}\n${usage}`); process.exitCode = 2; return; }
   const {positional: [input, output], options} = args;

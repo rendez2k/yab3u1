@@ -412,7 +412,7 @@ test('a result far too large is refused before any cutting', () => {
   const limit = Math.floor(0.85 * size), {entries, faces} = bigWall();
   const bands = faces * (layerIndex(1, 0.2, 0.08) + 1);
   assert.ok(40 * bands < limit, 'the old bound would have let it through to the cut');
-  assert.throws(() => applyBuiltInColours(entries, {...opts, layerHeight: 0.08, maxMemberBytes: limit, band: counting}), /too large to export/);
+  assert.throws(() => applyBuiltInColours(entries, {...opts, layerHeight: 0.08, maxMemberBytes: limit, band: counting}), /too large for built-in colours/);
   assert.equal(calls, 0, 'bandMesh was not called');
   // Just over the real size it goes through, calling bandMesh once.
   applyBuiltInColours(bigWall().entries, {...opts, layerHeight: 0.08, maxMemberBytes: size + 1, band: counting});
@@ -484,7 +484,7 @@ test('copies side by side at the same height share one banded mesh', () => {
 });
 
 test('an oversized result is refused with a triangle count', () => {
-  assert.throws(() => applyBuiltInColours(project(), {...opts, layerHeight: 0.08, maxMemberBytes: 2000}), /This model would need \d[\d,]* triangles at 0\.08 mm layers, which is too large to export\. Choose a thicker layer height\./);
+  assert.throws(() => applyBuiltInColours(project(), {...opts, layerHeight: 0.08, maxMemberBytes: 2000}), /This model would need \d[\d,]* triangles at 0\.08 mm layers, which is too large for built-in colours\. Export fewer objects at a time, or use Slicer blends\./);
   // The same model fits under the real limit.
   assert.ok(applyBuiltInColours(project(), {...opts, layerHeight: 0.08}).triangles.after > 0);
 });
@@ -501,6 +501,38 @@ test('problems are reported in plain words', () => {
   assert.equal(builtInProblem({...ok, depth: 1.3}), 'Choose an outer colour depth from 0.3 to 1.2 mm.');
   assert.deepEqual([BUILT_IN_DEPTH, BUILT_IN_LAYERS, BUILT_IN_FIRST_LAYER], [{min: 0.3, max: 1.2, standard: 0.45}, {min: 0.08, max: 0.2, standard: 0.12}, 0.2]);
   assert.throws(() => applyBuiltInColours(project(), {...opts, target: 'orca'}), /Snapmaker U1 only/);
+});
+
+// A reel that is not marked as the support reel is a model reel, whatever its material; the
+// model reels must all be one material, so a PLA shell is never built over a PETG core.
+const PETG_WHITE = {color: '#FFFFFF', type: 'PETG', name: 'PETG white'};
+const MIXED = [...CMYW.slice(0, 3), PETG_WHITE];
+const MIXED_PROBLEM = 'Built-in colours needs every model reel to be the same material. Remove or change the PETG reel in slot 4.';
+
+test('model reels of different materials are refused, naming the first that differs', () => {
+  const ok = {target: 'snapmaker', reels: CMYW, backingSlot: 4, depth: 0.45, layerHeight: 0.1};
+  for (const backingSlot of [1, 3, 4]) assert.equal(builtInProblem({...ok, reels: MIXED, backingSlot}), MIXED_PROBLEM);
+  assert.equal(builtInProblem({...ok, reels: [CMYW[0], {...CMYW[1], type: 'PETG'}, {...CMYW[2], type: 'abs'}, CMYW[3]], backingSlot: 1}),
+    'Built-in colours needs every model reel to be the same material. Remove or change the PETG reel in slot 2.');
+  // A two-and-two tie keeps the first-seen material, so the first PETG reel is named.
+  assert.equal(builtInProblem({...ok, reels: [CMYW[0], PETG_WHITE, CMYW[2], {...PETG_WHITE, color: '#000000'}], backingSlot: 1}),
+    'Built-in colours needs every model reel to be the same material. Remove or change the PETG reel in slot 2.');
+  const entries = project(), before = new Map(entries);
+  assert.throws(() => applyBuiltInColours(entries, {...opts, reels: MIXED}), {message: MIXED_PROBLEM});
+  assert.deepEqual(entries, before, 'nothing is written when it refuses');
+});
+
+test('a PETG support reel is not a model reel, and an all-PETG set is one material', () => {
+  const support = [...CMYW.slice(0, 3), {...PETG_WHITE, role: 'support-interface'}];
+  const ok = {target: 'snapmaker', backingSlot: 3, depth: 0.45, layerHeight: 0.1};
+  assert.equal(builtInProblem({...ok, reels: support}), '');
+  assert.ok(applyBuiltInColours(project(), {...opts, reels: support, backingSlot: 3}).triangles.after > 0);
+  const allPetg = CMYW.map(r => ({...r, type: 'PETG'}));
+  assert.equal(builtInProblem({...ok, reels: allPetg, backingSlot: 4}), '');
+  assert.ok(applyBuiltInColours(project(), {...opts, reels: allPetg}).triangles.after > 0);
+  // A reel without a usable colour is not a model reel either, so its material does not count.
+  assert.equal(builtInProblem({...ok, reels: [...CMYW.slice(0, 3), {color: '', type: 'PETG'}], backingSlot: 3}), '');
+  assert.equal(builtInProblem({...ok, reels: [...CMYW.slice(0, 3), {color: '', type: 'PETG'}], backingSlot: 4}), 'Choose one of the model reels for the interior.');
 });
 
 test('recipes are found by shade id, and a shade with no recipe is refused by id', () => {

@@ -7,9 +7,11 @@ import {readFileSync} from 'node:fs';
 import {readZip} from '../zip.js';
 import * as paint from '../shared/paint.js';
 import {readProject, analyse, previewSoup} from '../shared/project.js';
-import {BUILT_IN_PATH, BUILT_IN_LAYERS, BUILT_IN_FIRST_LAYER, BUILT_IN_DEPTH} from '../shared/builtInColours.js';
+import {BUILT_IN_PATH, BUILT_IN_LAYERS, BUILT_IN_FIRST_LAYER, BUILT_IN_DEPTH, builtInProblem, applyBuiltInColours} from '../shared/builtInColours.js';
+import {EXPORT_PLAN_PATH, readColourExportPlan} from '../shared/exportPlan.js';
+import {validateCalibration} from '../shared/blendCalibration.js';
 import {builtInFaceColour, shallowShare} from '../shared/builtInPreview.js';
-import {builtInPlan, defaultBackingSlot, builtInFixed} from '../shared/builtInWorkflow.js';
+import {builtInPlan, defaultBackingSlot, builtInFixed, builtInModelSlots} from '../shared/builtInWorkflow.js';
 import {reelSet} from '../../tools/export-built-in.mjs';
 
 const dec = new TextDecoder();
@@ -133,6 +135,53 @@ test('with a PETG support reel the bands use only the three model reels', async 
   assert.ok(support.includes('support_interface_filament'));
   for (const key of support) assert.deepEqual(cfg[key], reference[key], key);
   assert.equal(cfg.support_interface_filament, '4');
+});
+
+// The reviewer's case: three PLA reels and a white PETG reel that is not marked as the support reel.
+const MIXED = [...CMYW.slice(0, 3), {color: '#FFFFFF', type: 'PETG', name: 'PETG white'}];
+const MIXED_PROBLEM = 'Built-in colours needs every model reel to be the same material. Remove or change the PETG reel in slot 4.';
+
+test('the page check refuses model reels of different materials', () => {
+  // As the page asks: the backing reel it would choose, at the mode's fixed heights.
+  const fixed = builtInFixed(), backingSlot = defaultBackingSlot(MIXED);
+  assert.equal(builtInProblem({target: 'snapmaker', reels: MIXED, backingSlot, depth: fixed.depth, layerHeight: fixed.layerHeight}), MIXED_PROBLEM);
+  // The planner, the page and the export share one list of model reels.
+  assert.deepEqual(builtInModelSlots(MIXED), [1, 2, 3, 4]);
+  assert.deepEqual(builtInModelSlots(PETG), [1, 2, 3]);
+  const allPetg = CMYW.map(r => ({...r, type: 'PETG'}));
+  assert.equal(builtInProblem({target: 'snapmaker', reels: allPetg, backingSlot: defaultBackingSlot(allPetg), depth: fixed.depth, layerHeight: fixed.layerHeight}), '');
+  assert.equal(builtInProblem({target: 'snapmaker', reels: PETG, backingSlot: defaultBackingSlot(PETG), depth: fixed.depth, layerHeight: fixed.layerHeight}), '');
+});
+
+test('the worker refuses model reels of different materials, and accepts a PETG support reel or all PETG', async () => {
+  const {options} = builtInOptions(MIXED);
+  const reply = await request({type: 'export', plateId: PLATE, objects: null, options});
+  assert.equal(reply.type, 'error');
+  assert.equal(reply.message, MIXED_PROBLEM);
+  const support = await request({type: 'export', plateId: PLATE, objects: null, options: builtInOptions(PETG, {supportInterface: true}).options});
+  assert.equal(support.type, 'exported', support.message);
+  assert.ok([1, 2, 3].includes(support.builtIn.backingSlot));
+  const allPetg = CMYW.map(r => ({...r, type: 'PETG'}));
+  const petg = await request({type: 'export', plateId: PLATE, objects: null, options: builtInOptions(allPetg).options});
+  assert.equal(petg.type, 'exported', petg.message);
+});
+
+test('a built-in export plan file holds its fixed layer heights and never a slicer-blend calibration', async () => {
+  const calibration = validateCalibration({version: 2, surface: 'wall', revision: 1, name: 'Wall test', setup: 'U1, PLA, wall', context: 'test',
+    reels: CMYW.map((r, i) => ({...r, name: r.name || `Reel ${i + 1}`})), samples: [{a: 1, b: 3, percent: 50, color: '#66CC77'}]});
+  const {options} = builtInOptions(CMYW, {calibration});
+  const reply = await request({type: 'export', plateId: PLATE, objects: null, options});
+  assert.equal(reply.type, 'exported', reply.message);
+  const entries = await readZip(new Uint8Array(reply.bytes));
+  const raw = JSON.parse(dec.decode(entries.get(EXPORT_PLAN_PATH)));
+  assert.equal(raw.calibration, null);
+  assert.deepEqual(raw.layerHeight, {mode: 'custom', value: '0.12'});
+  assert.equal(raw.firstLayer, 0.2);
+  const read = readColourExportPlan(entries.get(EXPORT_PLAN_PATH));
+  assert.deepEqual([read.calibration, read.layerHeight, read.firstLayer], [null, {mode: 'custom', value: '0.12'}, 0.2]);
+  // The page sends no calibration with a built-in export.
+  const page = readFileSync(new URL('../recolour.js', import.meta.url), 'utf8');
+  assert.match(page, /calibration:payload\.builtIn\?null:calibrationPanel\?\.active\(\) \|\| null/);
 });
 
 test('the preview colours each face by its own normal and bed height, and the shallow share is measured', async () => {

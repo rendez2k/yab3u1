@@ -1,4 +1,5 @@
-// Throwaway spike (built-in colours, Task 2; banding replaced in Task 11). Not wired into the app.
+// Throwaway spike (built-in colours: the first fixed-pattern check, with its banding since replaced
+// by the app's own layer cutting). Not wired into the app.
 //
 //   node tools/built-in-colours-spike.mjs <input.3mf> <layerHeight> <output.3mf> [--whole-splits] [--no-band] [--plate=N]
 //   node tools/built-in-colours-spike.mjs --make-test-solid <output.3mf>
@@ -17,7 +18,7 @@
 // --no-band       export and dual-wall only, no banding (control: the source's own
 //                 open edges, for comparing with the banded output)
 // --plate=N       export plate N instead of the first plate
-// --flat-rule=D   experiment (Task 12 follow-up): a painted piece of a face whose normal is
+// --flat-rule=D   experiment (after the model-aware check): a painted piece of a face whose normal is
 //                 within D degrees of vertical takes the reel of the layer the face tops
 //                 (facing up) or bottoms (facing down), by web/shared/flatFaceRule.js, instead
 //                 of its band's; the geometry is unchanged. Faces below the first layer's

@@ -45,13 +45,14 @@ test('every candidate is a reduced ratio with a matching sequence and estimate',
   }
   for(let i=0;i<4;i++)assert.ok(all.some(c=>c.counts.join()===CMYW.map((_,j)=>j===i?1:0).join()),`single reel ${i+1}`);
 });
-test('a support reel and a foreign material never enter a recipe',()=>{
+test('a support reel never enters a recipe; a reel of another material is not silently left out',()=>{
   const reels=[...CMYW.slice(0,3),{color:'#FFFFFF',type:'PETG',role:'support-interface'}];
   assert.ok(builtInCandidates(reels).every(c=>c.counts[3]===0));
+  assert.ok(builtInCandidates(reels).some(c=>c.counts.filter(Boolean).length===3));
+  // A PETG reel not marked as support is a model reel (builtInReels.js); builtInProblem refuses
+  // the mixed set, so a PLA shell is never planned over a PETG core without a word.
   const foreign=[...CMYW.slice(0,3),{color:'#FFFFFF',type:'petg'}];
-  const all=builtInCandidates(foreign);
-  assert.ok(all.length>0&&all.every(c=>c.counts[3]===0));
-  assert.ok(all.some(c=>c.counts.filter(Boolean).length===3));
+  assert.ok(builtInCandidates(foreign).some(c=>c.counts[3]>0));
 });
 test('with no usable model reel there are no candidates and planning refuses',()=>{
   const lone=[{color:'#FFFFFF',type:'PLA',role:'support-interface'}];
