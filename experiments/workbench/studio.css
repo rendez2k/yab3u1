@@ -511,3 +511,11 @@ body[data-steps=on] #inspector #bundlepanel [data-use]{display:none!important}
 [data-flat-tip] div{display:flex;gap:8px;flex-wrap:wrap}#inspector [data-flat-tip] button{min-height:40px;padding:8px 12px}
 #inspector [data-flat-tip] [data-skip-interweave]{background:transparent;border:1px solid var(--line)}
 @media(max-width:760px){#inspector [data-flat-tip] button{min-height:44px}}
+/* 2.6.88 — a friendlier wait: the last view stays visible, softened, while squares stack up like a print in the model's colours. */
+#stage[data-loading=true]::after{background:color-mix(in srgb,var(--studio-canvas) 62%,transparent);backdrop-filter:blur(7px) saturate(.8);-webkit-backdrop-filter:blur(7px) saturate(.8)}
+.workbench-progress{top:50%;bottom:auto;transform:translate(-50%,-50%);flex-direction:column;text-align:center;gap:14px;width:300px;padding:22px 20px 18px}
+.pixel-build{display:grid;grid-template-columns:repeat(7,12px);grid-template-rows:repeat(7,12px);gap:2px;flex:none}
+.pixel-build i{border-radius:2px;background:var(--accent);opacity:0;animation:pixel-build 3.2s cubic-bezier(.2,.7,.2,1) infinite;animation-delay:calc((var(--r)*7 + var(--c))*38ms)}
+@keyframes pixel-build{0%{opacity:0;transform:translateY(-16px) scale(.3)}9%{opacity:1;transform:none}74%{opacity:1;transform:none}88%,100%{opacity:0;transform:scale(.6)}}
+@media(prefers-reduced-motion:reduce){.pixel-build i{animation:none;opacity:1}}
+@media(max-width:760px){.workbench-progress{width:240px;padding:14px;gap:10px}.pixel-build{grid-template-columns:repeat(7,9px);grid-template-rows:repeat(7,9px)}}
