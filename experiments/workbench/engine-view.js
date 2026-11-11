@@ -17,7 +17,18 @@ let engine, currentPanel='project', lastReport='', source=null, workspaceMode='s
 let lastStep='project', readColours=null, currentReport=null, methodOpen=false, interweaveSkipped=false;
 let fallbackKey='',fallbackPending=false,fallbackUrl=null;
 let objectTools, filamentTools, studio, prepared, projectPlates, loading=false, busySince=0,previewSettledAt=0;
-const progress=view.make('div',{class:'workbench-progress',hidden:'',role:'status','aria-live':'polite'},'<span class="working-orb" aria-hidden="true"></span><div><strong>Preparing your model…</strong><p></p></div>');
+// While the model is read or redrawn, small squares stack up row by row like a print, in the model's own colours.
+const BUILD_SHAPE=['..###..','.#####.','.#####.','#######','#######','.#####.','#######'];
+const buildPixels=BUILD_SHAPE.flatMap((row,r)=>[...row].map((cell,c)=>cell==='#'?`<i style="--r:${BUILD_SHAPE.length-1-r};--c:${c};grid-row:${r+1};grid-column:${c+1}"></i>`:'')).join('');
+const progress=view.make('div',{class:'workbench-progress',hidden:'',role:'status','aria-live':'polite'},`<span class="pixel-build" aria-hidden="true">${buildPixels}</span><div><strong>Preparing your model…</strong><p></p></div>`);
+let buildColours='';
+function colourBuild(){
+  let colours=[];try{colours=modelColours(readColours()).colours.map(c=>c.colour);}catch{}
+  if(!colours.length)colours=['#B4E945','#55C3CE','#2F6F57'];
+  const key=colours.join();if(key===buildColours)return;buildColours=key;
+  // One colour per row, bottom up, so the figure looks printed in the model's filaments.
+  for(const pixel of progress.querySelectorAll('.pixel-build i'))pixel.style.backgroundColor=colours[Number(pixel.style.getPropertyValue('--r'))%colours.length];
+}
 view.stage.append(progress);
 const fallback=view.make('div',{class:'software-preview',hidden:''},'<div><img alt="Static preview of the current model and colours"></div><p>Static preview · 3D acceleration is unavailable in this browser. Use Layout to edit objects.</p>');
 view.stage.append(fallback);
@@ -365,6 +376,7 @@ function tick() {
   const showingProgress=Boolean(preparing||busySince&&performance.now()-previewSettledAt<250);
   progress.hidden=!showingProgress;view.stage.dataset.loading=String(showingProgress);view.stage.setAttribute('aria-busy',String(showingProgress));
   if(preparing){
+    colourBuild();
     if(!busySince)busySince=performance.now();
     progress.querySelector('strong').textContent=studio?.busy?'Applying your model edit…':s.exportingPlates?'Saving your plates…':busy?'Reading your model…':fallbackPending?'Drawing the plate preview…':'Preparing the plate preview…';
     progress.querySelector('p').textContent=`${((performance.now()-busySince)/1000).toFixed(1)}s · ${busy?(status||'Reading the file in your browser.'): 'Measuring objects and building the preview. Large models can take longer.'}`;

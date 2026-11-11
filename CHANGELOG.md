@@ -1,3 +1,8 @@
+## 2.6.88 — A friendlier wait
+
+- While a model is read or the view is redrawn, the previous view now stays in place, softened and blurred, instead of the stage going blank.
+- The spinner is replaced by small squares that stack up row by row like a print, coloured with the model's own colours. It stays still when the device asks for reduced motion.
+
 ## 2.6.87 — Dual-wall depth fix and a toolpath checker
 
 - **Dual-wall mixing now keeps the depth you choose.** A model that carried its own colour-depth setting (for example 5 mm, or 0 for unlimited) silently replaced the outer colour depth. The chosen depth is now written onto every object and part as well, and the interlocking depth is set to 0. Re-export older dual-wall files of such models to get the fix.
