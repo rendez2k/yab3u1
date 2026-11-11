@@ -15,43 +15,48 @@ import { splitChildren } from './standard.js';
 
 export const INTERWEAVE_PATH = 'Metadata/YAB3D_top_interweave.json';
 export const INTERWEAVE_TARGETS = ['snapmaker', 'bambu', 'orca'];
-export const INTERWEAVE_CELL = { min: 0.8, max: 2.4, standard: 1.2 };
+// The width of one stripe. Half a millimetre is about one printed line of a 0.4 mm nozzle.
+export const INTERWEAVE_CELL = { min: 0.4, max: 1.6, standard: 0.5 };
 // Faces within about 30 degrees of horizontal.
 export const INTERWEAVE_MIN_UP = 0.866;
 const ROOT = '3D/3dmodel.model', SETTINGS = 'Metadata/model_settings.config';
 const enc = new TextEncoder(), dec = new TextDecoder();
 const PAINT = /\s((?:slic3rpe:)?(?:mmu_segmentation|paint_color))="([0-9A-Fa-f]*)"/;
-// Ordered dither: at 50% this is an exact chequer, and other shares spread evenly.
-const BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+// Stripes, not squares. A first print showed that a chequer of 1.2 mm squares prints as
+// separate blobs: each square is its own start, stop and retraction. A stripe is one
+// continuous line of filament, so the pattern is narrow diagonal stripes, running the
+// way top-surface lines are laid. Ordered so that any share is spread evenly: at 50%
+// the reels alternate stripe by stripe.
+const ORDER = [0, 4, 2, 6, 1, 5, 3, 7];
 const MAX_TREE_DEPTH = 11, LARGE_FACE_LEAVES = 20000;
 
 export function interweaveProblem({ target, cell }) {
   if (!INTERWEAVE_TARGETS.includes(target)) return 'Top surface interweave exports to Snapmaker Orca, Bambu Studio or OrcaSlicer.';
   if (!Number.isFinite(cell) || cell < INTERWEAVE_CELL.min || cell > INTERWEAVE_CELL.max)
-    return `Choose a pattern size from ${INTERWEAVE_CELL.min} to ${INTERWEAVE_CELL.max} mm.`;
+    return `Choose a stripe width from ${INTERWEAVE_CELL.min} to ${INTERWEAVE_CELL.max} mm.`;
   return '';
 }
 
-/** Which filament a chequer cell prints in, for a blend with `share` of filament b. */
-export function cellFilament(i, j, recipe) {
-  const threshold = (BAYER[((i % 4) + 4) % 4][((j % 4) + 4) % 4] + 0.5) / 16;
+/** Which filament stripe number `i` prints in, for a blend with `percent` of filament b. */
+export function stripeFilament(i, recipe) {
+  const threshold = (ORDER[((i % 8) + 8) % 8] + 0.5) / 8;
   return threshold < recipe.percent / 100 ? recipe.b : recipe.a;
 }
+/** A point's distance across the stripes: they run diagonally in the bed plane. */
+const across = (x, y) => (x + y) * Math.SQRT1_2;
 
-/** Paint one triangle (world coordinates) as a chequer of the recipe's two filaments. */
+/** Paint one triangle (world coordinates) as stripes of the recipe's two filaments. */
 export function weave(triangle, recipe, cell, depth, budget) {
-  const xs = triangle.map(p => p[0]), ys = triangle.map(p => p[1]);
-  const i0 = Math.floor(Math.min(...xs) / cell), i1 = Math.floor(Math.max(...xs) / cell);
-  const j0 = Math.floor(Math.min(...ys) / cell), j1 = Math.floor(Math.max(...ys) / cell);
-  const centre = [(xs[0] + xs[1] + xs[2]) / 3, (ys[0] + ys[1] + ys[2]) / 3];
-  const leaf = () => ({ kind: 'leaf', state: cellFilament(Math.floor(centre[0] / cell), Math.floor(centre[1] / cell), recipe) });
-  if (i0 === i1 && j0 === j1) return leaf();
-  // Every cell this triangle touches may already be the same filament.
-  let same = true; const first = cellFilament(i0, j0, recipe);
-  for (let i = i0; i <= i1 && same; i += 1) for (let j = j0; j <= j1; j += 1) if (cellFilament(i, j, recipe) !== first) { same = false; break; }
-  if (same && (i1 - i0 + 1) * (j1 - j0 + 1) <= 64) return { kind: 'leaf', state: first };
+  const us = triangle.map(p => across(p[0], p[1]));
+  const i0 = Math.floor(Math.min(...us) / cell), i1 = Math.floor(Math.max(...us) / cell);
+  const leaf = () => ({ kind: 'leaf', state: stripeFilament(Math.floor((us[0] + us[1] + us[2]) / 3 / cell), recipe) });
+  if (i0 === i1) return leaf();
+  // Every stripe this triangle touches may already be the same filament.
+  let same = i1 - i0 < 64; const first = stripeFilament(i0, recipe);
+  for (let i = i0; i <= i1 && same; i += 1) if (stripeFilament(i, recipe) !== first) same = false;
+  if (same) return { kind: 'leaf', state: first };
   const longest = Math.max(...[0, 1, 2].map(k => Math.hypot(triangle[k][0] - triangle[(k + 1) % 3][0], triangle[k][1] - triangle[(k + 1) % 3][1], triangle[k][2] - triangle[(k + 1) % 3][2])));
-  // Refine cell edges to half a cell; finer than that is below what a nozzle can show.
+  // Refine stripe edges to half a stripe; finer than that is below what a nozzle can show.
   if (depth >= MAX_TREE_DEPTH || longest < cell / 2) return leaf();
   const node = { kind: 'split', sides: 3, specialSide: 0 };
   budget.leaves += 3;

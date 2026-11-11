@@ -284,7 +284,7 @@ function syncSteps(loaded,busy,batch,report){
     if(!tip){tip=view.make('div',{'data-flat-tip':'',hidden:'',role:'status'},'<strong>This model has flat tops in blended colours</strong><p></p><div><button type="button" class="primary" data-use-interweave>Turn on Top surface interweave</button><button type="button" data-skip-interweave>Not now</button></div>');view.panels.output.querySelector('.task-heading').after(tip);}
     let flat=null;try{flat=loaded?engine.workbenchFlatTops():null;}catch{}
     const offered=Boolean(flat&&flat.blends&&flat.share>=0.1&&!$('interweaveoptions').hidden&&!$('interweaveon').checked&&!interweaveSkipped);
-    if(tip.hidden===offered){tip.hidden=!offered;if(offered)tip.querySelector('p').textContent=`About ${Math.round(flat.share*100)}% of the blended surface is flat or nearly flat. Blends are made layer by layer, so those tops would print as bands of single colours. Top surface interweave paints them as a fine chequer of the two reels instead. It is experimental and prints many small patches per layer: try it on one small part first, and check the top layers in the slicer preview.`;}
+    if(tip.hidden===offered){tip.hidden=!offered;if(offered)tip.querySelector('p').textContent=`About ${Math.round(flat.share*100)}% of the blended surface is flat or nearly flat. Blends are made layer by layer, so those tops would print as bands of single colours. Top surface interweave paints them as narrow stripes of the two reels instead. It is experimental and the stripes have not been printed yet: try it on one small part first, and check the top layers in the slicer preview.`;}
   }
   if(kind==='spectrum'){
     let note=document.querySelector('[data-change-note]');

@@ -45,7 +45,7 @@ import { FINE_BLEND_TARGETS, FINE_BLEND } from './shared/fineBlend.js';
 import { INTERWEAVE_TARGETS, INTERWEAVE_MIN_UP, interweaveProblem } from './shared/topInterweave.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.6.91";
+const VERSION = "2.6.92";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -88,17 +88,27 @@ function describeBlendStrength() {
   $('blendstrengthhint').textContent=`Up to ${Math.min(chosen.recipes,room)} blended colours from ${chosen.ratios.length} ratios. `
     +(chosen.name==='standard'?'Each blend repeats within 4 layers.':`Finer ratios repeat over up to ${chosen.period} layers, so they can show as faint bands: use thin layers, and Subdivide Mix Layer (step 3, Print options) where it is offered.`);
   const three=(state.recipes||[]).filter(r=>r.c).length;
-  $('bakedhint').textContent=`Mixes three reels where that comes closer, such as skin tones and browns from cyan, magenta, yellow and white. Each is a repeat of up to ${chosen.layers} whole layers, one reel per layer, so thin layers (0.08–0.12 mm) blend it best; Subdivide Mix Layer does not apply to these.`
-    +(three?` In use now: ${three} three-reel blend${three===1?'':'s'}.`:'')+' Not yet confirmed by a slice or a print.';
+  $('bakedhint').textContent=`Mixes three reels where that comes closer, such as skin tones and browns. Each blend repeats every ${chosen.layers} whole layers at most, one reel per layer, so it turns on the Fine blend profile (0.10 mm layers). A first print at 0.16 mm came out as plain stripes. Even with thin layers, domes and gentle slopes will show rings of the separate reels; it suits upright walls best.`
+    +(three?` In use now: ${three} three-reel blend${three===1?'':'s'}.`:'')+' Thin-layer result not yet printed.';
 }
 setBlendStrength($('blendstrength').value);
 setHueFidelity($('keephue').checked);
 // Baked colours: blends of three reels, written as explicit runs of layers.
 setBakedColours($('bakedon').checked);
-$('bakedon').addEventListener('change',()=>{setBakedColours($('bakedon').checked);clearReview();invalidateRecommendation();refresh();});
+$('bakedon').addEventListener('change',()=>{
+  setBakedColours($('bakedon').checked);
+  // Three reels alternate by whole layers, so they need thin layers: the Fine blend profile comes with it.
+  if($('bakedon').checked&&FINE_BLEND_TARGETS.includes(state.target)&&!$('fineblendon').checked){$('fineblendon').checked=true;applyFineBlendControls();}
+  clearReview();invalidateRecommendation();refresh();
+});
+function bakedIssue(){
+  let recipes=[];try{recipes=resultPlan().recipes||[];}catch{return '';}
+  return FINE_BLEND_TARGETS.includes(state.target)&&recipes.some(r=>r.c)&&!$('fineblendon').checked
+    ?'three-reel blends need thin layers: turn on Fine blend profile under Print options, or turn Baked colours off':'';
+}
 $('keephue').addEventListener('change',()=>{setHueFidelity($('keephue').checked);clearReview();invalidateRecommendation();refresh();});
 $('blendstrength').addEventListener('change',()=>{setBlendStrength($('blendstrength').value);clearReview();invalidateRecommendation();refresh();});
-// Top surface interweave: flat tops of blended colours become a chequer of the blend's two filaments.
+// Top surface interweave: flat tops of blended colours become narrow stripes of the blend's two filaments.
 for(const id of ['interweaveon','interweavecell'])$(id).addEventListener('change',()=>{clearReview();refresh();});
 function interweaveChoice() {
   if(!INTERWEAVE_TARGETS.includes(state.target)||!$('interweaveon').checked)return null;
@@ -113,7 +123,7 @@ function renderInterweave(recipes) {
   $('interweaveoptions').hidden=!available;if(!available)return;
   $('interweavefields').hidden=!$('interweaveon').checked;
   const choice=interweaveChoice();
-  $('interweavenote').textContent=!choice?'':interweaveIssue()||`${blends} blended colour${blends===1?'':'s'} will be interwoven on upward faces within about 30° of flat, in ${choice.cell} mm squares. Faces on the bed are left whole. It makes many small separate patches per layer, so try it on one small part first. Unvalidated: not yet confirmed by a sliced or printed sample.`;
+  $('interweavenote').textContent=!choice?'':interweaveIssue()||`${blends} blended colour${blends===1?'':'s'} will be interwoven on upward faces within about 30° of flat, in stripes ${choice.cell} mm wide. Faces on the bed are left whole. Stripes have not been printed yet, so try it on one small part first. Unvalidated: not yet confirmed by a sliced or printed sample.`;
 }
 // Dual-wall mixing: painted colour in the outer wall only, one chosen filament behind it.
 for(const id of ['dualwallon','dualwallinner','dualwalldepth'])$(id).addEventListener('change',()=>{clearReview();refresh();});
@@ -1564,7 +1574,7 @@ function renderExport() {
   const reviewBox = $("review");
   const blocking = (activeReels().length>state.capacity && state.strategy!=="source" ? `Choose at most ${state.capacity} reels or increase capacity` : "") || (state.target==="bambu" && state.bambuRequired && !state.bambuSetup ? state.bambuError || "Choose a Bambu printer and wait for its profiles" : "") || state.layoutError || profileError || (negative && target === 'prusa' ? 'negative cutouts require Snapmaker Orca or Bambu Studio output' : '') || (!state.objects.length ? "tick at least one object"
     : state.strategy!=='source' && state.workflow==='model' && !state.modelApplied && state.reelView!=='recommended' ? "choose and apply a model palette"
-    : payload.blocked || (state.reelView==='recommended' ? 'apply the selected palette or blend settings' : null)) || dualWallIssue() || fineBlendIssue() || interweaveIssue() || null;
+    : payload.blocked || (state.reelView==='recommended' ? 'apply the selected palette or blend settings' : null)) || dualWallIssue() || fineBlendIssue() || bakedIssue() || interweaveIssue() || null;
   const needsReview = state.strategy !== "source" && !blocking;
   renderActionBar(blocking,needsReview);
   reviewBox.parentElement.classList.toggle("hidden", !needsReview);
