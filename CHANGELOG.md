@@ -1,3 +1,8 @@
+## 2.6.86 — Top surface interweave leaves the first layer alone
+
+- Top surface interweave also patterned faces that look down, including the face resting on the bed. That turned the first layer into small squares of two reels, which does not stick and can jam a head. It now patterns upward faces only; downward faces keep their single blend.
+- The option's note and the flat-top suggestion now say to try it on one small part first, because it prints many small separate patches per layer.
+
 ## 2.6.85 — Suggests Top surface interweave for flat tops
 
 - In Full Spectrum blends, YAB3D now measures how much of the blended surface is a flat or nearly flat top. When it is a tenth or more, step 3 opens with a note saying so and a **Turn on Top surface interweave** button. "Not now" dismisses it.

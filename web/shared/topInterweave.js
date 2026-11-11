@@ -136,8 +136,10 @@ export function applyTopInterweave(entries, { target, cell = INTERWEAVE_CELL.sta
         if (points.some(p => !p || !p.every(Number.isFinite))) return triangle;
         const u = points[1].map((v, i) => v - points[0][i]), w = points[2].map((v, i) => v - points[0][i]);
         const n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]], length = Math.hypot(...n);
-        // Flat tops, shallow slopes, and the matching faces underneath.
-        if (!(length > 1e-12) || Math.abs(n[2]) / length < minUp) return triangle;
+        // Flat tops and shallow upward slopes only. Faces that look down are left alone:
+        // on the bed they are the first layer, and a first layer cut into small
+        // squares of two reels does not stick.
+        if (!(length > 1e-12) || n[2] / length < minUp) return triangle;
         const found = PAINT.exec(tri);
         const node = found && found[2] ? paint.decode(found[2]) : { kind: 'leaf', state: 0 };
         const filled = node.kind === 'leaf' && node.state === 0 ? { kind: 'leaf', state: base } : node;
