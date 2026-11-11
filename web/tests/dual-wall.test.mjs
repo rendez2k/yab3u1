@@ -109,3 +109,19 @@ test('the shared paint step changes the project but leaves the dual-wall record 
   assert.equal(out.process.mmu_segmented_region_max_width,'0.45');
   assert.ok(out.facesGivenExplicitPaint>0);
 });
+
+test('per-object and per-part paint depth overrides are replaced, and counted only when there are any', () => {
+  const entries = project(), settings = dec.decode(entries.get('Metadata/model_settings.config'))
+    .replace('<metadata key="wall_loops" value="1"/>', '<metadata key="wall_loops" value="1"/><metadata key="mmu_segmented_region_max_width" value="5"/>')
+    .replace('<metadata key="name" value="Hat"/><metadata key="extruder" value="2"/>', '<metadata key="name" value="Hat"/><metadata key="extruder" value="2"/><metadata key="mmu_segmented_region_max_width" value="0"/><metadata key="mmu_segmented_region_interlocking_depth" value="2"/>');
+  entries.set('Metadata/model_settings.config', enc.encode(settings));
+  const report = applyDualWall(entries, {target: 'snapmaker', innerSlot: 4, depth: 0.6});
+  const after = dec.decode(entries.get('Metadata/model_settings.config'));
+  assert.deepEqual([...after.matchAll(/key="mmu_segmented_region_max_width" value="([^"]*)"/g)].map(m => m[1]), ['0.6', '0.6']);
+  assert.deepEqual([...after.matchAll(/key="mmu_segmented_region_interlocking_depth" value="([^"]*)"/g)].map(m => m[1]), ['0']);
+  assert.equal(report.overridesReplaced, 3);
+  assert.equal(JSON.parse(dec.decode(entries.get(DUAL_WALL_PATH))).overridesReplaced, 3);
+  const plain = project();
+  assert.equal('overridesReplaced' in applyDualWall(plain, {target: 'snapmaker', innerSlot: 4, depth: 0.45}), false);
+  assert.equal(explicitOuterPaint(project(), {target: 'snapmaker', innerSlot: 4, depth: 0.45}).overridesReplaced, 0);
+});

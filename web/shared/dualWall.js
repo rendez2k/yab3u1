@@ -45,7 +45,11 @@ export function explicitOuterPaint(entries, { target, innerSlot, depth = DUAL_WA
 
   // Which filament each solid mesh prints in when a face has no paint.
   const own = new Map();
-  let partsChanged = 0, singleWalls = 0;
+  let partsChanged = 0, singleWalls = 0, overrides = 0;
+  // An object or part may carry its own paint depth (the exporter carries the source's
+  // value over, e.g. 0 = unlimited or 5 mm), which would override the project's.
+  const replaceOwn = (text, key, value) => text.replace(new RegExp(`(<metadata(?: type="[^"]*")? key="${key}" value=")([^"]*)(")`, 'g'),
+    (all, a, old, c) => (old === value ? all : (overrides += 1, `${a}${value}${c}`)));
   const settings = settingsText.replace(/<object\b([^>]*)>([\s\S]*?)<\/object>/g, (whole, attrs, body) => {
     const objectExtruder = /<metadata(?: type="[^"]*")? key="extruder" value="(\d+)"/.exec(body.replace(/<part\b[\s\S]*?<\/part>/g, ''));
     let next = body.replace(/<part\b([^>]*)>([\s\S]*?)<\/part>/g, (part, partAttrs, partBody) => {
@@ -63,6 +67,7 @@ export function explicitOuterPaint(entries, { target, innerSlot, depth = DUAL_WA
     if (marker.test(head)) next = next.replace(marker, `<metadata key="extruder" value="${innerSlot}"/>`);
     // An object told to print a single wall would have no inner wall to colour.
     next = next.replace(/(<metadata(?: type="[^"]*")? key="wall_loops" value=")([^"]*)(")/g, (all, a, value, c) => Number(value) >= 2 ? all : (singleWalls += 1, `${a}2${c}`));
+    next = replaceOwn(replaceOwn(next, 'mmu_segmented_region_max_width', String(depth)), 'mmu_segmented_region_interlocking_depth', '0');
     return `<object${attrs}>${next}</object>`;
   });
   if (!own.size) throw Error('No solid parts were found to prepare for dual-wall mixing.');
@@ -99,14 +104,16 @@ export function explicitOuterPaint(entries, { target, innerSlot, depth = DUAL_WA
   if (Array.isArray(cfg.different_settings_to_system) && typeof cfg.different_settings_to_system[0] === 'string')
     cfg.different_settings_to_system[0] = [...new Set([...cfg.different_settings_to_system[0].split(';').filter(Boolean), ...Object.keys(process)])].sort().join(';');
   entries.set(PROJECT, enc.encode(JSON.stringify(cfg, null, 2)));
-  return { cfg, process, parts: partsChanged, meshes, faces, facesGivenExplicitPaint: filled, objectsRaisedToTwoWalls: singleWalls };
+  return { cfg, process, parts: partsChanged, meshes, faces, facesGivenExplicitPaint: filled, objectsRaisedToTwoWalls: singleWalls, overridesReplaced: overrides };
 }
 
 /** Rewrite exported entries in place. Returns what changed, for the manifest and the page. */
 export function applyDualWall(entries, { target, innerSlot, depth = DUAL_WALL_DEPTH.standard }) {
-  const { cfg, process, parts, meshes, faces, facesGivenExplicitPaint, objectsRaisedToTwoWalls } = explicitOuterPaint(entries, { target, innerSlot, depth });
+  const { cfg, process, parts, meshes, faces, facesGivenExplicitPaint, objectsRaisedToTwoWalls, overridesReplaced } = explicitOuterPaint(entries, { target, innerSlot, depth });
   const report = { schema: 'yab3d-dual-wall', version: 1, target, innerSlot, innerColour: String(cfg.filament_colour[innerSlot - 1] || '').slice(0, 7),
     outerDepth: depth, wallLoops: Number(cfg.wall_loops), objectsRaisedToTwoWalls, parts, meshes, faces, facesGivenExplicitPaint,
+    // Written only when there were any, so that a project without them keeps its bytes.
+    ...(overridesReplaced ? { overridesReplaced } : {}),
     settings: process, validation: { sliced: false, printed: false },
     note: 'Painted colours are limited to the outer depth; inner walls, infill and unpainted interiors use the inner filament. Check the sliced preview before printing.' };
   entries.set(DUAL_WALL_PATH, enc.encode(JSON.stringify(report, null, 2)));

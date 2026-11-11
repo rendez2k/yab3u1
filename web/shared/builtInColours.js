@@ -143,6 +143,14 @@ function mergeTrees(a, b, combine) {
   return {kind: 'split', sides: like.sides, specialSide: like.specialSide, children};
 }
 
+/** A split whose leaves all hold one state is that state (explicitOuterPaint turns [X, 0] into [X, X]). */
+function collapse(node) {
+  if (node.kind === 'leaf') return node;
+  const children = node.children.map(collapse);
+  if (children.every(c => c.kind === 'leaf' && c.state === children[0].state)) return children[0];
+  return {kind: 'split', sides: node.sides, specialSide: node.specialSide, children};
+}
+
 const mapLeaves = (node, f) => (node.kind === 'leaf' ? {kind: 'leaf', state: f(node.state)}
   : {kind: 'split', sides: node.sides, specialSide: node.specialSide, children: node.children.map(c => mapLeaves(c, f))});
 const digits = n => String(n).length;
@@ -193,6 +201,13 @@ export function applyBuiltInColours(entries, {target, reels, recipes, backingSlo
   const outer = explicitOuterPaint(work, {target, innerSlot: backingSlot, depth});
   const {objects: objectNames, parts} = readSettings(dec.decode(work.get(SETTINGS)));
   const printedPart = id => parts.get(id)?.subtype === 'normal_part';
+  // A raft lifts the model by the raft's own height, so the bands would no longer meet the
+  // slicer's layers; the exporter carries the source's raft setting onto each object.
+  const raft = ' prints on a raft, which lifts every layer of the model. Built-in colours needs the model on the bed; turn the raft off and export again.';
+  if (Number(JSON.parse(dec.decode(work.get(PROJECT))).raft_layers) > 0) throw Error(`This project${raft}`);
+  for (const m of dec.decode(work.get(SETTINGS)).matchAll(/<object\b([^>]*)>([\s\S]*?)<\/object>/g))
+    if ([...m[2].matchAll(/<metadata(?: type="[^"]*")? key="raft_layers" value="([^"]*)"/g)].some(r => Number(r[1]) > 0))
+      throw Error(`"${objectNames.get(attr(m[1], 'id')) ?? `object ${attr(m[1], 'id')}`}"${raft}`);
 
   // ---- every object of every model member; the printed meshes' vertices ----
   const members = [...work.keys()].filter(name => /^3D\/.*\.model$/i.test(name));
@@ -341,9 +356,9 @@ export function applyBuiltInColours(entries, {target, reels, recipes, backingSlo
       faces.forEach((face, f) => {
         const trees = others[f];
         if (!trees && face.paint.kind === 'leaf') { face.paint = leafOf[keyFor([face.paint.state, ...none])]; return; }
-        let tree = mapLeaves(face.paint, s => [s]);
+        let tree = mapLeaves(collapse(face.paint), s => [s]);
         for (const k of otherNames) {
-          tree = mergeTrees(tree, trees?.get(k) ?? noPaint, (tuple, s) => [...tuple, s]);
+          tree = mergeTrees(tree, collapse(trees?.get(k) ?? noPaint), (tuple, s) => [...tuple, s]);
           if (!tree) throw Error(`"${name}" has colour, support or seam paint that divides one triangle in different ways. Built-in colours cannot combine them exactly; repaint so that they match, or remove the support or seam paint there, and export again.`);
         }
         face.paint = mapLeaves(tree, keyFor);
@@ -447,7 +462,7 @@ export function applyBuiltInColours(entries, {target, reels, recipes, backingSlo
   }
   const settings = {...outer.process, layer_height: String(height), initial_layer_print_height: String(first), mmu_segmented_region_max_width: String(depth),
     mmu_segmented_region_interlocking_depth: '0', dithering_local_z_mode: '0', mixed_filament_advanced_dithering: '0', mixed_filament_definitions: '',
-    wall_loops: Number(cfg.wall_loops) >= 2 ? String(cfg.wall_loops) : '2'};
+    wall_loops: Number(cfg.wall_loops) >= 2 ? String(cfg.wall_loops) : '2', precise_z_height: '0'};
   Object.assign(cfg, settings);
   if (Array.isArray(cfg.different_settings_to_system) && typeof cfg.different_settings_to_system[0] === 'string')
     cfg.different_settings_to_system[0] = [...new Set([...cfg.different_settings_to_system[0].split(';').filter(Boolean), ...Object.keys(settings)])].sort().join(';');
@@ -455,7 +470,11 @@ export function applyBuiltInColours(entries, {target, reels, recipes, backingSlo
   // A per-object layer height would override the global one and move every band. Parts
   // that print nothing carry a shade id as their filament from the export; they take the
   // backing reel, so that no filament number beyond the reels is left.
-  let modelSettings = dec.decode(work.get(SETTINGS)).replace(/(<metadata(?: type="[^"]*")? key="layer_height" value=")[^"]*(")/g, `$1${height}$2`);
+  // The same for per-object and per-part copies of the other settings the bands depend on.
+  let overrides = outer.overridesReplaced, modelSettings = dec.decode(work.get(SETTINGS));
+  for (const [k, value] of Object.entries({layer_height: String(height), initial_layer_print_height: String(first), dithering_local_z_mode: '0',
+    mixed_filament_advanced_dithering: '0', mixed_filament_definitions: '', precise_z_height: '0'}))
+    modelSettings = modelSettings.replace(new RegExp(`(<metadata(?: type="[^"]*")? key="${k}" value=")([^"]*)(")`, 'g'), (all, a, old, c) => (old === value ? all : (overrides += 1, `${a}${value}${c}`)));
   modelSettings = modelSettings.replace(/<part\b([^>]*)>([\s\S]*?)<\/part>/g, (whole, partAttrs, body) => ((attr(partAttrs, 'subtype') || 'normal_part') === 'normal_part' ? whole
     : `<part${partAttrs}>${body.replace(/(<metadata(?: type="[^"]*")? key="extruder" value=")(\d+)(")/g, (all, a, value, c) => (Number(value) ? `${a}${backingSlot}${c}` : all))}</part>`));
   for (const m of modelSettings.matchAll(/<metadata(?: type="[^"]*")? key="extruder" value="(\d+)"/g))
@@ -472,7 +491,7 @@ export function applyBuiltInColours(entries, {target, reels, recipes, backingSlo
     recipes: [...byId.values()].sort((a, b) => a.id - b.id).map(r => ({id: r.id, sequence: [...r.sequence], counts: Array.isArray(r.counts) ? [...r.counts] : [], color: String(r.color || ''), estimated: true})),
     triangles: {before: trianglesBefore, after: trianglesAfter}, layers,
     reelsPerLayer: {max: perLayer.length ? Math.max(...perLayer) : 0, mean: perLayer.length ? Math.round(1000 * perLayer.reduce((a, b) => a + b, 0) / perLayer.length) / 1000 : 0},
-    settings, validation: {sliced: false, printed: false}, note: BUILT_IN_NOTE};
+    settings, overridesReplaced: overrides, validation: {sliced: false, printed: false}, note: BUILT_IN_NOTE};
   work.set(BUILT_IN_PATH, enc.encode(JSON.stringify(report, null, 2)));
 
   for (const name of [...entries.keys()]) if (!work.has(name)) entries.delete(name);

@@ -25,7 +25,7 @@ const NS = 'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xm
 const SPLIT = {kind: 'split', sides: 1, specialSide: 0, children: [{kind: 'leaf', state: 2}, {kind: 'leaf', state: 0}]};
 
 /** The fixture: object "Figure" with a Body (shade 1) and a Hat (shade 2) wall from z = 0 to z = 1, and a modifier. */
-function project({bodyExtra = '', supportsOnSplit = '', t1 = null, hatPaint = '', items = '<item objectid="10" transform="1 0 0 0 1 0 0 0 1 100 100 0" printable="1"/>', extraObjects = '', extraSettings = '', extraParts = ''} = {}) {
+function project({bodyExtra = '', supportsOnSplit = '', t1 = null, hatPaint = '', objectMeta = '', bodyMeta = '', projectExtra = {}, items = '<item objectid="10" transform="1 0 0 0 1 0 0 0 1 100 100 0" printable="1"/>', extraObjects = '', extraSettings = '', extraParts = ''} = {}) {
   const main = `<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" ${NS}><resources>
 <object id="10" type="model"><components><component p:path="/${MEMBER}" objectid="1" transform="1 0 0 0 1 0 0 0 1 0 0 0"/><component p:path="/${MEMBER}" objectid="2"/><component p:path="/${MEMBER}" objectid="3"/></components></object>${extraObjects}
 </resources><build>${items}</build></model>`;
@@ -60,14 +60,14 @@ function project({bodyExtra = '', supportsOnSplit = '', t1 = null, hatPaint = ''
 </triangles></mesh></object>
 </resources><build/></model>`;
   const settings = `<?xml version="1.0" encoding="UTF-8"?><config>
-<object id="10"><metadata key="name" value="Figure"/><metadata key="extruder" value="1"/><metadata key="layer_height" value="0.28"/><metadata key="wall_loops" value="1"/>
-<part id="1" subtype="normal_part"><metadata key="name" value="Body"/><metadata key="extruder" value="1"/></part>
+<object id="10"><metadata key="name" value="Figure"/><metadata key="extruder" value="1"/><metadata key="layer_height" value="0.28"/><metadata key="wall_loops" value="1"/>${objectMeta}
+<part id="1" subtype="normal_part"><metadata key="name" value="Body"/><metadata key="extruder" value="1"/>${bodyMeta}</part>
 <part id="2" subtype="normal_part"><metadata key="name" value="Hat"/><metadata key="extruder" value="2"/></part>
 <part id="3" subtype="modifier_part"><metadata key="name" value="Strong zone"/></part>${extraParts}</object>${extraSettings}
 </config>`;
   const cfg = {filament_colour: CMYW.map(r => r.color + 'FF'), filament_type: ['PLA', 'PLA', 'PLA', 'PLA'], wall_loops: '1', layer_height: '0.2',
     initial_layer_print_height: '0.3', mmu_segmented_region_max_width: '0', mixed_filament_definitions: '1,2,0,0,50', dithering_local_z_mode: '1',
-    mixed_filament_advanced_dithering: '1', different_settings_to_system: ['layer_height', '', '', '', '', '']};
+    mixed_filament_advanced_dithering: '1', different_settings_to_system: ['layer_height', '', '', '', '', ''], ...projectExtra};
   return new Map([['3D/3dmodel.model', enc.encode(main)], [MEMBER, enc.encode(member)], ['Metadata/model_settings.config', enc.encode(settings)],
     ['Metadata/project_settings.config', enc.encode(JSON.stringify(cfg))], ['Metadata/layer_heights_profile.txt', enc.encode('object_id=1|0.2|0.08')]]);
 }
@@ -417,6 +417,52 @@ test('a result far too large is refused before any cutting', () => {
   assert.equal(calls, 1);
 });
 
+test('per-object and per-part paint depth and layer settings are overwritten and counted', () => {
+  const read = entries => dec.decode(entries.get('Metadata/model_settings.config'));
+  const widths = text => [...text.matchAll(/key="mmu_segmented_region_max_width" value="([^"]*)"/g)].map(m => m[1]);
+  // They Live's object width of 5, and a part of the Body with its own width and interlocking depth.
+  const five = project({objectMeta: '<metadata key="mmu_segmented_region_max_width" value="5"/><metadata key="mmu_segmented_region_interlocking_depth" value="0"/>',
+    bodyMeta: '<metadata key="mmu_segmented_region_max_width" value="2"/><metadata key="mmu_segmented_region_interlocking_depth" value="1"/>'});
+  const a = applyBuiltInColours(five, opts), textA = read(five);
+  assert.deepEqual(widths(textA), ['0.45', '0.45']);
+  assert.deepEqual([...textA.matchAll(/key="mmu_segmented_region_interlocking_depth" value="([^"]*)"/g)].map(m => m[1]), ['0', '0']);
+  // width 5, part width 2, part depth 1, and the object layer height 0.28; the object depth was already 0.
+  assert.equal(a.overridesReplaced, 4);
+  // Super Man's and Flirty's 0 (unlimited), with per-object layer and blend settings that would move the bands.
+  const zero = project({objectMeta: '<metadata key="mmu_segmented_region_max_width" value="0"/><metadata key="initial_layer_print_height" value="0.3"/><metadata key="dithering_local_z_mode" value="1"/>'
+    + '<metadata key="mixed_filament_advanced_dithering" value="1"/><metadata key="mixed_filament_definitions" value="1,2,0,0,50"/><metadata key="precise_z_height" value="1"/>'});
+  const b = applyBuiltInColours(zero, opts), textB = read(zero);
+  assert.deepEqual(widths(textB), ['0.45']);
+  for (const [key, value] of [['initial_layer_print_height', '0.2'], ['dithering_local_z_mode', '0'], ['mixed_filament_advanced_dithering', '0'], ['mixed_filament_definitions', ''], ['precise_z_height', '0'], ['layer_height', '0.1']])
+    assert.match(textB, new RegExp(`key="${key}" value="${value}"/>`), key);
+  assert.equal(b.overridesReplaced, 7);
+  const cfg = JSON.parse(dec.decode(zero.get('Metadata/project_settings.config')));
+  assert.equal(cfg.precise_z_height, '0');
+});
+
+test('a raft is refused, because it lifts every layer of the model', () => {
+  assert.throws(() => applyBuiltInColours(project({objectMeta: '<metadata key="raft_layers" value="2"/>'}), opts), /"Figure" prints on a raft/);
+  assert.throws(() => applyBuiltInColours(project({projectExtra: {raft_layers: '3'}}), opts), /This project prints on a raft/);
+  assert.ok(applyBuiltInColours(project({objectMeta: '<metadata key="raft_layers" value="0"/>'}), opts).triangles.after > 0);
+});
+
+test('a colour split whose leaves are all one shade merges with any support split', () => {
+  // explicitOuterPaint turns [X, 0] into [X, X]: the same colour on both halves, split along a median.
+  const t1 = `paint_color="${paint.encode(node(1, [1, 1]))}" paint_supports="${paint.encode(node(3, [1, 0, 0, 0]))}"`;
+  const entries = project({t1});
+  applyBuiltInColours(entries, opts);
+  const T1 = LEAVES[1][1].tri.slice(0, 2).concat([LEAVES[1][2].tri[1]]);   // corners 0, 2, 3: (0,0,0), (1,0,1), (0,0,1)
+  const quarter = [T1[0], mid(T1[0], T1[1]), mid(T1[2], T1[0])];
+  const body = objectsOf(dec.decode(entries.get(MEMBER))).get('1');
+  const pieces = triangles(body).filter(t => within(centroid(t.p), T1) && Math.abs(t.p[0][1]) < 1e-12);
+  const enforced = pieces.filter(t => attrOf(t.attrs, 'paint_supports') === leaf(1));
+  for (const t of enforced) assert.ok(within(centroid(t.p), quarter));
+  assert.ok(Math.abs(enforced.reduce((s, t) => s + area(t.p), 0) - area(quarter)) < 1e-9);
+  assert.ok(pieces.length > 2);
+  for (const t of pieces) assert.equal(t.node.state, 1, 'shade 1 is reel 1 on every layer');
+});
+
+
 test('a mesh used twice at different tilts is refused by name', () => {
   const tiltedTwice = () => project({extraObjects: `<object id="11" type="model"><components><component p:path="/${MEMBER}" objectid="1"/></components></object>`,
     items: '<item objectid="10" transform="1 0 0 0 1 0 0 0 1 100 100 0" printable="1"/><item objectid="11" transform="1 0 0 0 0 1 0 -1 0 150 100 0" printable="1"/>',
@@ -489,7 +535,9 @@ test('the record is an estimate, stripped of planner fields, and claims no measu
   assert.equal(record.layers, 9);
   assert.deepEqual(record.reelsPerLayer, {max: 2, mean: 1.444});
   assert.equal(record.triangles.before, 6); assert.equal(record.triangles.after, strips(entries).length + 1);
-  assert.deepEqual(Object.keys(record), ['schema', 'version', 'target', 'reels', 'backingSlot', 'outerDepth', 'layerHeight', 'firstLayer', 'recipes', 'triangles', 'layers', 'reelsPerLayer', 'settings', 'validation', 'note']);
+  assert.deepEqual(Object.keys(record), ['schema', 'version', 'target', 'reels', 'backingSlot', 'outerDepth', 'layerHeight', 'firstLayer', 'recipes', 'triangles', 'layers', 'reelsPerLayer', 'settings', 'overridesReplaced', 'validation', 'note']);
+  // The fixture's own object-level layer height (0.28) is the one override.
+  assert.equal(record.overridesReplaced, 1);
 });
 
 test('nothing is silently dropped: unreadable triangles and unplaced parts are refused by name', () => {
