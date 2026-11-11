@@ -39,3 +39,6 @@ node_modules/
 *.pyc
 .pytest_cache/
 .env
+
+# built-in colours demo files for the owner to print (tools/export-built-in.mjs); large, not committed
+deliverables/built-in-colours-demo-2026-11/
