@@ -5,6 +5,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {readZip, writeZip} from '../zip.js';
+import {readProject, exportProject} from '../shared/project.js';
+import {applyBuiltInColours} from '../shared/builtInColours.js';
+import {builtInExportOptions} from '../shared/builtInWorkflow.js';
 import * as paint from '../shared/paint.js';
 import {BUILT_IN_LAYERS, BUILT_IN_FIRST_LAYER} from '../shared/builtInColours.js';
 import {builtInPlan, defaultBackingSlot, builtInFixed, profileLayerChoice, builtInNozzleProblem} from '../shared/builtInWorkflow.js';
@@ -13,7 +16,8 @@ import {reelSet} from '../../tools/export-built-in.mjs';
 
 const enc = new TextEncoder(), dec = new TextDecoder();
 const REELS = reelSet('cmyw');
-const NOZZLE = 'Built-in colours uses 0.12 mm layers and a 0.2 mm first layer, which this nozzle profile does not allow. Choose the 0.4 mm nozzle.';
+const NOZZLE = 'Built-in colours has only been checked with the 0.4 mm nozzle. Choose the 0.4 mm nozzle.';
+const LIMITS = 'Built-in colours uses 0.12 mm layers and a 0.2 mm first layer, which this nozzle profile does not allow. Choose the 0.4 mm nozzle.';
 
 /** Two boxes in one green part: A from 0 to 1 mm, B from 0.5 to 1.5 mm, so flat faces face
  * up at 1 and 1.5 mm and down at 0 and 0.5 mm. Placed by `transform`. */
@@ -135,10 +139,10 @@ for (const [name, transform] of [['unmirrored', '1 0 0 0 1 0 0 0 1 100 100 0'], 
   });
 }
 
-test('nozzles whose layer limits exclude 0.12 mm layers or a 0.2 mm first layer are refused', async () => {
+test('only the 0.4 mm nozzle is accepted; layer limits that exclude the heights are refused too', async () => {
   const bytes = await boxes('1 0 0 0 1 0 0 0 1 100 100 0');
   assert.equal((await request({type: 'load', bytes: bytes.buffer.slice(0)})).type, 'loaded');
-  for (const nozzle of ['0.8', '0.2']) {
+  for (const nozzle of ['0.8', '0.6', '0.2']) {
     const reply = await request({type: 'export', plateId: 1, objects: null, options: options({u1Nozzle: nozzle})});
     assert.equal(reply.type, 'error', nozzle);
     assert.equal(reply.message, NOZZLE, nozzle);
@@ -153,6 +157,19 @@ test('nozzles whose layer limits exclude 0.12 mm layers or a 0.2 mm first layer 
   }
   // `auto` follows the source's own nozzle, as the export does.
   assert.equal(builtInNozzleProblem({nozzle_diameter: ['0.8']}, 'auto'), NOZZLE);
+  assert.equal(builtInNozzleProblem({nozzle_diameter: ['0.6']}, 'auto'), NOZZLE);
+  assert.equal(builtInNozzleProblem({nozzle_diameter: ['0.4']}, 'auto'), '');
+
+  // A 0.4 mm project whose profile limits still exclude the heights keeps the layer-limit refusal.
+  const source = readProject(await readZip(bytes), {allowNegative: true, allowModifiers: true});
+  const built = exportProject(source, 1, null, builtInExportOptions(options({u1Nozzle: '0.4'})));
+  assert.deepEqual(built.problems, []);
+  const name = 'Metadata/project_settings.config', cfg = JSON.parse(dec.decode(built.entries.get(name)));
+  cfg.max_layer_height = cfg.max_layer_height.map(() => '0.1');
+  built.entries.set(name, enc.encode(JSON.stringify(cfg)));
+  const before = new Map(built.entries);
+  assert.throws(() => applyBuiltInColours(built.entries, {target: 'snapmaker', reels: REELS, recipes: plan.recipes, backingSlot: 4, ...fixed}), {message: LIMITS});
+  assert.deepEqual([...built.entries.keys()], [...before.keys()], 'a refusal changes nothing');
 });
 
 test('in built-in mode the hidden layer-height choice is not validated', () => {

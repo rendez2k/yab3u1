@@ -64,6 +64,10 @@ export function builtInProblem({target, reels, backingSlot, depth, layerHeight} 
   return '';
 }
 
+/** Every toolpath check of built-in colours used the 0.4 mm nozzle profile; a wider line than the colour shell is untested. */
+export const BUILT_IN_NOZZLE = '0.4';
+export const BUILT_IN_NOZZLE_PROBLEM = 'Built-in colours has only been checked with the 0.4 mm nozzle. Choose the 0.4 mm nozzle.';
+
 /** The refusal when a nozzle profile's layer limits exclude the pattern's layer or first-layer height, or ''. */
 export function builtInLayerProblem({minLayer, maxLayer}, layerHeight, firstLayer) {
   const inside = v => !(Number.isFinite(minLayer) && v < minLayer - EPS) && !(Number.isFinite(maxLayer) && v > maxLayer + EPS);
@@ -208,6 +212,10 @@ export function applyBuiltInColours(entries, {target, reels, recipes, backingSlo
   if (entries.has(PROJECT)) {
     const limits = JSON.parse(dec.decode(entries.get(PROJECT)));
     const at = (key, slot) => { const v = limits[key]; return Number(Array.isArray(v) ? v[slot - 1] : v); };
+    for (const slot of modelSlots(reels)) {
+      const nozzle = limits.nozzle_diameter === undefined ? NaN : at('nozzle_diameter', slot);
+      if (Number.isFinite(nozzle) && Math.abs(nozzle - Number(BUILT_IN_NOZZLE)) > EPS) throw Error(BUILT_IN_NOZZLE_PROBLEM);
+    }
     for (const slot of modelSlots(reels)) {
       const problem = builtInLayerProblem({minLayer: at('min_layer_height', slot), maxLayer: at('max_layer_height', slot)}, height, first);
       if (problem) throw Error(problem);

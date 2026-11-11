@@ -2,7 +2,7 @@
 // options it sends to the worker, and the worker's own export step. Pure apart from the
 // entries applyBuiltInColours rewrites. Every shade here is an estimate, never a measurement.
 import {planBuiltIn, alignPhases} from './builtInRecipes.js';
-import {applyBuiltInColours, builtInProblem, builtInLayerProblem, BUILT_IN_DEPTH, BUILT_IN_LAYERS, BUILT_IN_FIRST_LAYER} from './builtInColours.js';
+import {applyBuiltInColours, builtInProblem, builtInLayerProblem, BUILT_IN_NOZZLE, BUILT_IN_NOZZLE_PROBLEM, BUILT_IN_DEPTH, BUILT_IN_LAYERS, BUILT_IN_FIRST_LAYER} from './builtInColours.js';
 import {matchU1Profile} from './u1Profiles.js';
 import {norm, toLab} from './colour.js';
 
@@ -62,6 +62,7 @@ export function applyBuiltInExport(entries, {target, reels, builtIn}) {
 export function builtInNozzleProblem(sourceSettings, u1Nozzle = 'auto') {
   let match;
   try { match = matchU1Profile(sourceSettings || {}, u1Nozzle || 'auto', {blends: false}); } catch (error) { return error.message; }
+  if (match.nozzle !== BUILT_IN_NOZZLE) return BUILT_IN_NOZZLE_PROBLEM;
   return builtInLayerProblem(match, BUILT_IN_LAYERS.standard, BUILT_IN_FIRST_LAYER);
 }
 
