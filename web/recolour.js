@@ -46,7 +46,7 @@ import { builtInPlan, builtInModelSlots, defaultBackingSlot, builtInFixed, built
 import { builtInProblem } from './shared/builtInColours.js';
 import { shallowWarning } from './shared/builtInPreview.js';
 
-const VERSION = "2.6.75";
+const VERSION = "2.6.76";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({

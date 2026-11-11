@@ -1,7 +1,7 @@
 // Built-in colours (experimental) reference plate. Modelled on tools/prepare-ordered-wall-test.mjs.
 //
 //   node tools/prepare-built-in-reference.mjs [output folder]
-//   (default deliverables/built-in-colours-demo-2026-11)
+//   (default deliverables/built-in-colours-reference-2026-11; never the demo folder, which may be in use)
 //
 // Eight numbered hollow cylinders (10 mm across, 12 mm tall, 1.2 mm wall, open top) on white
 // bases with raised numbers, for ELEGOO Rilievo cyan, magenta, yellow and white in slots 1-4.
@@ -22,7 +22,7 @@ import {spreadSequence} from '../web/shared/builtInRecipes.js';
 import {mixManyHex, FDM_MODEL} from '../web/shared/fdmMix.js';
 import {applyBuiltInColours, BUILT_IN_LAYERS, BUILT_IN_FIRST_LAYER, BUILT_IN_DEPTH} from '../web/shared/builtInColours.js';
 
-const output = process.argv[2] || 'deliverables/built-in-colours-demo-2026-11';
+const output = process.argv[2] || 'deliverables/built-in-colours-reference-2026-11';
 await mkdir(output, {recursive: true});
 const reels = wallTestSetup({height: 0.08}).reels; // ELEGOO Rilievo C, M, Y, W in slots 1-4
 const enc = new TextEncoder();
@@ -98,7 +98,7 @@ const built = exportProject(project, 1, null, {target: 'snapmaker', reels, recip
 if (built.problems.length) throw Error(built.problems.join('\n'));
 const record = applyBuiltInColours(built.entries, {target: 'snapmaker', reels, recipes, backingSlot: 4, depth: BUILT_IN_DEPTH.standard, layerHeight: layer, firstLayer: first});
 const manifest = {version: 1, title: 'Built-in colours reference plate', datePrepared: '2026-11-11', printer: 'Snapmaker U1', nozzle: 0.4,
-  status: 'Experimental. Sliced and toolpath-checked only; never printed. Every shade is an estimate, not a measurement.',
+  status: 'Experimental. Sliced and toolpath-checked only; never printed. Every shade is an estimate from the reels’ nominal display colours, not a measurement. A toolpath check is not a check of printed colour.',
   reels: reels.map((r, i) => ({slot: i + 1, name: r.name, type: r.type, color: r.color})), backingSlot: 4,
   layerHeight: layer, firstLayer: first, outerDepth: BUILT_IN_DEPTH.standard, samples,
   construction: 'Hollow cylinders, open top, 1.2 mm wall: the sample sequence is painted on every outside face, the outer and the inner face of the wall alike, to a depth of 0.45 mm; only the core of the wall between those shells (about 0.3 mm) is white. Each sequence counts layers from the first layer (layer 0, 0.2 mm); a reel is chosen as sequence[layer % length], so the cylinders start part-way into their sequence at the first layer above the 0.56 mm base.'};

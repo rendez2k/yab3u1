@@ -11,6 +11,8 @@ Prepared 11 November 2026 for the Snapmaker U1 with a 0.4 mm nozzle.
 
 The files are in `deliverables/built-in-colours-demo-2026-11/`. That folder is not in git. `READ-ME-FIRST.txt` in the folder repeats the essentials.
 
+For release 2.6.76 the reference plate was rebuilt with the release code into `deliverables/built-in-colours-reference-2026-11/` (also not in git). It is the same plate: every member of the file is byte-for-byte the same as the demo folder's copy apart from the random identifiers (`p:UUID`) every export writes, and its slice and toolpath checks give the same figures as those below. Either copy can be printed. What the release contains, its limits and its proof run are in `docs/built-in-colours-release-2.6.76.md`.
+
 ## What the mode does
 
 Each source colour becomes a **recipe**: a repeating layer-by-layer sequence of the four reels.
@@ -181,10 +183,12 @@ Note the reel brands, the slicer version and any setting you changed.
 ## How the files were made
 
 ```
-node tools/prepare-built-in-reference.mjs
+node tools/prepare-built-in-reference.mjs deliverables/built-in-colours-demo-2026-11
 node --max-old-space-size=16000 tools/export-built-in.mjs "<owner's model>.3mf" deliverables/built-in-colours-demo-2026-11/backpack-cmyw.3mf --reels=cmyw "--objects=Backpack - Pink & White"
 node --max-old-space-size=16000 tools/export-built-in.mjs "<owner's model>.3mf" deliverables/built-in-colours-demo-2026-11/backpack-cmyk.3mf --reels=cmyk "--objects=Backpack - Pink & White"
 ```
+
+With no folder given, `prepare-built-in-reference.mjs` now writes to `deliverables/built-in-colours-reference-2026-11/`, as it did for release 2.6.76; it never writes to the demo folder unless that folder is named.
 
 `export-built-in.mjs` also writes `<output>.plan.json`: each source colour, its recipe, the estimated shade and the error, all marked estimated. Its other options are `--plate`, `--backing` and `--layer-height`.
 

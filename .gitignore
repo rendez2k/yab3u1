@@ -42,3 +42,6 @@ node_modules/
 
 # built-in colours demo files for the owner to print (tools/export-built-in.mjs); large, not committed
 deliverables/built-in-colours-demo-2026-11/
+
+# built-in colours reference plate regenerated for release 2.6.76 (tools/prepare-built-in-reference.mjs); not committed
+deliverables/built-in-colours-reference-2026-11/
