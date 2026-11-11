@@ -397,3 +397,120 @@ cd $G && ./info.sh test-solid-noband test-solid-0.12 superman-noband superman-0.
 ./slice.sh test-solid-0.12    # and superman-0.12, theylive-0.12, flirty-0.12
 node --max-old-space-size=14000 open-check.mjs theylive-noband.3mf theylive-0.12.3mf
 ```
+
+### Model-aware toolpath check (Task 12, 11 November 2026)
+
+`tools/check-built-in-toolpaths.mjs <gcode> --model <exported.3mf>` now compares the
+G-code with the exported model's own paint (functions in `tools/builtInToolpathCheck.mjs`,
+3MF reading in `tools/builtInModelReader.mjs`). Each layer above the first is cut at
+mid-layer height. The reel of each triangle comes from its paint, or from its part's
+extruder when it has none. Outline that lies inside another part or another shell, or
+inside a negative part, is left out, because it is not printed surface. Every "Outer
+wall" move is sampled every 0.2 mm:
+- A sample within 0.35 mm of the outline is visible and is judged against the reel of
+  the outline next to it.
+- A sample further away is hidden and is not judged. This is the inner reel's own outer
+  wall, about 0.66–0.70 mm in on the test solid.
+- Orca also prints the inner edge of the 0.45 mm colour shell as a second "Outer wall"
+  loop, about 0.24 mm in. It is in the colour reel and counts as visible.
+
+Pass needs all three of these: at least 99% matched overall, no layer with over 20 mm
+judged below 95%, and at least 90% of the outline covered. "Overhang wall" moves are
+not counted as outer wall.
+
+Alignment: the G-code is in bed coordinates. These equal the build-item transform with
+each item dropped so that its lowest printed point is at z = 0. No plate offset was
+needed. The median distance from the outline to the nearest outer-wall sample is 0.215–0.225 mm on all four
+files, which is half a 0.42 mm line, so model and G-code line up. Moving the model 1 mm
+in x raises it to 0.665 mm and the check stops. The brief's own measure, the median
+over visible samples, stayed at 0.205 mm even then, so it cannot show misalignment on
+its own. A 0.4 mm shift is not caught by that median (0.215 mm), but coverage falls to
+61% and the check fails. G-code: relative extrusion (M83) throughout. There are G2/G3
+arcs, but they are all travel moves (spiral lifts), and no outer wall is an arc. Wipes
+and retractions have E ≤ 0 and are not counted. Default Node heap; They Live peaked at
+507 MB resident.
+
+| File | Layers checked | Matched share | Worst layer (judged > 20 mm) | Covered share | Mixed share | Hidden (not judged) | Median visible distance | Result | Run time |
+|---|---|---|---|---|---|---|---|---|---|
+| Test solid | 832 | 100.00% (0 mm wrong) | 1 at 100.00% | 100.00% | 0.00% | 107,736 mm | 0.222 mm | **pass** | 8.1 s |
+| Super Man (plate 1) | 123 | 99.67% (97 mm wrong) | 101 at 92.08% | 99.32% | 0.00% | 11,040 mm | 0.213 mm | **fail** | 5.5 s |
+| They Live Alien | 1,164 | 99.81% (449 mm wrong) | 17 at 0.00% | 95.53% | 0.00% | 295,895 mm | 0.210 mm | **fail** | 28.4 s |
+| Flirty Figures Alien | 877 | 99.92% (121 mm wrong) | 220 at 70.94% | 98.45% | 0.00% | 4,110 mm | 0.212 mm | **fail** | 14.1 s |
+
+The three figurines fail on the per-layer rule alone; matched share and coverage are
+above their limits. Layers with over 20 mm judged and below 95% matched:
+- Super Man: layer 101.
+- They Live: layers 17, 112, 174 and 207.
+- Flirty: layers 206, 220, 446 and 447.
+
+Mixed share is 0 because, in these files, every layer has one reel round its whole
+outline. Per-layer tables are in `spike-output/gapfix/gc-*/plate_1.gcode.model-check.json`
+and the console output is in `gapfix/model-check.log`.
+
+Why they fail. It is not a checker fault and not an alignment fault. The wrong walls are
+in the reel of a nearly flat face next to them, from the neighbouring layer's band:
+- **The check.** `gapfix/wrong-near-flat-faces.mjs` (log `wrong-near-flat-faces.log`)
+  looks for a model face within 26° of horizontal (|nz| ≥ 0.9) in a reel other than
+  the outline's. The face must be within 0.6 mm in x/y of the sample and in this layer,
+  the one above or the one below.
+- **Wrong walls with such a face in the wall's own reel:** 96.8 of 96.8 mm on Super Man,
+  443.3 of 448.6 mm on They Live, and 121.2 of 121.2 mm on Flirty.
+- **Walls with no such face nearby:** 23,670 mm, 213,238 mm and 137,567 mm. Of these,
+  0, 5.2 and 0 mm are wrong. They Live's 5.2 mm is the inner reel (T3) beside thin
+  internal slots (layer 52, (140.69, 77.53)).
+- **The faces lie between a band boundary and the next layer's slice plane.** Banding
+  paints such a face with its band's reel. Orca slices it into the layer next door,
+  treats it as that layer's top (or bottom) and uses its paint for the outer wall there.
+- **Examples:**
+  - They Live layer 17 (z 2.24): the plinth ledge, a top face at z 2.29 in layer 18's
+    band (reel 1). Orca slices layer 18 at 2.30. The whole 194.4 mm round the plinth is
+    printed T0 (reel 1) where the paint says reel 3, e.g. at (149.39, 122.41).
+  - They Live layer 207: a top face at 25.04, 96.8 mm in T1, e.g. at (148.99, 118.37).
+  - Flirty layer 220: a top face at 26.62, 61.2 mm in T2, at (113.19, 108.28).
+  - Flirty layer 206: a top face at 24.93, 22.2 mm in T0, at (114.42, 105.51).
+  - Super Man layer 101: a top face at 12.32, 5.2 mm in T0, at (165.96, 184.50).
+  - Underside faces do the same upwards: Super Man layer 1 (faces at z 0.08) and They
+    Live layer 112 (a face at 13.49).
+- **Mid-layer is the right height to cut at:** cutting at a quarter or three quarters of
+  the layer instead gives slightly lower coverage on Flirty (`cut-height-check.mjs`).
+
+So the slicer prints these walls in the reel painted on the flat face beside them. It
+does not print them in the reel painted on the side of that layer. At every ledge, top
+and overhang underside that falls between those two heights, the side of one layer takes
+the colour of the next. Whether this is acceptable, and whether banding should paint
+such faces by Orca's slice planes instead of by band boundaries, is for the owner to
+decide. The thresholds were not changed.
+
+The first run had a checker fault, which is now fixed. Outline inside overlapping parts
+and shells was counted, both for coverage and when judging walls. Super Man's 26 parts
+overlap, and They Live has overlapping shells and four 0.06–0.09 mm slots in its
+plinth. The first run gave They Live 91.07% covered and Super Man 91.49%, both
+understated. The check now keeps only outline whose outside is not inside other solid
+(non-zero winding, with the solid kept on the segment's left). That leaves out 18,217 mm
+on Super Man, 12,967 mm on They Live and 574 mm on Flirty. The figures above are after
+the fix.
+
+What is still uncovered:
+- They Live's plinth slots are narrower than twice Orca's 0.049 mm closing radius. Orca
+  closes them and prints infill there, so 93 of its layers are under 90% covered.
+- Flirty layer 21 is printed as overhang wall.
+- Small tips near the tops of the figurines.
+
+Not verified:
+- **This shows where the slicer puts each reel, not the colour of a printed part.**
+  Nothing was printed, nothing was sent to a printer and no slice was opened in the GUI.
+- Only these four 0.12 mm slices were checked.
+- The check judges only moves typed "Outer wall". Overhang walls are reported but not
+  judged.
+- The flat-face explanation is a measured association, plus the slice-plane arithmetic
+  for the examples. Orca's source was not read to confirm it.
+
+Reproduce (from the repo root):
+
+```
+G=.superpowers/sdd/2026-11-10-built-in-colours-1a/spike-output/gapfix
+for f in test-solid superman theylive flirty; do
+  node tools/check-built-in-toolpaths.mjs $G/gc-$f-0.12/plate_1.gcode --model $G/$f-0.12.3mf --json $G/gc-$f-0.12/plate_1.gcode.model-check.json
+done
+node --max-old-space-size=12000 $G/wrong-near-flat-faces.mjs $G/gc-theylive-0.12/plate_1.gcode $G/theylive-0.12.3mf
+```

@@ -26,17 +26,16 @@
 // about 200,000 triangles, three painted shades plus split-painted boundaries).
 import {readFileSync, writeFileSync} from 'node:fs';
 import {readZip, writeZip} from '../web/zip.js';
-import {readProject, exportProject, matrixFromText, matmul, applyMatrix, SRC_BBL_PROJECT} from '../web/shared/project.js';
+import {readProject, exportProject, applyMatrix, SRC_BBL_PROJECT} from '../web/shared/project.js';
 import {applyDualWall} from '../web/shared/dualWall.js';
 import {bandMesh} from '../web/shared/paintBands.js';
 import {wallTestSetup} from '../web/shared/wallComparison.js';
 import * as paint from '../web/shared/paint.js';
+import {placements} from './builtInToolpathCheck.mjs';
 
 const enc = new TextEncoder(), dec = new TextDecoder();
 const FIRST = 0.2, PATTERN = [1, 2, 3];
 const OBJECT_RE = /<object\b([^>]*)>([\s\S]*?)<\/object>/g;
-const COMPONENT_RE = /<component\b([^>]*?)\/>/g;
-const ITEM_RE = /<item\b([^>]*?)\/>/g;
 const VERTEX_RE = /<vertex\b[^>]*?x="([^"]+)"[^>]*?y="([^"]+)"[^>]*?z="([^"]+)"[^>]*?\/>/g;
 const TRIANGLE_RE = /<triangle\b([^>]*?)\/>/g;
 const PAINT_RE = /\s(?:slic3rpe:)?(?:mmu_segmentation|paint_color)="([0-9A-Fa-f]*)"/;
@@ -104,34 +103,8 @@ function makeTestSolid(path) {
 
 // ------------------------------------------------------------- banding ----
 
-/** Every mesh (member, id) -> world matrix of the build item that places it, and the item. */
-function placements(entries) {
-  const main = dec.decode(entries.get('3D/3dmodel.model'));
-  const objects = new Map();
-  for (const m of main.matchAll(OBJECT_RE)) {
-    const id = attr(m[1], 'id'), comps = [];
-    for (const c of m[2].matchAll(COMPONENT_RE))
-      comps.push({member: (attr(c[1], 'p:path') || '/3D/3dmodel.model').replace(/^\//, ''), id: attr(c[1], 'objectid'), transform: attr(c[1], 'transform')});
-    objects.set(id, {comps, mesh: m[2].includes('<mesh')});
-  }
-  const out = new Map();
-  let item = 0;
-  for (const it of main.matchAll(ITEM_RE)) {
-    const obj = objects.get(attr(it[1], 'objectid')), itemM = matrixFromText(attr(it[1], 'transform'));
-    item += 1;
-    const list = obj.mesh ? [{member: '3D/3dmodel.model', id: attr(it[1], 'objectid'), m: itemM}]
-      : obj.comps.map(c => ({member: c.member, id: c.id, m: c.transform ? matmul(matrixFromText(c.transform), itemM) : itemM}));
-    for (const p of list) {
-      const key = `${p.member}#${p.id}`;
-      if (out.has(key)) {
-        const o = out.get(key).m;
-        if (o.some((row, i) => row.some((x, j) => Math.abs(x - p.m[i][j]) > 1e-9))) throw Error(`${key} is placed twice with different transforms; the spike cannot band it.`);
-      }
-      out.set(key, {m: p.m, item});
-    }
-  }
-  return out;
-}
+// placements(entries) -- every mesh's world matrix and build item -- lives in
+// tools/builtInToolpathCheck.mjs, which the toolpath check shares.
 
 /** Open edges (used by one triangle) and edges used by more than two, by vertex index. */
 function edgeStats(tris) {
