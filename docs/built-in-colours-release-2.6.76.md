@@ -10,7 +10,7 @@
 
 ## What it is
 
-Full Spectrum blends has a second colour construction, in Export settings: **Built-in colours (experimental)**. Instead of leaving the mixing to the slicer, each colour is written into the model as a repeating layer-by-layer sequence of the four physical reels.
+Full Spectrum blends has a second colour construction, in Export settings: **Built-in colours (experimental)**. Instead of leaving the mixing to the slicer, each colour is written into the model as a repeating layer-by-layer sequence of your model reels (three when the PETG support slot is reserved).
 
 - The sequence is painted into a **0.45 mm outer shell**. Inside the shell the model prints in one **backing reel**, the lightest model reel unless you choose another.
 - On steep walls the layers of different reels sit on top of each other and are meant to mix by eye.
@@ -25,6 +25,8 @@ Full Spectrum blends has a second colour construction, in Export settings: **Bui
 
 > This model would need 5,723,752 triangles at 0.12 mm layers, which is too large to export. Choose a thicker layer height.
 
+That was the wording at the time of the proof run. The mode has no layer-height choice, so the wording has since changed to: "This model would need 5,723,752 triangles at 0.12 mm layers, which is too large for built-in colours. Export fewer objects at a time, or use Slicer blends."
+
 The mode always uses 0.12 mm, so that model cannot be exported with built-in colours in this release.
 
 **Refusals.** The export stops with a plain message, and writes nothing, for:
@@ -33,11 +35,12 @@ The mode always uses 0.12 mm, so that model cannot be exported with built-in col
 - colour, support and seam paint that divide one face in different ways;
 - any nozzle other than 0.4 mm, or a project whose nozzle size cannot be read;
 - any target other than the Snapmaker U1;
-- height ranges that change the layer height, and nozzle profiles whose limits exclude 0.12 mm or 0.2 mm.
+- height ranges that change the layer height, and nozzle profiles whose limits exclude 0.12 mm or 0.2 mm;
+- model reels of different materials. Every model reel (every reel not reserved as the PETG support reel) must be the same material; the refusal names the reel to remove or change.
 
 A file exported with built-in colours cannot be reopened for conversion: its paint is already a layer pattern, so it is refused with a message asking for the original model.
 
-**Dual-wall mixing** is not available while Built-in colours is on.
+**Dual-wall mixing** and **Print comparison** are not available while Built-in colours is on.
 
 ## Proof run for this release
 
@@ -99,6 +102,8 @@ Separately from built-in colours, this release fixes dual-wall mixing ignoring t
 - Mixing on top surfaces.
 - Bambu targets.
 - Any other nozzle than 0.4 mm, and any layer height other than 0.12 mm.
+- Print comparison while Built-in colours is on.
+- Model reels of different materials: every model reel must be the same material.
 - Any change to the Python route.
 
 ## For the owner's first print

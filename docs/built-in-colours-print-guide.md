@@ -15,7 +15,7 @@ For release 2.6.76 the reference plate was rebuilt with the release code into `d
 
 ## What the mode does
 
-Each source colour becomes a **recipe**: a repeating layer-by-layer sequence of the four reels.
+Each source colour becomes a **recipe**: a repeating layer-by-layer sequence of your model reels (three when the PETG support slot is reserved).
 
 - The sequence is written into the model as paint, but only in a **0.45 mm outer shell**.
 - Inside the shell, the model prints in one **backing reel**.
@@ -146,6 +146,7 @@ As for the backpack, these estimates are built from the catalogue's nominal disp
 - A run passes when at least 99% of the judged wall is in the right reel, no layer with over 20 mm judged is below 95%, at least 90% of the outline is covered, and the outline guard holds.
 - The check was run at the nominal height and with the model shifted in z by −0.03, −0.02, +0.02 and +0.03 mm. The shifts show how sensitive each file is to a small height error.
 - **These are checks of where the slicer puts each reel, not of colour.**
+- The percentages cover the judged (visible) wall only: outer-wall toolpath further than 0.35 mm from the model's outline is not judged. How much was judged and how much was not is in the judged/hidden table of `docs/built-in-colours-release-2.6.76.md`.
 
 | File | Nominal | −0.03 mm | −0.02 mm | +0.02 mm | +0.03 mm |
 |---|---|---|---|---|---|
@@ -190,6 +191,6 @@ node --max-old-space-size=16000 tools/export-built-in.mjs "<owner's model>.3mf" 
 
 With no folder given, `prepare-built-in-reference.mjs` now writes to `deliverables/built-in-colours-reference-2026-11/`, as it did for release 2.6.76; it never writes to the demo folder unless that folder is named.
 
-`export-built-in.mjs` also writes `<output>.plan.json`: each source colour, its recipe, the estimated shade and the error, all marked estimated. Its other options are `--plate`, `--backing` and `--layer-height`.
+`export-built-in.mjs` also writes `<output>.plan.json`: each source colour, its recipe, the estimated shade and the error, all marked estimated. Its other options are `--plate`, `--backing` and `--layer-height`. `--layer-height` is an unchecked experiment: only 0.12 mm has been toolpath-checked, and the app always uses 0.12 mm.
 
 The owner's model expands past the 3MF reader's total limit. The tool therefore reads only the mesh members of the chosen plate.

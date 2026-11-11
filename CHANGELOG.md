@@ -3,14 +3,14 @@
 - **Experimental, and never printed.** Full Spectrum blends has a second colour construction in Export settings, **Built-in colours (experimental)**. It has been sliced with the Snapmaker Orca command line and toolpath-checked only. A toolpath check shows which reel the slicer puts where; it is not a check of printed colour.
 - **Every shade is an estimate** built from the reels' nominal colours. Nothing has been measured.
 - **Snapmaker U1 only, 0.4 mm nozzle only, browser only.** The Python route is unchanged. Slicer blends remains the default.
-- Each colour is written into the model as a repeating layer-by-layer sequence of the four reels, painted into a 0.45 mm outer shell, with one backing reel inside.
+- Each colour is written into the model as a repeating layer-by-layer sequence of your model reels (three when the PETG support slot is reserved), painted into a 0.45 mm outer shell, with one backing reel inside.
 - **The layers are fixed at 0.12 mm with a 0.2 mm first layer.** Changing either in the slicer puts the wrong reel on each layer.
 - **Flat and gently sloped areas print as single-reel bands.** Beside near-flat ledges a single layer's wall can take the neighbouring layer's reel; in the toolpath checks some models passed at the nominal height but failed when the check was shifted by 0.02–0.03 mm. The outcome depends on how the recipes are phased, so a pass for one export is no guarantee for the next.
 - **Large models can be refused as too large at 0.12 mm.** One test model of 1.33 million triangles would need 5.72 million and is refused.
 - **Cost:** in the checked files the prime tower takes 47–74% of the filament, with 134 to 1,529 tool changes (slicer estimates of 2 h to 23 h). Tower waste has not been reduced in this release.
-- Refused with a plain message: rafts; one mesh placed more than once at different tilts or heights; colour, support and seam paint that divide a face in different ways; nozzles other than 0.4 mm; targets other than the U1. A built-in export cannot be reopened for conversion. Dual-wall mixing is unavailable while Built-in colours is on.
+- Refused with a plain message: rafts; one mesh placed more than once at different tilts or heights; colour, support and seam paint that divide a face in different ways; nozzles other than 0.4 mm; targets other than the U1; model reels of different materials (every model reel must be the same material). A built-in export cannot be reopened for conversion. Dual-wall mixing and Print comparison are unavailable while Built-in colours is on.
 - **Dual-wall mixing fix:** the colour depth you choose now also replaces any per-object or per-part colour depth carried over from the source model, which used to override it (for example 5 mm, or 0 for unlimited). Models without such settings export as before.
-- Not in this release: full texture colour and the number of shades, per-colour wall pairs, calibration from printed samples, top-surface mixing, Bambu targets.
+- Not in this release: full texture colour and the number of shades, per-colour wall pairs, calibration from printed samples, top-surface mixing, Bambu targets, Print comparison while Built-in colours is on, and model reels of different materials.
 - Full details and the proof run: `docs/built-in-colours-release-2.6.76.md`. Print guide: `docs/built-in-colours-print-guide.md`.
 
 ## 2.6.75 — Warn about thin layers with Subdivide Mix Layer
