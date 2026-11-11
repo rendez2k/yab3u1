@@ -597,7 +597,9 @@ test('an exported built-in project is banded into the four reels end to end', as
   const recipes = [1, 2, 3, 4, 5, 6].map(id => ({id, sequence: id <= 3 ? [id] : [1, id - 3], counts: [0, 0, 0, 0], color: '#808080'}));
   const report = applyBuiltInColours(built.entries, {target: 'snapmaker', reels: CMYW, recipes, backingSlot: 4, layerHeight: 0.12});
   assert.equal(report.firstLayer, BUILT_IN_FIRST_LAYER); assert.equal(report.outerDepth, BUILT_IN_DEPTH.standard);
-  const again = readProject(new Map(built.entries)), used = analyse(again, again.plates[0].id, null).used;
+  assert.throws(() => readProject(new Map(built.entries)), /already a layer pattern/);   // a built-in export is never re-read as a source
+  const inspected = new Map(built.entries); inspected.delete(BUILT_IN_PATH);   // read its paint only, to count the reels it uses
+  const again = readProject(inspected), used = analyse(again, again.plates[0].id, null).used;
   assert.ok(used.every(id => id >= 1 && id <= 4), `only the four reels are used (${used})`);
   assert.ok(paintStates(built.entries).every(s => s >= 1 && s <= 3));
 });
@@ -637,4 +639,21 @@ test('without builtIn the four-colour export is byte-for-byte what it was', asyn
     const hashes = Object.fromEntries([...built.entries].map(([k, v]) => [k, createHash('sha256').update(v).digest('hex')]));
     assert.deepEqual(hashes, BASE[label], label);
   }
+});
+
+test('a built-in export is refused on re-import with a plain reason', () => {
+  const entries = project(); applyBuiltInColours(entries, opts);
+  assert.ok(entries.has(BUILT_IN_PATH));
+  assert.throws(() => readProject(entries), err => err.constructor.name === 'ProjectError');
+  assert.throws(() => readProject(entries), {message: 'This file was exported with built-in colours, so its paint is already a layer pattern. Open the original model instead.'});
+  assert.throws(() => readProject(entries), /already a layer pattern\. Open the original model instead/);
+});
+
+test('the built-in refusal comes before any parsing and only concerns files with that member', async () => {
+  // An archive with no 3D/3dmodel.model would otherwise fail with the "not a 3MF" reason.
+  const bare = new Map([[BUILT_IN_PATH, enc.encode('{}')]]);
+  assert.throws(() => readProject(bare), /built-in colours/);
+  assert.throws(() => readProject(new Map()), /not a 3MF/);
+  const source = await fourColours();
+  assert.doesNotThrow(() => readProject(new Map(source.entries)));
 });

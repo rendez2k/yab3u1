@@ -1,6 +1,7 @@
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {validateCalibration,calibratedPredictor,matchesCalibration} from '../shared/blendCalibration.js';
+import {validateCalibration,calibratedPredictor,matchesCalibration,builtInMeasured} from '../shared/blendCalibration.js';
 import {planBlends,mappingFromPlan,swapPaletteSlots} from '../shared/mix.js';
 import {mixFdmHex} from '../shared/fdmMix.js';
 import {recommendWorkflow} from '../shared/recommend.js';
@@ -62,3 +63,69 @@ for(const [a,b] of [[1,2],[2,1]]) {
   assert.deepEqual(totals,{[a]:12,5:12,6:12,7:12,[b]:12},'every tile uses the intended physical reel or native mixture');
 }
 console.log('Calibration: measured lookup, fallback, material isolation, reorder, validation, ranking, export and native five-tile projects passed.');
+
+// ---- version 3: how a sample was made (slicer blend or built-in colours) ----
+const wallInput={version:2,surface:'wall',revision:3,name:'Wall test',setup:'U1, PLA, wall',context:'test',reels,
+  samples:[{a:1,b:3,percent:50,color:'#66cc77'},{a:2,b:3,percent:75,color:'#112233'}]};
+const v3Input=(over={})=>({...wallInput,version:3,construction:'built-in',samples:[{sequence:[1,3],color:'#66CC77'}],...over});
+
+test('two-reel slicer-blend samples never count as measured for built-in colours',()=>{
+  const v2=validateCalibration(wallInput);
+  assert.equal(builtInMeasured(reels,v2,[1,3]),null);
+  assert.equal(builtInMeasured(reels,v2,[1,2]),null);
+});
+test('a built-in wall sample is measured only for its exact sequence',()=>{
+  const p=validateCalibration(v3Input());
+  assert.equal(builtInMeasured(reels,p,[1,3]),'#66CC77');
+  assert.equal(builtInMeasured(reels,p,[3,1]),null);
+  assert.equal(builtInMeasured(reels,p,[1]),null);
+  assert.equal(builtInMeasured(reels,p,[1,3,3]),null);
+  assert.equal(builtInMeasured(reels,p,[1,5]),null);
+  assert.equal(builtInMeasured(reels,p,'13'),null);
+});
+test('a built-in sample is measured only on the wall surface, for the same reels, with the built-in construction',()=>{
+  assert.equal(builtInMeasured(reels,validateCalibration(v3Input({surface:'top'})),[1,3]),null);
+  assert.equal(builtInMeasured(reels,validateCalibration(v3Input({construction:'slicer-blend'})),[1,3]),null);
+  const p=validateCalibration(v3Input());
+  assert.equal(builtInMeasured(reels.map((r,i)=>i===2?{...r,color:'#EEEEEE'}:r),p,[1,3]),null);
+  assert.equal(builtInMeasured(reels.slice(0,3),p,[1,3]),null);
+  assert.equal(builtInMeasured(reels,null,[1,3]),null);
+});
+test('a measured sequence follows its reels when the loaded order differs',()=>{
+  const p=validateCalibration(v3Input());
+  const swapped=[reels[2],reels[1],reels[0],reels[3]];   // old slot 1 is now slot 3
+  assert.equal(builtInMeasured(swapped,p,[3,1]),'#66CC77');
+  assert.equal(builtInMeasured(swapped,p,[1,3]),null);
+});
+test('version 3 is validated strictly and keeps its construction',()=>{
+  const p=validateCalibration(v3Input({samples:[{sequence:[1,3],color:'#66cc77'},{sequence:[1,3,1,3],color:'#102030'},{sequence:[2],color:'#0080C0'}]}));
+  assert.equal(p.version,3);assert.equal(p.construction,'built-in');assert.equal(p.surface,'wall');assert.equal(p.revision,3);
+  assert.deepEqual(p.samples,[{sequence:[1,3],color:'#66CC77'},{sequence:[1,3,1,3],color:'#102030'},{sequence:[2],color:'#0080C0'}]);
+  assert.equal(validateCalibration(v3Input({construction:'slicer-blend'})).construction,'slicer-blend');
+  const bad=[{construction:'other'},{construction:undefined},{surface:'side'},{surface:undefined},
+    {samples:[{sequence:[],color:'#66CC77'}]},{samples:[{sequence:Array(41).fill(1),color:'#66CC77'}]},
+    {samples:[{sequence:[0,1],color:'#66CC77'}]},{samples:[{sequence:[1,5],color:'#66CC77'}]},
+    {samples:[{sequence:[1.5,2],color:'#66CC77'}]},{samples:[{sequence:'13',color:'#66CC77'}]},
+    {samples:[{sequence:[1,3],color:'red'}]},{samples:[{a:1,b:3,percent:50,color:'#66CC77'}]},
+    {samples:[{sequence:[1,3],color:'#66CC77'},{sequence:[1,3],color:'#000000'}]},
+    {reels:reels.map((r,i)=>i===2?{...r,type:'PETG'}:r),samples:[{sequence:[1,3],color:'#66CC77'}]}];
+  for(const change of bad) assert.throws(()=>validateCalibration(v3Input(change)),Error,JSON.stringify(change));
+  assert.equal(validateCalibration(v3Input({samples:[{sequence:Array(40).fill(1),color:'#66CC77'}]})).samples[0].sequence.length,40);
+  assert.throws(()=>validateCalibration({...wallInput,construction:'built-in',samples:[{sequence:[1,3],color:'#66CC77'}]}),Error,'version 2 cannot carry sequences');
+});
+test('a version 3 profile never feeds the two-reel blend predictor',()=>{
+  const p=validateCalibration(v3Input());
+  const {predict,measured}=calibratedPredictor(reels,p);
+  assert.equal(measured(1,3,50),null);
+  assert.equal(predict(reels[0].color,reels[2].color,50,1,3),mixFdmHex(reels[0].color,reels[2].color,50));
+});
+test('version 1 and 2 files still load exactly as before',()=>{
+  // Captured from validateCalibration before version 3 existed (scratch script run on the unchanged module).
+  const BEFORE={"v1":{"version":1,"name":"Measured test","setup":"U1, PLA, same temperature and lighting","context":"test","reels":[{"color":"#FF0000","type":"PLA","name":"Brand reel 1"},{"color":"#0080C0","type":"PLA","name":"Brand reel 2"},{"color":"#FFFFFF","type":"PLA","name":"Brand reel 3"},{"color":"#000000","type":"PLA","name":"Brand reel 4"}],"samples":[{"a":1,"b":2,"percent":25,"color":"#A03050"}]},
+    "v2":{"version":2,"name":"Wall test","setup":"U1, PLA, wall","context":"test","reels":[{"color":"#FF0000","type":"PLA","name":"Brand reel 1"},{"color":"#0080C0","type":"PLA","name":"Brand reel 2"},{"color":"#FFFFFF","type":"PLA","name":"Brand reel 3"},{"color":"#000000","type":"PLA","name":"Brand reel 4"}],"samples":[{"a":1,"b":3,"percent":50,"color":"#66CC77"},{"a":2,"b":3,"percent":75,"color":"#112233"}],"surface":"wall","revision":3}};
+  const v1Input={version:1,name:'Measured test',setup:'U1, PLA, same temperature and lighting',context:'test',reels,samples:[{a:1,b:2,percent:25,color:'#a03050'}]};
+  assert.deepEqual(validateCalibration(v1Input),BEFORE.v1);
+  assert.deepEqual(validateCalibration(wallInput),BEFORE.v2);
+  assert.equal('construction' in validateCalibration(v1Input),false);
+  assert.equal('construction' in validateCalibration(wallInput),false);
+});

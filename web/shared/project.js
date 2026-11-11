@@ -15,6 +15,7 @@ import {nativeBambuConfig, validateBambuLayers, applyNativeBambuFilaments,resolv
 import {colourExportPlan,readColourExportPlan,EXPORT_PLAN_PATH} from './exportPlan.js';
 import { norm } from "./colour.js";
 import {validateRecipe} from './blendRecipes.js';
+import {BUILT_IN_PATH} from './builtInColours.js';
 import * as paint from "./paint.js";
 import { SLOTS, arrange, bijectionProblem, completeRule, isIdentity, conversionPalette }
   from "./assignment.js";
@@ -137,6 +138,10 @@ export function applyMatrix(m, point) {
 // ---------------------------------------------------------------- reading ----
 
 export function readProject(entries, options = {}) {
+  // A built-in export's paint is a per-layer pattern, no longer the original colours: never convert it again.
+  if (entries.has(BUILT_IN_PATH)) {
+    throw new ProjectError("This file was exported with built-in colours, so its paint is already a layer pattern. Open the original model instead.");
+  }
   const main = text(entries, MODEL_FILE);
   if (main === null) {
     throw new ProjectError("this archive has no 3D/3dmodel.model, so it is not a 3MF");
