@@ -1,3 +1,7 @@
+## 2.6.77 — Models from later plates land on the plate in Full Spectrum
+
+- Opening one plate of a multi-plate project and switching to Full Spectrum blends showed the models beside the bed, because a single copy kept its position from the source file. A single set that sits outside the plate is now centred on it, in the preview and in the export. Sets already on the plate stay exactly where they were.
+
 ## 2.6.76 — Top surface interweave (experimental)
 
 - Full Spectrum blends has a new export option in Settings: **Top surface interweave**. On flat tops, shallow slopes and the matching faces underneath, a blended colour is painted as a fine chequer of its two filaments, in proportion to the blend, so it mixes across the surface. Walls keep mixing by alternating layers.

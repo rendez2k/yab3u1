@@ -44,7 +44,7 @@ import { DUAL_WALL_TARGETS, dualWallProblem } from './shared/dualWall.js';
 import { INTERWEAVE_TARGETS, interweaveProblem } from './shared/topInterweave.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.6.76";
+const VERSION = "2.6.77";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -169,7 +169,15 @@ function updateCopies() {
     const options=layoutSettings();
     if(!state.objects.length) throw new Error('Restore at least one object.');
     if(!measured) throw new Error('Checking the selected model’s size…');
-    if(options.copies>1 || options.arrangement==='objects') {
+    // A model from another plate of a multi-plate project sits at that plate's
+    // position in the source file, beside the bed. Bring it onto the plate.
+    const centre=options.centre||[0,0],off=options.copies===1&&options.arrangement!=='objects'&&(
+      state.bounds.min[0]<centre[0]-options.width/2-1||state.bounds.max[0]>centre[0]+options.width/2+1||
+      state.bounds.min[1]<centre[1]-options.depth/2-1||state.bounds.max[1]>centre[1]+options.depth/2+1);
+    if(off && !planLayout(state.bounds,options).blocked) {
+      state.layout=options;
+      note='The model sat beside the plate in the source file, so it has been centred. Parts and orientation are preserved.';
+    } else if(options.copies>1 || options.arrangement==='objects') {
       state.layout=options;
       const plan=planLayout(state.bounds,options);
       if(plan.blocked||plan.capped) throw new Error(plan.problem || `Only ${plan.copies} of ${options.copies} complete sets fit. Reduce quantities or spacing, then Fill plate again.`);
