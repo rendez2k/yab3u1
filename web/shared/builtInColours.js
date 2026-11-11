@@ -67,6 +67,8 @@ export function builtInProblem({target, reels, backingSlot, depth, layerHeight} 
 /** Every toolpath check of built-in colours used the 0.4 mm nozzle profile; a wider line than the colour shell is untested. */
 export const BUILT_IN_NOZZLE = '0.4';
 export const BUILT_IN_NOZZLE_PROBLEM = 'Built-in colours has only been checked with the 0.4 mm nozzle. Choose the 0.4 mm nozzle.';
+/** The refusal when the project's nozzle size is missing or cannot be read for every reel. */
+export const BUILT_IN_NOZZLE_UNREAD = 'Built-in colours could not read the nozzle size from this project. Choose the 0.4 mm nozzle and export again.';
 
 /** The refusal when a nozzle profile's layer limits exclude the pattern's layer or first-layer height, or ''. */
 export function builtInLayerProblem({minLayer, maxLayer}, layerHeight, firstLayer) {
@@ -208,18 +210,21 @@ export function applyBuiltInColours(entries, {target, reels, recipes, backingSlo
     throw Error('This project has height ranges that change the layer height. Built-in colours needs one fixed layer height; remove those ranges and export again.');
 
   // The slicer clamps (or refuses) a layer height outside its nozzle profile's limits, which
-  // would move every band: check each model reel's limits in the project.
-  if (entries.has(PROJECT)) {
-    const limits = JSON.parse(dec.decode(entries.get(PROJECT)));
-    const at = (key, slot) => { const v = limits[key]; return Number(Array.isArray(v) ? v[slot - 1] : v); };
-    for (const slot of modelSlots(reels)) {
-      const nozzle = limits.nozzle_diameter === undefined ? NaN : at('nozzle_diameter', slot);
-      if (Number.isFinite(nozzle) && Math.abs(nozzle - Number(BUILT_IN_NOZZLE)) > EPS) throw Error(BUILT_IN_NOZZLE_PROBLEM);
-    }
-    for (const slot of modelSlots(reels)) {
-      const problem = builtInLayerProblem({minLayer: at('min_layer_height', slot), maxLayer: at('max_layer_height', slot)}, height, first);
-      if (problem) throw Error(problem);
-    }
+  // would move every band: check each model reel's nozzle and limits in the project. A
+  // nozzle size that is missing, not one per reel, or unreadable is refused, never skipped.
+  if (!entries.has(PROJECT)) throw Error(BUILT_IN_NOZZLE_UNREAD);
+  const limits = JSON.parse(dec.decode(entries.get(PROJECT)));
+  const at = (key, slot) => { const v = limits[key]; return Number(Array.isArray(v) ? v[slot - 1] : v); };
+  const nozzles = limits.nozzle_diameter;
+  if (!Array.isArray(nozzles) || nozzles.length < reels.length) throw Error(BUILT_IN_NOZZLE_UNREAD);
+  for (const slot of modelSlots(reels)) {
+    const nozzle = Number(nozzles[slot - 1]);
+    if (!Number.isFinite(nozzle)) throw Error(BUILT_IN_NOZZLE_UNREAD);
+    if (Math.abs(nozzle - Number(BUILT_IN_NOZZLE)) > EPS) throw Error(BUILT_IN_NOZZLE_PROBLEM);
+  }
+  for (const slot of modelSlots(reels)) {
+    const problem = builtInLayerProblem({minLayer: at('min_layer_height', slot), maxLayer: at('max_layer_height', slot)}, height, first);
+    if (problem) throw Error(problem);
   }
 
   // A copy, so that a refusal at any step leaves the caller's entries as they were.

@@ -198,3 +198,26 @@ test('the engine refusal also reaches the multi-plate print jobs', async () => {
   assert.equal(BUILT_IN_LAYERS.standard, 0.12);
   assert.equal(BUILT_IN_FIRST_LAYER, 0.2);
 });
+
+test('a project whose nozzle size cannot be read is refused, not let through', async () => {
+  const READ = 'Built-in colours could not read the nozzle size from this project. Choose the 0.4 mm nozzle and export again.';
+  const source = readProject(await readZip(await boxes('1 0 0 0 1 0 0 0 1 100 100 0')), {allowNegative: true, allowModifiers: true});
+  const built = exportProject(source, 1, null, builtInExportOptions(options({u1Nozzle: '0.4'})));
+  assert.deepEqual(built.problems, []);
+  const name = 'Metadata/project_settings.config', good = JSON.parse(dec.decode(built.entries.get(name)));
+  assert.equal(good.nozzle_diameter.length, REELS.length);
+  const cases = {missing: undefined, shorter: good.nozzle_diameter.slice(0, REELS.length - 1), 'not an array': '0.4', unreadable: good.nozzle_diameter.map(() => 'n/a')};
+  for (const [label, value] of Object.entries(cases)) {
+    const entries = new Map(built.entries), cfg = {...good};
+    if (value === undefined) delete cfg.nozzle_diameter; else cfg.nozzle_diameter = value;
+    entries.set(name, enc.encode(JSON.stringify(cfg)));
+    const before = new Map(entries);
+    assert.throws(() => applyBuiltInColours(entries, {target: 'snapmaker', reels: REELS, recipes: plan.recipes, backingSlot: 4, ...fixed}), {message: READ}, label);
+    assert.deepEqual([...entries], [...before], `${label}: a refusal changes nothing`);
+  }
+  const noSettings = new Map(built.entries);
+  noSettings.delete(name);
+  assert.throws(() => applyBuiltInColours(noSettings, {target: 'snapmaker', reels: REELS, recipes: plan.recipes, backingSlot: 4, ...fixed}), {message: READ}, 'no project settings');
+  // The readable 0.4 mm project still exports.
+  assert.doesNotThrow(() => applyBuiltInColours(new Map(built.entries), {target: 'snapmaker', reels: REELS, recipes: plan.recipes, backingSlot: 4, ...fixed}));
+});

@@ -42,7 +42,7 @@ import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } 
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 import { DUAL_WALL_TARGETS, dualWallProblem } from './shared/dualWall.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
-import { builtInPlan, builtInModelSlots, defaultBackingSlot, builtInFixed, builtInNozzleProblem, profileLayerChoice } from './shared/builtInWorkflow.js';
+import { builtInPlan, builtInModelSlots, defaultBackingSlot, builtInFixed, builtInNozzleProblem, profileLayerChoice, sessionBuiltInSettings } from './shared/builtInWorkflow.js';
 import { builtInProblem } from './shared/builtInColours.js';
 import { shallowWarning } from './shared/builtInPreview.js';
 
@@ -2008,7 +2008,7 @@ export const workbenchFocus={stop:()=>focusBrush?.stop(),key:event=>focusBrush?.
 export {state, load, refresh, renderObjects, renderQuantityFields, layoutChanged, textureImporter};
 const workbenchSettingKeys=['capacity','capacityChosen','priority','paletteSource','importantColours','focusMarks','compareBundles','bambuSetup','bambuRequired','bambuError','target','u1Nozzle','supportInterface','interfacePosition','reels','strategy','overrides','manualBlends','workflow','modelType','keepExact','useOwned','modelApplied','modeReels','locked','appliedSlotOrder','loadedTuning','reelView','construction','builtInBacking'];
 export function workbenchCaptureSettings(){return {state:structuredClone(Object.fromEntries(workbenchSettingKeys.filter(k=>state[k]!==undefined).map(k=>[k,state[k]]))),controls:Object.fromEntries(['spectrumlayermode','spectrumlayerheight','subdividemix','dualwallon','dualwalldepth','blendstrength','keephue'].map(id=>[id,$(id).type==='checkbox'?$(id).checked:$(id).value]))};}
-export function workbenchRestoreSettings(saved){if(!saved||!state.project)return;Object.assign(state,saved.state);state.reviewed=false;for(const [id,value]of Object.entries(saved.controls))if($(id).type==='checkbox')$(id).checked=value;else $(id).value=value;if(saved.controls.blendstrength)setBlendStrength($('blendstrength').value);setHueFidelity($('keephue').checked);renderReels();renderWorkflow();return refresh();}
+export function workbenchRestoreSettings(saved){if(!saved||!state.project)return;Object.assign(state,saved.state,sessionBuiltInSettings(saved.state));state.reviewed=false;for(const [id,value]of Object.entries(saved.controls))if($(id).type==='checkbox')$(id).checked=value;else $(id).value=value;if(saved.controls.blendstrength)setBlendStrength($('blendstrength').value);setHueFidelity($('keephue').checked);renderReels();renderWorkflow();return refresh();}
 export async function workbenchSourceColours(){if(!state.project)return null;return (await background().preview(state.plateId,state.objects,'original',paletteOf(null,'original'),null,state.geometryId,state.assessed?.counts.triangles||0,state.layout)).colors;}
 export function workbenchObjects() {
   return {key:`${state.epoch}:${state.plateId}`,objects:quantityObjects(),quantities:state.quantities,

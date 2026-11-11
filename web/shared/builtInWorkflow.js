@@ -66,5 +66,16 @@ export function builtInNozzleProblem(sourceSettings, u1Nozzle = 'auto') {
   return builtInLayerProblem(match, BUILT_IN_LAYERS.standard, BUILT_IN_FIRST_LAYER);
 }
 
+/**
+ * The mode and backing reel a saved session restores. A session saved before built-in
+ * colours existed (or with a value this page does not know) restores as Slicer blends with
+ * no backing reel, rather than keeping whatever mode is current.
+ */
+export function sessionBuiltInSettings(saved) {
+  const construction = saved?.construction === 'built-in' ? 'built-in' : 'slicer';
+  const backing = saved?.builtInBacking;
+  return {construction, builtInBacking: Number.isInteger(backing) && backing > 0 ? backing : null};
+}
+
 /** The layer-height choice the page validates: none in built-in mode, which fixes its own heights. */
 export const profileLayerChoice = (builtIn, choice) => (builtIn ? undefined : choice);

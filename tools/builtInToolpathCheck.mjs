@@ -5,11 +5,12 @@
 // from, with the reel each triangle is painted. Every "Outer wall" extrusion of that
 // layer is sampled along its length; a sample close to the outline is on the visible
 // surface and is judged against the reel of the outline next to it, and a sample far
-// from it is counted but not judged. On the spike's test solid the far ones are the
-// inner reel's own walls, which Orca also types "Outer wall" (about 0.66 mm in), and the
-// inner edge of the 0.45 mm colour shell is a second loop about 0.24 mm in, in the colour
-// reel, and is judged. On other files the far walls can be other things (a deeper colour
-// region's inner edge, boundaries of overlapping parts); checkLayer reports them by tool
+// from it is counted but not judged. The next two statements hold for the spike's generated
+// test solid only: there the far samples are the inner reel's own walls, which Orca also
+// types "Outer wall" (about 0.66 mm in), and the inner edge of the 0.45 mm colour shell is a
+// second loop about 0.24 mm in, in the colour reel, and is judged. They are not established
+// for any other file: on other files the far walls can be other things (a deeper colour
+// region's inner edge, boundaries of overlapping parts), and checkLayer reports them by tool
 // and distance so they can be looked at. All lengths are in millimetres, in bed coordinates.
 //
 // A toolpath check only shows where the slicer puts each reel. It says nothing about

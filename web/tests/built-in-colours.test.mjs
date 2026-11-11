@@ -15,6 +15,8 @@ const enc = new TextEncoder(), dec = new TextDecoder();
 const leaf = n => paint.encode({kind: 'leaf', state: n});
 const CMYW = [{color: '#00AEEF', type: 'PLA', name: 'Cyan'}, {color: '#EC008C', type: 'PLA', name: 'Magenta'},
   {color: '#FFF200', type: 'PLA', name: 'Yellow'}, {color: '#FFFFFF', type: 'PLA', name: 'White'}];
+// An exported Snapmaker project gives every reel a nozzle size; built-in colours refuses a project without one.
+const NOZZLES = ['0.4', '0.4', '0.4', '0.4'];
 const RECIPES = [{id: 1, sequence: [1], counts: [1, 0, 0, 0], color: '#00AEEF'}, {id: 2, sequence: [1, 3], counts: [1, 0, 1, 0], color: '#7FD08A'}];
 const opts = {target: 'snapmaker', reels: CMYW, recipes: RECIPES, backingSlot: 4, depth: 0.45, layerHeight: 0.1, firstLayer: 0.2};
 const MEMBER = '3D/Objects/figure.model';
@@ -65,7 +67,7 @@ function project({bodyExtra = '', supportsOnSplit = '', t1 = null, hatPaint = ''
 <part id="2" subtype="normal_part"><metadata key="name" value="Hat"/><metadata key="extruder" value="2"/></part>
 <part id="3" subtype="modifier_part"><metadata key="name" value="Strong zone"/></part>${extraParts}</object>${extraSettings}
 </config>`;
-  const cfg = {filament_colour: CMYW.map(r => r.color + 'FF'), filament_type: ['PLA', 'PLA', 'PLA', 'PLA'], wall_loops: '1', layer_height: '0.2',
+  const cfg = {filament_colour: CMYW.map(r => r.color + 'FF'), filament_type: ['PLA', 'PLA', 'PLA', 'PLA'], nozzle_diameter: NOZZLES, wall_loops: '1', layer_height: '0.2',
     initial_layer_print_height: '0.3', mmu_segmented_region_max_width: '0', mixed_filament_definitions: '1,2,0,0,50', dithering_local_z_mode: '1',
     mixed_filament_advanced_dithering: '1', different_settings_to_system: ['layer_height', '', '', '', '', ''], ...projectExtra};
   return new Map([['3D/3dmodel.model', enc.encode(main)], [MEMBER, enc.encode(member)], ['Metadata/model_settings.config', enc.encode(settings)],
@@ -147,7 +149,7 @@ function stepped(transform = '1 0 0 0 1 0 0 0 1 100 100 0') {
     + '<triangle v1="8" v2="10" v3="9"/><triangle v1="8" v2="11" v3="10"/>'              // underside, facing down
     + '</triangles></mesh></object></resources><build/></model>';
   const settings = '<config><object id="10"><metadata key="name" value="Step"/><metadata key="extruder" value="2"/><part id="1" subtype="normal_part"><metadata key="name" value="Step"/><metadata key="extruder" value="2"/></part></object></config>';
-  const cfg = {filament_colour: CMYW.map(r => r.color + 'FF'), wall_loops: '2', different_settings_to_system: ['', '', '', '', '', '']};
+  const cfg = {filament_colour: CMYW.map(r => r.color + 'FF'), nozzle_diameter: NOZZLES, wall_loops: '2', different_settings_to_system: ['', '', '', '', '', '']};
   return new Map([['3D/3dmodel.model', enc.encode(main)], ['3D/Objects/step.model', enc.encode(member)],
     ['Metadata/model_settings.config', enc.encode(settings)], ['Metadata/project_settings.config', enc.encode(JSON.stringify(cfg))]]);
 }
@@ -272,7 +274,7 @@ function underside(first) {
   const member = `<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" ${NS}><resources><object id="1" type="model"><mesh><vertices><vertex x="0" y="0" z="5"/><vertex x="10" y="10" z="5"/><vertex x="10" y="0" z="5"/><vertex x="0" y="10" z="5"/></vertices><triangles>`
     + `<triangle v1="0" v2="1" v3="2"${first}/><triangle v1="0" v2="3" v3="1"/></triangles></mesh></object></resources><build/></model>`;
   const settings = '<config><object id="10"><metadata key="name" value="Shelf"/><metadata key="extruder" value="2"/><part id="1" subtype="normal_part"><metadata key="name" value="Shelf"/><metadata key="extruder" value="2"/></part></object></config>';
-  const cfg = {filament_colour: CMYW.map(r => r.color + 'FF'), wall_loops: '2', different_settings_to_system: ['', '', '', '', '', '']};
+  const cfg = {filament_colour: CMYW.map(r => r.color + 'FF'), nozzle_diameter: NOZZLES, wall_loops: '2', different_settings_to_system: ['', '', '', '', '', '']};
   return new Map([['3D/3dmodel.model', enc.encode(main)], ['3D/Objects/under.model', enc.encode(member)],
     ['Metadata/model_settings.config', enc.encode(settings)], ['Metadata/project_settings.config', enc.encode(JSON.stringify(cfg))]]);
 }

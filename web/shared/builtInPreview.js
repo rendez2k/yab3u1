@@ -20,6 +20,8 @@ export function isShallow(normal) {
  * The colour to preview for one face: the recipe's estimated blend for a steep face, or the
  * single reel the export gives the face's layer for a shallow one. `zHigh` and `zLow`
  * (the face's highest and lowest bed heights) default to `zMid`. `reels` are in slot order.
+ * `normal` is in bed orientation (after the placement's transform), with its sign corrected
+ * for mirrored placements so that it points out of the part as the export reads it.
  */
 export function builtInFaceColour({normal, zMid, zHigh = zMid, zLow = zMid, recipe, reels, firstLayer, layerHeight}) {
   if (!isShallow(normal)) return recipe.color;

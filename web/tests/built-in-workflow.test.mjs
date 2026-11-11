@@ -199,3 +199,15 @@ test('slicer-blend export options produce the same bytes as before this change',
     for (const [name, data] of before) assert.ok(Buffer.from(now.get(name)).equals(Buffer.from(data)), `${c.name}: ${name} changed`);
   }
 });
+
+test('a session saved before built-in colours restores as Slicer blends with no backing reel', async () => {
+  const {sessionBuiltInSettings} = await import('../shared/builtInWorkflow.js');
+  assert.deepEqual(sessionBuiltInSettings({target: 'snapmaker'}), {construction: 'slicer', builtInBacking: null});
+  assert.deepEqual(sessionBuiltInSettings(undefined), {construction: 'slicer', builtInBacking: null});
+  assert.deepEqual(sessionBuiltInSettings({construction: 'built-in', builtInBacking: 3}), {construction: 'built-in', builtInBacking: 3});
+  assert.deepEqual(sessionBuiltInSettings({construction: 'something else', builtInBacking: 'x'}), {construction: 'slicer', builtInBacking: null});
+  // The page applies it after the saved state, so whatever mode is current is not kept.
+  const page = readFileSync(new URL('../recolour.js', import.meta.url), 'utf8');
+  const restore = page.slice(page.indexOf('export function workbenchRestoreSettings'));
+  assert.match(restore.slice(0, restore.indexOf('\n')), /Object\.assign\(state,saved\.state,sessionBuiltInSettings\(saved\.state\)\)/);
+});
