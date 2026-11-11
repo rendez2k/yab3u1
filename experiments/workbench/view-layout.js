@@ -7,8 +7,10 @@ export function composeView(doc,kind) {
   const workspace=make('div',{id:'engine-workspace'}),stage=make('section',{id:'stage','aria-label':'Model preview'}),inspector=make('aside',{id:'inspector','aria-label':'Task settings'});
   workspace.append(stage,inspector);doc.body.append(workspace);
   const panels={};
-  const descriptions={project:['Your project','Choose the model, plate and destination.'],colours:['Choose your colours',kind==='converter'?'Keep the painting, rearrange slots or merge colours.':'Compare palettes, protect important colours and try blends.'],layout:['Arrange your plate','Click an object in the preview to duplicate or remove it.'],output:['Prepare your export','Review what will travel into your slicer.'],help:['Tools & information','Connections, documentation and credits.']};
+  const descriptions={project:['Your model','Open a model and choose your printer.'],colours:['Choose your colours',kind==='converter'?'Keep the painting, rearrange slots or merge colours.':'Compare palettes, protect important colours and try blends.'],layout:['Arrange your plate','Click an object in the preview to duplicate or remove it.'],output:['Check and download','Review what will travel into your slicer.'],help:['Tools & information','Connections, documentation and credits.']};
   for(const [key,[title,description]]of Object.entries(descriptions)){const panel=make('section',{'data-task':key,hidden:'','aria-label':title},`<div class="task-heading"><h1>${title}</h1><p>${description}</p></div>`);panels[key]=panel;inspector.append(panel);}
+  // The three step panels say where they sit in the four steps.
+  ['project','colours','output'].forEach((key,index)=>panels[key].querySelector('.task-heading').prepend(make('span',{class:'step-eyebrow'},`Step ${index+1} of 4`)));
   const move=(selector,to)=>{const n=doc.querySelector(selector);if(!n)throw Error(`Workbench feature missing: ${selector}`);to.append(n);return n;};
   const empty=make('div',{id:'stage-empty'},'<div><h1>Your next print starts here.</h1><p>Bring your model, its colours and its parts into one workspace.</p><button class="primary" data-open-model>Open a model</button><button data-open-sample>Try a sample project</button><button class="joint-sample-link" data-open-sample="joint">Try separating a green stalk</button><p class="empty-formats">3MF · GLB · OBJ with textures in a ZIP<br>Processed in this browser. Nothing uploaded.</p></div>');stage.append(empty);
   const feedback=make('div',{id:'stage-feedback','aria-live':'polite'});stage.append(feedback);
@@ -19,8 +21,9 @@ export function composeView(doc,kind) {
     move('#bambuprinter',panels.project);move('#printercapacity',panels.project);
     move('#petgsupport',panels.colours);move('fieldset.repaint',panels.colours);
     move('#platelayout',panels.layout);
-    const conversionSettings=make('details',{class:'conversion-settings',open:''},'<summary>Print settings & compatibility</summary>');panels.output.append(conversionSettings);move('#settingsbox',conversionSettings);
-    move('#convertplan',panels.output);move('#convertgo',panels.output);move('#convertout',panels.output);move('#printersetup',panels.output);
+    const conversionSettings=make('details',{class:'conversion-settings'},'<summary>Print settings · advanced</summary>');
+    // The check comes first: what will be written. Settings follow for those who want them.
+    move('#convertplan',panels.output);panels.output.append(conversionSettings);move('#settingsbox',conversionSettings);move('#convertgo',panels.output);move('#convertout',panels.output);move('#printersetup',panels.output);
     move('#loaderror',feedback);move('#convertstatus',feedback);
     const batch=move('#batchpanel',workspace);batch.prepend(make('button',{'data-close-batch':''},'Back to model'));
     $('convertpick').classList.add('hidden');
@@ -40,6 +43,11 @@ export function composeView(doc,kind) {
     heading.textContent=oldHeading.textContent;oldHeading.replaceWith(heading);
     move('#copyoptions',panels.layout);$('copyoptions').open=true;
     move('#exportcard',panels.output);
+    // The check comes first: what will be written and the confirmation. Print options follow.
+    const options=make('details',{class:'print-options'},'<summary>Print options · advanced</summary>'),card=$('exportcard'),review=$('review').closest('label');
+    options.append(...['interweaveoptions','dualwalloptions','subdivideoptions','layeroptions'].map($),$('spectrumfilaments').closest('details'));
+    $('exportsettingsheading').textContent='What will be downloaded';
+    $('exportsettingsheading').after($('exportnote'),$('applyforexport'),review,options);
     move('#advanced',panels.colours);move('#plannercard',panels.output);
     move('#cutoutnote',panels.project);move('.previewdetails',panels.project);
     $('previewheading').textContent='Model & plate';
@@ -66,10 +74,20 @@ export function composeView(doc,kind) {
   panels.project.hidden=false;
   const explanation=panels.colours.querySelector('.workflow-explanation');
   const help=make('details',{class:'workflow-explanation'},'<summary>How colour replacement works</summary>');help.append(...explanation.childNodes);explanation.replaceWith(help);
-  panels.colours.querySelector('.task-heading').after(make('div',{class:'colour-workflow'},`<div role="group" aria-label="Colour workflow"><button data-colour-workflow="converter" aria-pressed="${kind==='converter'}">Solid colours</button><button data-colour-workflow="spectrum" aria-pressed="${kind==='spectrum'}">Full Spectrum blends</button></div><p>Two colour methods for the same model. Solid colours keeps or replaces each colour. Full Spectrum blends mixes your filaments to reach more shades. Each keeps its own colour choices when you switch back.</p></div>`));
+  panels.colours.querySelector('.task-heading').after(make('div',{class:'colour-workflow'},`<div class="colour-need" data-colour-need role="status"></div><div class="colour-choices" role="group" aria-label="How to print the colours">
+<button type="button" data-colour-workflow="spectrum" data-colour-purpose="blends" aria-pressed="${kind==='spectrum'}"><strong>Blend the extra colours</strong><span>Mixes your reels layer by layer to reach more shades. Closest to the original.</span><em data-recommended hidden>Recommended</em></button>
+<button type="button" data-colour-workflow="converter" aria-pressed="${kind==='converter'}"><strong>Merge similar colours</strong><span>Prints each extra colour in the nearest reel you load. Simplest and most reliable.</span></button>
+<button type="button" data-colour-workflow="spectrum" data-colour-purpose="reel-changes" aria-pressed="false"><strong>Swap reels mid-print</strong><span>Keeps every colour by changing reels at set layers. You need to be at the printer.</span></button>
+</div><p class="colour-workflow-note">Each method keeps its own colour choices, so you can switch and compare. Your model is not changed until you download.</p></div>`));
+  if(kind==='converter'){
+    // Leaving the extra colours for the slicer is a colour decision, so it sits with the others.
+    const keep=make('details',{class:'keep-all-colours',hidden:''},'<summary>Keep every colour and sort it out in the slicer</summary>'),label=$('capacitykeep').closest('label'),hint=label.nextElementSibling;
+    keep.append(label,hint);
+    panels.colours.querySelector('.colour-workflow').append(keep);
+  }
   if(kind==='spectrum'){
     panels.colours.append(help);
-    help.append(panels.colours.querySelector('.colour-workflow p'));
+    help.append(panels.colours.querySelector('.colour-workflow-note'));
     $('filamentbundles').open=true;
   }
   // Contextual help remains available without consuming the main viewport.

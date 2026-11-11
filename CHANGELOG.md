@@ -1,3 +1,13 @@
+## 2.6.79 — Guided steps
+
+- The Workbench is now four numbered steps down the left side: **1 Model, 2 Colours, 3 Check, 4 Download**. A tick marks each finished step, and a bar at the bottom of the panel always shows the one next action, with Back beside it.
+- **Step 2 asks one question.** It says how many colours the model uses and how many the printer holds, then offers three plain choices: Blend the extra colours, Merge similar colours, or Swap reels mid-print. Blending is marked Recommended when the model has more colours than the printer. "Keep every colour and sort it out in the slicer" sits underneath.
+- **Step 3 leads with the check.** What will be downloaded and the confirmation come first; layer height, Subdivide Mix Layer, interweave, dual wall and filament presets are folded under Print options · advanced. The fold opens by itself if one of them has a warning.
+- **Downloading happens where you are.** On step 3 the bar's button downloads the file, or lists the choices when there are several plates.
+- Paint, Split and Plates are grouped under Edit. From any of them the bar returns to the step you were on.
+- The Model step no longer shows the "extra need a solution" buttons; it says in a sentence what step 2 will sort out.
+- Simple view is unchanged. Nothing in the conversion engines changed.
+
 ## 2.6.78 — Baked colours: three-reel blends (experimental)
 
 - Full Spectrum blends has a new option under Blend detail: **Baked colours**. With it on, a colour can be mixed from three reels instead of two, where that comes closer. From cyan, magenta, yellow and white this reaches skin tones, browns and muted shades that no pair can.

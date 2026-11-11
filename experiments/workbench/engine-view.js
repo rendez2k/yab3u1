@@ -6,12 +6,13 @@ import {prepareWorkbenchPlates,connectPlatePreview} from './shared/sequentialPan
 import {mountPreparedPreview} from './prepared-preview.js';
 import {mountProjectPlates} from './project-plates.js';
 import {installModelDrop} from './file-drop.js';
-import {mountModelColours} from './model-colours.js';
-import {mountFeatureToolbox} from './feature-toolbox.js';
+import {mountModelColours,modelColours} from './model-colours.js';
+import {mountFeatureToolbox,STEPS} from './feature-toolbox.js';
 import {inspectPlates,trimProject,PICKER_THRESHOLD_BYTES} from './project-trim.js';
 const kind=document.body.dataset.engine,$=id=>document.getElementById(id);
 const view=composeView(document,kind);
 let engine, currentPanel='project', lastReport='', source=null, workspaceMode='studio', colourSummary, toolbox;
+let lastStep='project', readColours=null, currentReport=null;
 let fallbackKey='',fallbackPending=false,fallbackUrl=null;
 let objectTools, filamentTools, studio, prepared, projectPlates, loading=false, busySince=0,previewSettledAt=0;
 const progress=view.make('div',{class:'workbench-progress',hidden:'',role:'status','aria-live':'polite'},'<span class="working-orb" aria-hidden="true"></span><div><strong>Preparing your model…</strong><p></p></div>');
@@ -78,7 +79,7 @@ function setPanel(panel) {
   if(panel!=='layout')prepared?.close();
   else prepared?.resume();
   if(panel!=='edit')studio?.leavePanel();
-  currentPanel=panel;
+  currentPanel=panel;if(['project','colours','output'].includes(panel))lastStep=panel;
   for(const [key,node]of Object.entries(view.panels))node.hidden=workspaceMode==='quick'&&panel!=='help'?!['project','output'].includes(key):key!==panel;
   if(kind==='converter')$('mode-single').click();
   view.inspector.scrollTop=0;
@@ -91,7 +92,11 @@ document.addEventListener('click',event=>{
   const b=event.target.closest('button,a');if(!b)return;
   if(b.matches('[data-open-model]'))api.open();
   if(b.matches('[data-open-sample]'))parentHost?.workbench?.sample(b.dataset.openSample);
-  if(b.dataset.colourWorkflow)parentHost?.workbench?.switchMode(b.dataset.colourWorkflow);
+  if(b.dataset.colourWorkflow){
+    const purpose=b.dataset.colourPurpose;
+    if(b.dataset.colourWorkflow===kind){if(purpose==='reel-changes'){setPanel('output');$('plannercard').open=true;$('plannercard').scrollIntoView?.({block:'start'});}}
+    else parentHost?.workbench?.switchMode(b.dataset.colourWorkflow,purpose);
+  }
   if(b.matches('[data-close-batch]'))setPanel('project');
   if(['petgfullspectrum','capacityblend','capacityswaps'].includes(b.id)||b.matches('[data-model-workflow]')) {
     event.preventDefault();event.stopImmediatePropagation();parentHost?.workbench?.switchMode('spectrum',b.id==='capacityswaps'?'reel-changes':'blends');return;
@@ -115,11 +120,11 @@ const api={kind,setPanel,context,
   setWorkspaceMode(value){
     const next=value==='quick'&&kind==='converter'?'quick':'studio',changed=next!==workspaceMode;workspaceMode=next;
     document.body.dataset.workspaceMode=workspaceMode;
-    view.panels.project.querySelector('h1').textContent=workspaceMode==='quick'?'Convert a model':'Your project';
-    view.panels.project.querySelector('.task-heading p').textContent=workspaceMode==='quick'?'Choose its destination, then export.':'Choose the model, plate and destination.';
+    view.panels.project.querySelector('h1').textContent=workspaceMode==='quick'?'Convert a model':'Your model';
+    view.panels.project.querySelector('.task-heading p').textContent=workspaceMode==='quick'?'Choose its destination, then export.':'Open a model and choose your printer.';
     if(workspaceMode==='quick'){studio?.leavePanel();currentPanel='project';prepared?.close();}
     for(const [key,node]of Object.entries(view.panels))node.hidden=workspaceMode==='quick'?!['project','output'].includes(key):key!==currentPanel;
-    const advanced=document.querySelector('.conversion-settings');if(advanced&&changed)advanced.open=workspaceMode!=='quick';
+    const advanced=document.querySelector('.conversion-settings');if(advanced&&changed)advanced.open=false;
     tick();
   },
   get loading(){return loading;},
@@ -187,6 +192,68 @@ function exportChoices(){
   choices.push({id:'zip',label:'Print jobs · ZIP',hint:'A separate printer file and filament list per plate.',disabled:projectPlates.saveDisabled('zip')});
   return choices;
 }
+// Guided steps: Model, Colours, Check, Download. One Back/Next bar serves whichever step is open.
+const stepBar=view.make('div',{class:'step-footer',hidden:''},'<ul class="step-downloads" hidden></ul><p class="step-note" role="status"></p><div class="step-buttons"><button type="button" data-step-back>Back</button><button type="button" class="primary" data-step-next>Next</button></div>');
+view.inspector.append(stepBar);
+const stepNames=Object.fromEntries(STEPS.map(([id,label])=>[id,label])),stepPanels=['project','colours','output'];
+const applying=()=>kind==='spectrum'&&$('mainaction')?.dataset.action==='apply';
+function nextStep(){
+  if(!stepPanels.includes(currentPanel))return {label:`Back to ${stepNames[lastStep]}`,run:()=>setPanel(lastStep)};
+  if(currentPanel==='project')return {label:'Next: Colours',run:()=>setPanel('colours')};
+  if(currentPanel==='colours'){
+    const button=$('mainaction');
+    if(applying())return {label:button.textContent,disabled:button.disabled,run:()=>api.primary(),note:'Apply the suggested colours to carry on.'};
+    let open=0;if(kind==='converter'){try{const check=engine.session.capacityStatus();open=check.unresolved?check.excess||1:0;}catch{}}
+    return {label:'Next: Check',run:()=>setPanel('output'),note:open?`${open} colour${open===1?'':'s'} still need${open===1?'s':''} a decision. Pick one of the choices above.`:''};
+  }
+  const report=currentReport||{},several=(report.exports||[]).length>1;
+  let open=0;if(kind==='converter'){try{const check=engine.session.capacityStatus();open=check.unresolved?check.excess||1:0;}catch{}}
+  return {label:several?'Download…':report.action||'Download',disabled:Boolean(report.disabled),note:open?`Step 2 is not finished: ${open} colour${open===1?'':'s'} still need${open===1?'s':''} a decision.`:report.disabled?report.status:'',
+    run:()=>{if(!several){api.primary();return;}const list=stepBar.querySelector('.step-downloads');list.hidden=!list.hidden;}};
+}
+stepBar.querySelector('[data-step-next]').onclick=()=>{try{nextStep().run();}catch(error){reportError(error);}};
+stepBar.querySelector('[data-step-back]').onclick=()=>setPanel(stepPanels[Math.max(0,stepPanels.indexOf(currentPanel)-1)]);
+stepBar.querySelector('.step-downloads').addEventListener('click',event=>{const b=event.target.closest('[data-export]');if(!b)return;stepBar.querySelector('.step-downloads').hidden=true;api.export(b.dataset.export);});
+let stepKey='';
+function syncSteps(loaded,busy,batch,report){
+  let coloursDone=false;
+  if(loaded){try{coloursDone=kind==='converter'?!engine.session.capacityStatus().unresolved:!applying();}catch{}}
+  const done={project:loaded,colours:loaded&&coloursDone,output:loaded&&coloursDone&&!report.disabled&&!report.pending&&!/review/i.test(report.action||''),download:false};
+  toolbox?.sync(currentPanel,studio?.mode,busy,{loaded,done,download:{disabled:!loaded}});
+  const show=loaded&&!batch&&workspaceMode!=='quick'&&currentPanel!=='help';
+  const next=show?nextStep():{},several=currentPanel==='output'&&(report.exports||[]).length>1;
+  // How many colours the model has against how many the printer holds: the one question of step 2.
+  let need='',recommend=false,cap=null,count=0,target='';
+  if(loaded){try{const c=context();cap=Number(c.capacity)||null;target=c.target;count=modelColours(readColours()).count;}catch{}
+    need=!count?'':cap==null?`Your model uses ${count} colour${count===1?'':'s'}.`
+      :count<=cap?`Your model uses ${count} colour${count===1?'':'s'} and your printer holds ${cap}, so they all fit. Carry on to Check, or change how they print below.`
+      :`Your model uses ${count} colours. Your printer holds ${cap} at once. Choose how to print the other ${count-cap}.`;
+    recommend=cap!=null&&count>cap;}
+  let keepShown=false,plain='';
+  if(kind==='converter'&&loaded){try{
+    const check=engine.session.capacityStatus();keepShown=check.unresolved||$('capacitykeep').checked;
+    plain=check.problem||engine.session.capacityError||(check.capacity==null?`This file lists ${check.needed} filament${check.needed===1?'':'s'}. Your printer's size is not set.`
+      :check.excess?`This file lists ${check.needed} filaments and your printer holds ${check.capacity}. Step 2 sorts out the other ${check.excess}.`
+      :check.outsideSlots?'Some colours sit outside slots 1–4. Step 2 moves them.':`All ${check.needed} filament${check.needed===1?'':'s'} fit your printer.`);
+  }catch{}}
+  const key=JSON.stringify([show,currentPanel,next.label,next.disabled,next.note,several&&report.exports,need,recommend,target,keepShown,plain]);
+  if(key===stepKey)return;stepKey=key;
+  stepBar.hidden=!show;document.body.dataset.steps=show?'on':'off';
+  const needNode=document.querySelector('[data-colour-need]');if(needNode)needNode.textContent=need;
+  for(const b of document.querySelectorAll('[data-recommended]'))b.hidden=!recommend;
+  for(const b of document.querySelectorAll('[data-colour-purpose="reel-changes"]'))b.hidden=target!=='snapmaker';
+  const keep=document.querySelector('.keep-all-colours');if(keep)keep.hidden=!keepShown;
+  if(kind==='converter'){let line=document.querySelector('[data-capacity-plain]');if(!line){line=view.make('p',{'data-capacity-plain':'',role:'status'});$('capacitystatus').after(line);}line.textContent=plain;}
+  // A warning inside the folded print options must not stay out of sight.
+  const warned=$('subdividewarning'),folded=document.querySelector('.print-options');if(folded&&warned&&!warned.hidden&&!folded.dataset.warned){folded.open=true;folded.dataset.warned='true';}
+  if(!show)return;
+  const back=stepBar.querySelector('[data-step-back]'),forward=stepBar.querySelector('[data-step-next]'),list=stepBar.querySelector('.step-downloads');
+  back.hidden=!stepPanels.includes(currentPanel)||currentPanel==='project';
+  forward.textContent=next.label;forward.disabled=Boolean(next.disabled)||busy;
+  stepBar.querySelector('.step-note').textContent=next.note||'';
+  if(!several)list.hidden=true;
+  list.replaceChildren(...(several?report.exports:[]).map(choice=>{const li=view.make('li'),b=view.make('button',{type:'button','data-export':choice.id});const strong=view.make('strong'),hint=view.make('span');strong.textContent=choice.label;hint.textContent=choice.hint;b.append(strong,hint);b.disabled=Boolean(choice.disabled);li.append(b);return li;}));
+}
 function sequentialAction(){const mode=document.querySelector('[data-print-mode]')?.value;if(currentPanel!=='layout'||!mode||mode==='together')return null;const pack=document.querySelector('[data-pack]');return pack&&!pack.hidden?pack:document.querySelector('[data-prepare]');}
 function tick() {
   if(!engine)return;
@@ -205,7 +272,7 @@ function tick() {
   if(plateStatus?.textContent)status=plateStatus.textContent;
   const report={kind,loaded,pending:Boolean(studio?.pending),busy:busy||plateBusy,batch,title:file?.yab3dDisplayName||file?.name||'Untitled project',status:status||'Files stay in your browser.',exports:menu?exports:[],action:batch?'Batch conversion':studio?.pending?'Finish edit to export':loaded?(menu?'Export':button.textContent):'Open a model to start',disabled:studio?.pending||busy||!loaded||(menu?exports.every(choice=>choice.disabled):button.disabled)||batch};
   const serial=JSON.stringify(report);if(serial!==lastReport){lastReport=serial;parentHost?.workbench?.report(report);}
-  colourSummary?.sync();toolbox?.sync(currentPanel,studio?.mode,busy);
+  currentReport=report;colourSummary?.sync();syncSteps(loaded,busy,batch,report);
   let snapshot;try{snapshot=engine.workbenchPreview();}catch{}
   if(snapshot&&!fallbackPending&&snapshot.key!==fallbackKey){
     fallbackPending=true;fallback.hidden=false;document.body.classList.add('software-mode');
@@ -283,8 +350,9 @@ try {
     finally{arrangeButton.disabled=false;arrangeButton.setAttribute('aria-busy','false');}
   };
   studio=mountStudio({view,engine,kind,api,objects:objectTools,setPanel});
-  toolbox=mountFeatureToolbox({view,choose:feature=>{if(feature==='paint'||feature==='split')studio.show(feature==='paint'?'colour':'split');else setPanel(feature);}});
-  colourSummary=mountModelColours({view,read:()=>{const state=kind==='converter'?engine.session.state:engine.state.project;const data=engine.workbenchObjects();return {loaded:Boolean(state),checking:loading||data.busy,palette:kind==='converter'?state?.colours:state?.colors,objects:data.objects,quantities:data.quantities,copies:data.copies};},manage:()=>setPanel('colours')});
+  toolbox=mountFeatureToolbox({view,choose:feature=>{if(feature==='paint'||feature==='split')studio.show(feature==='paint'?'colour':'split');else if(feature==='download'){setPanel('output');stepBar.querySelector('[data-step-next]').focus();}else setPanel(feature);}});
+  readColours=()=>{const state=kind==='converter'?engine.session.state:engine.state.project;const data=engine.workbenchObjects();return {loaded:Boolean(state),checking:loading||data.busy,palette:kind==='converter'?state?.colours:state?.colors,objects:data.objects,quantities:data.quantities,copies:data.copies};};
+  colourSummary=mountModelColours({view,read:readColours,manage:()=>setPanel('colours')});
   prepared=mountPreparedPreview(view,{edit:()=>studio.show('select'),onSelect:id=>{
     document.querySelectorAll('[data-preview-plate]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.previewPlate===id)));
     const heading=view.panels.layout.querySelector('.task-heading');heading.querySelector('h1').textContent=id?'Prepared plates':kind==='converter'?'Plates & objects':'Arrange your plate';heading.querySelector('p').textContent=id?'Choose a plate to inspect the copies. Edit model returns to your original quantities.':kind==='converter'?'Choose a plate, edit its objects, then save the complete project.':'Click an object in the preview to duplicate or remove it.';
