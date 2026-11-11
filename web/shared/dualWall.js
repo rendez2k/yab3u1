@@ -30,8 +30,12 @@ export function dualWallProblem({ target, innerSlot, depth, filaments }) {
   return '';
 }
 
-/** Rewrite exported entries in place. Returns what changed, for the manifest and the page. */
-export function applyDualWall(entries, { target, innerSlot, depth = DUAL_WALL_DEPTH.standard }) {
+/**
+ * The shared first step: every outside face gets explicit paint, parts move to one inner reel,
+ * and the paint-depth settings are written. Rewrites the entries in place and returns what
+ * changed; it writes no record of its own, so each caller reports in its own way.
+ */
+export function explicitOuterPaint(entries, { target, innerSlot, depth = DUAL_WALL_DEPTH.standard }) {
   const settingsText = entries.has(SETTINGS) ? dec.decode(entries.get(SETTINGS)) : null;
   const projectText = entries.has(PROJECT) ? dec.decode(entries.get(PROJECT)) : null;
   if (settingsText === null || projectText === null) throw Error('Dual-wall mixing needs a native slicer project. Choose a printer project export.');
@@ -95,9 +99,14 @@ export function applyDualWall(entries, { target, innerSlot, depth = DUAL_WALL_DE
   if (Array.isArray(cfg.different_settings_to_system) && typeof cfg.different_settings_to_system[0] === 'string')
     cfg.different_settings_to_system[0] = [...new Set([...cfg.different_settings_to_system[0].split(';').filter(Boolean), ...Object.keys(process)])].sort().join(';');
   entries.set(PROJECT, enc.encode(JSON.stringify(cfg, null, 2)));
+  return { cfg, process, parts: partsChanged, meshes, faces, facesGivenExplicitPaint: filled, objectsRaisedToTwoWalls: singleWalls };
+}
 
+/** Rewrite exported entries in place. Returns what changed, for the manifest and the page. */
+export function applyDualWall(entries, { target, innerSlot, depth = DUAL_WALL_DEPTH.standard }) {
+  const { cfg, process, parts, meshes, faces, facesGivenExplicitPaint, objectsRaisedToTwoWalls } = explicitOuterPaint(entries, { target, innerSlot, depth });
   const report = { schema: 'yab3d-dual-wall', version: 1, target, innerSlot, innerColour: String(cfg.filament_colour[innerSlot - 1] || '').slice(0, 7),
-    outerDepth: depth, wallLoops: Number(cfg.wall_loops), objectsRaisedToTwoWalls: singleWalls, parts: partsChanged, meshes, faces, facesGivenExplicitPaint: filled,
+    outerDepth: depth, wallLoops: Number(cfg.wall_loops), objectsRaisedToTwoWalls, parts, meshes, faces, facesGivenExplicitPaint,
     settings: process, validation: { sliced: false, printed: false },
     note: 'Painted colours are limited to the outer depth; inner walls, infill and unpainted interiors use the inner filament. Check the sliced preview before printing.' };
   entries.set(DUAL_WALL_PATH, enc.encode(JSON.stringify(report, null, 2)));
