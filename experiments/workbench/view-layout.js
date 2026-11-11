@@ -45,7 +45,7 @@ export function composeView(doc,kind) {
     move('#exportcard',panels.output);
     // The check comes first: what will be written and the confirmation. Print options follow.
     const options=make('details',{class:'print-options'},'<summary>Print options · advanced</summary>'),card=$('exportcard'),review=$('review').closest('label');
-    options.append(...['interweaveoptions','dualwalloptions','subdivideoptions','layeroptions'].map($),$('spectrumfilaments').closest('details'));
+    options.append(...['fineblendoptions','interweaveoptions','dualwalloptions','subdivideoptions','layeroptions'].map($),$('spectrumfilaments').closest('details'));
     $('exportsettingsheading').textContent='What will be downloaded';
     $('exportsettingsheading').after($('exportnote'),$('applyforexport'),review,options);
     move('#advanced',panels.colours);move('#plannercard',panels.output);

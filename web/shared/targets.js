@@ -146,6 +146,12 @@ export function layerPattern(parts, maxLength = 10) {
     if (error <= 1.5) break;
   }
   if (!best) throw new MixError('this blend cannot be written as a run of layers');
+  if (parts.length === 2) {
+    // Two reels: the smaller share is spaced as evenly as whole layers allow.
+    const minor = best.counts[0] < best.counts[1] ? 0 : 1, m = best.counts[minor], at = new Set();
+    for (let k = 0; k < m; k += 1) at.add(Math.floor((k + 0.5) * best.n / m));
+    return Array.from({ length: best.n }, (_, layer) => parts[at.has(layer) ? minor : 1 - minor].slot);
+  }
   // Every ordering of so short a repeat can be tried. The best keeps each
   // reel's layers as evenly spaced as possible around the repeat.
   const left = best.counts.slice(), order = [], n = best.n;
@@ -172,6 +178,34 @@ export function layerPattern(parts, maxLength = 10) {
   const first = best.counts.indexOf(Math.max(...best.counts));
   left[first] -= 1; order.push(first); place();
   return chosen.map(i => parts[i].slot);
+}
+
+/**
+ * The same repeat for the walls behind the outer one, started at a different
+ * layer so that each outer stripe is backed by another reel wherever it can be.
+ * Seen through a translucent outer wall the two mix in depth, which softens the
+ * stripes. The shares are unchanged.
+ */
+export function backingPattern(pattern) {
+  let best = pattern.slice(), most = -1;
+  for (let shift = 1; shift < pattern.length; shift += 1) {
+    const turned = pattern.map((_, i) => pattern[(i + shift) % pattern.length]);
+    const differs = turned.filter((slot, i) => slot !== pattern[i]).length;
+    // Most stripes backed by another reel; among equals, nearest to half a repeat.
+    const score = differs * 100 - Math.abs(shift - pattern.length / 2);
+    if (score > most) { most = score; best = turned; }
+  }
+  return best;
+}
+
+/** Any blend as a wall-aware layer-cycle row: one repeat for the outer wall, a second for the walls behind it. */
+export function wallPatternRow(recipe, stableId, maxLength = 10) {
+  const parts = recipeParts(recipe).slice().sort((x, y) => x.slot - y.slot);
+  if (parts.some(p => p.slot > 9)) throw new MixError('a layer-pattern blend can only use slots 1 to 9');
+  const outer = layerPattern(parts, parts.length === 2 ? maxLength : Math.min(maxLength, 10)), inner = backingPattern(outer);
+  const share = slot => Math.round(100 * outer.filter(s => s === slot).length / outer.length);
+  return `1,2,1,1,${share(2)},0,g${parts.map(p => p.slot).join('')},w${parts.map(p => share(p.slot)).join('/')},m0,z0,`
+    + `xa0,xb0,d0,o0,u${stableId},cm1,${outer.join('')},${inner.join('')}`;
 }
 
 /** One blend of three reels, as the slicer's explicit layer-cycle row. In such
