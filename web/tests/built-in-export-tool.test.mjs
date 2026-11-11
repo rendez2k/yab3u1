@@ -78,6 +78,18 @@ test('an end-to-end run on four-colours.3mf writes a four-reel built-in project 
     assert.ok(existsSync(planPath));
     const plan = JSON.parse(readFileSync(planPath, 'utf8'));
     assert.equal(plan.reelSet, 'cmyw');
+    assert.match(plan.note, /never printed/);
+    assert.match(plan.note, /not a check of printed colour/);
+    // The model's four colours (white, black, red, green), each mapped to the recipe written for it.
+    assert.deepEqual(plan.rows.map(r => r.hex), ['#FFFFFF', '#000000', '#FF0000', '#00FF00']);
+    const white = plan.rows.find(r => r.hex === '#FFFFFF');
+    assert.equal(white.sequence, '4');
+    for (const row of plan.rows) {
+      const recipe = record.recipes.find(r => r.id === row.recipe);
+      assert.ok(recipe, `recipe ${row.recipe} for ${row.hex} is in the record`);
+      assert.equal(recipe.sequence.join(''), row.sequence);
+    }
+    assert.deepEqual(record.recipes.find(r => r.id === white.recipe).sequence, [4]);
     assert.ok(plan.rows.length >= 1);
     for (const row of plan.rows) {
       assert.equal(row.estimated, true);
@@ -86,6 +98,43 @@ test('an end-to-end run on four-colours.3mf writes a four-reel built-in project 
       assert.ok(row.sequence.length >= 1);
       assert.equal(typeof row.error, 'number');
     }
+  } finally {
+    rmSync(dir, {recursive: true, force: true});
+  }
+});
+
+const runTool = (args) => spawnSync(process.execPath, ['tools/export-built-in.mjs', ...args], {cwd: ROOT, encoding: 'utf8'});
+
+test('--objects picks objects by name, and only their colours are planned', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'yab3d-built-in-'));
+  try {
+    const out = join(dir, 'beta.3mf');
+    const run = runTool(['web/tests/four-colours.3mf', out, '--reels=cmyk', '--objects=Beta']);
+    assert.equal(run.status, 0, run.stderr + run.stdout);
+    const plan = JSON.parse(readFileSync(`${out}.plan.json`, 'utf8'));
+    assert.deepEqual(plan.objects.map(o => o.name), ['Beta']);
+    assert.deepEqual(plan.rows.map(r => r.hex), ['#FF0000', '#00FF00']);
+    assert.equal(plan.backingSlot, 3);
+  } finally {
+    rmSync(dir, {recursive: true, force: true});
+  }
+});
+
+test('a refusal exits non-zero with its message and writes nothing; a fault is not called a refusal', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'yab3d-built-in-'));
+  try {
+    const out = join(dir, 'x.3mf');
+    const reels = runTool(['web/tests/four-colours.3mf', out, '--reels=rgb']);
+    assert.equal(reels.status, 1);
+    assert.match(reels.stderr, /^Refused: Choose --reels=cmyw or cmyk \(not "rgb"\)\./);
+    const missing = runTool(['web/tests/four-colours.3mf', out, '--reels=cmyw', '--objects=Gamma']);
+    assert.equal(missing.status, 1);
+    assert.match(missing.stderr, /^Refused: There is no object called "Gamma"\./);
+    assert.ok(!existsSync(out) && !existsSync(`${out}.plan.json`));
+    const absent = runTool([join(dir, 'no-such-file.3mf'), out, '--reels=cmyw']);
+    assert.notEqual(absent.status, 0);
+    assert.doesNotMatch(absent.stderr, /Refused/);
+    assert.match(absent.stderr, /^Error: .*ENOENT/);
   } finally {
     rmSync(dir, {recursive: true, force: true});
   }

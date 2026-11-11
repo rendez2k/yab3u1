@@ -22,19 +22,26 @@
 import {readFileSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
 import {readZip, writeZip} from '../web/zip.js';
-import {readProject, exportProject, analyse} from '../web/shared/project.js';
+import {readProject, exportProject, analyse, ProjectError} from '../web/shared/project.js';
 import {planBuiltIn, alignPhases} from '../web/shared/builtInRecipes.js';
 import {applyBuiltInColours, BUILT_IN_LAYERS, BUILT_IN_FIRST_LAYER, BUILT_IN_DEPTH} from '../web/shared/builtInColours.js';
 import {wallTestSetup} from '../web/shared/wallComparison.js';
 import {norm, toLab} from '../web/shared/colour.js';
 
 export const REEL_SETS = ['cmyw', 'cmyk'];
+
+/** A refusal: the export code (or this tool) declined these inputs, with a message for the user. */
+export class Refusal extends Error {}
+// The export modules refuse with ProjectError or a plain Error; anything else (a TypeError, a file
+// system error with a code) is a fault, not a refusal, and is passed on unchanged.
+const asRefusal = error => (error instanceof Refusal ? error
+  : (error instanceof ProjectError || error?.constructor === Error) && !error.code ? new Refusal(error.message, {cause: error}) : error);
 export const GENERIC_BLACK = {name: 'black (generic, estimate)', brand: 'generic', type: 'PLA', color: '#000000',
   swatchSource: 'nominal display colour', calibration: 'unmeasured'};
 
 /** The four reels, slots 1-4, of a reel set. */
 export function reelSet(name) {
-  if (!REEL_SETS.includes(name)) throw Error(`Choose --reels=cmyw or cmyk (not "${name}").`);
+  if (!REEL_SETS.includes(name)) throw new Refusal(`Choose --reels=cmyw or cmyk (not "${name}").`);
   const elegoo = wallTestSetup({height: 0.08}).reels; // ELEGOO Rilievo cyan, magenta, yellow, white
   return name === 'cmyw' ? elegoo.map(r => ({...r})) : [...elegoo.slice(0, 3).map(r => ({...r})), {...GENERIC_BLACK}];
 }
@@ -58,11 +65,17 @@ export function planFor(sourceColours, set, {weights = {}, backing} = {}) {
   const recipes = alignPhases(plan.recipes);
   const byId = new Map(recipes.map(r => [r.id, r]));
   const backingSlot = backing ?? lightestSlot(reels);
-  if (!Number.isInteger(backingSlot) || backingSlot < 1 || backingSlot > reels.length) throw Error(`Choose a backing slot from 1 to ${reels.length}.`);
+  if (!Number.isInteger(backingSlot) || backingSlot < 1 || backingSlot > reels.length) throw new Refusal(`Choose a backing slot from 1 to ${reels.length}.`);
   const rows = plan.rows.map(r => ({source: r.source, hex: norm(r.original), sequence: [...byId.get(r.recipe).sequence], counts: [...r.counts],
     shade: norm(r.shade), error: r.error, recipe: r.recipe, estimated: true}));
   return {reelSet: set, reels, backingSlot, rows, recipes};
 }
+
+export const PLAN_NOTE = 'Experimental and never printed. Every shade and error below is an estimate from the layer-interleaved mixing model, '
+  + 'computed from the reels’ nominal display colours, not a measurement; the real reels differ and no mixed shade has been measured. '
+  + 'Flat and gently sloped areas print as single-reel bands, and beside near-flat ledges a layer’s wall can take the neighbouring layer’s reel. '
+  + 'A toolpath check shows which reel the slicer puts where; it is not a check of printed colour. '
+  + 'Layer heights are fixed: changing them in the slicer puts the wrong reel on each layer.';
 
 const mm = v => Number(Number(v).toFixed(3));
 
@@ -97,7 +110,7 @@ function choose(project, {plate, objects}) {
     objectIds = names.map(name => {
       if (project.meta.has(name) || project.objects.has(name)) return name;
       const hits = [...project.meta].filter(([, m]) => m.name === name).map(([id]) => id);
-      if (hits.length !== 1) throw Error(hits.length ? `More than one object is called "${name}"; give its id.` : `There is no object called "${name}".`);
+      if (hits.length !== 1) throw new Refusal(hits.length ? `More than one object is called "${name}"; give its id.` : `There is no object called "${name}".`);
       return hits[0];
     });
   }
@@ -106,12 +119,16 @@ function choose(project, {plate, objects}) {
     const found = objectIds && project.plates.find(p => (p.objectIds || []).map(String).includes(String(objectIds[0])));
     plateId = found ? found.id : project.plates[0].id;
   }
-  if (!project.plates.some(p => p.id === plateId)) throw Error(`There is no plate ${plateId}.`);
+  if (!project.plates.some(p => p.id === plateId)) throw new Refusal(`There is no plate ${plateId}.`);
   return {plateId, objectIds};
 }
 
 /** The whole export: returns the zip bytes, the plan file contents and the built-in record. */
-export async function exportBuiltIn(bytes, {reels: set, plate, objects, backing, layerHeight = BUILT_IN_LAYERS.standard, title} = {}) {
+export async function exportBuiltIn(bytes, options = {}) {
+  try { return await exportBuiltInUnchecked(bytes, options); } catch (error) { throw asRefusal(error); }
+}
+
+async function exportBuiltInUnchecked(bytes, {reels: set, plate, objects, backing, layerHeight = BUILT_IN_LAYERS.standard, title} = {}) {
   const {project, plateId, objectIds} = await readSource(bytes, {plate, objects});
   const analysis = analyse(project, plateId, objectIds);
   const weights = {};
@@ -120,14 +137,13 @@ export async function exportBuiltIn(bytes, {reels: set, plate, objects, backing,
   const mapping = Object.fromEntries(plan.rows.map(r => [r.source, r.recipe]));
   const built = exportProject(project, plateId, objectIds, {target: 'snapmaker', reels: plan.reels, recipes: [], mapping, u1Nozzle: '0.4',
     builtIn: {shades: plan.recipes.length}, title: title || `Built-in colours (experimental, ${set})`});
-  if (built.problems.length) throw Error(built.problems.join('\n'));
+  if (built.problems.length) throw new Refusal(built.problems.join('\n'));
   const record = applyBuiltInColours(built.entries, {target: 'snapmaker', reels: plan.reels, recipes: plan.recipes, backingSlot: plan.backingSlot,
     depth: BUILT_IN_DEPTH.standard, layerHeight, firstLayer: BUILT_IN_FIRST_LAYER});
   const zip = await writeZip([...built.entries].map(([name, data]) => ({name, data})));
   const selected = analysis.objects.filter(o => o.selected).map(o => ({id: o.id, name: o.name, parts: o.parts, triangles: o.triangles}));
   const planFile = {
-    note: 'Experimental and never printed. Every shade and error below is an estimate from the layer-interleaved mixing model, not a measurement. '
-      + 'Flat and gently sloped areas print as single-reel bands. Layer heights are fixed: changing them in the slicer puts the wrong reel on each layer.',
+    note: PLAN_NOTE,
     reelSet: set, plate: plateId, objects: selected,
     reels: plan.reels.map((r, i) => ({slot: i + 1, name: r.name, type: r.type, color: norm(r.color)})),
     backingSlot: plan.backingSlot, layerHeight, firstLayer: BUILT_IN_FIRST_LAYER, outerDepth: BUILT_IN_DEPTH.standard,
@@ -169,7 +185,7 @@ async function main() {
     console.log(JSON.stringify({output, bytes: zip.length, triangles: record.triangles, layers: record.layers, recipes: record.recipes.length,
       backingSlot: record.backingSlot, layerHeight: record.layerHeight, seconds: mm((Date.now() - started) / 1000)}));
   } catch (error) {
-    console.error(`Refused: ${error.message}`);
+    console.error(error instanceof Refusal ? `Refused: ${error.message}` : `Error: ${error.stack || error.message}`);
     process.exitCode = 1;
   }
 }

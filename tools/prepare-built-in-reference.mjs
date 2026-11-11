@@ -7,8 +7,9 @@
 // bases with raised numbers, for ELEGOO Rilievo cyan, magenta, yellow and white in slots 1-4.
 // Each cylinder is one shade, a layer-by-layer reel sequence built with spreadSequence from the
 // layer counts below, and the whole plate goes through the real export path (exportProject with
-// builtIn, then applyBuiltInColours) at 0.12 mm layers with a 0.2 mm first layer. The interior
-// of each wall, behind the 0.45 mm outer shell, is the white backing reel.
+// builtIn, then applyBuiltInColours) at 0.12 mm layers with a 0.2 mm first layer. Paint covers
+// every outside face of a cylinder, the inner face of the wall included, to a depth of 0.45 mm;
+// only the core of the 1.2 mm wall between those two shells (about 0.3 mm) is the white backing.
 // Every shade is an estimate from the layer-interleaved mixing model, not a measurement, and
 // nothing here has been printed.
 import {mkdir, writeFile} from 'node:fs/promises';
@@ -100,7 +101,7 @@ const manifest = {version: 1, title: 'Built-in colours reference plate', datePre
   status: 'Experimental. Sliced and toolpath-checked only; never printed. Every shade is an estimate, not a measurement.',
   reels: reels.map((r, i) => ({slot: i + 1, name: r.name, type: r.type, color: r.color})), backingSlot: 4,
   layerHeight: layer, firstLayer: first, outerDepth: BUILT_IN_DEPTH.standard, samples,
-  construction: 'Hollow cylinders, open top, 1.2 mm wall: the outer 0.45 mm carries the sample sequence, the rest of the wall is white. Each sequence counts layers from the first layer (layer 0, 0.2 mm); a reel is chosen as sequence[layer % length], so the cylinders start part-way into their sequence at the first layer above the 0.56 mm base.'};
+  construction: 'Hollow cylinders, open top, 1.2 mm wall: the sample sequence is painted on every outside face, the outer and the inner face of the wall alike, to a depth of 0.45 mm; only the core of the wall between those shells (about 0.3 mm) is white. Each sequence counts layers from the first layer (layer 0, 0.2 mm); a reel is chosen as sequence[layer % length], so the cylinders start part-way into their sequence at the first layer above the 0.56 mm base.'};
 const name = `${output}/reference-plate-cmyw-0.12.3mf`;
 await writeFile(name, await writeZip([...built.entries].map(([n, data]) => ({name: n, data}))));
 await writeFile(`${name}.samples.json`, JSON.stringify(manifest, null, 2));
