@@ -15,6 +15,7 @@ import { cluster, clusterWithinBudget } from "./simplify.js";
 import { encodePng } from "./png.js";
 import { downscale, renderIso } from "./raster.js";
 import { applyDualWall } from "./dualWall.js";
+import { applyTopInterweave } from "./topInterweave.js";
 import { layoutOffsets, planLayout } from "./layout.js";
 import { surfaceAreas } from './surfaceWeights.js';
 import {exportComparisonJob} from './comparisonExport.js';
@@ -440,6 +441,11 @@ self.onmessage = async (event) => {
         post({ type: "error", id, message: built.problems[0] });
         return;
       }
+      // Top surface interweave first: it reads the blends the export assigned, before dual-wall fills in bases.
+      const interweave = message.options.interweave
+        ? applyTopInterweave(built.entries, { target: message.options.target, cell: message.options.interweave.cell,
+            recipes: message.options.recipes || [], physical: (message.options.physical || message.options.reels || []).length })
+        : null;
       // Dual-wall mixing rewrites the finished project: explicit paint outside, one filament inside.
       const dualWall = message.options.dualWall
         ? applyDualWall(built.entries, { target: message.options.target, innerSlot: message.options.dualWall.slot, depth: message.options.dualWall.depth })
@@ -447,7 +453,7 @@ self.onmessage = async (event) => {
       const bytes = await writeZip([...built.entries].map(([name, data]) =>
         ({ name, data })));
       post({ type: "exported", id, bytes, ms: Date.now() - started,
-             recipes: built.recipes.length, thumbnails: built.thumbnails, dualWall },
+             recipes: built.recipes.length, thumbnails: built.thumbnails, dualWall, interweave },
            [bytes.buffer]);
       return;
     }

@@ -1,3 +1,10 @@
+## 2.6.76 — Top surface interweave (experimental)
+
+- Full Spectrum blends has a new export option in Settings: **Top surface interweave**. On flat tops, shallow slopes and the matching faces underneath, a blended colour is painted as a fine chequer of its two filaments, in proportion to the blend, so it mixes across the surface. Walls keep mixing by alternating layers.
+- The pattern size is adjustable from 0.8 to 2.4 mm (default 1.2 mm). Faces within about 30° of flat are treated as tops, judged with the object as it sits on the plate.
+- Only paint changes: no geometry is added or moved. Gradients and three-filament blends are left to the slicer.
+- Not yet confirmed by a slice or a print. The 3D preview does not show the pattern.
+
 ## 2.6.75 — Warn about thin layers with Subdivide Mix Layer
 
 - When Subdivide Mix Layer is on and the regular layer height is 0.10 mm or less, Settings now says that the slicer will warn about divided layers being thinner than the printer supports, and gives the two ways out: a taller layer with Subdivide on, or Subdivide off at the thin layer.
