@@ -43,23 +43,25 @@ function project({transform='1 0 0 0 1 0 0 0 1 100 100 0'}={}){
 const recipes=[{a:1,b:3,percent:50},{a:2,b:3,percent:25},{a:1,b:2,percent:40,gradient:{start:20,end:80}}];
 const faces=entries=>[...dec.decode(entries.get('3D/Objects/cube.model')).matchAll(/<triangle\b([^>]*)\/>/g)].map(m=>{const p=/paint_color="([0-9A-F]+)"/i.exec(m[1]);return p?[...new Set(paint.walkStates(paint.decode(p[1])))].sort():[];});
 
-test('only flat top and bottom faces are interwoven, with the two filaments of each blend',()=>{
+test('only upward flat faces are interwoven; the face on the bed is left whole',()=>{
   const entries=project(),before=dec.decode(entries.get('3D/Objects/cube.model'));
   const report=applyTopInterweave(entries,{target:'snapmaker',cell:1.2,recipes,physical:4});
   const got=faces(entries);
-  // Top (blend 5 = reels 1 and 3) and bottom (unpainted, so the part's blend 6 = reels 2 and 3).
-  assert.deepEqual(got.slice(0,4),[[1,3],[1,3],[2,3],[2,3]]);
+  // Which pair of faces looks up depends on the fixture's winding; exactly one pair is interwoven.
+  const woven=got.slice(0,4).filter(states=>states.length===2);
+  assert.equal(woven.length,2);assert.deepEqual(woven[0],woven[1]);
+  assert.equal(got.slice(0,4).filter(states=>states.length<2).length,2,'the downward pair keeps its single colour');
   // Walls are untouched: painted blend, painted solid, and unpainted.
   assert.deepEqual(got.slice(4),[[5],[5],[2],[2],[],[],[],[]]);
-  assert.deepEqual([report.meshes,report.faces,report.facesInterwoven,report.blends],[1,12,4,2]);
+  assert.deepEqual([report.meshes,report.faces,report.facesInterwoven],[1,12,2]);
   // Geometry and face order are exactly as they were.
   const strip=text=>text.replace(/ paint_color="[^"]*"/g,'');
   assert.equal(strip(dec.decode(entries.get('3D/Objects/cube.model'))),strip(before));
   assert.deepEqual(JSON.parse(dec.decode(entries.get(INTERWEAVE_PATH))).validation,{sliced:false,printed:false});
 });
 test('which faces count as tops follows how the object is turned on the plate',()=>{
-  // Tipped a quarter turn about X: the painted side wall now faces up or down, the old top is a wall.
-  const entries=project({transform:'1 0 0 0 0 1 0 -1 0 100 100 20'});
+  // Tipped a quarter turn about X so the painted side wall faces up; the old top is now a wall.
+  const entries=project({transform:'1 0 0 0 0 -1 0 1 0 100 100 20'});
   applyTopInterweave(entries,{target:'snapmaker',cell:1.2,recipes,physical:4});
   const got=faces(entries);
   assert.deepEqual(got.slice(0,2),[[5],[5]]);assert.deepEqual(got.slice(4,6),[[1,3],[1,3]]);

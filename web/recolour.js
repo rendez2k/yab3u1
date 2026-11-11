@@ -45,7 +45,7 @@ import { FINE_BLEND_TARGETS, FINE_BLEND } from './shared/fineBlend.js';
 import { INTERWEAVE_TARGETS, INTERWEAVE_MIN_UP, interweaveProblem } from './shared/topInterweave.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.6.85";
+const VERSION = "2.6.86";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -113,7 +113,7 @@ function renderInterweave(recipes) {
   $('interweaveoptions').hidden=!available;if(!available)return;
   $('interweavefields').hidden=!$('interweaveon').checked;
   const choice=interweaveChoice();
-  $('interweavenote').textContent=!choice?'':interweaveIssue()||`${blends} blended colour${blends===1?'':'s'} will be interwoven on faces within about 30° of flat, in ${choice.cell} mm squares. Unvalidated: not yet confirmed by a sliced or printed sample.`;
+  $('interweavenote').textContent=!choice?'':interweaveIssue()||`${blends} blended colour${blends===1?'':'s'} will be interwoven on upward faces within about 30° of flat, in ${choice.cell} mm squares. Faces on the bed are left whole. It makes many small separate patches per layer, so try it on one small part first. Unvalidated: not yet confirmed by a sliced or printed sample.`;
 }
 // Dual-wall mixing: painted colour in the outer wall only, one chosen filament behind it.
 for(const id of ['dualwallon','dualwallinner','dualwalldepth'])$(id).addEventListener('change',()=>{clearReview();refresh();});
