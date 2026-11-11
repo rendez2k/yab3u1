@@ -15,7 +15,7 @@ Full Spectrum blends has a second colour construction, in Export settings: **Bui
 - The sequence is painted into a **0.45 mm outer shell**. Inside the shell the model prints in one **backing reel**, the lightest model reel unless you choose another.
 - On steep walls the layers of different reels sit on top of each other and are meant to mix by eye.
 - **Flat and gently sloped areas print as single-reel bands**, often clearly striped. The preview shows those areas in the single reel they will get and warns when a model has much of them.
-- The export records what it did in `Metadata/YAB3D_built_in_colours.json`, with every recipe marked as an estimate and `validation: {sliced: false, printed: false}`.
+- The export records what it did in `Metadata/YAB3D_built_in_colours.json`, with every recipe marked as an estimate and `validation: {sliced: false, printed: false}`. That record is what the exporter writes into each file; this release's proof run does not update it.
 
 ## Known limits
 
@@ -52,7 +52,22 @@ A run passes when at least 99% of the judged wall is in the reel the model gives
 | Flirty Figures Alien | 608,046 → 3,282,824 triangles | 3 parts, manifold (source 3, manifold) | PASS, 100.00% (no layer below 100%) | PASS, 99.97% (layer 433, 96.95%) | PASS, 99.99% (layer 413, 97.96%) | PASS, 99.99% (layer 227, 98.15%) | PASS, 99.98% (layer 84, 97.35%) |
 | They Live Alien 5 Colors | **refused** as too large (above) | – | – | – | – | – | – |
 
-**These results differ from earlier runs, and both are given here.** In the earlier product-path run (same engine, same reels and 0.45 mm shell, 11 November 2026), Super Man plate 1 passed at the nominal height but **failed at −0.03 mm (layer 102 at 93.48%) and −0.02 mm (layer 102 at 93.85%)**. Today it passes at every height, with layer 102 at 100%. The colours and shades are the same in both runs, but each colour's sequence starts at a different layer: the earlier run aligned the sequences without weights, and the command-line tool weights them by painted triangles (the app weights them by surface area and any focus marks). Whether a ledge shows the neighbouring layer's reel depends on which reels those two layers have, so the result can change with the plan. **Do not read today's pass as Super Man being safe from the ledge effect**, and an export from the app may plan differently again. Flirty passed at every height then and now. The demo backpacks prepared for the owner earlier (Task 13) are not re-run here: `backpack-cmyw` failed at +0.02 and +0.03 mm (layer 168 at 88.9%) and `backpack-cmyk` at −0.03, −0.02 and +0.03 mm (layer 13 at 12–13% under the downward shifts).
+**Not all of the outer wall is judged.** The percentages above are shares of the *judged* (visible) wall only. Outer-wall toolpath further than 0.35 mm from the model's outline is counted as hidden and is not judged; it includes the inside edge of the colour shell and walls along internal part boundaries. What that hidden wall is was characterised on the generated test solid and only partly on the figurines (see `docs/built-in-colours-spike-2026-11.md`, "Hidden and dropped wall"). At the nominal height:
+
+| File | Judged (visible) outer wall | Hidden (not judged) outer wall |
+|---|---|---|
+| Reference plate | 81,506 mm | 0 mm |
+| Super Man, plate 1 | 28,745 mm | 29,692 mm |
+| Flirty Figures Alien | 257,376 mm | 113,827 mm |
+
+Under the four shifts the figures move by under 1%: Super Man 28,419–28,801 mm judged against 29,635–30,018 mm hidden, Flirty 256,816–257,277 mm judged against 113,926–114,387 mm hidden; the reference plate stays at 81,506 mm and 0 mm.
+
+**Layers with 20 mm or less of judged wall are left out of the per-layer rule.** In these runs:
+- Super Man: layer 122 (8.2–8.3 mm judged) is at 96.30% at the nominal height and 95.45% at −0.03 and −0.02 mm; layer 121 is at 98.83–98.85% at +0.02 and +0.03 mm. None is below 95%.
+- Flirty: at +0.03 mm, layer 876 is at **47.05%, with 0.3 mm judged**. No other such layer is below 95%; at the other heights the worst is 100%.
+- Reference plate: no such layers.
+
+**These results differ from earlier runs, and both are given here.** In the earlier product-path run (same engine, same reels and 0.45 mm shell, 11 November 2026), Super Man plate 1 passed at the nominal height but **failed at −0.03 mm (layer 102 at 93.48%) and −0.02 mm (layer 102 at 93.85%)**. Today it passes at every height, with layer 102 at 100%. The colours and shades are the same in both runs, but each colour's sequence starts at a different layer: the earlier run aligned the sequences without weights, and the command-line tool weights them by painted triangles (the app weights them by surface area and any focus marks). That phasing is the only difference identified between the two runs. Which colour region the earlier failing layer 102 belonged to was not examined, so it is not established how the phasing changed that layer's result. **Do not read today's pass as Super Man being safe from the ledge effect**, and an export from the app may plan differently again. Flirty passed at every height then and now. The demo backpacks prepared for the owner earlier are not re-run here: `backpack-cmyw` failed at +0.02 and +0.03 mm (layer 168 at 88.9%) and `backpack-cmyk` at −0.03, −0.02 and +0.03 mm (layer 13 at 12–13% under the downward shifts).
 
 ## Cost
 

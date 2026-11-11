@@ -5,7 +5,7 @@
 - **Snapmaker U1 only, 0.4 mm nozzle only, browser only.** The Python route is unchanged. Slicer blends remains the default.
 - Each colour is written into the model as a repeating layer-by-layer sequence of the four reels, painted into a 0.45 mm outer shell, with one backing reel inside.
 - **The layers are fixed at 0.12 mm with a 0.2 mm first layer.** Changing either in the slicer puts the wrong reel on each layer.
-- **Flat and gently sloped areas print as single-reel bands.** Beside near-flat ledges a single layer's wall can take the neighbouring layer's reel; in the toolpath checks some models passed at the nominal height but failed when the check was shifted by 0.02–0.03 mm.
+- **Flat and gently sloped areas print as single-reel bands.** Beside near-flat ledges a single layer's wall can take the neighbouring layer's reel; in the toolpath checks some models passed at the nominal height but failed when the check was shifted by 0.02–0.03 mm. The outcome depends on how the recipes are phased, so a pass for one export is no guarantee for the next.
 - **Large models can be refused as too large at 0.12 mm.** One test model of 1.33 million triangles would need 5.72 million and is refused.
 - **Cost:** in the checked files the prime tower takes 47–74% of the filament, with 134 to 1,529 tool changes (slicer estimates of 2 h to 23 h). Tower waste has not been reduced in this release.
 - Refused with a plain message: rafts; one mesh placed more than once at different tilts or heights; colour, support and seam paint that divide a face in different ways; nozzles other than 0.4 mm; targets other than the U1. A built-in export cannot be reopened for conversion. Dual-wall mixing is unavailable while Built-in colours is on.
