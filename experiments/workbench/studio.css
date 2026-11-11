@@ -505,3 +505,9 @@ body[data-steps=on] #inspector #bundlepanel [data-use]{display:none!important}
 #inspector [data-task=output] label:has(>#review){display:none!important}
 [data-change-note]{margin:10px 0 14px}[data-change-note] p{margin:0 0 10px;font-size:12px;line-height:1.5}[data-change-note] p:empty{display:none}
 #inspector [data-see-changes]{min-height:40px;padding:8px 12px;background:transparent;border:1px solid var(--line);color:var(--accent)}
+/* 2.6.85 — suggest Top surface interweave when blended colours have large flat tops. */
+[data-flat-tip]{margin:0 0 18px;padding:14px;border:1px solid var(--accent);border-radius:10px;background:var(--soft)}[data-flat-tip][hidden]{display:none}
+[data-flat-tip] strong{display:block;font-size:13px;margin-bottom:6px}[data-flat-tip] p{font-size:12px;line-height:1.5;margin:0 0 12px}
+[data-flat-tip] div{display:flex;gap:8px;flex-wrap:wrap}#inspector [data-flat-tip] button{min-height:40px;padding:8px 12px}
+#inspector [data-flat-tip] [data-skip-interweave]{background:transparent;border:1px solid var(--line)}
+@media(max-width:760px){#inspector [data-flat-tip] button{min-height:44px}}

@@ -14,7 +14,7 @@ import {colourName} from './shared/assignment.js';
 const kind=document.body.dataset.engine,$=id=>document.getElementById(id);
 const view=composeView(document,kind);
 let engine, currentPanel='project', lastReport='', source=null, workspaceMode='studio', colourSummary, toolbox;
-let lastStep='project', readColours=null, currentReport=null, methodOpen=false;
+let lastStep='project', readColours=null, currentReport=null, methodOpen=false, interweaveSkipped=false;
 let fallbackKey='',fallbackPending=false,fallbackUrl=null;
 let objectTools, filamentTools, studio, prepared, projectPlates, loading=false, busySince=0,previewSettledAt=0;
 const progress=view.make('div',{class:'workbench-progress',hidden:'',role:'status','aria-live':'polite'},'<span class="working-orb" aria-hidden="true"></span><div><strong>Preparing your model…</strong><p></p></div>');
@@ -101,6 +101,8 @@ document.addEventListener('click',event=>{
   }
   if(b.matches('[data-close-batch]'))setPanel('project');
   if(b.matches('[data-auto-merge]'))autoMerge();
+  if(b.matches('[data-use-interweave]')){const box=$('interweaveon');box.checked=true;box.dispatchEvent(new Event('change',{bubbles:true}));const fold=document.querySelector('.print-options');if(fold)fold.open=true;}
+  if(b.matches('[data-skip-interweave]')){interweaveSkipped=true;stepKey='';}
   if(b.matches('[data-see-changes]')){setPanel('colours');$('colouroutcome')?.scrollIntoView?.({block:'start'});}
   // Pack chooser: once a pack is picked the list folds to that pack.
   if(b.matches('[data-card]')){const list=b.closest('[data-cards]');if(list)list.dataset.folded='true';}
@@ -265,6 +267,14 @@ function syncViewCaption(loaded){
 }
 let stepKey='';
 function syncSteps(loaded,busy,batch,report){
+  if(kind==='spectrum'){
+    // A model with large flat tops in blended colours bands there; offer the setting made for it.
+    let tip=document.querySelector('[data-flat-tip]');
+    if(!tip){tip=view.make('div',{'data-flat-tip':'',hidden:'',role:'status'},'<strong>This model has flat tops in blended colours</strong><p></p><div><button type="button" class="primary" data-use-interweave>Turn on Top surface interweave</button><button type="button" data-skip-interweave>Not now</button></div>');view.panels.output.querySelector('.task-heading').after(tip);}
+    let flat=null;try{flat=loaded?engine.workbenchFlatTops():null;}catch{}
+    const offered=Boolean(flat&&flat.blends&&flat.share>=0.1&&!$('interweaveoptions').hidden&&!$('interweaveon').checked&&!interweaveSkipped);
+    if(tip.hidden===offered){tip.hidden=!offered;if(offered)tip.querySelector('p').textContent=`About ${Math.round(flat.share*100)}% of the blended surface is flat or nearly flat. Blends are made layer by layer, so those tops would print as bands of single colours. Top surface interweave paints them as a fine chequer of the two reels instead. It is experimental: check the top layers in the slicer preview.`;}
+  }
   if(kind==='spectrum'){
     let note=document.querySelector('[data-change-note]');
     if(!note){note=view.make('div',{'data-change-note':''},'<p role="status"></p><button type="button" data-see-changes>See what each colour becomes</button>');$('review').closest('label').after(note);}
