@@ -18,3 +18,21 @@ export function mixFdmHex(first, second, percent) {
   if(percent===100) return b;
   return mixFilaments([{hex:a,ratio:1-percent/100},{hex:b,ratio:percent/100}]).hex.toUpperCase();
 }
+
+// Estimate for a repeating layer sequence that uses several reels. Reels are folded in
+// ascending index order: the first reel with a count starts the running mix, then each
+// later reel is mixed in at its share of the running total. Still an uncalibrated estimate.
+export function mixManyHex(colours, counts) {
+  let running='', total=0;
+  for(let i=0;i<colours.length;i++){
+    const count=counts[i];
+    if(!(count>0)) continue;
+    const colour=norm(colours[i]);
+    if(!colour) return '';
+    if(!total){ running=colour; total=count; continue; }
+    total+=count;
+    running=mixFdmHex(running,colour,Math.round(100*count/total));
+    if(!running) return '';
+  }
+  return running;
+}
