@@ -1,5 +1,5 @@
-// Flat-face rule for the built-in colours spike (Task 12 follow-up). Experimental; not
-// wired into the app, and web/shared/paintBands.js is unchanged.
+// The flat-face rule for built-in colours (moved from tools/flatFaceRule.mjs, where the
+// spike tried it; web/shared/builtInColours.js uses it to choose each piece's reel).
 //
 // The slicer builds layer n from the cross-section at its mid height (the first layer's
 // at half its own height). So a near-flat face is not part of the band it lies in but of
@@ -7,6 +7,11 @@
 // layer whose slice is at or below z, and a down-facing face is the bottom of the lowest
 // layer whose slice is above z. Layers are numbered as in web/shared/layerBands.js:
 // layer 0 is the first layer (0 to `first`), layer n >= 1 ends at first + n * height.
+//
+// Pure functions, no dependencies.
+
+/** A face whose normal is within this many degrees of vertical counts as flat. */
+export const FLAT_FACE_DEGREES = 30;
 
 /** Height at which the slicer cuts layer n. */
 export function sliceMid(n, first, height) {
@@ -30,4 +35,18 @@ export function isNearFlat(normal, degrees) {
   if (!(length > 0)) return {flat: false, up: false};
   const c = normal[2] / length;
   return {flat: Math.abs(c) >= Math.cos(degrees * Math.PI / 180), up: c > 0};
+}
+
+/**
+ * The layer whose reel a banded piece takes. `normal` is the piece's normal in bed
+ * orientation (after the placement transform, its sign corrected for a mirrored one);
+ * zHigh and zLow are its highest and lowest bed heights; `layer` is the band it lies in.
+ * A near-flat piece facing up belongs to the layer its highest point tops, one facing
+ * down to the layer its lowest point bottoms, so a piece that reaches its own band's
+ * slice keeps that band. Any other piece keeps its band.
+ */
+export function pieceLayer({normal, zHigh, zLow, layer}, first, height) {
+  const {flat, up} = isNearFlat(normal, FLAT_FACE_DEGREES);
+  if (!flat) return layer;
+  return up ? flatFaceLayer(zHigh, true, first, height) : flatFaceLayer(zLow, false, first, height);
 }

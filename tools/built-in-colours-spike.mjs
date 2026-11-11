@@ -19,7 +19,7 @@
 // --plate=N       export plate N instead of the first plate
 // --flat-rule=D   experiment (Task 12 follow-up): a painted piece of a face whose normal is
 //                 within D degrees of vertical takes the reel of the layer the face tops
-//                 (facing up) or bottoms (facing down), by tools/flatFaceRule.mjs, instead
+//                 (facing up) or bottoms (facing down), by web/shared/flatFaceRule.js, instead
 //                 of its band's; the geometry is unchanged. Faces below the first layer's
 //                 slice (0.1 mm) stay in the first layer, so a face on the bed stays there.
 // --flat-z=Z      height of a piece used by --flat-rule: centroid (default), min, max, or
@@ -39,7 +39,7 @@ import {bandMesh} from '../web/shared/paintBands.js';
 import {wallTestSetup} from '../web/shared/wallComparison.js';
 import * as paint from '../web/shared/paint.js';
 import {placements} from './builtInToolpathCheck.mjs';
-import {flatFaceLayer, isNearFlat} from './flatFaceRule.mjs';
+import {flatFaceLayer, isNearFlat} from '../web/shared/flatFaceRule.js';
 
 const enc = new TextEncoder(), dec = new TextDecoder();
 const FIRST = 0.2, PATTERN = [1, 2, 3];

@@ -1619,6 +1619,18 @@ const positive = (value) => {
   return Number.isInteger(number) && number > 0 ? number : null;
 };
 
+/** How many shade ids a built-in colours export writes (options.builtIn), or a refusal. */
+function builtInShades(builtIn, target, recipes, convert) {
+  if (target !== "snapmaker") throw new ProjectError("Built-in colours currently exports for the Snapmaker U1 only.");
+  if (convert) throw new ProjectError("Built-in colours recolours the model, so it cannot be combined with a conversion.");
+  if (recipes.length) throw new ProjectError("Built-in colours writes its own layer pattern, so it cannot be combined with slicer blends.");
+  const shades = Number(builtIn.shades);
+  if (!Number.isInteger(shades) || shades < 1 || shades > paint.BAMBU_STATE_MAX) {
+    throw new ProjectError(`Built-in colours writes 1 to ${paint.BAMBU_STATE_MAX} shades.`);
+  }
+  return shades;
+}
+
 /** The destination filament a part prints in, or a refusal.
  *
  * The source names one of the file's own filaments. A value the palette does not
@@ -2085,14 +2097,19 @@ export function exportProject(project, plateId, objectIds, options) {
   const reelColours = reels.map((reel) => norm(reel.color) || "#FFFFFF");
   const reelTypes = reels.map((reel) => reel.type || "PLA");
   const recipes = options.recipes || [];
+  // Built-in colours (experimental): paint and parts carry shade ids 1..K, which
+  // applyBuiltInColours (builtInColours.js) later turns into reels layer by layer.
+  const builtIn = options.builtIn ? builtInShades(options.builtIn, target, recipes, convert) : 0;
   if(options.subdivideMixLayer && (!['snapmaker','bambu','orca'].includes(target) || !recipes.length))
     throw new ProjectError('Subdivide Mix Layer requires a Snapmaker Orca, OrcaSlicer 2.5 or Bambu project with blend recipes.');
   for(const recipe of recipes)validateRecipe(recipe,reels.length,target);
   if(recipes.some(r=>r.gradient) && !options.subdivideMixLayer)
     throw new ProjectError('Gradients require Mixed Colour Sublayer. Enable subdivision before exporting.');
-  if(options.supportInterface) validateInterfaceExport({target,reels,mapping:options.mapping,recipes,supportMode:options.supportMode});
+  if(options.supportInterface) validateInterfaceExport({target,reels,mapping:builtIn ? {} : options.mapping,recipes,supportMode:options.supportMode});
   else if(reels.some(r=>r.role==='support-interface')) throw new ProjectError('Reserved support filament requires PETG interface mode.');
-  if (!convert) {
+  if (builtIn) {
+    // Shade ids are not slots and there are no blends, so neither limit applies.
+  } else if (!convert) {
     try {
       checkRecipes(reels.length, recipes, colourLimit(target));
       checkTypes(reelTypes, recipes);
@@ -2108,7 +2125,7 @@ export function exportProject(project, plateId, objectIds, options) {
   Object.entries(options.mapping || {}).forEach(([source, id]) => {
     mapping[Number(source)] = Number(id);
   });
-  if(options.supportInterface && analyse(project,plateId,objectIds).used.some(id=>Number(mapping[id] ?? id)===interfaceSlot(reels)))
+  if(options.supportInterface && !builtIn && analyse(project,plateId,objectIds).used.some(id=>Number(mapping[id] ?? id)===interfaceSlot(reels)))
     throw new ProjectError(`A model region still uses reserved PETG slot ${interfaceSlot(reels)}. Apply a three-colour palette before exporting.`);
   const u1Profile = target === 'snapmaker' ? buildU1Profile(project.sourceSettings, reelTypes,
     options.u1Nozzle || 'auto', {blends: recipes.length > 0, carry: options.carrySettings !== false, layerHeight:options.layerHeight}) : null;
@@ -2119,7 +2136,7 @@ export function exportProject(project, plateId, objectIds, options) {
   table.virtual.forEach((item) => { colours[item.id] = item.color; });
   // A destination the export does not write would leave paint pointing at a
   // filament that is not in the file, so it is refused rather than clamped.
-  const highest = reels.length + recipes.length;
+  const highest = builtIn || reels.length + recipes.length;
   for (const [source, id] of Object.entries(mapping)) {
     if (!Number.isInteger(id) || id < 1 || id > highest) {
       throw new ProjectError(`the mapping sends source colour ${source} to filament `
@@ -2684,7 +2701,7 @@ export function exportProject(project, plateId, objectIds, options) {
     + "\n</Relationships>\n"));
 
   const problemsOut = [...problems];
-  members.set(EXPORT_PLAN_PATH,encoder.encode(JSON.stringify(colourExportPlan({...options,target,reels,recipes,mapping}))));
+  members.set(EXPORT_PLAN_PATH,encoder.encode(JSON.stringify(colourExportPlan({...options,target,reels,recipes,mapping:builtIn ? {} : mapping}))));
   if (standard) {
     // The agnostic colour model must not smuggle a project in with it.
     if (members.has(SRC_BBL_PROJECT)) {

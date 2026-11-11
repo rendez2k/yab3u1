@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {sliceMid, flatFaceLayer, isNearFlat} from '../../tools/flatFaceRule.mjs';
+import {sliceMid, flatFaceLayer, isNearFlat, pieceLayer, FLAT_FACE_DEGREES} from '../shared/flatFaceRule.js';
 
 const FIRST = 0.2, H = 0.12;
 
@@ -43,4 +43,21 @@ test('near-flat means the normal is within the angle of vertical, up or down', (
   assert.deepEqual(isNearFlat([0, 0, -5], 30), {flat: true, up: false}, 'normals need not be unit length');
   assert.deepEqual(isNearFlat([1, 0, 0], 30), {flat: false, up: false});
   assert.deepEqual(isNearFlat([0, 0, 0], 30), {flat: false, up: false}, 'a zero normal is never flat');
+});
+
+test('a piece within 30 degrees of vertical takes the layer it tops or bottoms, judged by its own extreme height', () => {
+  assert.equal(FLAT_FACE_DEGREES, 30);
+  const up = [0, 0, 1], down = [0, 0, -1], tilt = deg => [Math.sin(deg * Math.PI / 180), 0, Math.cos(deg * Math.PI / 180)];
+  // Up-facing: the highest point decides. 2.29 is below layer 18's slice (2.30), 2.31 above it.
+  assert.equal(pieceLayer({normal: up, zHigh: 2.29, zLow: 2.25, layer: 18}, FIRST, H), 17);
+  assert.equal(pieceLayer({normal: up, zHigh: 2.31, zLow: 2.25, layer: 18}, FIRST, H), 18, 'a piece reaching its own slice keeps its band');
+  // Down-facing: the lowest point decides. 13.49 is above layer 111's slice (13.46).
+  assert.equal(pieceLayer({normal: down, zHigh: 13.51, zLow: 13.49, layer: 111}, FIRST, H), 112);
+  assert.equal(pieceLayer({normal: down, zHigh: 13.51, zLow: 13.44, layer: 111}, FIRST, H), 111);
+  // Within the angle, up and down; beyond it the band's own layer stands.
+  assert.equal(pieceLayer({normal: tilt(29), zHigh: 2.29, zLow: 2.25, layer: 18}, FIRST, H), 17);
+  assert.equal(pieceLayer({normal: tilt(31), zHigh: 2.29, zLow: 2.25, layer: 18}, FIRST, H), 18);
+  assert.equal(pieceLayer({normal: tilt(151), zHigh: 13.51, zLow: 13.49, layer: 111}, FIRST, H), 112);
+  assert.equal(pieceLayer({normal: [1, 0, 0], zHigh: 2.29, zLow: 2.25, layer: 18}, FIRST, H), 18);
+  assert.equal(pieceLayer({normal: [0, 0, 0], zHigh: 2.29, zLow: 2.25, layer: 18}, FIRST, H), 18, 'a zero normal keeps its band');
 });
