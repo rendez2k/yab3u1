@@ -19,6 +19,10 @@ function checkHeights(first, height) {
     throw new RangeError('Layer heights must be positive numbers.');
 }
 
+function checkVertexHeights(...zs) {
+  if (!zs.every(Number.isFinite)) throw new RangeError('Vertex heights must be finite numbers.');
+}
+
 export function layerIndex(z, first, height) {
   const k = Math.floor((z - first) / height + EDGE);
   return k < 0 ? 0 : k + 1;
@@ -34,6 +38,7 @@ const plane = (k, first, height) => first + k * height;
 /** The boundary heights strictly between zMin and zMax, ascending. */
 export function layerPlanes(zMin, zMax, first, height) {
   checkHeights(first, height);
+  checkVertexHeights(zMin, zMax);
   let k = Math.max(0, Math.floor((zMin - first) / height));
   while (k > 0 && plane(k - 1, first, height) > zMin) k--;
   while (plane(k, first, height) <= zMin) k++;
@@ -50,7 +55,9 @@ export function layerPlanes(zMin, zMax, first, height) {
 function position(z, first, height) {
   const s = (z - first) / height, k = Math.round(s);
   if (k >= 0 && Math.abs(s - k) <= EDGE) return 2 * k;
-  return 2 * layerIndex(z, first, height) - 1;
+  // Not within EDGE of a boundary, so plain floor: layerIndex's EDGE shift could put
+  // a height just outside the tolerance below boundary k into layer k + 1.
+  return s < 0 ? -1 : 2 * Math.floor(s) + 1;
 }
 
 const order = (a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
@@ -62,10 +69,15 @@ function cut(p, q, zc, zOf) {
   return [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]), a[2] + t * (b[2] - a[2])];
 }
 
-/** Cut one triangle into pieces that each lie within a single layer. Winding is kept. */
+/**
+ * Cut one triangle into pieces that each lie within a single layer. Winding is kept.
+ * Output points are shared references (between strips, and with the input) and must not be changed in place.
+ */
 export function bandTriangle(points, zOf, first, height) {
   checkHeights(first, height);
-  const pos = points.map(p => position(zOf(p), first, height));
+  const zs = points.map(zOf);
+  checkVertexHeights(...zs);
+  const pos = zs.map(z => position(z, first, height));
   const lowPos = Math.min(...pos), highPos = Math.max(...pos);
   const low = Math.floor(lowPos / 2) + 1, high = Math.max(low, Math.ceil(highPos / 2));
   if (low === high) return [{ points: [...points], layer: low }];

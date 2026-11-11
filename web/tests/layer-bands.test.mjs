@@ -102,6 +102,38 @@ test('layer planes are computed by multiplication',()=>{
   assert.deepEqual(layerPlanes(0.25,0.5,0.2,0.12),[0.2+1*0.12,0.2+2*0.12]);
   assert.deepEqual(layerPlanes(0,0.2,0.2,0.12),[]);
 });
+test('a vertex just below a boundary, outside the tolerance, stays in its own layer',()=>{
+  // s = 0.999999 is 1.00000000003e-6 below boundary 1: not on it, and inside layer 1
+  const tri=[[0,0,0.5],[1,0,0.999999],[0,1,0.5]],out=bandTriangle(tri,p=>p[2],0,1);
+  assert.equal(out.length,1);
+  assert.equal(out[0].layer,1);
+  assert.deepEqual(out[0].points,tri);
+});
+test('non-finite vertex heights are refused',()=>{
+  const message='Vertex heights must be finite numbers.';
+  for(const z of [NaN,Infinity,-Infinity]){
+    assert.throws(()=>bandTriangle([[0,0,0.3],[1,0,z],[0,1,0.3]],p=>p[2],0.2,0.12),{name:'RangeError',message});
+    assert.throws(()=>layerPlanes(0.3,z,0.2,0.12),{name:'RangeError',message});
+    assert.throws(()=>layerPlanes(z,0.3,0.2,0.12),{name:'RangeError',message});
+  }
+});
+test('a closed solid with vertices on and beside the boundaries stays exactly closed with no zero-area piece',()=>{
+  const first=0.2,h=0.12,solid=icosphere(3,[5.1,4.9,6.03],5.77);
+  const verts=[...new Set(solid.flat())];                  // shared arrays, so moving one moves it in every face
+  let onPlane=0,beside=0;
+  verts.forEach((p,i)=>{
+    if(i%2)return;
+    const k=Math.round((p[2]-first)/h);
+    p[2]=first+k*h+(i%10===0?1e-8:i%10===4?-1e-8:0);
+    if(i%10===0||i%10===4)beside++;else onPlane++;
+  });
+  assert.ok(onPlane>verts.length*0.25&&beside>verts.length*0.1);
+  assert.equal(closed(solid.map(points=>({points}))),true);
+  const out=solid.flatMap(points=>bandTriangle(points,p=>p[2],first,h));
+  assert.ok(out.length>solid.length);
+  assert.equal(closed(out),true);
+  for(const t of out)assert.ok(area(t.points)>0,`zero-area piece in layer ${t.layer}`);
+});
 test('bad heights are refused and the input is never returned by reference',()=>{
   const tri=[[0,0,0.3],[1,0,0.3],[0,1,0.3]];
   assert.throws(()=>bandTriangle(tri,p=>p[2],0.2,0),RangeError);
