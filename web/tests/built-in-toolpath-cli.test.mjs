@@ -71,7 +71,10 @@ test('the command line exits 0 on a pass, 1 on a fail and 2 on bad arguments', a
   assert.match(fail.stdout, /FAIL/);
   assert.match(fail.stdout, /layer 20 .*matched 0\.00%/);
   assert.equal(run(good).status, 2, 'fixed-pattern mode without its heights is a usage error');
-  assert.equal(run(good, '--model').status, 2);
+  const usage = run(good, '--model');
+  assert.equal(usage.status, 2);
+  assert.match(usage.stderr, /Outline guard \(exits 1\)/);
+  assert.match(usage.stderr, /inside out/);
   assert.equal(run(good, '--model', model, '--every', '0').status, 2);
 });
 

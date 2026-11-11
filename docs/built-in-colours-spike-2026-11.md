@@ -42,7 +42,10 @@ star-shaped, smooth and has no overhangs, thin features or multiple shells.
    writes, which would otherwise override it), `initial_layer_print_height` 0.2,
    `mmu_segmented_region_interlocking_depth` 0, `dithering_local_z_mode` 0,
    `mixed_filament_advanced_dithering` 0. The dual-wall step sets
-   `mmu_segmented_region_max_width` 0.45.
+   `mmu_segmented_region_max_width` 0.45. (Note added 11 November 2026, Task 12: it sets
+   it globally only. The figurine files carry their own per-object value, which overrides
+   it: 5 on They Live, 0 on Super Man and Flirty. Only the test solid was sliced with
+   0.45; see "Hidden and dropped wall" under the Task 12 sub-section.)
 5. Strip corners are merged (welded) onto a 1e-6 mm grid unless `--raw` is given. See
    finding 3 for why.
 
@@ -409,10 +412,15 @@ inside a negative part, is left out, because it is not printed surface. Every "O
 wall" move is sampled every 0.2 mm:
 - A sample within 0.35 mm of the outline is visible and is judged against the reel of
   the outline next to it.
-- A sample further away is hidden and is not judged. This is the inner reel's own outer
-  wall, about 0.66–0.70 mm in on the test solid.
-- Orca also prints the inner edge of the 0.45 mm colour shell as a second "Outer wall"
-  loop, about 0.24 mm in. It is in the colour reel and counts as visible.
+- A sample further away is hidden and is not judged. On the test solid this is the inner
+  reel's own outer wall, about 0.66–0.70 mm in.
+- On the test solid, Orca also prints the inner edge of the 0.45 mm colour shell as a
+  second "Outer wall" loop, about 0.24 mm in. It is in the colour reel and counts as
+  visible.
+- This applies to the test solid only. The figurines were sliced with their own
+  per-object colour-region widths, which overrode the 0.45 mm (5 mm on They Live, 0 =
+  unlimited on Super Man and Flirty). Their hidden wall is something else; see "Hidden and
+  dropped wall" below.
 
 Pass needs all three of these: at least 99% matched overall, no layer with over 20 mm
 judged below 95%, and at least 90% of the outline covered. "Overhang wall" moves are
@@ -612,6 +620,14 @@ Two variants, both at 30°:
   beside the plinth slots.
 
 **What this does and does not show.**
+- **The figurines do not test the 0.45 mm shell.** The three figurines were sliced with
+  their own per-object colour-region widths: 5 mm on They Live, and 0 (unlimited) on
+  Super Man and Flirty. They were not sliced with the 0.45 mm shell the export intends,
+  so their results say nothing about that shell. Only the test solid was sliced with it.
+- **These runs used the old rounding.** The flat30-extreme exports, and all the dz runs
+  below, were made before the exact-tie fix in `flatFaceLayer` (fix round 1). They use the
+  old rounding, which differs from the current code at about 4% of faces lying exactly at
+  a slice height. They were not re-run.
 - It shows that, in these four slices, the visible outer walls follow the paint when
   near-flat faces are painted by the layer the slicer slices them into.
 - It does not show that the colours print correctly. **A toolpath check says where the
@@ -648,6 +664,12 @@ with over 20 mm judged and the result. The log is `gapfix/fix1-runs.log`.
 - **So the pass at the nominal height is narrow** on Super Man and They Live. This shows
   that the paint and the check's cut agree to within the layer; it does not show any
   margin.
+- **The consequence.** The slicer's real cut height (print height minus half the layer)
+  is taken from memory of its code; it was not confirmed. If it differed by 0.02 mm, two
+  of the nominal passes would be fails: Super Man (at −0.02 mm) and They Live (at
+  +0.02 mm).
+- These dz runs used the flat30-extreme exports, made before the exact-tie fix in
+  `flatFaceLayer`, and were not re-run.
 
 #### Hidden and dropped wall (Task 12 fix round 1)
 
@@ -717,10 +739,15 @@ least 20 mm of raw outline:
 
 The guard trips on none of the four files.
 - **Super Man lists four parts as embedded and does not fail them.** They are parts 12,
-  13, 24 and 25 (by object id), keeping 0.6–7.4 mm of 31–163 mm, with printed outer wall
-  along only 22–65% of what was dropped.
+  13, 24 and 25 (by object id), keeping 0.6–7.4 mm of 31–163 mm. Printed outer wall lies
+  along 26–65% of what was dropped without the rule, and 22–64% with flat30-extreme.
 - **A plain "kept under 5%" rule would have failed them.** That is why printed wall
   along the dropped outline is part of the rule.
+- **Untested limits of the guard:**
+  - The 65–90% band of the embedded rule has no case either way: a part keeping under 5%
+    with printed wall along 65–90% of the rest.
+  - A part made of several shells with only one shell inverted keeps a positive total
+    area, so it would not be caught.
 
 **Bed drop.** The spike tool drops each build item by its painted meshes; the check drops
 it by every non-negative part. They agree when every printed part carries paint, as on

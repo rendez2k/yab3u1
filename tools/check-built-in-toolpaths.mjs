@@ -70,7 +70,11 @@ async function modelMode(args) {
   if (!file || file.startsWith('--') || !modelPath || !(every >= 1) || !Number.isInteger(every) || offset.length !== 3 || offset.some(x => !Number.isFinite(x))) {
     console.error('usage: node tools/check-built-in-toolpaths.mjs <gcode> --model <exported.3mf> [--every <n>] [--json <out>]\n'
       + 'The alignment stop measures x/y only (median outline-to-wall distance above 0.35 mm). It misses x/y\n'
-      + 'shifts up to about 0.5-0.6 mm (coverage then fails instead) and any z error (shown only by matched share).');
+      + 'shifts up to about 0.5-0.6 mm (coverage then fails instead) and any z error (shown only by matched share).\n'
+      + 'Outline guard (exits 1), for parts and layers with at least 20 mm of raw outline: a part whose summed\n'
+      + 'section area is not positive (inside out); a part keeping under 5% of its outline with printed outer wall\n'
+      + 'along over 90% of the rest; a layer keeping under 10% of its outline. Parts keeping under 5% with less\n'
+      + 'wall along them are listed as embedded, not failed.');
     process.exitCode = 2;
     return;
   }
