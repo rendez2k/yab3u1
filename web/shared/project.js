@@ -893,9 +893,13 @@ function meshBox(entries, member, id, cache) {
  * The world-space bounds of a whole selection: every instance, every component
  * transform, every part -- the number the layout box is measured against.
  */
+// A mesh's own box never changes while a project is open, so it is measured once.
+// Removing an object or changing a quantity must not read every remaining mesh again.
+const meshBoxCache = new WeakMap();
 export function selectionBounds(project, plateId, objectIds) {
   const box = emptyBox();
-  const cache = new Map();
+  if (!meshBoxCache.has(project)) meshBoxCache.set(project, new Map());
+  const cache = meshBoxCache.get(project);
   for (const [objectId, itemTransform] of selectionInstances(project, plateId,
                                                              objectIds)) {
     const object = project.objects.get(objectId);
@@ -985,7 +989,18 @@ export function layoutInstances(project, plateId, objectIds, layout) {
 }
 
 /** One inner object's facets: counts per state, for the assessment. */
+// A member's facet counts never change while its archive is open. They are counted once,
+// so that changing the selection does not read every mesh on the plate again.
+const scanCache = new WeakMap();
 export function scanMember(entries, member, wanted) {
+  if (!scanCache.has(entries)) scanCache.set(entries, new Map());
+  const scans = scanCache.get(entries), scanKey = `${member}|${[...wanted].map(String).sort().join(',')}`;
+  if (scans.has(scanKey)) return scans.get(scanKey);
+  const out = scanMemberNow(entries, member, wanted);
+  scans.set(scanKey, out);
+  return out;
+}
+function scanMemberNow(entries, member, wanted) {
   const blob = text(entries, member);
   if (blob === null) {
     throw new ProjectError(`${member} is referenced but not in the archive`);
@@ -1356,8 +1371,12 @@ export function summary(project, plateId) {
  * is not copying must not switch supports on for the one that is.  An empty
  * attribute (`custom_supports=""`) is not paint either.
  */
+// Whether one mesh carries support paint, found once per project.
+const supportPaintCache = new WeakMap();
 export function supportPaintPresent(project, plateId, objectIds) {
   const painted = /(?:slic3rpe:)?(?:custom_supports|paint_supports)="([^"]*)"/g;
+  if (!supportPaintCache.has(project)) supportPaintCache.set(project, new Map());
+  const known = supportPaintCache.get(project);
   let needed;
   try {
     needed = neededMembers(project, plateId, objectIds);
@@ -1365,19 +1384,25 @@ export function supportPaintPresent(project, plateId, objectIds) {
     return false;
   }
   for (const [member, wanted] of needed) {
-    const blob = text(project.entries, member);
-    if (!blob) continue;
-    OBJECT_RE.lastIndex = 0;
-    let object;
-    while ((object = OBJECT_RE.exec(blob)) !== null) {
-      const id = attr(object[1], "id");
-      if (id === null || !wanted.has(String(id))) continue;
-      painted.lastIndex = 0;
-      let found;
-      while ((found = painted.exec(object[2])) !== null) {
-        if (found[1]) return true;            // a value, not an empty attribute
+    const pending = [...wanted].map(String).filter(id => !known.has(`${member}|${id}`));
+    if (pending.length) {
+      const blob = text(project.entries, member);
+      for (const id of pending) known.set(`${member}|${id}`, false);
+      if (blob) {
+        OBJECT_RE.lastIndex = 0;
+        let object;
+        while ((object = OBJECT_RE.exec(blob)) !== null) {
+          const id = attr(object[1], "id");
+          if (id === null || !pending.includes(String(id))) continue;
+          painted.lastIndex = 0;
+          let found;
+          while ((found = painted.exec(object[2])) !== null) {
+            if (found[1]) { known.set(`${member}|${id}`, true); break; }   // a value, not an empty attribute
+          }
+        }
       }
     }
+    for (const id of wanted) if (known.get(`${member}|${String(id)}`)) return true;
   }
   return false;
 }
