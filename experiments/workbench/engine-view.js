@@ -101,6 +101,7 @@ document.addEventListener('click',event=>{
   }
   if(b.matches('[data-close-batch]'))setPanel('project');
   if(b.matches('[data-auto-merge]'))autoMerge();
+  if(b.matches('[data-see-changes]')){setPanel('colours');$('colouroutcome')?.scrollIntoView?.({block:'start'});}
   // Pack chooser: once a pack is picked the list folds to that pack.
   if(b.matches('[data-card]')){const list=b.closest('[data-cards]');if(list)list.dataset.folded='true';}
   if(b.matches('[data-change-pack]')){const list=document.querySelector('#bundlepanel [data-cards]');if(list){list.dataset.folded='false';list.querySelector('[aria-checked=true]')?.focus();}}
@@ -188,7 +189,10 @@ const api={kind,setPanel,context,
   },
   // One Export button: the shell shows these choices as a menu when there is more than one.
   export(id){if(!exportChoices().some(choice=>choice.id===id&&!choice.disabled))return;if(id==='plate'){setPanel('output');$('converterprimary').click();return;}if(workspaceMode!=='quick')setPanel('layout');projectPlates.save(id);},
-  primary(){if(kind==='converter'&&!$('batchpanel').classList.contains('hidden'))return;const sequential=sequentialAction();if(sequential){sequential.click();return;}setPanel(kind==='spectrum'&&$('mainaction').dataset.action==='apply'?'colours':'output');$(kind==='converter'?'converterprimary':'mainaction').click();},
+  primary(){if(kind==='converter'&&!$('batchpanel').classList.contains('hidden'))return;const sequential=sequentialAction();if(sequential){sequential.click();return;}
+    // Pressing Download is the confirmation: there is no separate box to tick first.
+    if(kind==='spectrum'&&$('mainaction').dataset.action==='review'){const box=$('review');box.checked=true;box.dispatchEvent(new Event('change',{bubbles:true}));setPanel('output');
+      let tries=0;const go=()=>{if($('mainaction').dataset.action==='download')$('mainaction').click();else if((tries+=1)<20)setTimeout(go,100);};setTimeout(go,50);return;}setPanel(kind==='spectrum'&&$('mainaction').dataset.action==='apply'?'colours':'output');$(kind==='converter'?'converterprimary':'mainaction').click();},
 };
 installModelDrop(document,{load:file=>api.load(file),show:value=>parentHost?.workbench?.drag(value),delegate:event=>Boolean(event.target.closest?.('#batchdrop')),error:error=>parentHost?.workbench?.dropError?parentHost.workbench.dropError(error):reportError(error instanceof Error?error:Error(error))});
 function exportChoices(){
@@ -261,10 +265,16 @@ function syncViewCaption(loaded){
 }
 let stepKey='';
 function syncSteps(loaded,busy,batch,report){
+  if(kind==='spectrum'){
+    let note=document.querySelector('[data-change-note]');
+    if(!note){note=view.make('div',{'data-change-note':''},'<p role="status"></p><button type="button" data-see-changes>See what each colour becomes</button>');$('review').closest('label').after(note);}
+    const text=/approximate/i.test($('reviewtext').textContent)?'Some colours are approximate and will look different from the original. Downloading accepts those changes.':'';
+    if(note.firstChild.textContent!==text)note.firstChild.textContent=text;
+  }
   try{syncViewCaption(loaded);}catch{}
   let coloursDone=false;
   if(loaded){try{coloursDone=kind==='converter'?!engine.session.capacityStatus().unresolved:!applying();}catch{}}
-  const done={project:loaded,colours:loaded&&coloursDone,output:loaded&&coloursDone&&!report.disabled&&!report.pending&&!/review/i.test(report.action||''),download:false};
+  const done={project:loaded,colours:loaded&&coloursDone,output:loaded&&coloursDone&&!report.disabled&&!report.pending,download:false};
   toolbox?.sync(currentPanel,studio?.mode,busy,{loaded,done,download:{disabled:!loaded}});
   const show=loaded&&!batch&&workspaceMode!=='quick'&&currentPanel!=='help';
   const next=show?nextStep():{},several=currentPanel==='output'&&(report.exports||[]).length>1;
@@ -323,7 +333,7 @@ function tick() {
   if(kind==='converter'&&loaded&&!busy&&status.includes('Nothing has been uploaded'))status=`${s.state.displayName}: ${s.capacityStatus().needed} filament${s.capacityStatus().needed===1?'':'s'} used on this plate. Files stay in your browser.`;
   const plateStatus=currentPanel==='layout'?document.querySelector('#printoptimiser [data-status]'):null,plateBusy=plateStatus?.dataset.busy==='true';
   if(plateStatus?.textContent)status=plateStatus.textContent;
-  const report={kind,loaded,pending:Boolean(studio?.pending),busy:busy||plateBusy,batch,title:file?.yab3dDisplayName||file?.name||'Untitled project',status:status||'Files stay in your browser.',exports:menu?exports:[],action:batch?'Batch conversion':studio?.pending?'Finish edit to export':loaded?(menu?'Export':button.textContent):'Open a model to start',disabled:studio?.pending||busy||!loaded||(menu?exports.every(choice=>choice.disabled):button.disabled)||batch};
+  const report={kind,loaded,pending:Boolean(studio?.pending),busy:busy||plateBusy,batch,title:file?.yab3dDisplayName||file?.name||'Untitled project',status:status||'Files stay in your browser.',exports:menu?exports:[],action:batch?'Batch conversion':studio?.pending?'Finish edit to export':loaded?(menu?'Export':button.textContent==='Review & download'?'Download project':button.textContent):'Open a model to start',disabled:studio?.pending||busy||!loaded||(menu?exports.every(choice=>choice.disabled):button.disabled)||batch};
   const serial=JSON.stringify(report);if(serial!==lastReport){lastReport=serial;parentHost?.workbench?.report(report);}
   currentReport=report;colourSummary?.sync();syncSteps(loaded,busy,batch,report);
   let snapshot;try{snapshot=engine.workbenchPreview();}catch{}

@@ -1,3 +1,9 @@
+## 2.6.84 — No separate agreement tick
+
+- In Full Spectrum blends, step 3 no longer asks you to tick "I have checked the colour mapping…" before the button will download. Pressing **Download project** is the confirmation.
+- When the set uses approximate colours, step 3 says so in a sentence: "Some colours are approximate and will look different from the original. Downloading accepts those changes."
+- A new **See what each colour becomes** button in step 3 goes back to the list of colour changes.
+
 ## 2.6.83 — The 3D view says what it is showing
 
 - In Full Spectrum blends, a caption above the Original / Applied / Suggested switch now names the view and shows its reels: "Applied · 4 reels + 1 blend. This is what will be downloaded." or "Suggested · not applied yet · 4 reels + 5 blends. Press Apply palette to use this set."
