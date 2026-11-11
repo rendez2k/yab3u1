@@ -13,7 +13,7 @@
 import * as paint from './paint.js';
 import {explicitOuterPaint} from './dualWall.js';
 import {bandMesh} from './paintBands.js';
-import {layerIndex} from './layerBands.js';
+import {layerPosition, layerPlane} from './layerBands.js';
 import {pieceLayer} from './flatFaceRule.js';
 import {matrixFromText, matmul} from './project.js';
 import {norm} from './colour.js';
@@ -39,9 +39,6 @@ const ATTRIBUTE_STEP = /\s*([A-Za-z_][\w:.-]*)="([^"]*)"/y;
 const COLOUR_ATTRS = new Set(['paint_color', 'mmu_segmentation', 'slic3rpe:mmu_segmentation']);
 // Seam, support and any other per-face paint: trees in the same format as the colour paint.
 const OTHER_PAINT = /^(?:slic3rpe:)?(?:paint|custom)_[\w]+$/;
-// Below this many bytes per written triangle no triangle line can be, which makes the
-// early size estimate a lower bound.
-const MIN_TRIANGLE_BYTES = 40;
 const EPS = 1e-9;
 
 const attr = (text, name) => new RegExp(`(?:^|\\s)${name.replace(/[.:]/g, '\\$&')}="([^"]*)"`).exec(text)?.[1];
@@ -83,7 +80,11 @@ function recipesById(recipes, reels) {
   return byId;
 }
 
-/** Object names and parts from model_settings.config. */
+/**
+ * Object names and parts from model_settings.config. Parts are keyed by id alone, as
+ * explicitOuterPaint keys them: the exporter writes each mesh object id once, so an id
+ * names one part across all model members.
+ */
 function readSettings(text) {
   const objects = new Map(), parts = new Map();
   for (const m of text.matchAll(/<object\b([^>]*)>([\s\S]*?)<\/object>/g)) {
@@ -122,41 +123,29 @@ function readVertices(body, name) {
   return out;
 }
 
-/** Corners of a paint split's children, as standard.splitChildren orders them (paintBands.js uses the same). */
-function splitCorners(c, node) {
-  const sides = Number(node.sides), s = sides === 3 ? 0 : Number(node.specialSide) % 3;
-  const v0 = c[s], v1 = c[(s + 1) % 3], v2 = c[(s + 2) % 3];
-  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
-  if (sides === 1) { const m = mid(v1, v2); return [[v0, v1, m], [m, v2, v0]]; }
-  if (sides === 2) { const a = mid(v0, v1), b = mid(v2, v0); return [[v0, a, b], [a, v1, b], [v1, v2, b]]; }
-  const m01 = mid(v0, v1), m12 = mid(v1, v2), m20 = mid(v2, v0);
-  return [[v0, m01, m20], [m01, v1, m12], [m12, v2, m20], [m01, m12, m20]];
-}
+/** Whether two split nodes cut their triangle the same way (paintBands.js reads the special side modulo 3 and ignores it for a three-sided split). */
+const sameSplit = (a, b) => Number(a.sides) === Number(b.sides) && (Number(a.sides) === 3 || Number(a.specialSide) % 3 === Number(b.specialSide) % 3);
 
-/** Barycentric coordinates of q in the triangle (a, b, c); all points in one plane. */
-function barycentric(q, a, b, c) {
-  const v0 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v1 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]], v2 = [q[0] - a[0], q[1] - a[1], q[2] - a[2]];
-  const dot = (u, w) => u[0] * w[0] + u[1] * w[1] + u[2] * w[2];
-  const d00 = dot(v0, v0), d01 = dot(v0, v1), d11 = dot(v1, v1), d20 = dot(v2, v0), d21 = dot(v2, v1), den = d00 * d11 - d01 * d01;
-  if (!(Math.abs(den) > 0)) return [1 / 3, 1 / 3, 1 / 3];
-  const v = (d11 * d20 - d01 * d21) / den, w = (d00 * d21 - d01 * d20) / den;
-  return [1 - v - w, v, w];
-}
-
-/** The state of the paint leaf a point lies in. The point is given in barycentric coordinates of the face. */
-function stateAt(node, point) {
-  let corners = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-  while (node.kind === 'split') {
-    const kids = splitCorners(corners, node);
-    let best = 0, score = -Infinity;
-    kids.forEach((k, i) => {
-      const s = Math.min(...barycentric(point, k[0], k[1], k[2]));
-      if (s > score) { best = i; score = s; }
-    });
-    corners = kids[best]; node = node.children[best];
+/**
+ * The common refinement of two paint trees on one triangle (colour, support and seam
+ * trees all use the same subdivision), with leaves combine(a, b); null when the two
+ * split one triangle in different ways, which no single tree can describe.
+ */
+function mergeTrees(a, b, combine) {
+  if (a.kind === 'leaf' && b.kind === 'leaf') return {kind: 'leaf', state: combine(a.state, b.state)};
+  if (a.kind !== 'leaf' && b.kind !== 'leaf' && !sameSplit(a, b)) return null;
+  const like = a.kind === 'leaf' ? b : a, children = [];
+  for (let i = 0; i < like.children.length; i++) {
+    const kid = mergeTrees(a.kind === 'leaf' ? a : a.children[i], b.kind === 'leaf' ? b : b.children[i], combine);
+    if (!kid) return null;
+    children.push(kid);
   }
-  return node.state;
+  return {kind: 'split', sides: like.sides, specialSide: like.specialSide, children};
 }
+
+const mapLeaves = (node, f) => (node.kind === 'leaf' ? {kind: 'leaf', state: f(node.state)}
+  : {kind: 'split', sides: node.sides, specialSide: node.specialSide, children: node.children.map(c => mapLeaves(c, f))});
+const digits = n => String(n).length;
 
 /** UTF-8 in chunks, so that a member larger than one string can be written; refuses past the byte limit. */
 function memberWriter(limit, refuse) {
@@ -186,10 +175,10 @@ function memberWriter(limit, refuse) {
  * Write built-in colour recipes into an exported Snapmaker project (see the module
  * note). `recipes` is the planner's list, `id` = shade id. Rewrites `entries` in place
  * and returns the record also written to BUILT_IN_PATH; on a refusal nothing is changed.
- * `maxMemberBytes` overrides MAX_MEMBER_BYTES (for tests).
+ * `maxMemberBytes` overrides MAX_MEMBER_BYTES and `band` replaces bandMesh (both for tests).
  */
 export function applyBuiltInColours(entries, {target, reels, recipes, backingSlot, depth = BUILT_IN_DEPTH.standard, layerHeight,
-  firstLayer = BUILT_IN_FIRST_LAYER, maxMemberBytes = MAX_MEMBER_BYTES} = {}) {
+  firstLayer = BUILT_IN_FIRST_LAYER, maxMemberBytes = MAX_MEMBER_BYTES, band = bandMesh} = {}) {
   const problem = builtInProblem({target, reels, backingSlot, depth, layerHeight});
   if (problem) throw Error(problem);
   if (!(typeof firstLayer === 'number' && Number.isFinite(firstLayer) && firstLayer > 0))
@@ -221,6 +210,10 @@ export function applyBuiltInColours(entries, {target, reels, recipes, backingSlo
       const n = mesh ? count(body, '<triangle') - count(body, '<triangles') : 0;
       triangles += n;
       const key = `${member}#${id}`, printed = mesh && n > 0 && printedPart(id);
+      // A part that prints nothing (support blocker or enforcer, modifier, cutter) gets no
+      // bands, so colour paint on it would keep a shade id that names no reel.
+      if (mesh && !printed && /\s(?:slic3rpe:)?(?:paint_color|mmu_segmentation)="[0-9A-Fa-f]+"/.test(body))
+        throw Error(`"${parts.get(id)?.name ?? `object ${id}`}" has colour paint on a part that prints nothing, which built-in colours cannot carry. Remove that paint and export again.`);
       objects.set(key, {member, id, mesh, comps, printed, name: parts.get(id)?.name ?? `object ${id}`, vertices: printed ? readVertices(body, parts.get(id).objectName) : null});
     }
     memberTriangles.set(member, triangles);
@@ -269,7 +262,6 @@ export function applyBuiltInColours(entries, {target, reels, recipes, backingSlo
   const codes = new Map();
   const leafCode = state => { if (!codes.has(state)) codes.set(state, paint.encode({kind: 'leaf', state})); return codes.get(state); };
   const layerReels = new Map();     // layer -> bit mask of reels painted on it
-  const otherPaint = {copied: 0, splitByPiece: 0};
   let trianglesAfter = trianglesBefore;
   for (const member of members) {
     const keys = printed.filter(([, o]) => o.member === member);
@@ -292,8 +284,8 @@ export function applyBuiltInColours(entries, {target, reels, recipes, backingSlo
 
       // Triangles, read one after another so that nothing between them goes unseen.
       const open = body.indexOf('<triangles'), close = body.lastIndexOf('</triangles>');
-      const from = body.indexOf('>', open) + 1, faces = [], extras = [];
-      let paintName = 'paint_color', at = from, sep = null;
+      const from = body.indexOf('>', open) + 1, faces = [], colourNames = [], others = [], otherNames = [];
+      let at = from, sep = null;
       TRIANGLE_STEP.lastIndex = from;
       for (let tm; at < close && (tm = TRIANGLE_STEP.exec(body)) && TRIANGLE_STEP.lastIndex <= close; at = TRIANGLE_STEP.lastIndex) {
         if (sep === null) sep = tm[0].slice(0, tm[0].indexOf('<'));
@@ -311,46 +303,101 @@ export function applyBuiltInColours(entries, {target, reels, recipes, backingSlo
           throw Error(`"${name}" has a triangle that does not name three of its vertices, so built-in colours stopped.`);
         const colour = [...COLOUR_ATTRS].filter(k => k in values);
         if (colour.length !== 1 || !values[colour[0]]) throw Error(`"${name}" has a face with no colour after the outer paint step, so built-in colours stopped.`);
-        paintName = colour[0];
         let node;
         try { node = paint.decode(values[colour[0]]); } catch (error) { throw Error(`"${name}" has paint that cannot be read (${error.message}).`); }
         for (const s of paint.walkStates(node)) {
           if (s === 0) throw Error(`"${name}" has a face with no colour after the outer paint step, so built-in colours stopped.`);
           if (!byId.has(s)) throw Error(`Shade ${s} has no built-in colour recipe, so "${name}" cannot be coloured.`);
         }
-        // Seam and support paint: a whole-face value goes on every piece; a split one is
-        // read at each piece's centre. Anything else would be lost, so it is refused.
-        let whole = '', splits = null;
+        // Seam and support paint (and any other per-face paint tree). An empty value is no paint.
+        let trees = null;
         for (const k of other) {
           if (!OTHER_PAINT.test(k)) throw Error(`"${name}" has triangle data (${k}) that built-in colours cannot carry through the layer cuts.`);
-          if (!values[k]) { whole += ` ${k}=""`; continue; }
+          if (!values[k]) continue;
           let tree;
           try { tree = paint.decode(values[k]); } catch (error) { throw Error(`"${name}" has ${k} paint that cannot be read (${error.message}).`); }
-          if (tree.kind === 'leaf') { whole += ` ${k}="${values[k]}"`; otherPaint.copied += 1; } else { (splits ||= []).push({k, tree}); otherPaint.splitByPiece += 1; }
+          if (!otherNames.includes(k)) otherNames.push(k);
+          (trees ||= new Map()).set(k, tree);
         }
         faces.push({v: ix, paint: node});
-        if (whole || splits) extras[f] = {whole, splits};
+        colourNames[f] = colour[0];
+        if (trees) others[f] = trees;
       }
       const tail = body.slice(at, close);
       if (tail.trim()) throw Error(`"${name}" has something in its triangle list that is not a triangle, so built-in colours stopped.`);
       if (faces.length !== count(body, '<triangle', from, close)) throw Error(`"${name}" has a triangle that cannot be read, so built-in colours stopped.`);
 
-      // A lower bound on the member's size, before the cut makes anything.
+      // Each face's colour, support and seam trees become one tree whose leaves stand for
+      // (shade, support state, seam state, ...): bandMesh cuts that, so every piece lies in
+      // one leaf of each, exactly.
+      const tuples = [null], keyOf = new Map(), leafOf = [];
+      const keyFor = tuple => {
+        const text = tuple.join(',');
+        let k = keyOf.get(text);
+        if (k === undefined) { k = tuples.push(tuple) - 1; keyOf.set(text, k); leafOf[k] = {kind: 'leaf', state: k}; }
+        return k;
+      };
+      const none = otherNames.map(() => 0), noPaint = {kind: 'leaf', state: 0};
+      faces.forEach((face, f) => {
+        const trees = others[f];
+        if (!trees && face.paint.kind === 'leaf') { face.paint = leafOf[keyFor([face.paint.state, ...none])]; return; }
+        let tree = mapLeaves(face.paint, s => [s]);
+        for (const k of otherNames) {
+          tree = mergeTrees(tree, trees?.get(k) ?? noPaint, (tuple, s) => [...tuple, s]);
+          if (!tree) throw Error(`"${name}" has colour, support or seam paint that divides one triangle in different ways. Built-in colours cannot combine them exactly; repaint so that they match, or remove the support or seam paint there, and export again.`);
+        }
+        face.paint = mapLeaves(tree, keyFor);
+      });
+      const extraOf = tuples.map(tuple => (tuple ? otherNames.map((k, i) => (tuple[i + 1] ? ` ${k}="${leafCode(tuple[i + 1])}"` : '')).join('') : ''));
+
+      // A lower bound on the member's size, before the cut makes anything. Each layer a face
+      // touches is a convex strip whose outline holds at least the points where its edges
+      // cross the strip's two planes and its corners strictly inside, so it is cut into at
+      // least that many points less two triangles (and at least one), none with an index
+      // below the face's smallest. Each boundary an edge crosses makes one new vertex, at
+      // the very point bandMesh computes (from the edge's lower index), so those vertex
+      // lines are counted exactly. Split leaves only add to both.
       // New vertices go straight after the last existing one (or after the opening tag).
       const vOpen = body.indexOf('<vertices'), vClose = body.indexOf('</vertices>'), vLast = body.lastIndexOf('<vertex', vClose);
       const vertexEnd = vLast === vOpen ? body.indexOf('>', vOpen) + 1 : body.indexOf('>', vLast) + 1;
       const vFirst = body.indexOf('<vertex', vOpen + 9);
       const vsep = vLast === vOpen ? '' : body.slice(body.lastIndexOf('>', vFirst) + 1, vFirst);
-      let spans = 0;
-      for (const face of faces) {
-        const zs = face.v.map(i => zOf(pts[i]));
-        spans += layerIndex(Math.max(...zs), first, height) - layerIndex(Math.min(...zs), first, height) + 1;
+      const tsep = sep ?? '', pos = new Float64Array(nv), zv = new Float64Array(nv);
+      for (let j = 0; j < nv; j++) { zv[j] = zOf(pts[j]); pos[j] = layerPosition(zv[j], first, height); }
+      const crossed = (p, q, k) => { const lo = Math.min(pos[p], pos[q]), hi = Math.max(pos[p], pos[q]); return k >= Math.floor(lo / 2) + 1 && k <= Math.ceil(hi / 2) - 1; };
+      let pieces = 0, bytes = 0;
+      const edges = new Float64Array(3 * faces.length);
+      faces.forEach((face, f) => {
+        const [a, b, c] = face.v, lo = Math.min(pos[a], pos[b], pos[c]), hi = Math.max(pos[a], pos[b], pos[c]);
+        const low = Math.floor(lo / 2) + 1, high = Math.max(low, Math.ceil(hi / 2));
+        let n = 0;
+        for (let layer = low; layer <= high; layer++) {
+          let points = 0;
+          for (let k = 0; k < 3; k++) {
+            const p = face.v[k], q = face.v[(k + 1) % 3];
+            points += crossed(p, q, layer - 1) + crossed(p, q, layer) + (pos[p] === 2 * layer - 1);
+          }
+          n += Math.max(1, points - 2);
+        }
+        pieces += n;
+        bytes += n * (`${tsep}<triangle v1="" v2="" v3="" ${colourNames[f]}=""/>`.length + 1 + 3 * digits(Math.min(a, b, c)));
+        for (let k = 0; k < 3; k++) { const p = face.v[k], q = face.v[(k + 1) % 3]; edges[3 * f + k] = p < q ? p * 2 ** 26 + q : q * 2 ** 26 + p; }
+      });
+      edges.sort();
+      const vertexLine = `${vsep}<vertex x="" y="" z=""/>`.length;
+      for (let i = 0; i < edges.length; i++) {
+        if (i && edges[i] === edges[i - 1]) continue;
+        const p = Math.floor(edges[i] / 2 ** 26), q = edges[i] - p * 2 ** 26, P = pts[p], Q = pts[q];
+        for (let k = Math.floor(Math.min(pos[p], pos[q]) / 2) + 1, top = Math.ceil(Math.max(pos[p], pos[q]) / 2) - 1; k <= top; k++) {
+          const s = (layerPlane(k, first, height) - zv[p]) / (zv[q] - zv[p]);
+          bytes += vertexLine + String(P[0] + s * (Q[0] - P[0])).length + String(P[1] + s * (Q[1] - P[1])).length + String(P[2] + s * (Q[2] - P[2])).length;
+        }
       }
-      const lower = writer.size() + (bodyAt + vertexEnd - last) + spans * MIN_TRIANGLE_BYTES + (text.length - (bodyAt + close));
-      if (lower > maxMemberBytes) throw tooLarge(need - faces.length + spans);
+      const lower = writer.size() + (bodyAt + vertexEnd - last) + bytes + (text.length - (bodyAt + close));
+      if (lower > maxMemberBytes) throw tooLarge(need - faces.length + pieces);
 
       let banded;
-      try { banded = bandMesh(pts, faces, {zOf, first, height}); } catch (error) { throw Error(`"${name}" could not be cut into layers (${error.message}).`); }
+      try { banded = band(pts, faces, {zOf, first, height}); } catch (error) { throw Error(`"${name}" could not be cut into layers (${error.message}).`); }
       need += banded.pieces.length - faces.length;
       trianglesAfter += banded.pieces.length - faces.length;
 
@@ -369,27 +416,17 @@ export function applyBuiltInColours(entries, {target, reels, recipes, backingSlo
         return [normals[3 * f], normals[3 * f + 1], normals[3 * f + 2]];
       };
 
-      // Write: the vertex list as it was, the new vertices after it, then the pieces.
+      // Write: the vertex list as it was, the new vertices after it, then the pieces, each
+      // under its own face's colour attribute name.
       writer.push(text.slice(last, bodyAt + vertexEnd));
       for (let j = nv; j < out.length; j++) writer.push(`${vsep}<vertex x="${out[j][0]}" y="${out[j][1]}" z="${out[j][2]}"/>`);
       writer.push(text.slice(bodyAt + vertexEnd, bodyAt + from));
-      const tsep = sep ?? '';
       for (const piece of banded.pieces) {
         const [a, b, c] = piece.v, za = zs[a], zb = zs[b], zc = zs[c];
         const layer = pieceLayer({normal: normalOf(piece.face), zHigh: Math.max(za, zb, zc), zLow: Math.min(za, zb, zc), layer: piece.layer}, first, height);
-        const sequence = byId.get(piece.state).sequence, reel = sequence[layer % sequence.length];
+        const sequence = byId.get(tuples[piece.state][0]).sequence, reel = sequence[layer % sequence.length];
         layerReels.set(layer, (layerReels.get(layer) || 0) | (1 << (reel - 1)));
-        let extra = '';
-        const e = extras[piece.face];
-        if (e) {
-          extra = e.whole;
-          if (e.splits) {
-            const corners = faces[piece.face].v.map(i => out[i]), centre = [0, 1, 2].map(k => (out[a][k] + out[b][k] + out[c][k]) / 3);
-            const where = barycentric(centre, corners[0], corners[1], corners[2]);
-            for (const {k, tree} of e.splits) { const s = stateAt(tree, where); if (s) extra += ` ${k}="${leafCode(s)}"`; }
-          }
-        }
-        writer.push(`${tsep}<triangle v1="${a}" v2="${b}" v3="${c}" ${paintName}="${leafCode(reel)}"${extra}/>`);
+        writer.push(`${tsep}<triangle v1="${a}" v2="${b}" v3="${c}" ${colourNames[piece.face]}="${leafCode(reel)}"${extraOf[piece.state]}/>`);
       }
       last = bodyAt + at;
     }
@@ -415,8 +452,15 @@ export function applyBuiltInColours(entries, {target, reels, recipes, backingSlo
   if (Array.isArray(cfg.different_settings_to_system) && typeof cfg.different_settings_to_system[0] === 'string')
     cfg.different_settings_to_system[0] = [...new Set([...cfg.different_settings_to_system[0].split(';').filter(Boolean), ...Object.keys(settings)])].sort().join(';');
   work.set(PROJECT, enc.encode(JSON.stringify(cfg, null, 2)));
-  // A per-object layer height would override the global one and move every band.
-  work.set(SETTINGS, enc.encode(dec.decode(work.get(SETTINGS)).replace(/(<metadata(?: type="[^"]*")? key="layer_height" value=")[^"]*(")/g, `$1${height}$2`)));
+  // A per-object layer height would override the global one and move every band. Parts
+  // that print nothing carry a shade id as their filament from the export; they take the
+  // backing reel, so that no filament number beyond the reels is left.
+  let modelSettings = dec.decode(work.get(SETTINGS)).replace(/(<metadata(?: type="[^"]*")? key="layer_height" value=")[^"]*(")/g, `$1${height}$2`);
+  modelSettings = modelSettings.replace(/<part\b([^>]*)>([\s\S]*?)<\/part>/g, (whole, partAttrs, body) => ((attr(partAttrs, 'subtype') || 'normal_part') === 'normal_part' ? whole
+    : `<part${partAttrs}>${body.replace(/(<metadata(?: type="[^"]*")? key="extruder" value=")(\d+)(")/g, (all, a, value, c) => (Number(value) ? `${a}${backingSlot}${c}` : all))}</part>`));
+  for (const m of modelSettings.matchAll(/<metadata(?: type="[^"]*")? key="extruder" value="(\d+)"/g))
+    if (Number(m[1]) > reels.length) throw Error(`The project still names filament ${m[1]}, beyond the ${reels.length} reels, so built-in colours stopped.`);
+  work.set(SETTINGS, enc.encode(modelSettings));
   work.delete(HEIGHTS_PROFILE);
 
   // ---- the record ----
@@ -428,7 +472,7 @@ export function applyBuiltInColours(entries, {target, reels, recipes, backingSlo
     recipes: [...byId.values()].sort((a, b) => a.id - b.id).map(r => ({id: r.id, sequence: [...r.sequence], counts: Array.isArray(r.counts) ? [...r.counts] : [], color: String(r.color || ''), estimated: true})),
     triangles: {before: trianglesBefore, after: trianglesAfter}, layers,
     reelsPerLayer: {max: perLayer.length ? Math.max(...perLayer) : 0, mean: perLayer.length ? Math.round(1000 * perLayer.reduce((a, b) => a + b, 0) / perLayer.length) / 1000 : 0},
-    seamAndSupportPaint: otherPaint, settings, validation: {sliced: false, printed: false}, note: BUILT_IN_NOTE};
+    settings, validation: {sliced: false, printed: false}, note: BUILT_IN_NOTE};
   work.set(BUILT_IN_PATH, enc.encode(JSON.stringify(report, null, 2)));
 
   for (const name of [...entries.keys()]) if (!work.has(name)) entries.delete(name);

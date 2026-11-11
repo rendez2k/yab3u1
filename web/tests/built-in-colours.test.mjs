@@ -5,6 +5,7 @@ import {createHash} from 'node:crypto';
 import * as paint from '../shared/paint.js';
 import {layerIndex} from '../shared/layerBands.js';
 import {pieceLayer} from '../shared/flatFaceRule.js';
+import {bandMesh} from '../shared/paintBands.js';
 import {applyBuiltInColours, builtInProblem, BUILT_IN_PATH, BUILT_IN_DEPTH, BUILT_IN_LAYERS, BUILT_IN_FIRST_LAYER} from '../shared/builtInColours.js';
 import {readZip} from '../zip.js';
 import {readProject, exportProject, analyse} from '../shared/project.js';
@@ -24,7 +25,7 @@ const NS = 'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xm
 const SPLIT = {kind: 'split', sides: 1, specialSide: 0, children: [{kind: 'leaf', state: 2}, {kind: 'leaf', state: 0}]};
 
 /** The fixture: object "Figure" with a Body (shade 1) and a Hat (shade 2) wall from z = 0 to z = 1, and a modifier. */
-function project({bodyExtra = '', supportsOnSplit = '', items = '<item objectid="10" transform="1 0 0 0 1 0 0 0 1 100 100 0" printable="1"/>', extraObjects = '', extraSettings = '', extraParts = ''} = {}) {
+function project({bodyExtra = '', supportsOnSplit = '', t1 = null, hatPaint = '', items = '<item objectid="10" transform="1 0 0 0 1 0 0 0 1 100 100 0" printable="1"/>', extraObjects = '', extraSettings = '', extraParts = ''} = {}) {
   const main = `<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" ${NS}><resources>
 <object id="10" type="model"><components><component p:path="/${MEMBER}" objectid="1" transform="1 0 0 0 1 0 0 0 1 0 0 0"/><component p:path="/${MEMBER}" objectid="2"/><component p:path="/${MEMBER}" objectid="3"/></components></object>${extraObjects}
 </resources><build>${items}</build></model>`;
@@ -38,7 +39,7 @@ function project({bodyExtra = '', supportsOnSplit = '', items = '<item objectid=
  <vertex x="2" y="0" z="1"/>
 </vertices><triangles>
  <triangle v1="0" v2="1" v3="2"/>
- <triangle v1="0" v2="2" v3="3" paint_color="${paint.encode(SPLIT)}" paint_seam="4"${supportsOnSplit}/>
+ <triangle v1="0" v2="2" v3="3" ${t1 ?? `paint_color="${paint.encode(SPLIT)}" paint_seam="4"`}${supportsOnSplit}/>
  <triangle v1="1" v2="4" v3="5" paint_color="${leaf(2)}" paint_supports="8"${bodyExtra}/>
 </triangles></mesh></object>
 <object id="2" type="model"><mesh><vertices>
@@ -47,7 +48,7 @@ function project({bodyExtra = '', supportsOnSplit = '', items = '<item objectid=
  <vertex x="4" y="0" z="1"/>
  <vertex x="3" y="0" z="1"/>
 </vertices><triangles>
- <triangle v1="0" v2="1" v3="2"/>
+ <triangle v1="0" v2="1" v3="2"${hatPaint}/>
  <triangle v1="0" v2="2" v3="3"/>
 </triangles></mesh></object>
 <object id="3" type="model"><mesh><vertices>
@@ -252,17 +253,168 @@ test('seam and support paint survive on every strip', () => {
     assert.equal(attrOf(t.attrs, 'paint_seam'), t.leaf.face === 1 ? '4' : undefined);
     assert.equal(attrOf(t.attrs, 'paint_supports'), t.leaf.face === 2 ? '8' : undefined);
   }
-  assert.deepEqual(report.seamAndSupportPaint, {copied: 2, splitByPiece: 0});
+  assert.equal('seamAndSupportPaint' in report, false);
 });
 
-test('a split support tree is resolved piece by piece by where each piece lies', () => {
-  // Support enforcer on the same half of face 1 as its shade-2 paint, nothing on the other half.
-  const tree = paint.encode({kind: 'split', sides: 1, specialSide: 0, children: [{kind: 'leaf', state: 1}, {kind: 'leaf', state: 0}]});
-  const entries = project({supportsOnSplit: ` paint_supports="${tree}"`});
-  const report = applyBuiltInColours(entries, opts);
-  for (const t of strips(entries).filter(s => s.id === '1' && s.leaf.face === 1))
-    assert.equal(attrOf(t.attrs, 'paint_supports'), t.leaf.shade === 2 ? leaf(1) : undefined);
-  assert.deepEqual(report.seamAndSupportPaint, {copied: 2, splitByPiece: 1});
+const node = (sides, kids, specialSide = 0) => ({kind: 'split', sides, specialSide, children: kids.map(k => (typeof k === 'number' ? {kind: 'leaf', state: k} : k))});
+const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
+/** Whether a point lies in a triangle of any plane (barycentric, small tolerance). */
+function within(q, [a, b, c]) {
+  const v0 = sub(b, a), v1 = sub(c, a), v2 = sub(q, a), dot = (u, w) => u[0] * w[0] + u[1] * w[1] + u[2] * w[2];
+  const d00 = dot(v0, v0), d01 = dot(v0, v1), d11 = dot(v1, v1), d20 = dot(v2, v0), d21 = dot(v2, v1), den = d00 * d11 - d01 * d01;
+  const v = (d11 * d20 - d01 * d21) / den, w = (d00 * d21 - d01 * d20) / den;
+  return Math.min(1 - v - w, v, w) > -1e-9;
+}
+
+/** A 10 x 10 mm flat underside at z = 5 (two faces facing down); `first` holds the first face's extra attributes. */
+function underside(first) {
+  const main = `<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" ${NS}><resources><object id="10" type="model"><components><component p:path="/3D/Objects/under.model" objectid="1"/></components></object></resources><build><item objectid="10" transform="1 0 0 0 1 0 0 0 1 100 100 0" printable="1"/></build></model>`;
+  const member = `<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" ${NS}><resources><object id="1" type="model"><mesh><vertices><vertex x="0" y="0" z="5"/><vertex x="10" y="10" z="5"/><vertex x="10" y="0" z="5"/><vertex x="0" y="10" z="5"/></vertices><triangles>`
+    + `<triangle v1="0" v2="1" v3="2"${first}/><triangle v1="0" v2="3" v3="1"/></triangles></mesh></object></resources><build/></model>`;
+  const settings = '<config><object id="10"><metadata key="name" value="Shelf"/><metadata key="extruder" value="2"/><part id="1" subtype="normal_part"><metadata key="name" value="Shelf"/><metadata key="extruder" value="2"/></part></object></config>';
+  const cfg = {filament_colour: CMYW.map(r => r.color + 'FF'), wall_loops: '2', different_settings_to_system: ['', '', '', '', '', '']};
+  return new Map([['3D/3dmodel.model', enc.encode(main)], ['3D/Objects/under.model', enc.encode(member)],
+    ['Metadata/model_settings.config', enc.encode(settings)], ['Metadata/project_settings.config', enc.encode(JSON.stringify(cfg))]]);
+}
+
+test('a support enforcer on a quarter of a flat underside keeps exactly that quarter', () => {
+  const U0 = [[0, 0, 5], [10, 10, 5], [10, 0, 5]], quarter = [U0[0], mid(U0[0], U0[1]), mid(U0[2], U0[0])];
+  const entries = underside(` paint_supports="${paint.encode(node(3, [1, 0, 0, 0]))}"`);
+  applyBuiltInColours(entries, opts);
+  const pieces = triangles(objectsOf(dec.decode(entries.get('3D/Objects/under.model'))).get('1'));
+  const enforced = pieces.filter(t => attrOf(t.attrs, 'paint_supports') !== undefined);
+  assert.ok(enforced.length >= 1);
+  for (const t of enforced) {
+    assert.equal(attrOf(t.attrs, 'paint_supports'), leaf(1));
+    assert.ok(within(centroid(t.p), quarter), 'support only inside the painted quarter');
+  }
+  for (const t of pieces.filter(t => !enforced.includes(t))) assert.ok(!within(centroid(t.p), quarter), 'no unsupported piece inside the quarter');
+  const got = enforced.reduce((a, t) => a + area(t.p), 0);
+  assert.ok(Math.abs(got - area(quarter)) < 1e-9, `support area ${area(quarter)} kept (got ${got})`);
+  assert.ok(Math.abs(pieces.reduce((a, t) => a + area(t.p), 0) - 100) < 1e-9);
+});
+
+test('a seam split finer than the colour split keeps its own area', () => {
+  // Colour: face 1 halved (shade 2 | shade 1). Seam: the shade-2 half split four ways, the child at its second
+  // corner painted; that child's inner side is slanted, so no layer cut follows it.
+  const seam = paint.encode(node(1, [node(3, [0, 1, 0, 0]), 0]));
+  const entries = project({t1: `paint_color="${paint.encode(SPLIT)}" paint_seam="${seam}"`});
+  applyBuiltInColours(entries, opts);
+  const half = LEAVES[1][1].tri, corner = [mid(half[0], half[1]), half[1], mid(half[1], half[2])];
+  const all = strips(entries).filter(t => t.id === '1'), seamed = all.filter(t => attrOf(t.attrs, 'paint_seam') !== undefined);
+  assert.ok(seamed.length >= 1);
+  for (const t of seamed) { assert.equal(attrOf(t.attrs, 'paint_seam'), leaf(1)); assert.ok(within(centroid(t.p), corner)); }
+  for (const t of all.filter(t => !seamed.includes(t))) assert.ok(!within(centroid(t.p), corner));
+  const got = seamed.reduce((a, t) => a + area(t.p), 0);
+  assert.ok(Math.abs(got - area(corner)) < 1e-9, `seam area ${area(corner)} kept (got ${got})`);
+  // The colours are unchanged by the seam split.
+  for (const t of all) {
+    const sequence = RECIPES[t.shadeBefore - 1].sequence;
+    const layer = pieceLayer({normal: cross(sub(t.p[1], t.p[0]), sub(t.p[2], t.p[0])), zHigh: t.zHigh, zLow: t.zLow, layer: layerIndex(t.zMid, 0.2, 0.1)}, 0.2, 0.1);
+    assert.equal(t.state, sequence[layer % sequence.length]);
+  }
+});
+
+test('a split colour face with a whole-face support value carries it on every piece', () => {
+  const entries = project({supportsOnSplit: ' paint_supports="8"'});
+  applyBuiltInColours(entries, opts);
+  const face1 = strips(entries).filter(t => t.id === '1' && t.leaf.face === 1);
+  assert.ok(face1.length > 2);
+  for (const t of face1) assert.equal(attrOf(t.attrs, 'paint_supports'), '8');
+  assert.ok(Math.abs(face1.reduce((a, t) => a + area(t.p), 0) - 0.5) < 1e-9);
+});
+
+test('colour, support and seam split the same face in different ways: refused by name', () => {
+  const t1 = `paint_color="${paint.encode(SPLIT)}" paint_supports="${paint.encode(node(3, [1, 0, 0, 0]))}" paint_seam="${paint.encode(node(2, [1, 0, 0], 1))}"`;
+  const entries = project({t1}), before = snapshot(entries);
+  assert.throws(() => applyBuiltInColours(entries, opts), /"Figure" has colour, support or seam paint that divides one triangle in different ways/);
+  assert.deepEqual(snapshot(entries), before);
+});
+
+test('a closed solid with split support paint stays closed by vertex index', () => {
+  // A 2 x 2 x 1 mm box; its underside carries a support split two levels deep.
+  const v = [[0, 0, 0], [2, 0, 0], [2, 2, 0], [0, 2, 0], [0, 0, 1], [2, 0, 1], [2, 2, 1], [0, 2, 1]];
+  const f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+  const support = paint.encode(node(3, [1, node(1, [0, 1]), 0, 0]));
+  const entries = underside('');
+  entries.set('3D/Objects/under.model', enc.encode(`<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" ${NS}><resources><object id="1" type="model"><mesh><vertices>${v.map(p => `<vertex x="${p[0]}" y="${p[1]}" z="${p[2]}"/>`).join('')}</vertices><triangles>`
+    + f.map((t, i) => `<triangle v1="${t[0]}" v2="${t[1]}" v3="${t[2]}"${i === 0 ? ` paint_supports="${support}"` : ''}/>`).join('') + '</triangles></mesh></object></resources><build/></model>'));
+  applyBuiltInColours(entries, opts);
+  const body = objectsOf(dec.decode(entries.get('3D/Objects/under.model'))).get('1');
+  const tris = [...body.matchAll(/<triangle\b([^>]*?)\/>/g)].map(m => ['v1', 'v2', 'v3'].map(k => Number(attrOf(m[1], k))));
+  const edges = new Map();
+  for (const t of tris) for (let k = 0; k < 3; k++) { const a = t[k], b = t[(k + 1) % 3], key = a < b ? `${a}-${b}` : `${b}-${a}`; edges.set(key, (edges.get(key) || 0) + 1); }
+  assert.ok(tris.length > 12);
+  assert.deepEqual([...new Set(edges.values())], [2], 'every edge is shared by exactly two pieces');
+  const pieces = triangles(body), F0 = [v[0], v[2], v[1]];
+  const enforcedArea = pieces.filter(t => attrOf(t.attrs, 'paint_supports') === leaf(1)).reduce((a, t) => a + area(t.p), 0);
+  assert.ok(Math.abs(enforcedArea - area(F0) * (1 / 4 + 1 / 8)) < 1e-9, `got ${enforcedArea}`);
+});
+
+test('each piece is written under its own face\'s colour attribute name', () => {
+  const entries = project({hatPaint: ` mmu_segmentation="${leaf(2)}"`});
+  applyBuiltInColours(entries, opts);
+  const objects = objectsOf(dec.decode(entries.get(MEMBER)));
+  const hat = [...objects.get('2').matchAll(/<triangle\b([^>]*?)\/>/g)].map(m => m[1]);
+  const named = hat.map(a => /\smmu_segmentation="/.test(a)), plain = hat.map(a => /\spaint_color="/.test(a));
+  assert.ok(named.some(Boolean) && plain.some(Boolean));
+  hat.forEach((a, i) => assert.ok(named[i] !== plain[i], 'one colour attribute per piece'));
+  // The pieces under the old name are exactly those of the first Hat face.
+  const geometry = triangles(objects.get('2').replace(/mmu_segmentation=/g, 'paint_color='));
+  geometry.forEach((t, i) => assert.equal(named[i], inside(centroid(t.p), LEAVES[2][0].tri)));
+  for (const a of [...objects.get('1').matchAll(/<triangle\b([^>]*?)\/>/g)].map(m => m[1])) assert.match(a, /\spaint_color="/);
+});
+
+test('support, negative and modifier parts never keep a shade id as their filament', () => {
+  const extraParts = '<part id="5" subtype="support_blocker"><metadata key="name" value="No supports"/><metadata key="extruder" value="6"/></part>'
+    + '<part id="6" subtype="negative_part"><metadata key="name" value="Hole"/><metadata key="extruder" value="1"/></part>';
+  const extraMesh = '<object id="5" type="model"><mesh><vertices><vertex x="0" y="3" z="0"/><vertex x="1" y="3" z="0"/><vertex x="1" y="3" z="1"/></vertices><triangles><triangle v1="0" v2="1" v3="2"/></triangles></mesh></object>'
+    + '<object id="6" type="model"><mesh><vertices><vertex x="0" y="4" z="0"/><vertex x="1" y="4" z="0"/><vertex x="1" y="4" z="1"/></vertices><triangles><triangle v1="0" v2="1" v3="2"/></triangles></mesh></object>';
+  const make = (mesh = extraMesh) => {
+    const entries = project({extraParts});
+    entries.set(MEMBER, enc.encode(dec.decode(entries.get(MEMBER)).replace('</resources>', mesh + '</resources>')));
+    entries.set('3D/3dmodel.model', enc.encode(dec.decode(entries.get('3D/3dmodel.model')).replace('objectid="3"/>', `objectid="3"/><component p:path="/${MEMBER}" objectid="5"/><component p:path="/${MEMBER}" objectid="6"/>`)));
+    return entries;
+  };
+  const entries = make();
+  applyBuiltInColours(entries, opts);
+  const settings = dec.decode(entries.get('Metadata/model_settings.config'));
+  const extruders = [...settings.matchAll(/<metadata key="extruder" value="(\d+)"\/>/g)].map(m => Number(m[1]));
+  assert.ok(extruders.length >= 5 && extruders.every(e => e >= 1 && e <= 4), `extruders ${extruders}`);
+  assert.match(settings, /<part id="5" subtype="support_blocker"><metadata key="name" value="No supports"\/><metadata key="extruder" value="4"\/>/);
+  assert.match(settings, /<part id="6" subtype="negative_part"><metadata key="name" value="Hole"\/><metadata key="extruder" value="4"\/>/);
+  assert.match(settings, /<part id="3" subtype="modifier_part"><metadata key="name" value="Strong zone"\/><\/part>/, 'absent stays absent');
+  // Colour paint on a part that prints nothing would keep a shade id: refused by name.
+  const painted = extraMesh.replace('<triangle v1="0" v2="1" v3="2"/></triangles></mesh></object><object id="6"', `<triangle v1="0" v2="1" v3="2" paint_color="${leaf(6)}"/></triangles></mesh></object><object id="6"`);
+  assert.throws(() => applyBuiltInColours(make(painted), opts), /"No supports" has colour paint/);
+});
+
+/** A wall 40 mm round and 6 mm tall, in long thin faces, so that banding multiplies it many times. */
+function bigWall() {
+  const N = 48, R = 6, pts = [], tris = [];
+  for (let r = 0; r <= R; r++) for (let i = 0; i < N; i++) { const t = 2 * Math.PI * i / N; pts.push([+(20 * Math.cos(t)).toFixed(4), +(20 * Math.sin(t)).toFixed(4), r]); }
+  for (let r = 0; r < R; r++) for (let i = 0; i < N; i++) { const j = (i + 1) % N, a = r * N + i, b = r * N + j; tris.push([a, b, b + N], [a, b + N, a + N]); }
+  const entries = underside('');
+  entries.set('3D/Objects/under.model', enc.encode(`<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" ${NS}><resources><object id="1" type="model"><mesh><vertices>${pts.map(p => `<vertex x="${p[0]}" y="${p[1]}" z="${p[2]}"/>`).join('')}</vertices><triangles>`
+    + tris.map(t => `<triangle v1="${t[0]}" v2="${t[1]}" v3="${t[2]}"/>`).join('') + '</triangles></mesh></object></resources><build/></model>'));
+  return {entries, faces: tris.length};
+}
+
+test('a result far too large is refused before any cutting', () => {
+  const real = bigWall().entries;
+  applyBuiltInColours(real, {...opts, layerHeight: 0.08});
+  const size = real.get('3D/Objects/under.model').length;
+  let calls = 0;
+  const counting = (...args) => { calls += 1; return bandMesh(...args); };
+  // At 85 % of the real size the early bound already knows; 40 bytes a band would not have.
+  const limit = Math.floor(0.85 * size), {entries, faces} = bigWall();
+  const bands = faces * (layerIndex(1, 0.2, 0.08) + 1);
+  assert.ok(40 * bands < limit, 'the old bound would have let it through to the cut');
+  assert.throws(() => applyBuiltInColours(entries, {...opts, layerHeight: 0.08, maxMemberBytes: limit, band: counting}), /too large to export/);
+  assert.equal(calls, 0, 'bandMesh was not called');
+  // Just over the real size it goes through, calling bandMesh once.
+  applyBuiltInColours(bigWall().entries, {...opts, layerHeight: 0.08, maxMemberBytes: size + 1, band: counting});
+  assert.equal(calls, 1);
 });
 
 test('a mesh used twice at different tilts is refused by name', () => {
@@ -337,6 +489,7 @@ test('the record is an estimate, stripped of planner fields, and claims no measu
   assert.equal(record.layers, 9);
   assert.deepEqual(record.reelsPerLayer, {max: 2, mean: 1.444});
   assert.equal(record.triangles.before, 6); assert.equal(record.triangles.after, strips(entries).length + 1);
+  assert.deepEqual(Object.keys(record), ['schema', 'version', 'target', 'reels', 'backingSlot', 'outerDepth', 'layerHeight', 'firstLayer', 'recipes', 'triangles', 'layers', 'reelsPerLayer', 'settings', 'validation', 'note']);
 });
 
 test('nothing is silently dropped: unreadable triangles and unplaced parts are refused by name', () => {
