@@ -1,3 +1,7 @@
+## 2.6.90 — White squares show in the waiting figure
+
+- The waiting figure uses the model's colours, so a white filament drew a row of white squares on a white card and looked like a gap. Every square now has a faint outline.
+
 ## 2.6.89 — Baked colours no longer turns olive grey
 
 - With Baked colours on, a dark muted green could be replaced by a plain grey (equal parts cyan, magenta and yellow), because grey was numerically closer and has no hue for "Keep each colour's hue" to compare. Keeping hue now also marks down a blend that gives up most of a colour's saturation, so an olive stays a muted yellow-green.
