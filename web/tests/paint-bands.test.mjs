@@ -175,6 +175,27 @@ test('split paint over vertices on and beside the layer planes leaves no gap',()
     const total=out.pieces.reduce((s,piece)=>s+area(corners(out,piece)),0);
     const want=faces.reduce((s,f)=>s+area(f.v.map(i=>vertices[i])),0);
     assert.ok(Math.abs(total-want)<=1e-9*want,'no area is lost or doubled');
+    for(const piece of out.pieces)assert.ok(area(corners(out,piece))>0,`zero-area piece of face ${piece.face}`);
+  }
+});
+test('a flat top and bottom lying exactly on layer planes, beside split sides, give no zero-area piece',()=>{
+  // A closed square prism from boundary 2 to boundary 5. Split paint on the sides puts
+  // midpoints on the top and bottom edges, so the flat faces carry extra points on their sides.
+  const lo=0.2+2*0.12,hi=0.2+5*0.12,leaf=s=>({kind:'leaf',state:s});
+  const vertices=[[0,0,lo],[3,0,lo],[3,3,lo],[0,3,lo],[0,0,hi],[3,0,hi],[3,3,hi],[0,3,hi]];
+  const flat=[[4,5,6],[4,6,7],[0,2,1],[0,3,2]],sides=[];
+  for(let i=0;i<4;i++){const a=i,b=(i+1)%4;sides.push([a,b,b+4],[a,b+4,a+4]);}
+  for(const seed of [21,22,23]){
+    const faces=[...flat.map((v,i)=>({v,paint:i===1?randomPaint(seed+i,3):leaf(1)})),...sides.map((v,i)=>({v,paint:randomPaint(seed*31+i,2+i%3)}))];
+    const out=bandMesh(vertices,faces,{zOf:p=>p[2],first:0.2,height:0.12});
+    assert.equal(manifold(out.pieces),true,`seed ${seed}`);
+    for(const piece of out.pieces){
+      const t=corners(out,piece),n=normal(faces[piece.face].v.map(i=>vertices[i]));
+      assert.ok(area(t)>0,`zero-area piece ${JSON.stringify(t)} of face ${piece.face}`);
+      assert.ok(dot(normal(t),n)>0,`piece of face ${piece.face} is flipped`);
+    }
+    const total=out.pieces.reduce((s,piece)=>s+area(corners(out,piece)),0);
+    assert.ok(Math.abs(total-(2*9+4*3*0.36))<1e-9,'no area is lost or doubled');
   }
 });
 test('a side with two points on one plane and its far end off it leaves no gap',()=>{

@@ -361,6 +361,25 @@ What this shows:
   123, They Live 1,118 of 1,164, Flirty 16 of 877. Colour-only view: 4, 15, 10 and 16
   layers with another colour reel above 5%. These were not inspected.
 
+Zero-area pieces and repeated vertices, counted by the spike tool on the banded meshes
+(exact coordinates and an exactly zero cross product):
+- Test solid: none of either. Smallest piece 8.4e-9 mm².
+- Super Man: no repeated vertex. There is 1 zero-area piece, and it is the source's own
+  degenerate face (three collinear vertices), passed through uncut.
+- They Live: no zero-area piece. 147 new vertices repeat another vertex, and all 147 lie
+  on source edges between vertices that the source itself repeats (it has 180 coincident
+  vertex pairs along its open seams).
+- Flirty: no zero-area piece. 1 new vertex repeats another; it lies on two source edges
+  that coincide because the source has two vertices at the same point (Flirty has 11
+  such vertices).
+- Smallest pieces on the figurines: 1.2e-14 mm² on They Live and 4.7e-14 mm² on Flirty.
+  These are not zero, but they are far below anything the printer can make.
+- So `bandMesh` makes no repeated vertex and no zero-area piece except where the source
+  already has coincident vertices or a degenerate face.
+- These counts were re-run after the fix for flat strips on a plane (fix round 1). That
+  fix left all four banded meshes byte-identical (same model XML), so `--info` and the
+  slices above still apply.
+
 Not verified:
 - **Nothing was printed** and no slice was opened in the GUI. Print times are the
   slicer's estimates; tower grams are computed from the G-code.

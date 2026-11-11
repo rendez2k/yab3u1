@@ -16,6 +16,11 @@
 // All midpoints are registered in a first pass, before any crossing is made, so a
 // line's crossings know every point that already sits on a layer plane.
 //
+// New points are distinct from each other and from the input vertices as long as the
+// input has no coincident vertices and no degenerate (zero-area) faces. If it has, a
+// point made on one line can equal a point on another; pieces still meet by index, but
+// such duplicates, and zero-area pieces of a degenerate face, are possible.
+//
 // Pure geometry: no dependency beyond layerBands.js.
 import {layerPosition, layerPlane} from './layerBands.js';
 
@@ -155,7 +160,9 @@ export function bandMesh(vertices, faces, {zOf, first, height}) {
       }
       crossings.set(line, made);
     }
-    return typeof made === 'number' ? made + k - between(ps[a], ps[b])[0] : made.get(k);
+    const v = typeof made === 'number' ? made + k - between(ps[a], ps[b])[0] : made.get(k);
+    if (v === undefined) throw new Error(`Line ${a}-${b} has no crossing at boundary ${k}.`);
+    return v;
   };
 
   // ---- each leaf: its outline through every registered point, then its strips ----
@@ -175,9 +182,14 @@ export function bandMesh(vertices, faces, {zOf, first, height}) {
       };
       const list = onLine.get(line);
       if (list) {
-        const inside = list.filter(m => m.t > Math.min(ta, tb) && m.t < Math.max(ta, tb));
-        if (ta > tb) inside.reverse();
-        for (const m of inside) { reach(m.v); ringV.push(m.v); ringL.push(side); }
+        // The list is sorted by t: find the first point past the span's lower end, then walk.
+        const tLo = Math.min(ta, tb), tHi = Math.max(ta, tb);
+        let first = 0, last = list.length;
+        while (first < last) { const mid = (first + last) >> 1; if (list[mid].t <= tLo) first = mid + 1; else last = mid; }
+        let end = first;
+        while (end < list.length && list[end].t < tHi) end++;
+        if (ta < tb) for (let j = first; j < end; j++) { reach(list[j].v); ringV.push(list[j].v); ringL.push(side); }
+        else for (let j = end - 1; j >= first; j--) { reach(list[j].v); ringV.push(list[j].v); ringL.push(side); }
       }
       reach(c[(i + 1) % 3]);
     }
@@ -194,6 +206,11 @@ export function bandMesh(vertices, faces, {zOf, first, height}) {
         vs.push(ringV[j]);
         ls.push(ringL[j] | (p === lo ? LOWER : 0) | (p === hi ? UPPER : 0));
       }
+      // A strip whose every point is on one plane lies in that plane (a flat leaf on a
+      // boundary): the plane is then not a line of the polygon, so its label is dropped.
+      let all = -1;
+      for (const l of ls) all &= l;
+      if (all & (LOWER | UPPER)) for (let j = 0; j < ls.length; j++) ls[j] &= ~(LOWER | UPPER);
       triangulate(vs, ls, (a, b, d) => pieces.push({v: [a, b, d], face: f, state, layer}));
     }
   };
@@ -235,7 +252,8 @@ function triangulate(vs, ls, emit) {
     for (let b = 0; b < LABELS; b++) if (ls[i] & (1 << b)) count[b]--;
     stack.push(q, p);
   }
-  // Normally three points are left. More only when the polygon has no area at all
+  // Normally three points are left. More only when no ear can be cut, which happens
+  // only when every point shares one label, that is, the points all lie on one line
   // (a degenerate input face): fan the rest so that every edge is still used.
   let a = 0;
   while (gone[a]) a++;

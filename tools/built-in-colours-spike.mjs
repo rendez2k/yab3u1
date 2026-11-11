@@ -17,8 +17,8 @@
 // --no-band       export and dual-wall only, no banding (control: the source's own
 //                 open edges, for comparing with the banded output)
 // --plate=N       export plate N instead of the first plate
-// --raw           accepted so that earlier command lines still run; it has no effect,
-//                 because there is no weld any more
+// --raw           accepted so that earlier command lines still run; it prints a notice and
+//                 has no effect, because there is no weld any more
 // Negative volumes are kept (readProject allowNegative); they carry no paint and
 // are not banded.
 //
@@ -153,6 +153,24 @@ function edgeStats(tris) {
   return {edges, openEdges: open, edgesOnMoreThanTwoFaces: over};
 }
 
+/**
+ * Appended vertices that equal another appended vertex or an input vertex (exact
+ * coordinates), and pieces with zero area (exactly zero cross product).
+ */
+function bandChecks(vertices, inputCount, pieces) {
+  const seen = new Set();
+  let duplicates = 0, zeroArea = 0, smallest = Infinity;
+  vertices.forEach((p, i) => { const k = `${p[0]},${p[1]},${p[2]}`; if (seen.has(k) && i >= inputCount) duplicates += 1; seen.add(k); });
+  for (const {v} of pieces) {
+    const a = vertices[v[0]], b = vertices[v[1]], c = vertices[v[2]];
+    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], w = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const area = Math.hypot(u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]) / 2;
+    if (area === 0) zeroArea += 1;
+    smallest = Math.min(smallest, area);
+  }
+  return {duplicates, zeroArea, smallest};
+}
+
 /** UTF-8 encoding in chunks, so a model larger than one JS string can be written. */
 function chunkedWriter() {
   const chunks = [];
@@ -205,7 +223,7 @@ async function spike(input, height, output, {wholeSplits = false, noBand = false
   }
 
   const stats = {trianglesBefore: 0, trianglesAfter: 0, paintedBefore: 0, splitPaintedBefore: 0, unpaintedBefore: 0, meshesBanded: 0, meshesKept: 0,
-    verticesBefore: 0, verticesAfter: 0, layersSpanned: [Infinity, -Infinity], wholeSplits, noBand,
+    verticesBefore: 0, verticesAfter: 0, duplicateAppendedVertices: 0, zeroAreaPieces: 0, smallestPieceAreaMm2: Infinity, layersSpanned: [Infinity, -Infinity], wholeSplits, noBand,
     before: {openEdges: 0, edgesOnMoreThanTwoFaces: 0}, after: {openEdges: 0, edgesOnMoreThanTwoFaces: 0}};
   const reelFaces = {1: 0, 2: 0, 3: 0};
   const codes = Object.fromEntries(PATTERN.map(s => [s, paint.encode({kind: 'leaf', state: s})]));
@@ -249,6 +267,9 @@ async function spike(input, height, output, {wholeSplits = false, noBand = false
       stats.meshesBanded += 1;
       stats.trianglesAfter += banded.pieces.length;
       stats.verticesAfter += banded.vertices.length;
+      const check = bandChecks(banded.vertices, pts.length, banded.pieces);
+      stats.duplicateAppendedVertices += check.duplicates; stats.zeroAreaPieces += check.zeroArea;
+      stats.smallestPieceAreaMm2 = Math.min(stats.smallestPieceAreaMm2, check.smallest);
       const e1 = edgeStats(banded.pieces.map(p => p.v));
       stats.after.openEdges += e1.openEdges; stats.after.edgesOnMoreThanTwoFaces += e1.edgesOnMoreThanTwoFaces;
       writer.push(text.slice(last, m.index));
@@ -301,10 +322,11 @@ async function spike(input, height, output, {wholeSplits = false, noBand = false
 const args = process.argv.slice(2);
 if (args[0] === '--make-test-solid' && args[1]) console.log(JSON.stringify(await makeTestSolid(args[1]), null, 2));
 else if (args.length >= 3 && Number(args[1]) > 0 && args.slice(3).every(a => ['--raw', '--whole-splits', '--no-band'].includes(a) || /^--plate=\d+$/.test(a))) {
+  if (args.includes('--raw')) console.error('--raw has no effect: the output is never welded.');
   const flags = new Set(args.slice(3)), plate = Number(args.slice(3).find(a => a.startsWith('--plate='))?.slice(8)) || null;
   const r = await spike(args[0], Number(args[1]), args[2], {wholeSplits: flags.has('--whole-splits'), noBand: flags.has('--no-band'), plate});
   console.log(JSON.stringify({output: r.output, trianglesBefore: r.trianglesBefore, trianglesAfter: r.trianglesAfter, splitPaintedBefore: r.splitPaintedBefore, modelHeightMm: r.modelHeightMm,
-    before: r.before, after: r.after,
+    before: r.before, after: r.after, duplicateAppendedVertices: r.duplicateAppendedVertices, zeroAreaPieces: r.zeroAreaPieces, smallestPieceAreaMm2: r.smallestPieceAreaMm2,
     uncompressedModelBytes: r.uncompressedModelBytes, outputBytes: r.outputBytes, seconds: r.seconds}, null, 2));
 } else {
   console.error('usage: node tools/built-in-colours-spike.mjs <input.3mf> <layerHeight> <output.3mf> [--whole-splits] [--no-band] [--plate=N]\n       node tools/built-in-colours-spike.mjs --make-test-solid <output.3mf>');
