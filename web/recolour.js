@@ -42,10 +42,10 @@ import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } 
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 import { DUAL_WALL_TARGETS, dualWallProblem } from './shared/dualWall.js';
 import { FINE_BLEND_TARGETS, FINE_BLEND } from './shared/fineBlend.js';
-import { INTERWEAVE_TARGETS, interweaveProblem } from './shared/topInterweave.js';
+import { INTERWEAVE_TARGETS, INTERWEAVE_MIN_UP, interweaveProblem } from './shared/topInterweave.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.6.84";
+const VERSION = "2.6.85";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -1938,6 +1938,26 @@ export function workbenchObjects() {
       $('objects').querySelectorAll('[data-object]').forEach(box=>{box.checked=(state.quantities[box.dataset.object]??1)>0;});
       state.objects=selectedObjects();renderQuantityFields();layoutChanged();refresh();
     }};
+}
+// How much of the blended surface is a flat or nearly flat top, where layer-by-layer blends show as bands.
+let flatTops={key:'',value:null};
+export function workbenchFlatTops(){
+  if(!state.project||!focusGeometry?.states||!focusGeometry.positions?.length)return null;
+  let plan;try{plan=resultPlan();}catch{return null;}
+  const physical=(plan.physical||[]).length,recipes=plan.recipes||[];
+  const blended=Object.entries(plan.mapping||{}).filter(([,slot])=>{const r=recipes[Number(slot)-physical-1];return r&&!r.c&&!r.gradient;}).map(([source])=>Number(source)).sort((a,b)=>a-b);
+  const key=`${state.geometryId}|${focusGeometry.positions.length}|${blended.join()}`;
+  if(key===flatTops.key)return flatTops.value;
+  const p=focusGeometry.positions,states=focusGeometry.states,wanted=new Set(blended),count=Math.min(states.length,Math.floor(p.length/9));
+  let flat=0,total=0;
+  for(let t=0;t<count;t+=1){
+    if(!wanted.has(states[t]))continue;
+    const i=t*9,ux=p[i+3]-p[i],uy=p[i+4]-p[i+1],uz=p[i+5]-p[i+2],vx=p[i+6]-p[i],vy=p[i+7]-p[i+1],vz=p[i+8]-p[i+2];
+    const nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx,length=Math.hypot(nx,ny,nz);if(!length)continue;
+    total+=length/2;if(nz/length>=INTERWEAVE_MIN_UP)flat+=length/2;
+  }
+  flatTops={key,value:{blends:blended.length,share:total?flat/total:0}};
+  return flatTops.value;
 }
 export const workbenchSource = () => retainedModel?.file || null;
 export function workbenchPreview() {

@@ -1,3 +1,8 @@
+## 2.6.85 — Suggests Top surface interweave for flat tops
+
+- In Full Spectrum blends, YAB3D now measures how much of the blended surface is a flat or nearly flat top. When it is a tenth or more, step 3 opens with a note saying so and a **Turn on Top surface interweave** button. "Not now" dismisses it.
+- It suggests the option; it does not turn it on by itself, because the option is still experimental. Three-reel blends and gradients are not counted, since interweave leaves those to the slicer.
+
 ## 2.6.84 — No separate agreement tick
 
 - In Full Spectrum blends, step 3 no longer asks you to tick "I have checked the colour mapping…" before the button will download. Pressing **Download project** is the confirmation.
