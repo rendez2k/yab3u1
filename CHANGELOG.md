@@ -1,3 +1,11 @@
+## 2.6.81 — Fine blend profile (experimental)
+
+- A new export option for Snapmaker Orca, in step 3 under Print options: **Fine blend profile**. One switch sets 0.10 mm layers, five walls 0.3 mm wide and Subdivide Mix Layer off, and restores your previous layer height and Subdivide choice when turned off.
+- With it on, every blend is written as two layer patterns: one for the outer wall and an offset one for the walls behind it, so each outer stripe is backed by another reel wherever possible. With translucent filament the colours then mix in depth as well as in height. The shares of each reel are unchanged.
+- Two-reel blends can use repeats of up to 10 layers in this profile; three-reel blends (Baked colours) use it too.
+- Only the blend table and those print settings change. Geometry and paint are untouched. It cannot be combined with dual-wall mixing.
+- Prints slower. Not yet confirmed by a slice or a print.
+
 ## 2.6.80 — A shorter Colours step
 
 - Once a method is in use, the three method cards shrink to one line with a **Change** button.

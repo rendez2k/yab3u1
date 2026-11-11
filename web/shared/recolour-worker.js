@@ -16,6 +16,7 @@ import { encodePng } from "./png.js";
 import { downscale, renderIso } from "./raster.js";
 import { applyDualWall } from "./dualWall.js";
 import { applyTopInterweave } from "./topInterweave.js";
+import { applyFineBlend } from "./fineBlend.js";
 import { layoutOffsets, planLayout } from "./layout.js";
 import { surfaceAreas } from './surfaceWeights.js';
 import {exportComparisonJob} from './comparisonExport.js';
@@ -450,10 +451,14 @@ self.onmessage = async (event) => {
       const dualWall = message.options.dualWall
         ? applyDualWall(built.entries, { target: message.options.target, innerSlot: message.options.dualWall.slot, depth: message.options.dualWall.depth })
         : null;
+      // Fine blend profile last: wall-aware layer patterns and the walls to show them.
+      const fineBlend = message.options.fineBlend
+        ? applyFineBlend(built.entries, { target: message.options.target, recipes: message.options.recipes || [] })
+        : null;
       const bytes = await writeZip([...built.entries].map(([name, data]) =>
         ({ name, data })));
       post({ type: "exported", id, bytes, ms: Date.now() - started,
-             recipes: built.recipes.length, thumbnails: built.thumbnails, dualWall, interweave },
+             recipes: built.recipes.length, thumbnails: built.thumbnails, dualWall, interweave, fineBlend },
            [bytes.buffer]);
       return;
     }
