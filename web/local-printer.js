@@ -4,9 +4,11 @@ const http=require('node:http'),crypto=require('node:crypto');
 const printer=new URL(process.argv[2]||'http://invalid');
 const ip=printer.hostname.split('.').map(Number);
 if(!['http:','https:'].includes(printer.protocol)||printer.username||printer.password||printer.pathname!=='/'||printer.search||printer.hash||ip.length!==4||!ip.every(n=>Number.isInteger(n)&&n>=0&&n<=255)||!(ip[0]===10||ip[0]===192&&ip[1]===168||ip[0]===172&&ip[1]>=16&&ip[1]<=31))throw Error('Supply the U1 private IPv4 address, for example http://192.168.1.100');
-const token=crypto.randomBytes(32).toString('hex'),port=Number(process.env.YAB3D_LOCAL_PORT||8786),origin='http://127.0.0.1:'+port;
+const token=crypto.randomBytes(32).toString('hex'),firstPort=Number(process.env.YAB3D_LOCAL_PORT||8786);
+let port=firstPort,origin='http://127.0.0.1:'+port;
 const site=process.argv.includes('--petg-review')?'https://petg-interface-demo--yab3u1.netlify.app':process.argv.includes('--review')?'https://u1-reel-changes--yab3u1.netlify.app':'https://yab3d.uk';
-const startPage=process.argv.includes('--recolour')?'/recolour.html':'/';
+// The Workbench is the start page; --classic opens the older single-page blend screen.
+const startPage=process.argv.includes('--classic')?'/recolour.html':'/';
 const statusRoute='/printer/objects/query?gcode=commands&print_stats=state&idle_timeout=state&print_task_config=filament_vendor,filament_type,filament_sub_type,filament_color_rgba,filament_spool_id,filament_exist';
 const headers=process.env.YAB3D_PRINTER_API_KEY?{'X-Api-Key':process.env.YAB3D_PRINTER_API_KEY}:{};
 let writing=false;
@@ -35,9 +37,22 @@ const server=http.createServer(async(req,res)=>{
   if(req.method!=='GET')return reply(405,{error:'Read only'});
   const url=new URL(req.url,origin);
   const pathname=url.pathname==='/recolour'?'/recolour.html':url.pathname;
-  if(!/^\/[a-zA-Z0-9_./-]*$/.test(pathname)||pathname.includes('..')||!(/\.(html|js|css|png|ico|txt)$/.test(pathname)||pathname==='/'))return reply(404,{error:'Unknown asset'});
+  if(!/^\/[a-zA-Z0-9_./-]*$/.test(pathname)||pathname.includes('..')||!(/\.(html|js|css|png|ico|txt|woff2|zip|svg|json|webp|jpg)$/.test(pathname)||pathname==='/'))return reply(404,{error:'Unknown asset'});
   const file=await fetch(site+(pathname==='/'?'/index.html':pathname),{signal:AbortSignal.timeout(15000)});
   res.writeHead(file.status,{'Content-Type':file.headers.get('content-type')||'application/octet-stream','Cache-Control':'no-store'});res.end(Buffer.from(await file.arrayBuffer()));
  }catch{reply(502,{error:'Request failed. Check the printer and connection; a write may be uncertain.'});}
 });
-server.listen(port,'127.0.0.1',()=>console.log('Open '+origin+startPage+' — keep this terminal running. Ctrl+C stops it.'));
+// A port left busy by an earlier launcher is not an error: take the next free one.
+server.on('error',error=>{
+ if(error.code==='EADDRINUSE'&&port<firstPort+20){port+=1;origin='http://127.0.0.1:'+port;server.listen(port,'127.0.0.1');return;}
+ console.error(error.code==='EADDRINUSE'?'No free port from '+firstPort+' to '+port+'. Close other YAB3D launcher windows and try again.':'Could not start: '+error.message);process.exit(1);
+});
+server.on('listening',()=>{
+ const address=origin+startPage;
+ console.log('YAB3D is running at '+address+'\nKeep this window open while you use it. Ctrl+C stops it.');
+ if(process.argv.includes('--no-open'))return;
+ // Open the browser for the user; if that fails the address above still works.
+ const {spawn}=require('node:child_process'),run=(command,args)=>{try{spawn(command,args,{stdio:'ignore',detached:true,windowsHide:true}).on('error',()=>{}).unref();}catch{}};
+ if(process.platform==='win32')run('cmd',['/c','start','',address]);else run(process.platform==='darwin'?'open':'xdg-open',[address]);
+});
+server.listen(port,'127.0.0.1');

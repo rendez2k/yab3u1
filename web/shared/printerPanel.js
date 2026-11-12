@@ -18,7 +18,7 @@ export function mountPrinter(host,getPalette,options={}) {
  <button type="button" class="primary" data-printer="check">Check U1 & review slots</button>
  <div class="printer-status" role="status" aria-live="polite"><strong data-printer="state">Nothing sent</strong><p class="hint" data-printer="status"></p></div>
  <div data-printer="review"></div><button type="button" class="primary" data-printer="send" hidden>Send reviewed slots to U1</button>
- <details data-printer="help"><summary>Browser cannot connect? Run YAB3D locally</summary><p class="hint">If your browser blocks the printer connection, the local launcher keeps this same review and send screen. No Spool Studio account is needed.</p><p><a href="local-printer.js" download="yab3d-local.cjs">Download local launcher</a></p><p class="hint">With Node.js 22 or newer installed, save the file and run:</p><pre data-printer="command"></pre><p class="hint">Open the localhost address it prints and load your model. If Moonraker requires a key, set YAB3D_PRINTER_API_KEY in the launcher's environment.</p></details>
+ <details data-printer="help"><summary>Browser cannot connect? Run YAB3D locally</summary><p class="hint">If your browser blocks the printer connection, the local launcher keeps this same review and send screen. No Spool Studio account is needed.</p><p><a href="local-printer.js" download="yab3d-local.cjs">Download local launcher</a></p><p class="hint">With Node.js 22 or newer installed, save the file and run:</p><pre data-printer="command"></pre><p class="hint">It opens YAB3D in your browser from your own computer, where the printer connection is allowed. Load your model there. If Moonraker requires a key, set YAB3D_PRINTER_API_KEY in the launcher's environment.</p></details>
  </div>
  <details data-printer="bridge-option"><summary>Use Spool Studio Bridge instead</summary>
  <p class="hint">Optional alternative if you already use its bridge. This opens another tab for review.</p>
@@ -41,7 +41,7 @@ export function mountPrinter(host,getPalette,options={}) {
  function readiness(){
   renderSlots();
   let address='http://YOUR-PRINTER-IP';try{address=printerOrigin($('address').value.trim());}catch{}
-  $('command').textContent='node yab3d-local.cjs '+address+(location.hostname==='petg-interface-demo--yab3u1.netlify.app'?' --petg-review':location.hostname==='u1-reel-changes--yab3u1.netlify.app'?' --review':'')+(converter?'':' --recolour');
+  $('command').textContent='node yab3d-local.cjs '+address+(location.hostname==='petg-interface-demo--yab3u1.netlify.app'?' --petg-review':location.hostname==='u1-reel-changes--yab3u1.netlify.app'?' --review':'');
   const ready=Boolean(getPalette());
   $('ready-note').textContent = bridgePending?'Continue in Spool Studio to review and send. Verified slot results appear here.':!ready?notReady():'Check the printer, review the changes below, then send the selected slots. Unused slots stay unchanged.';
   $('continue').hidden=!bridgePending;

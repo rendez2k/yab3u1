@@ -1,3 +1,10 @@
+## 2.6.95 — A simpler local launcher for the printer connection
+
+- The local launcher no longer stops with an error when its port is busy: it takes the next free one.
+- It opens YAB3D in your browser by itself, and starts in the Workbench with the numbered steps (it used to open the older single-page screen). `--classic` opens that older screen; `--no-open` leaves the browser alone.
+- The command shown in "Send filament setup to U1" is shorter: `node yab3d-local.cjs http://YOUR-PRINTER-IP`.
+- A hosted page still cannot reach a printer on your home network; that is a browser rule. The launcher is the way round it.
+
 ## 2.6.94 — Fine blend profile no longer crashes the slicer; quieter suggestion
 
 - **Snapmaker Orca stopped with "Access violation" when slicing a Fine blend profile export.** The profile wrote each blend with a second layer pattern for the inner walls. That second pattern is the one thing these projects had that earlier, successfully sliced ones did not, so it is no longer written: each blend is now a single layer pattern, the form that has sliced and printed. Thin layers and the five thin walls are unchanged. Re-export any project made with the profile before this version.
