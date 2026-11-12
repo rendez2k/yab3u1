@@ -142,8 +142,8 @@ function renderFineBlend(recipes){
   const blends=(recipes||[]).filter(r=>!r.gradient).length,available=FINE_BLEND_TARGETS.includes(state.target)&&Boolean(state.project)&&blends>0;
   $('fineblendoptions').hidden=!available;if(!available)return;
   $('fineblendnote').textContent=$('fineblendon').checked
-    ?`On: ${FINE_BLEND.layerHeight.toFixed(2)} mm layers, ${FINE_BLEND.walls} walls ${FINE_BLEND.lineWidth} mm wide, Subdivide Mix Layer off. ${blends} blend${blends===1?'':'s'} written with one layer pattern for the outer wall and an offset one for the walls behind it. Prints slower. Best with translucent filament. Not yet confirmed by a slice or a print.`
-    :'Softens the stripes in blended colours: thin layers, five thin walls, and an offset layer pattern behind the outer wall so colours also mix in depth.';
+    ?`On: ${FINE_BLEND.layerHeight.toFixed(2)} mm layers, ${FINE_BLEND.walls} walls ${FINE_BLEND.lineWidth} mm wide, Subdivide Mix Layer off. ${blends} blend${blends===1?'':'s'} written as explicit layer patterns. Prints slower. Not yet confirmed by a print.`
+    :'Makes the stripes in blended colours finer: thin layers and five thin walls, with every blend written as an explicit layer pattern.';
 }
 function dualWallChoice() {
   if(!DUAL_WALL_TARGETS.includes(state.target)||!$('dualwallon').checked)return null;

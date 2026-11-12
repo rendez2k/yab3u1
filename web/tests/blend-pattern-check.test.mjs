@@ -11,7 +11,7 @@ test('the blend table is read as the app writes it: pattern rows, ratio rows, di
   assert.equal(table.physical,4);assert.deepEqual([...table.blends.keys()],[5,6]);
   assert.deepEqual(table.blends.get(5),{kind:'ratio',a:1,b:2,percent:50,row:rows[0]});
   assert.equal(table.blends.get(6).kind,'pattern');assert.equal(table.blends.get(6).outer.length,6);assert.equal(table.blends.get(6).inner,null);
-  const fine=blendPatterns(cfg([wallPatternRow({a:3,b:4,percent:60},1)]));
+  const fine=blendPatterns(cfg([wallPatternRow({a:3,b:4,percent:60},1,10,{inner:true})]));
   assert.deepEqual(fine.blends.get(5).outer,[4,3,4,3,4]);assert.deepEqual(fine.blends.get(5).inner,[3,4,3,4,4]);
 });
 

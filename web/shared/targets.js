@@ -198,14 +198,18 @@ export function backingPattern(pattern) {
   return best;
 }
 
-/** Any blend as a wall-aware layer-cycle row: one repeat for the outer wall, a second for the walls behind it. */
-export function wallPatternRow(recipe, stableId, maxLength = 10) {
+/**
+ * Any blend as a layer-cycle row. With `inner`, a second repeat is added for the walls
+ * behind the outer one. That form made Snapmaker Orca stop with an access violation when
+ * slicing a painted model, so it is off unless asked for.
+ */
+export function wallPatternRow(recipe, stableId, maxLength = 10, { inner: withInner = false } = {}) {
   const parts = recipeParts(recipe).slice().sort((x, y) => x.slot - y.slot);
   if (parts.some(p => p.slot > 9)) throw new MixError('a layer-pattern blend can only use slots 1 to 9');
   const outer = layerPattern(parts, parts.length === 2 ? maxLength : Math.min(maxLength, 10)), inner = backingPattern(outer);
   const share = slot => Math.round(100 * outer.filter(s => s === slot).length / outer.length);
   return `1,2,1,1,${share(2)},0,g${parts.map(p => p.slot).join('')},w${parts.map(p => share(p.slot)).join('/')},m0,z0,`
-    + `xa0,xb0,d0,o0,u${stableId},cm1,${outer.join('')},${inner.join('')}`;
+    + `xa0,xb0,d0,o0,u${stableId},cm1,${outer.join('')}${withInner ? ',' + inner.join('') : ''}`;
 }
 
 /** One blend of three reels, as the slicer's explicit layer-cycle row. In such
