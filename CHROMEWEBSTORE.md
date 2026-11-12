@@ -6,7 +6,7 @@ Last updated: 12 November 2026.
 
 **Name:** YAB3D for MakerWorld
 
-**Short description:** Open MakerWorld projects in YAB3D to prepare colours and plates, convert them to Snapmaker U1 files, and let YAB3D set your U1's filament slots.
+**Short description:** Open MakerWorld projects in YAB3D, convert them for the Snapmaker U1, and let YAB3D set your U1's filament slots.
 
 **Detailed description:**
 

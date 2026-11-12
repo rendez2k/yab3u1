@@ -43,6 +43,9 @@ test('a label is only sent to an idle printer with that slot loaded and free',()
 test('the manifest asks for printer access only as an optional permission',()=>{
   const manifest=JSON.parse(readFileSync(new URL('../../extensions/makerworld-yab3d/manifest.json',import.meta.url)));
   assert.deepEqual(manifest.optional_host_permissions,['http://*/*']);
+  // The Chrome Web Store refuses a manifest description over 132 characters.
+  assert.ok(manifest.description.length<=132,`description is ${manifest.description.length} characters`);
+  assert.ok(manifest.name.length<=75);
   assert.deepEqual(manifest.host_permissions,['https://makerworld.com/*','https://makerworld.com.cn/*']);
   const script=manifest.content_scripts.find(c=>c.js.includes('printer-bridge-content.js'));
   assert.deepEqual(script.matches,['https://yab3d.uk/*']);
