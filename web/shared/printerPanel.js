@@ -1,6 +1,17 @@
 import {printerOrigin,filamentSetup,inspectPrinter,sendSetup} from './printer.js';
 import {colourName} from './assignment.js';
 import {openPrinterBridge} from './printerBridge.js';
+// Messages to the YAB3D extension's content script, when it is installed on this page.
+let extensionSeq=0;
+function extensionCall(type,payload,timeout){
+ return new Promise((resolve,reject)=>{
+  const id='p'+Date.now()+'-'+(extensionSeq+=1);
+  const done=event=>{if(event.source!==window||event.data?.source!=='yab3d-extension'||event.data.id!==id)return;window.removeEventListener('message',done);clearTimeout(timer);resolve(event.data);};
+  const timer=setTimeout(()=>{window.removeEventListener('message',done);reject(Error('The YAB3D extension did not answer.'));},timeout);
+  window.addEventListener('message',done);
+  window.postMessage({source:'yab3d-page',id,type,...payload},location.origin);
+ });
+}
 export function mountPrinter(host,getPalette,options={}) {
  const converter=options.converter===true;
  const notReady=()=>converter?'Load a project and assign its colours within the four U1 slots first.':'Apply your chosen palette first, then check the printer.';
@@ -18,7 +29,7 @@ export function mountPrinter(host,getPalette,options={}) {
  <button type="button" class="primary" data-printer="check">Check U1 & review slots</button>
  <div class="printer-status" role="status" aria-live="polite"><strong data-printer="state">Nothing sent</strong><p class="hint" data-printer="status"></p></div>
  <div data-printer="review"></div><button type="button" class="primary" data-printer="send" hidden>Send reviewed slots to U1</button>
- <details data-printer="help"><summary>Browser cannot connect? Run YAB3D locally</summary><p class="hint">If your browser blocks the printer connection, the local launcher keeps this same review and send screen. No Spool Studio account is needed.</p><p><a href="local-printer.js" download="yab3d-local.cjs">Download local launcher</a></p><p class="hint">With Node.js 22 or newer installed, save the file and run:</p><pre data-printer="command"></pre><p class="hint">Leave it running, then press <strong>Check U1 &amp; review slots</strong> again in this tab: the launcher connects this page to your printer, so the work you have open stays. It also opens a local copy of YAB3D, which you can ignore. If Moonraker requires a key, set YAB3D_PRINTER_API_KEY in the launcher's environment.</p></details>
+ <details data-printer="help"><summary>Browser cannot connect? Use the extension or the local launcher</summary><p class="hint"><strong>Easiest: the YAB3D Chrome extension.</strong> A web page is not allowed to reach a printer on your home network; the extension is. Install it, press Check U1 again, and allow your printer once when it asks. <a href="downloads/makerworld-yab3d-1.5.4.0.zip" download>Download the extension (ZIP)</a>; how to install it is under Tools &amp; information.</p><p class="hint"><strong>Without the extension:</strong> the local launcher does the same from a terminal.</p><p class="hint">If your browser blocks the printer connection, the local launcher keeps this same review and send screen. No Spool Studio account is needed.</p><p><a href="local-printer.js" download="yab3d-local.cjs">Download local launcher</a></p><p class="hint">With Node.js 22 or newer installed, save the file and run:</p><pre data-printer="command"></pre><p class="hint">Leave it running, then press <strong>Check U1 &amp; review slots</strong> again in this tab: the launcher connects this page to your printer, so the work you have open stays. It also opens a local copy of YAB3D, which you can ignore. If Moonraker requires a key, set YAB3D_PRINTER_API_KEY in the launcher's environment.</p></details>
  </div>
  <details data-printer="bridge-option"><summary>Use Spool Studio Bridge instead</summary>
  <p class="hint">Optional alternative if you already use its bridge. This opens another tab for review.</p>
@@ -80,6 +91,17 @@ export function mountPrinter(host,getPalette,options={}) {
     const response=await fetch('/__printer/session');
     if(response.ok && response.headers.get('content-type')?.includes('application/json')) {const session=await response.json();token=session.token;origin='/__printer';$('address').value=session.printer;}
    }
+   // The YAB3D browser extension, when installed, reaches the printer for this page.
+   let extension=null;
+   if(!origin&&await extensionCall('ping',{},600).then(r=>r.ok,()=>false)) {
+    const printer=printerOrigin($('address').value.trim());
+    extension=async(route,body)=>{
+     const reply=await extensionCall('printer',{printer,route,body:body||null,key:$('key').value},12000);
+     if(!reply.ok)throw Error(reply.error||'The extension could not reach the printer.');
+     return reply.data;
+    };
+    origin=printer;bridged='extension';
+   }
    // A local launcher running on this computer bridges the hosted page to the printer.
    if(!origin) {
     const probe=async port=>{const response=await fetch('http://127.0.0.1:'+port+'/__printer/session',{credentials:'omit',signal:AbortSignal.timeout(1500)});if(!response.ok)throw Error('no bridge');const session=await response.json();if(!session.token)throw Error('no bridge');return {port,session};};
@@ -87,19 +109,19 @@ export function mountPrinter(host,getPalette,options={}) {
    }
    if(!origin)origin=printerOrigin($('address').value.trim());
    const key=$('key').value;
-   request=async(route,body)=>{
+   request=extension||(async(route,body)=>{
     const response=await fetch(origin+route,{method:body?'POST':'GET',redirect:'error',credentials:'omit',signal:AbortSignal.timeout(8000),headers:{...(body?{'Content-Type':'application/json'}:{}),...(token?{Authorization:'Bearer '+token}:key?{'X-Api-Key':key}:{})},...(body?{body:JSON.stringify(body)}:{})});
     if(!response.ok)throw Error('Printer request failed ('+response.status+'). Check address and access settings.');
     return response.json();
-   };
+   });
    const before=await inspectPrinter(request);
    if(signature()!==sourceSignature)throw Error('Palette changed while checking. Check again.');
    if(!before.supported)throw Error('This firmware does not expose the supported U1 metadata command.');
    review={before,profiles,channels:[],created:Date.now(),signature:sourceSignature};
    $('review').innerHTML='<p class="hint">Review each physical slot. Generic labels do not change temperatures or calibrated slicer profiles. Choose the actual finish of each reel.</p>'+profiles.map((p,i)=>!p?`<p class="hint">Slot ${i+1}: unused by this project · left unchanged</p>`:`<div class="printer-slot"><label class="check"><input type="checkbox" data-slot="${i}" ${before.idle&&before.slots[i].present&&before.slots[i].spoolId===0?'checked':'disabled'}>Slot ${i+1}</label><span><i class="swatch" style="background:#${esc(before.slots[i].rgba.slice(0,6))}"></i>${esc(before.slots[i].material)} → <i class="swatch" style="background:#${p.rgba.slice(0,6)}"></i>Generic ${p.material} · #${p.rgba.slice(0,6)}</span><label>Finish <select data-finish="${i}"><option>Basic</option><option>Matte</option><option>Silk</option></select></label>${before.slots[i].spoolId?'<span class="hint">Managed by Spoolman · left unchanged. Update this reel’s assignment in the printer filament manager first.</span>':!before.slots[i].present?'<span class="hint">Load a reel in this slot first.</span>':''}</div>`).join('');
    $('send').hidden=false;$('check').textContent='Refresh slot check';$('check').classList.remove('primary');
-   status((bridged?'Connected through the local launcher':'Connected')+(before.idle?' · ready to review':' · printer '+before.state),before.idle?'Check the selected slots below, then send. This review expires after one minute. Nothing has been sent.':'Current slots are shown below. Sending is disabled while the printer is '+before.state+'. Finish or cancel the job on your printer, then refresh this check. Nothing has been sent.');
-  }catch(error){clear();if(error instanceof TypeError)$('help').open=true;status('Check failed · nothing sent',error instanceof TypeError?'This browser could not connect to the U1; no settings were sent. The printer may be reachable but blocking this site (CORS or local-network permission). Run the local launcher below and leave it open, then press Check again in this tab: your work here stays as it is.':error.message);}
+   status((bridged==='extension'?'Connected through the YAB3D extension':bridged?'Connected through the local launcher':'Connected')+(before.idle?' · ready to review':' · printer '+before.state),before.idle?'Check the selected slots below, then send. This review expires after one minute. Nothing has been sent.':'Current slots are shown below. Sending is disabled while the printer is '+before.state+'. Finish or cancel the job on your printer, then refresh this check. Nothing has been sent.');
+  }catch(error){clear();if(error instanceof TypeError)$('help').open=true;status(/^Allow the YAB3D extension/.test(error.message)?'One step first · nothing sent':'Check failed · nothing sent',error instanceof TypeError?'This browser could not connect to the U1; no settings were sent. The printer may be reachable but blocking this site (CORS or local-network permission). Install the YAB3D Chrome extension, or run the local launcher below and leave it open, then press Check again in this tab: your work here stays as it is.':error.message);}
   finally{lock(false);if(review)host.querySelectorAll('[data-slot]').forEach(el=>el.disabled=!review.before.idle||!review.before.slots[Number(el.dataset.slot)].present||review.before.slots[Number(el.dataset.slot)].spoolId!==0);readiness();}
  });
  $('review').addEventListener('change',readiness);

@@ -15,7 +15,11 @@ const make=(brand,family,edition,names,colours,source,opticalClass='unknown',pub
   name:`${brand} ${name}`,brand,family,edition,type:'PLA',color:colours[i],opticalClass,
   catalogueRevision:CATALOGUE_REVISION,swatchSource:published?'manufacturer display colour':'nominal display colour',source,
 }));
-const cm=['Cyan','Magenta','Yellow'], nominal=['#00FFFF','#FF00FF','#FFFF00'];
+// Where a maker publishes no RGB values, these stand in. They are estimates of typical
+// cyan, magenta and yellow filament, not the pure screen primaries: a pure cyan is so
+// light that a slicer matching reels by colour pairs it with a white slot, and blends
+// predicted from pure primaries come out far more vivid than any print.
+const cm=['Cyan','Magenta','Yellow'], nominal=['#0086D6','#D9308A','#F7E400'];
 const bundle=(id,name,brand,edition,kind,reels,source,note,application='model')=>({id,name,brand,edition,kind,reels:reels.map(r=>({...r,bundleId:id})),source,note,application,checked:'2026-11-04',calibration:'unmeasured'});
 const bambuReels=make('Bambu Lab','PLA Palette','2026',[...cm,'Key','White'],['#0090DA','#E24585','#FCE300','#000000','#FFFFFF'],bambu,'opaque',true)
   .map(r=>({...r,opticalClass:r.name==='Bambu Lab Key'?'translucent':'opaque'}));

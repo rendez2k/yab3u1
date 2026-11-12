@@ -1,12 +1,16 @@
 # Privacy policy for YAB3D for MakerWorld
 
-Last updated: 4 November 2026. Publisher: r2k / YAB3D.
+Last updated: 12 November 2026. Publisher: r2k / YAB3D.
 
 ## Model pages and files
 
 The extension reads MakerWorld model-page content and the response to a download you request, so it can offer conversion and open the original project in YAB3D. It uses MakerWorld's existing sign-in and download flow. It does not read or store passwords, cookies or authentication tokens. When MakerWorld returns a file link, the extension downloads that file from MakerWorld's file hosting service.
 
 Conversion runs in your browser. The extension does not upload model files to a server. If you choose Open in YAB3D, the original file, its filename and public model title are passed directly to the new https://yab3d.uk browser tab. The transfer checks the destination, sending window and a temporary random connection token. The website processes the file in the browser. Opening the website makes ordinary page and asset requests to its hosting provider; those requests contain normal connection information such as your IP address. Model bytes are not included in those requests.
+
+## Your printer (optional)
+
+If you use YAB3D's "Send filament setup to U1" and press Check U1, the extension asks you to allow one printer address on your home network. After you allow it, the extension contacts only that printer, on your network, when you press Check or Send in YAB3D. It reads the printer's state and which filament is in each slot, and it can set a slot's filament colour and type label. It cannot start, stop or change a print. This information is shown to you in YAB3D and is not sent to any server. You can remove the permission at any time in Chrome's extension settings.
 
 ## Preferences and custom profiles
 

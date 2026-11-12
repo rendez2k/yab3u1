@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "YAB3D for MakerWorld",
-  "version": "1.5.3.7",
-  "version_name": "1.5.3.7",
-  "description": "Open MakerWorld projects in YAB3D to prepare colours and plates, or convert them to Snapmaker U1 files in your browser.",
+  "version": "1.5.4.0",
+  "version_name": "1.5.4.0",
+  "description": "Open MakerWorld projects in YAB3D to prepare colours and plates, convert them to Snapmaker U1 files, and let YAB3D set your U1's filament slots.",
   "homepage_url": "https://yab3d.uk/",
   "icons": {
     "16": "assets/icons/icon16.png",
@@ -68,6 +68,16 @@
         "content.js"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://yab3d.uk/*"
+      ],
+      "js": [
+        "printer-bridge-content.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
     }
   ],
   "web_accessible_resources": [
@@ -83,5 +93,8 @@
       ]
     }
   ],
-  "minimum_chrome_version": "111"
+  "minimum_chrome_version": "111",
+  "optional_host_permissions": [
+    "http://*/*"
+  ]
 }

@@ -1,4 +1,4 @@
-# YAB3D for MakerWorld 1.5.3.7
+# YAB3D for MakerWorld 1.5.4.0
 
 This is the YAB3D community fork of https://github.com/Dragon2203/makerworld-to-snapmaker-u1. It adds the original-project handoff to https://yab3d.uk and retains local U1 conversion. It is not an official MakerWorld, Bambu Lab or Snapmaker product.
 
