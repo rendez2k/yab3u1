@@ -1,3 +1,7 @@
+## 2.6.94 — Quick setups silence the flat-top suggestion
+
+- After you press a Quick setup, step 3 no longer suggests turning on Top surface interweave. Each setup already decides whether the tops are interwoven, so the suggestion contradicted it.
+
 ## 2.6.93 — Quick setups
 
 - Full Spectrum blends for the Snapmaker U1 has a **Quick setup** row at the top of step 2. One press sets every option of a known combination, and the row shows which one is in effect:

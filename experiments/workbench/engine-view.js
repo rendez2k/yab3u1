@@ -112,7 +112,9 @@ document.addEventListener('click',event=>{
   }
   if(b.matches('[data-close-batch]'))setPanel('project');
   if(b.matches('[data-auto-merge]'))autoMerge();
-  if(b.dataset.preset){try{engine.workbenchApplyPreset(b.dataset.preset);}catch(error){reportError(error);}presetKey='';}
+  if(b.dataset.preset){try{engine.workbenchApplyPreset(b.dataset.preset);}catch(error){reportError(error);}presetKey='';
+    // A quick setup is a deliberate choice about the tops, so the flat-top suggestion stays out of the way.
+    interweaveSkipped=true;stepKey='';}
   if(b.matches('[data-use-interweave]')){const box=$('interweaveon');box.checked=true;box.dispatchEvent(new Event('change',{bubbles:true}));const fold=document.querySelector('.print-options');if(fold)fold.open=true;}
   if(b.matches('[data-skip-interweave]')){interweaveSkipped=true;stepKey='';}
   if(b.matches('[data-see-changes]')){setPanel('colours');$('colouroutcome')?.scrollIntoView?.({block:'start'});}
