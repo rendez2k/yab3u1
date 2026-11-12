@@ -14,7 +14,7 @@ await rm(out,{recursive:true,force:true});
 await mkdir(out,{recursive:true});
 await cp(path.join(root,'dist'),out,{recursive:true});
 await cp(path.join(root,'web/extension-privacy.html'),path.join(out,'extension-privacy.html'));
-await cp(path.join(root,'web/downloads/makerworld-yab3d-1.5.3.7.zip'),path.join(out,'downloads/makerworld-yab3d-1.5.3.7.zip'));
+await cp(path.join(root,'web/downloads/makerworld-yab3d-1.5.4.0.zip'),path.join(out,'downloads/makerworld-yab3d-1.5.4.0.zip'));
 for(const [source,controller,kind] of [['index.html','convert-page.js','converter'],['recolour.html','recolour.js','spectrum']]) {
   let html=await readFile(path.join(root,'dist',source),'utf8');
   const script=new RegExp(`<script type="module" src="(?:\\./)?${controller.replace('.','\\.')}"></script>`);
@@ -42,4 +42,4 @@ const assets=(await readdir(out,{recursive:true})).filter(name=>/\.(js|html)$/.t
 const contents=await Promise.all(assets.map(name=>readFile(path.join(out,name),'utf8')));
 const revision=createHash('sha256').update(contents.join('\n')).digest('hex').slice(0,12);
 await Promise.all(assets.map((name,i)=>writeFile(path.join(out,name),contents[i].replace(/(['"])(\.{1,2}\/[^'"\s]+\.js)\1/g,(_,quote,url)=>`${quote}${url}?v=${revision}${quote}`))));
-console.log(`Workbench 2.6.96: ${out}`);
+console.log(`Workbench 2.6.97: ${out}`);

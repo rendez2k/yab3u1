@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project follows the principles of **Keep a Changelog** and uses **Semantic Versioning**.
 
+## [1.5.4.0] - 2026-11-12
+
+### Added
+- Optional printer connection for the YAB3D web app. When you press Check U1 in YAB3D, the extension can read your Snapmaker U1's filament slots and set their colour and type labels, so a web page that is not allowed to reach your home network does not need a separate local program.
+- Access is asked for one printer address at a time, on an extension page that names the address. Nothing is requested at install.
+- Requests are limited to reading printer state and slots and to one filament-label command; anything else is refused.
+
 ## [1.5.3] - 2026-08-06
 
 ### Added

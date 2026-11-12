@@ -1,3 +1,10 @@
+## 2.6.97 — Printer connection through the browser extension; realistic pack colours
+
+- **The YAB3D Chrome extension (1.5.4.0) can now connect the online page to your printer.** With it installed, "Check U1 & review slots" on yab3d.uk works without the local launcher. The first time, the extension opens a page naming your printer's address and asks you to allow it; after that, Check and Send work from the page you already have open.
+- The extension only reads the printer's state and filament slots, and sets a slot's filament colour and type label. It refuses every other request and every address that is not a private one. Nothing is requested when the extension is installed.
+- The local launcher remains for browsers without the extension.
+- **Filament packs without published colours now use realistic stand-ins** for cyan, magenta and yellow, in place of the pure screen colours. A pure cyan is light enough that a slicer matching reels by colour pairs it with a white slot. Previews of those packs are less vivid as a result, and closer to what prints. These are estimates, not measurements.
+
 ## 2.6.96 — The local launcher bridges the online page to your printer
 
 - With the local launcher running, **Check U1 & review slots** on yab3d.uk now reaches the printer through it. The work you already have open online stays where it is; you no longer have to reload the model in a local copy.
