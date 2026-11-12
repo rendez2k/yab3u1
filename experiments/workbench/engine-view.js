@@ -112,6 +112,7 @@ document.addEventListener('click',event=>{
   }
   if(b.matches('[data-close-batch]'))setPanel('project');
   if(b.matches('[data-auto-merge]'))autoMerge();
+  if(b.dataset.preset){try{engine.workbenchApplyPreset(b.dataset.preset);}catch(error){reportError(error);}presetKey='';}
   if(b.matches('[data-use-interweave]')){const box=$('interweaveon');box.checked=true;box.dispatchEvent(new Event('change',{bubbles:true}));const fold=document.querySelector('.print-options');if(fold)fold.open=true;}
   if(b.matches('[data-skip-interweave]')){interweaveSkipped=true;stepKey='';}
   if(b.matches('[data-see-changes]')){setPanel('colours');$('colouroutcome')?.scrollIntoView?.({block:'start'});}
@@ -259,6 +260,21 @@ async function autoMerge(){
   }catch(error){say(`Could not merge automatically: ${error.message}`);}
   stepKey='';tick();
 }
+// Quick setups for Full Spectrum on the U1: one press sets every option of a known combination.
+let presetKey='';
+function syncPresets(){
+  if(kind!=='spectrum'||!engine.workbenchPresetState)return;
+  let box=document.querySelector('.print-presets');
+  if(!box){
+    box=view.make('div',{class:'print-presets',hidden:''},`<h2>Quick setup</h2><div role="group" aria-label="Quick setup">${engine.workbenchPresets.map(p=>`<button type="button" data-preset="${p.id}" aria-pressed="false">${p.name}</button>`).join('')}</div><p class="print-preset-note" role="status"></p>`);
+    view.panels.colours.querySelector('.colour-workflow').after(box);
+  }
+  const now=engine.workbenchPresetState(),key=JSON.stringify(now);if(key===presetKey)return;presetKey=key;
+  box.hidden=!now.available;
+  for(const b of box.querySelectorAll('[data-preset]'))b.setAttribute('aria-pressed',String(b.dataset.preset===now.current));
+  const chosen=engine.workbenchPresets.find(p=>p.id===now.current);
+  box.querySelector('.print-preset-note').textContent=chosen?chosen.summary:'Custom: the options below do not match a quick setup. Press one to set them all.';
+}
 // Says which reel set the 3D view is showing, so Applied and Suggested cannot be mistaken for each other.
 let captionKey='';
 function syncViewCaption(loaded){
@@ -293,6 +309,7 @@ function syncSteps(loaded,busy,batch,report){
     if(note.firstChild.textContent!==text)note.firstChild.textContent=text;
   }
   try{syncViewCaption(loaded);}catch{}
+  try{syncPresets();}catch{}
   let coloursDone=false;
   if(loaded){try{coloursDone=kind==='converter'?!engine.session.capacityStatus().unresolved:!applying();}catch{}}
   const done={project:loaded,colours:loaded&&coloursDone,output:loaded&&coloursDone&&!report.disabled&&!report.pending,download:false};

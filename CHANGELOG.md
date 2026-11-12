@@ -1,3 +1,12 @@
+## 2.6.93 — Quick setups
+
+- Full Spectrum blends for the Snapmaker U1 has a **Quick setup** row at the top of step 2. One press sets every option of a known combination, and the row shows which one is in effect:
+  - **Standard** — two-reel blends, the model's own layer height, Subdivide Mix Layer on.
+  - **Test: three-reel blends** — Baked colours with the Fine blend profile (0.10 mm layers, five thin walls); tops left plain.
+  - **Test: striped tops** — as Standard, with Top surface interweave in 0.5 mm stripes.
+- Each also sets Blend detail to Strong, keeps hue on and turns Dual-wall mixing off. Change any of those options by hand and the row reads "Custom".
+- Reels are not part of a setup: choose them as before.
+
 ## 2.6.92 — After the first Baked colours print
 
 A test print with Baked colours and Top surface interweave at 0.16 mm layers came out as plain stripes and speckle. These changes follow from it.
