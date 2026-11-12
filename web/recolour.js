@@ -45,7 +45,7 @@ import { FINE_BLEND_TARGETS, FINE_BLEND } from './shared/fineBlend.js';
 import { INTERWEAVE_TARGETS, INTERWEAVE_MIN_UP, interweaveProblem } from './shared/topInterweave.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.6.92";
+const VERSION = "2.6.93";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -1968,6 +1968,33 @@ export function workbenchFlatTops(){
   }
   flatTops={key,value:{blends:blended.length,share:total?flat/total:0}};
   return flatTops.value;
+}
+// Quick setups: one press sets every option a known combination needs, so a test is not a checklist.
+export const workbenchPresets=[
+  {id:'standard',name:'Standard',summary:'Two-reel blends, the model\'s own layer height, Subdivide Mix Layer on. The settings of the first good print.',baked:false,fine:false,interweave:false},
+  {id:'baked',name:'Test: three-reel blends',summary:'Baked colours with the Fine blend profile: 0.10 mm layers, five thin walls. Print one object. Tops are left plain.',baked:true,fine:true,interweave:false},
+  {id:'stripes',name:'Test: striped tops',summary:'Two-reel blends as Standard, with Top surface interweave in 0.5 mm stripes. Print one object.',baked:false,fine:false,interweave:true},
+];
+const presetAvailable=()=>Boolean(state.project)&&FINE_BLEND_TARGETS.includes(state.target)&&state.strategy!=='solid'&&state.strategy!=='source';
+export function workbenchPresetState(){
+  if(!presetAvailable())return {available:false,current:''};
+  const now={baked:$('bakedon').checked,fine:$('fineblendon').checked,interweave:$('interweaveon').checked};
+  const extra=$('dualwallon').checked||$('blendstrength').value!=='strong'||!$('keephue').checked||(now.interweave&&Number($('interweavecell').value)!==0.5)||(!now.fine&&!$('subdividemix').checked);
+  const match=extra?null:workbenchPresets.find(p=>p.baked===now.baked&&p.fine===now.fine&&p.interweave===now.interweave);
+  return {available:true,current:match?.id||''};
+}
+export function workbenchApplyPreset(id){
+  const preset=workbenchPresets.find(p=>p.id===id);if(!preset||!presetAvailable()||state.loading||state.exporting)return false;
+  $('blendstrength').value='strong';setBlendStrength('strong');
+  $('keephue').checked=true;setHueFidelity(true);
+  $('dualwallon').checked=false;
+  $('interweaveon').checked=preset.interweave;$('interweavecell').value='0.5';
+  if($('fineblendon').checked!==preset.fine){$('fineblendon').checked=preset.fine;applyFineBlendControls();}
+  // Without the fine profile the proven pairing is the model's own layer height with Subdivide on.
+  if(!preset.fine){$('spectrumlayermode').value='preserve';$('subdividemix').checked=true;}
+  $('bakedon').checked=preset.baked;setBakedColours(preset.baked);
+  clearReview();invalidateRecommendation();refresh();
+  return true;
 }
 export const workbenchSource = () => retainedModel?.file || null;
 export function workbenchPreview() {
