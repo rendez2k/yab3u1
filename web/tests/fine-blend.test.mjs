@@ -24,8 +24,9 @@ test('the backing repeat has the same shares and backs stripes with another reel
   assert.deepEqual(backingPattern([1,2]),[2,1]);
 });
 
-test('a wall-aware row carries an outer and an inner repeat',()=>{
-  const tokens=wallPatternRow({a:3,b:4,percent:50},9).split(',');
+test('a blend row carries one repeat, and a second for inner walls only when asked',()=>{
+  assert.match(wallPatternRow({a:3,b:4,percent:50},9),/,u9,cm1,34$/);
+  const tokens=wallPatternRow({a:3,b:4,percent:50},9,10,{inner:true}).split(',');
   assert.deepEqual(tokens.slice(0,4),['1','2','1','1']);
   assert.ok(tokens.includes('g34')&&tokens.includes('w50/50')&&tokens.includes('m0')&&tokens.includes('u9')&&tokens.includes('cm1'));
   assert.deepEqual(tokens.slice(-2),['34','43']);
@@ -43,11 +44,11 @@ test('the fine blend profile rewrites the blend table and wall settings only',as
   assert.equal(result.blends,2);assert.equal(result.walls,5);
   const cfg=JSON.parse(new TextDecoder().decode(built.entries.get('Metadata/project_settings.config')));
   const rows=cfg.mixed_filament_definitions.split(';');
-  assert.match(rows[0],/,cm1,12,21$/);assert.match(rows[1],/,g134,.*,cm1,[134]{4},[134]{4}$/);
+  assert.match(rows[0],/,cm1,12$/);assert.match(rows[1],/,g134,.*,cm1,[134]{4}$/);
   assert.match(rows[2],/,d1,/,'the disabled automatic rows are untouched');
   assert.equal(cfg.wall_loops,'5');assert.equal(cfg.outer_wall_line_width,'0.3');assert.equal(cfg.inner_wall_line_width,'0.3');assert.equal(cfg.dithering_local_z_mode,'0');
   for(const [name,hex]of models)assert.equal(Buffer.from(built.entries.get(name)).toString('hex'),hex,`${name} is unchanged`);
   const manifest=JSON.parse(new TextDecoder().decode(built.entries.get(FINE_BLEND_PATH)));
-  assert.deepEqual(manifest.validation,{sliced:false,printed:false});assert.equal(manifest.patterns[0],'12,21');
+  assert.deepEqual(manifest.validation,{sliced:false,printed:false});assert.equal(manifest.patterns[0],'12');
   assert.throws(()=>applyFineBlend(built.entries,{target:'bambu',recipes}),/Snapmaker Orca/);
 });

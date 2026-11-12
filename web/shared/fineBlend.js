@@ -1,10 +1,12 @@
 // Fine blend profile for Snapmaker Orca (experimental).
 //
-// Blends made by alternating layers show as stripes. Three things soften them:
-// thin layers, several thin walls so the stripes have depth and infill stays
-// hidden, and a second layer pattern for the walls behind the outer one, offset
-// so each outer stripe is backed by another reel. With translucent filament the
-// two walls mix in depth as well as in height.
+// Blends made by alternating layers show as stripes. Thin layers make the stripes
+// finer, and several thin walls give them depth and keep infill out of sight. Every
+// blend is written as an explicit run of layers, one reel per layer.
+//
+// An earlier version also wrote a second, offset run for the walls behind the outer
+// one. Snapmaker Orca stopped with an access violation when slicing such a project of
+// a painted model, so only the single run is written.
 //
 // This rewrites an already exported project: only its blend table and a few
 // print settings change. No geometry and no paint is touched.

@@ -1,3 +1,9 @@
+## 2.6.94 — Fine blend profile no longer crashes the slicer; quieter suggestion
+
+- **Snapmaker Orca stopped with "Access violation" when slicing a Fine blend profile export.** The profile wrote each blend with a second layer pattern for the inner walls. That second pattern is the one thing these projects had that earlier, successfully sliced ones did not, so it is no longer written: each blend is now a single layer pattern, the form that has sliced and printed. Thin layers and the five thin walls are unchanged. Re-export any project made with the profile before this version.
+
+- After you press a Quick setup, step 3 no longer suggests turning on Top surface interweave. Each setup already decides whether the tops are interwoven, so the suggestion contradicted it.
+
 ## 2.6.93 — Quick setups
 
 - Full Spectrum blends for the Snapmaker U1 has a **Quick setup** row at the top of step 2. One press sets every option of a known combination, and the row shows which one is in effect:

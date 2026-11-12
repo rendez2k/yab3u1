@@ -112,7 +112,9 @@ document.addEventListener('click',event=>{
   }
   if(b.matches('[data-close-batch]'))setPanel('project');
   if(b.matches('[data-auto-merge]'))autoMerge();
-  if(b.dataset.preset){try{engine.workbenchApplyPreset(b.dataset.preset);}catch(error){reportError(error);}presetKey='';}
+  if(b.dataset.preset){try{engine.workbenchApplyPreset(b.dataset.preset);}catch(error){reportError(error);}presetKey='';
+    // A quick setup is a deliberate choice about the tops, so the flat-top suggestion stays out of the way.
+    interweaveSkipped=true;stepKey='';}
   if(b.matches('[data-use-interweave]')){const box=$('interweaveon');box.checked=true;box.dispatchEvent(new Event('change',{bubbles:true}));const fold=document.querySelector('.print-options');if(fold)fold.open=true;}
   if(b.matches('[data-skip-interweave]')){interweaveSkipped=true;stepKey='';}
   if(b.matches('[data-see-changes]')){setPanel('colours');$('colouroutcome')?.scrollIntoView?.({block:'start'});}
@@ -299,7 +301,9 @@ function syncSteps(loaded,busy,batch,report){
     let tip=document.querySelector('[data-flat-tip]');
     if(!tip){tip=view.make('div',{'data-flat-tip':'',hidden:'',role:'status'},'<strong>This model has flat tops in blended colours</strong><p></p><div><button type="button" class="primary" data-use-interweave>Turn on Top surface interweave</button><button type="button" data-skip-interweave>Not now</button></div>');view.panels.output.querySelector('.task-heading').after(tip);}
     let flat=null;try{flat=loaded?engine.workbenchFlatTops():null;}catch{}
-    const offered=Boolean(flat&&flat.blends&&flat.share>=0.1&&!$('interweaveoptions').hidden&&!$('interweaveon').checked&&!interweaveSkipped);
+    const offered=Boolean(flat&&flat.blends&&flat.share>=0.1&&!$('interweaveoptions').hidden&&!$('interweaveon').checked&&!interweaveSkipped
+      // The three-reel test leaves tops plain on purpose, also after a reload restores it.
+      &&!$('bakedon').checked&&!$('fineblendon').checked);
     if(tip.hidden===offered){tip.hidden=!offered;if(offered)tip.querySelector('p').textContent=`About ${Math.round(flat.share*100)}% of the blended surface is flat or nearly flat. Blends are made layer by layer, so those tops would print as bands of single colours. Top surface interweave paints them as narrow stripes of the two reels instead. It is experimental and the stripes have not been printed yet: try it on one small part first, and check the top layers in the slicer preview.`;}
   }
   if(kind==='spectrum'){

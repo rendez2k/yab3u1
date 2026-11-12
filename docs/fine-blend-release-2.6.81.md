@@ -34,3 +34,7 @@ A blend of 40% reel 3 and 60% reel 4 is written as:
 ## Not yet confirmed
 
 The row format follows the open-source slicer code and projects Snapmaker Orca opens. It has not been sliced or printed from YAB3D. Slice a small test and check that the outer and inner walls show different reels on the same layer.
+
+## Update, 2.6.94
+
+The inner-wall pattern described above is no longer written. Snapmaker Orca stopped with an access violation when slicing a painted model exported that way. Each blend is now one layer pattern; the layer height and wall settings are unchanged.
