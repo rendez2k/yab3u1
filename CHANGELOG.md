@@ -1,3 +1,10 @@
+## 2.6.96 — The local launcher bridges the online page to your printer
+
+- With the local launcher running, **Check U1 & review slots** on yab3d.uk now reaches the printer through it. The work you already have open online stays where it is; you no longer have to reload the model in a local copy.
+- The page looks for the launcher on this computer first, and says "Connected through the local launcher" when it uses it.
+- The launcher accepts printer requests only from its own page and from yab3d.uk, and still only reads the slots and sets filament labels. Any other website is refused.
+- Works in Chrome, Edge and Firefox. The browser may ask once for permission to reach devices on your network. Safari does not allow this kind of connection.
+
 ## 2.6.95 — A simpler local launcher for the printer connection
 
 - The local launcher no longer stops with an error when its port is busy: it takes the next free one.
