@@ -18,7 +18,7 @@ export function mountPrinter(host,getPalette,options={}) {
  <button type="button" class="primary" data-printer="check">Check U1 & review slots</button>
  <div class="printer-status" role="status" aria-live="polite"><strong data-printer="state">Nothing sent</strong><p class="hint" data-printer="status"></p></div>
  <div data-printer="review"></div><button type="button" class="primary" data-printer="send" hidden>Send reviewed slots to U1</button>
- <details data-printer="help"><summary>Browser cannot connect? Run YAB3D locally</summary><p class="hint">If your browser blocks the printer connection, the local launcher keeps this same review and send screen. No Spool Studio account is needed.</p><p><a href="local-printer.js" download="yab3d-local.cjs">Download local launcher</a></p><p class="hint">With Node.js 22 or newer installed, save the file and run:</p><pre data-printer="command"></pre><p class="hint">It opens YAB3D in your browser from your own computer, where the printer connection is allowed. Load your model there. If Moonraker requires a key, set YAB3D_PRINTER_API_KEY in the launcher's environment.</p></details>
+ <details data-printer="help"><summary>Browser cannot connect? Run YAB3D locally</summary><p class="hint">If your browser blocks the printer connection, the local launcher keeps this same review and send screen. No Spool Studio account is needed.</p><p><a href="local-printer.js" download="yab3d-local.cjs">Download local launcher</a></p><p class="hint">With Node.js 22 or newer installed, save the file and run:</p><pre data-printer="command"></pre><p class="hint">Leave it running, then press <strong>Check U1 &amp; review slots</strong> again in this tab: the launcher connects this page to your printer, so the work you have open stays. It also opens a local copy of YAB3D, which you can ignore. If Moonraker requires a key, set YAB3D_PRINTER_API_KEY in the launcher's environment.</p></details>
  </div>
  <details data-printer="bridge-option"><summary>Use Spool Studio Bridge instead</summary>
  <p class="hint">Optional alternative if you already use its bridge. This opens another tab for review.</p>
@@ -75,10 +75,15 @@ export function mountPrinter(host,getPalette,options={}) {
   try {
    const reels=getPalette();if(!reels)throw Error(notReady());
    const profiles=filamentSetup(reels.map(r=>r||{color:'#FFFFFF',type:'PLA'})).map((p,i)=>reels[i]?p:null);
-   let origin,token='';
+   let origin,token='',bridged=false;
    if(['127.0.0.1','localhost'].includes(location.hostname)) {
     const response=await fetch('/__printer/session');
     if(response.ok && response.headers.get('content-type')?.includes('application/json')) {const session=await response.json();token=session.token;origin='/__printer';$('address').value=session.printer;}
+   }
+   // A local launcher running on this computer bridges the hosted page to the printer.
+   if(!origin) {
+    const probe=async port=>{const response=await fetch('http://127.0.0.1:'+port+'/__printer/session',{credentials:'omit',signal:AbortSignal.timeout(1500)});if(!response.ok)throw Error('no bridge');const session=await response.json();if(!session.token)throw Error('no bridge');return {port,session};};
+    try{const found=await Promise.any([8786,8787,8788,8789,8790].map(probe));token=found.session.token;origin='http://127.0.0.1:'+found.port+'/__printer';$('address').value=found.session.printer;bridged=true;}catch{}
    }
    if(!origin)origin=printerOrigin($('address').value.trim());
    const key=$('key').value;
@@ -93,8 +98,8 @@ export function mountPrinter(host,getPalette,options={}) {
    review={before,profiles,channels:[],created:Date.now(),signature:sourceSignature};
    $('review').innerHTML='<p class="hint">Review each physical slot. Generic labels do not change temperatures or calibrated slicer profiles. Choose the actual finish of each reel.</p>'+profiles.map((p,i)=>!p?`<p class="hint">Slot ${i+1}: unused by this project · left unchanged</p>`:`<div class="printer-slot"><label class="check"><input type="checkbox" data-slot="${i}" ${before.idle&&before.slots[i].present&&before.slots[i].spoolId===0?'checked':'disabled'}>Slot ${i+1}</label><span><i class="swatch" style="background:#${esc(before.slots[i].rgba.slice(0,6))}"></i>${esc(before.slots[i].material)} → <i class="swatch" style="background:#${p.rgba.slice(0,6)}"></i>Generic ${p.material} · #${p.rgba.slice(0,6)}</span><label>Finish <select data-finish="${i}"><option>Basic</option><option>Matte</option><option>Silk</option></select></label>${before.slots[i].spoolId?'<span class="hint">Managed by Spoolman · left unchanged. Update this reel’s assignment in the printer filament manager first.</span>':!before.slots[i].present?'<span class="hint">Load a reel in this slot first.</span>':''}</div>`).join('');
    $('send').hidden=false;$('check').textContent='Refresh slot check';$('check').classList.remove('primary');
-   status(before.idle?'Connected · ready to review':'Connected · printer '+before.state,before.idle?'Check the selected slots below, then send. This review expires after one minute. Nothing has been sent.':'Current slots are shown below. Sending is disabled while the printer is '+before.state+'. Finish or cancel the job on your printer, then refresh this check. Nothing has been sent.');
-  }catch(error){clear();if(error instanceof TypeError)$('help').open=true;status('Check failed · nothing sent',error instanceof TypeError?'This browser could not connect to the U1; no settings were sent. The printer may be reachable but blocking this site (CORS or local-network permission). Use the local launcher below for the same app with a local connection.':error.message);}
+   status((bridged?'Connected through the local launcher':'Connected')+(before.idle?' · ready to review':' · printer '+before.state),before.idle?'Check the selected slots below, then send. This review expires after one minute. Nothing has been sent.':'Current slots are shown below. Sending is disabled while the printer is '+before.state+'. Finish or cancel the job on your printer, then refresh this check. Nothing has been sent.');
+  }catch(error){clear();if(error instanceof TypeError)$('help').open=true;status('Check failed · nothing sent',error instanceof TypeError?'This browser could not connect to the U1; no settings were sent. The printer may be reachable but blocking this site (CORS or local-network permission). Run the local launcher below and leave it open, then press Check again in this tab: your work here stays as it is.':error.message);}
   finally{lock(false);if(review)host.querySelectorAll('[data-slot]').forEach(el=>el.disabled=!review.before.idle||!review.before.slots[Number(el.dataset.slot)].present||review.before.slots[Number(el.dataset.slot)].spoolId!==0);readiness();}
  });
  $('review').addEventListener('change',readiness);

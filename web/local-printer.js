@@ -14,10 +14,16 @@ const headers=process.env.YAB3D_PRINTER_API_KEY?{'X-Api-Key':process.env.YAB3D_P
 let writing=false;
 async function printerRequest(route,body){const res=await fetch(printer.origin+route,{redirect:'error',signal:AbortSignal.timeout(8000),method:body?'POST':'GET',headers:{...headers,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});if(!res.ok)throw Error('Printer request failed: '+res.status);return res.json();}
 const server=http.createServer(async(req,res)=>{
- const reply=(status,data)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
+ // Bridge: the hosted YAB3D page may also use this launcher, so work already open there can
+ // reach the printer. Only that site and this launcher's own page are allowed; every other
+ // origin is refused. Printer routes stay limited to reading slots and setting filament labels.
+ const from=req.headers.origin,hosted=from===site&&req.url.startsWith('/__printer/');
+ const cors=hosted?{'Access-Control-Allow-Origin':site,'Vary':'Origin','Access-Control-Allow-Headers':'authorization, content-type','Access-Control-Allow-Methods':'GET, POST','Access-Control-Allow-Private-Network':'true','Access-Control-Max-Age':'600'}:{};
+ const reply=(status,data)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store',...cors});res.end(JSON.stringify(data));};
  try {
   if(req.headers.host!=='127.0.0.1:'+port)return reply(403,{error:'Invalid host'});
-  if(req.headers.origin&&req.headers.origin!==origin)return reply(403,{error:'Origin not allowed'});
+  if(from&&from!==origin&&!hosted)return reply(403,{error:'Origin not allowed'});
+  if(hosted&&req.method==='OPTIONS'){res.writeHead(204,cors);return res.end();}
   if(req.url==='/__printer/session'&&req.method==='GET')return reply(200,{token,printer:printer.origin});
   if(req.url.startsWith('/__printer/')) {
    if(req.headers.authorization!=='Bearer '+token)return reply(403,{error:'Local session required'});
@@ -49,7 +55,7 @@ server.on('error',error=>{
 });
 server.on('listening',()=>{
  const address=origin+startPage;
- console.log('YAB3D is running at '+address+'\nKeep this window open while you use it. Ctrl+C stops it.');
+ console.log('YAB3D is running at '+address+'\nKeep this window open while you use it. Ctrl+C stops it.\nA YAB3D tab already open at '+site+' can use this connection too: press Check U1 there.');
  if(process.argv.includes('--no-open'))return;
  // Open the browser for the user; if that fails the address above still works.
  const {spawn}=require('node:child_process'),run=(command,args)=>{try{spawn(command,args,{stdio:'ignore',detached:true,windowsHide:true}).on('error',()=>{}).unref();}catch{}};
