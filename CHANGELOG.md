@@ -1,3 +1,9 @@
+## 2.6.99 — The extension is on the Chrome Web Store
+
+- YAB3D for MakerWorld 1.5.4.0 is published on the Chrome Web Store, and its printer connection has been confirmed against a Snapmaker U1.
+- The site's install instructions now lead with the store page ("Add to Chrome"). Installing by hand from the ZIP is kept as a fallback.
+- The "Browser cannot connect?" help in Send filament setup to U1 links to the store page.
+
 ## 2.6.98 — Fine blend profile keeps the slicer's mixing for two-reel blends
 
 A print with the three-reel setup at 0.10 mm showed three-reel blends working on steep surfaces, but two-reel blends came out pinstriped: the profile had written them as whole layers and turned Subdivide Mix Layer off.
