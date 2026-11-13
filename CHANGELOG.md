@@ -1,3 +1,8 @@
+## 2.7.2 — A quick setup for the dual-wall test
+
+- Quick setup has a fourth button, **Test: dual wall**. It is the Standard setup with Dual-wall mixing on: colour only in the outer 0.45 mm, with the lightest loaded reel in the walls behind it and the infill. Print one object.
+- Dual-wall mixing is still experimental and has not been confirmed by a print.
+
 ## 2.7.1 — Swatch strips read from a photo
 
 Printed blend samples (step 2, Fine-tune · advanced) can now be made and read without a colour-measuring device.
