@@ -683,6 +683,13 @@
       </details>
     </details>
     <details id="blendcalibration" class="compact-options"></details>
+    <details id="savedsettings" class="compact-options"><summary>Back up my settings</summary>
+      <p class="hint">Your loaded reels, reel TD values, printed blend samples and saved filament sets are kept only in this browser. Save them to a file to keep a copy or to move them to another browser or computer. Nothing is uploaded.</p>
+      <div class="row"><button type="button" id="settingssave" class="secondary">Save settings file</button></div>
+      <label class="field">Load a settings file<input id="settingsload" type="file" accept=".json,application/json"></label>
+      <div id="settingsconfirm" hidden><p id="settingsfound" class="hint"></p><div class="row"><button type="button" id="settingsapply">Replace and reload</button><button type="button" id="settingscancel" class="secondary">Cancel</button></div></div>
+      <p id="settingsstatus" class="hint" role="status"></p>
+    </details>
     <section id="recommendation" aria-labelledby="recommendheading">
       <h3 id="recommendheading">Palette suggestions</h3>
       <p class="hint" id="recommendstatus" role="status">Load a model to suggest colours.</p>

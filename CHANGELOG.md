@@ -1,3 +1,9 @@
+## 2.7.3 — Back up my settings
+
+- Step 2, Fine-tune · advanced has a new block, **Back up my settings**. It saves your loaded reels, reel TD values, printed blend samples and saved filament sets to one file, and loads such a file back.
+- These are kept only in your browser, so a file is the way to keep a copy or move them to another browser or computer. Nothing is uploaded.
+- A file is checked completely before anything changes. Loading replaces only the parts the file holds, then reloads the page, so an open model needs opening again.
+
 ## 2.7.2 — A quick setup for the dual-wall test
 
 - Quick setup has a fourth button, **Test: dual wall**. It is the Standard setup with Dual-wall mixing on: colour only in the outer 0.45 mm, with the lightest loaded reel in the walls behind it and the infill. Print one object.

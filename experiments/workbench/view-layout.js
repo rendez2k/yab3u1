@@ -107,7 +107,7 @@ export function composeView(doc,kind) {
     body.prepend($('filamentbundles'),$('recommendation'),$('colouroutcome'));
     $('filamentbundles').before(make('h2',{class:'colour-section'},'Reels to load'));
     $('recommendheading').textContent='Suggested set';
-    tune.append($('blendstrengthfield'),$('slotoptions'),$('blendeditor'),$('colourpriorities'),$('supportinterface'),$('modelchoices'),$('spoolimport'),$('blendcalibration'),$('advanced'));
+    tune.append($('blendstrengthfield'),$('slotoptions'),$('blendeditor'),$('colourpriorities'),$('supportinterface'),$('modelchoices'),$('spoolimport'),$('blendcalibration'),$('savedsettings'),$('advanced'));
     body.append(tune);
     const help=[...panels.colours.querySelectorAll('details.workflow-explanation')].pop();if(help)body.append(help);
   }
