@@ -535,3 +535,11 @@ body[data-steps=on] #inspector #bundlepanel [data-use]{display:none!important}
 .strip-reading{list-style:none;padding:0;margin:10px 0;display:grid;gap:4px}.strip-reading li{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:8px;align-items:center;font-size:12px}
 .strip-reading .swatch{width:22px;height:22px;border-radius:5px;border:1px solid #8886}.strip-reading code{font-size:11px}
 @media(max-width:760px){#inspector .strip-photo{min-height:44px}}
+
+/* Pack cards: estimated colour match for the loaded model */
+.bundle-card-side{display:flex;align-items:center;gap:8px;flex:none}
+.bundle-match{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;padding:2px 7px;border-radius:999px;border:1px solid currentColor;line-height:1.4}
+.bundle-match[data-level=good]{color:#1f7a4d}.bundle-match[data-level=fair]{color:#9a6b00}.bundle-match[data-level=poor]{color:#b3402e}
+[data-theme=dark] .bundle-match[data-level=good]{color:#6fd39c}[data-theme=dark] .bundle-match[data-level=fair]{color:#e6b84d}[data-theme=dark] .bundle-match[data-level=poor]{color:#f08a78}
+.bundle-card-copy small.bundle-card-left{color:var(--dim);font-size:10px;line-height:1.3;overflow-wrap:anywhere}
+.bundle-match .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}

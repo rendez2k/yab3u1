@@ -41,12 +41,13 @@ import { mountCalibration } from './shared/calibrationPanel.js';
 import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } from './shared/supportInterface.js';
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 import { DUAL_WALL_TARGETS, dualWallProblem } from './shared/dualWall.js';
+import { packMatch } from './shared/packMatch.js';
 import { collectSettings, readSettings, applySettings, describeSettings, SETTINGS_MAX_BYTES } from './shared/settingsFile.js';
 import { FINE_BLEND_TARGETS, FINE_BLEND } from './shared/fineBlend.js';
 import { INTERWEAVE_TARGETS, INTERWEAVE_MIN_UP, interweaveProblem } from './shared/topInterweave.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.7.3";
+const VERSION = "2.7.4";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -1913,6 +1914,15 @@ function applyFilamentSet(reels) {
 bundlePanel=mountBundlePanel($('bundlepanel'),{
   printComparison:bundleId=>calibrationPanel.openWallComparison(bundleId),
   getState:()=>state,
+  // Estimated colour match per pack for the loaded model; null until a model has been read.
+  packScores:bundles=>{
+    const colours=state.assessed?.sourceColors;if(!state.project||!colours||!Object.keys(colours).length)return null;
+    const areas=colourWeights(colours,state.assessed.surfaceAreas),inputs=state.capacity-(state.supportInterface?1:0);
+    const sources=[...new Set(Object.values(colours).map(norm))].map(color=>({color,weight:Object.entries(areas).reduce((sum,[c,a])=>norm(c)===color?sum+a:sum,0)}));
+    const scored=new Map();
+    for(const bundle of bundles){const match=packMatch(sources,withTd(bundle.reels),inputs);if(match)scored.set(bundle.id,match);}
+    return scored.size?scored:null;
+  },
   chooseSource:source=>{state.compareBundles=null;if(source==='bundle'){state.paletteSource='bundle';invalidateRecommendation();renderWorkflow();refresh();}else{switchWorkflow(source);invalidateRecommendation();renderWorkflow();refresh();}},
   compare:bundles=>{state.paletteSource='bundle';state.compareBundles=bundles;invalidateRecommendation();refresh();},
   changeCapacity:count=>{state.capacity=state.supportInterface?4:count;state.capacityChosen=true;state.compareBundles=null;invalidateRecommendation();renderReels();renderWorkflow();refresh();},

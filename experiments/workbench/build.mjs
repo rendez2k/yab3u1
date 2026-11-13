@@ -42,4 +42,4 @@ const assets=(await readdir(out,{recursive:true})).filter(name=>/\.(js|html)$/.t
 const contents=await Promise.all(assets.map(name=>readFile(path.join(out,name),'utf8')));
 const revision=createHash('sha256').update(contents.join('\n')).digest('hex').slice(0,12);
 await Promise.all(assets.map((name,i)=>writeFile(path.join(out,name),contents[i].replace(/(['"])(\.{1,2}\/[^'"\s]+\.js)\1/g,(_,quote,url)=>`${quote}${url}?v=${revision}${quote}`))));
-console.log(`Workbench 2.7.3: ${out}`);
+console.log(`Workbench 2.7.4: ${out}`);
