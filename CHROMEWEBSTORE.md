@@ -1,6 +1,6 @@
 # Chrome Web Store listing — YAB3D for MakerWorld
 
-Last updated: 12 November 2026.
+Last updated: 13 November 2026.
 
 ## Store listing
 
@@ -94,11 +94,13 @@ Publisher: r2k. Contact: hello@productkit.digital (already published on the YAB3
 | Version | Date | Changes | Status |
 | --- | --- | --- | --- |
 | 1.5.3.7 | 2026-11-04 | Production Workbench handoff, clear fork name and updated privacy policy | Submitted; dashboard showed Pending review on 4 November |
-| 1.5.4.0 | 2026-11-12 | Optional printer connection for the YAB3D web app: content script on yab3d.uk, optional host permission requested per printer | **Not submitted.** Package built; the dashboard fields above need updating by the account holder |
+| 1.5.4.0 | 2026-11-12 | Optional printer connection for the YAB3D web app: content script on yab3d.uk, optional host permission requested per printer | **Published.** The owner reported on 13 November 2026 that the store listing had updated and that sending filament colours to a Snapmaker U1 through the extension works |
 
 Package: web/downloads/makerworld-yab3d-1.5.4.0.zip. Rebuild with `node tools/build_chrome_extension.mjs`.
 
 Store item ID: `cbgaablimljekipakmeflccalaodkfcf`.
+
+Public listing: https://chromewebstore.google.com/detail/yab3d-for-makerworld/cbgaablimljekipakmeflccalaodkfcf (answered 200 on 13 November 2026).
 
 Dashboard: https://chrome.google.com/webstore/devconsole/cd9f36a0-cb33-4e30-9299-ff472ec72a44/cbgaablimljekipakmeflccalaodkfcf/edit
 
@@ -114,7 +116,7 @@ Saved in the dashboard (464 characters; no account credentials supplied):
 
 Limitations: MakerWorld sign-in/verification remains under the user's control; popup permission may be needed; YAB3D handoff accepts projects up to 96 MiB. A live authenticated MakerWorld download and store review remain to be checked. No printer actions are triggered by this extension. Upstream MIT and derived PolyForm Noncommercial notices remain included; this package is distributed free and does not remove those conditions.
 
-### What to change in the dashboard for 1.5.4.0
+### What was changed in the dashboard for 1.5.4.0
 
 1. Package: upload `web/downloads/makerworld-yab3d-1.5.4.0.zip`.
 2. Store listing: the short description, the new feature line and the PERMISSIONS paragraph above.
