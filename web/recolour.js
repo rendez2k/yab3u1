@@ -45,7 +45,7 @@ import { FINE_BLEND_TARGETS, FINE_BLEND } from './shared/fineBlend.js';
 import { INTERWEAVE_TARGETS, INTERWEAVE_MIN_UP, interweaveProblem } from './shared/topInterweave.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.6.99";
+const VERSION = "2.7.0";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -317,6 +317,25 @@ const spoolImport = mountSpoolImport({ host: $("spoolimport"), getReels: () => s
 }, onStock: rows => { state.stock=rows; if(rows===null) state.useOwned=false; renderWorkflow(); invalidateRecommendation(); refresh(); } });
 
 let recommendationWorker=null, recommendationKey='';
+// Reel opacity (TD), kept per filament so it follows a reel through packs, suggestions and My reels.
+const TD_KEY='yab3d-reel-td';
+let reelTd={};try{reelTd=JSON.parse(localStorage.getItem(TD_KEY)||'{}')||{};}catch{reelTd={};}
+const tdKey=reel=>String(reel?.productId||norm(reel?.color)||'');
+const withTd=reels=>reels.map(reel=>Number(reelTd[tdKey(reel)])>0?{...reel,td:Number(reelTd[tdKey(reel)])}:reel);
+let reelTdShown='';
+function renderReelTd(){
+  const reels=activeReels().filter(r=>r.role!=='support-interface'),shown=JSON.stringify(reels.map(r=>[tdKey(r),r.name,r.color]));
+  if(shown===reelTdShown)return;reelTdShown=shown;
+  $('reeltd').innerHTML=reels.map((reel,index)=>`<label class="reel-td-row"><i class="swatch" style="background:${esc(reel.color)}" aria-hidden="true"></i><span>${esc(reel.name||colourName(reel.color))}</span><input type="number" data-td="${esc(tdKey(reel))}" min="0.1" max="100" step="0.1" inputmode="decimal" placeholder="not set" value="${Number(reelTd[tdKey(reel)])>0?esc(String(reelTd[tdKey(reel)])):''}" aria-label="Transmission distance in millimetres for ${esc(reel.name||colourName(reel.color))}"></label>`).join('');
+  $('reeltd').querySelectorAll('[data-td]').forEach(input=>input.addEventListener('change',()=>{
+    const value=Number(input.value);
+    if(input.value.trim()==='')delete reelTd[input.dataset.td];
+    else if(!(value>=0.1&&value<=100)){input.setCustomValidity('Enter a transmission distance from 0.1 to 100 mm, or leave it empty.');input.reportValidity();return;}
+    else reelTd[input.dataset.td]=Math.round(value*10)/10;
+    input.setCustomValidity('');try{localStorage.setItem(TD_KEY,JSON.stringify(reelTd));}catch{}
+    clearReview();refresh();
+  }));
+}
 function activeReels() {
   return state.reelView==='recommended' && state.recommendation ? state.recommendation.reels : state.reels;
 }
@@ -1043,11 +1062,11 @@ function useAssessed(assessed) {
   $("palettenote").textContent = extraColours
     ? `${surfaceColours} colours found on the selected model; ${extraColours} other palette entries are not used on its surface. The sliced-file check can confirm which can be left out of the reel load, including support and purge use.`
     : "";
-  state.mix = planBlends(assessed.sourceColors, activeReels(),activeApproximation(),
+  state.mix = planBlends(assessed.sourceColors, withTd(activeReels()),activeApproximation(),
     state.reelView==='recommended' ? state.recommendation?.slotOrder : state.appliedSlotOrder,calibrationPanel?.active() || null,Math.max(0,Math.min(blendStrength().recipes,colourLimit(state.target)-activeReels().length)));
   state.recipes = state.mix.recipes.filter(recipe=>plausibleBlend(
     activeReels()[recipe.a-1].color,activeReels()[recipe.b-1].color,recipe.color,recipe.c ? activeReels()[recipe.c-1].color : null));
-  describeBlendStrength();
+  describeBlendStrength();renderReelTd();
   /* Ticking belongs to one recipe set. A new set starts fully ticked; an empty set
      means the user turned every blend off, and that must stay off. */
   const key = JSON.stringify(state.recipes.map((r) => [r.id, r.a, r.b, r.percent, r.color, r.measuredColor]));

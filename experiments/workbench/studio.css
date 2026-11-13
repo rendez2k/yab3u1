@@ -526,3 +526,4 @@ body[data-steps=on] #inspector #bundlepanel [data-use]{display:none!important}
 #inspector .print-presets button{min-height:44px;padding:8px 6px;line-height:1.3;background:transparent}
 #inspector .print-presets button[aria-pressed=true]{background:var(--panel);box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent)}
 .print-preset-note{font-size:12px;line-height:1.5;color:var(--dim);margin:8px 0 0}
+#inspector .reel-td-row{display:grid;grid-template-columns:20px minmax(0,1fr) 96px;align-items:center;gap:10px;margin:8px 0;font-size:12px}#inspector .reel-td-row .swatch{width:20px;height:20px;border-radius:5px;border:1px solid #8886}#inspector .reel-td-row input{width:100%;min-height:36px}

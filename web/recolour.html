@@ -625,6 +625,11 @@
       <p class="hint">Prefers a blend of the right hue, such as a stronger green, over a paler or greyer colour that is numerically closer.</p>
       <label class="check"><input type="checkbox" id="bakedon" aria-describedby="bakedhint">Baked colours · three-reel blends · experimental</label>
       <p class="hint" id="bakedhint" role="status"></p>
+      <details id="reeltdoptions"><summary>Reel opacity · TD</summary>
+        <p class="hint">Optional. TD (transmission distance) is the depth in millimetres at which a filament stops letting light through. An opaque reel shows more strongly in a blend than its share of layers suggests; with a TD on every reel of a blend, the colour estimate allows for that. Leave these empty and nothing changes.</p>
+        <div id="reeltd"></div>
+        <p class="hint">Makers and communities publish TD values, for example at <a href="https://3dfilamentprofiles.com/" target="_blank" rel="noopener">3dfilamentprofiles.com</a>, and a HueForge TD test print gives your own. This is an estimate, not a measurement of your print. It does not change the suggested reel sets, only the blends chosen for the set in use.</p>
+      </details>
     </div>
     <details id="colourpriorities" class="compact-options"><summary id="prioritysummary">Important details &amp; colours</summary>
       <div id="focusbrush">

@@ -1,3 +1,11 @@
+## 2.7.0 — Opacity (TD) in the blend estimates
+
+- Each reel can now carry an optional **TD** (transmission distance): the depth in millimetres at which the filament stops letting light through. It is entered in step 2 under Fine-tune · advanced, in **Reel opacity · TD**, for whichever reels are in use: a pack, a suggestion or your own. A value is remembered for that filament.
+- When every reel of a blend has a TD, the colour estimate weights each reel by how opaque it is. A little of an opaque reel in a very translucent one is predicted to show more strongly than its share of layers, which is what prints do.
+- A recipe's layer shares are written as before; what changes is the predicted colour, and with it which recipe is judged closest. The suggested reel sets are still ranked without TD.
+- With no TD entered, every estimate is exactly as before.
+- TD values are not bundled with the filament packs. They are published by makers and communities, for example at 3dfilamentprofiles.com, whose terms do not allow their data to be redistributed. The adjustment is a reasoned estimate and has not been checked against measured prints.
+
 ## 2.6.99 — The extension is on the Chrome Web Store
 
 - YAB3D for MakerWorld 1.5.4.0 is published on the Chrome Web Store, and its printer connection has been confirmed against a Snapmaker U1.
