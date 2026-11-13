@@ -168,7 +168,8 @@ export function candidateRecipes(reels, ratios = RATIOS, predictor = mixHex) {
         // What the eye is expected to see once opacity is counted; the recipe keeps the layer share.
         const seen = Math.min(99, Math.max(1, Math.round(100 * effectiveShares([100 - percent, percent], [reels[a]?.td, reels[b]?.td])[1])));
         out.push({ a: a + 1, b: b + 1, percent,
-                   color: predictor(colors[a], colors[b], seen, a+1, b+1),
+                   // A recorded reading is of the layer share itself; only an estimate takes the opacity-adjusted share.
+                   color: predictor(colors[a], colors[b], percent, a+1, b+1, seen),
                    materials: material(reels[a]) });
       }
     }

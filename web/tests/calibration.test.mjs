@@ -62,3 +62,26 @@ for(const [a,b] of [[1,2],[2,1]]) {
   assert.deepEqual(totals,{[a]:12,5:12,6:12,7:12,[b]:12},'every tile uses the intended physical reel or native mixture');
 }
 console.log('Calibration: measured lookup, fallback, material isolation, reorder, validation, ranking, export and native five-tile projects passed.');
+
+// Shares between two readings are interpolated; nothing is carried past the readings.
+{
+  const full=validateCalibration({version:2,surface:'wall',name:'Strip',setup:'U1',context:'test',reels,
+    samples:[{a:1,b:2,percent:25,color:'#A03050'},{a:1,b:2,percent:75,color:'#304090'}],pure:['#E01010',null,null,null]});
+  const p=calibratedPredictor(reels,full);
+  assert.equal(p.predict(reels[0].color,reels[1].color,25,1,2),'#A03050');
+  const mid=p.predict(reels[0].color,reels[1].color,50,1,2);
+  assert.notEqual(mid,mixFdmHex(reels[0].color,reels[1].color,50),'50% lies between the 25% and 75% readings');
+  const [r,g,b]=[1,3,5].map(i=>parseInt(mid.slice(i,i+2),16));
+  assert.ok(r>0x30&&r<0xA0&&b>0x50&&b<0x90,`${mid} lies between the two readings`);
+  // 17% lies between the pure tile of reel 1 and the 25% reading.
+  assert.notEqual(p.predict(reels[0].color,reels[1].color,17,1,2),mixFdmHex(reels[0].color,reels[1].color,17));
+  // 83% is past the last reading and reel 2 has no pure tile: the estimate stands.
+  assert.equal(p.predict(reels[0].color,reels[1].color,83,1,2),mixFdmHex(reels[0].color,reels[1].color,83));
+  // Another pair has no readings at all.
+  assert.equal(p.predict(reels[0].color,reels[2].color,50,1,3),mixFdmHex(reels[0].color,reels[2].color,50));
+  // Pure tiles on both reels of a pair with no blend recorded: still an estimate.
+  const ends=validateCalibration({...full,samples:[],pure:['#E01010','#1060B0',null,null]});
+  assert.equal(calibratedPredictor(reels,ends).predict(reels[0].color,reels[1].color,50,1,2),mixFdmHex(reels[0].color,reels[1].color,50));
+  assert.throws(()=>validateCalibration({...full,pure:['#E01010']}),/Pure reel readings/);
+  assert.throws(()=>validateCalibration({...full,pure:['red',null,null,null]}),/Pure reel readings/);
+}

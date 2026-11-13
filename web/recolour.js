@@ -45,7 +45,7 @@ import { FINE_BLEND_TARGETS, FINE_BLEND } from './shared/fineBlend.js';
 import { INTERWEAVE_TARGETS, INTERWEAVE_MIN_UP, interweaveProblem } from './shared/topInterweave.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.7.0";
+const VERSION = "2.7.1";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -1888,10 +1888,13 @@ function calibrationSetup(surface='wall') {
       throw Error('This selection has different object layer heights. Choose a common custom layer height before calibrating.');
   }
   const nozzle=profile.match.nozzle;
-  const context=JSON.stringify({target:state.target,printer:state.bambuSetup?.machine.name,surface,subdivideMixLayer:subdivideChoice(),nozzle,height,
+  // The setting as chosen, not whether blends exist yet: this is asked while the blends are
+  // being planned, and readings that only matched once a plan existed were never used to make it.
+  const subdivide=['snapmaker','bambu','orca'].includes(state.target)&&$('subdividemix').checked;
+  const context=JSON.stringify({target:state.target,printer:state.bambuSetup?.machine.name,surface,subdivideMixLayer:subdivide,nozzle,height,
     sourceSettings:Object.fromEntries(Object.entries(sourceSettings).sort(([a],[b])=>a.localeCompare(b))),
     filamentProfiles:reels.map(r=>JSON.stringify(r.profile || null)).sort()});
-  return {reels,sourceSettings,nozzle,height,context,surface,target:state.target,bambuSetup:state.bambuSetup,subdivideMixLayer:subdivideChoice()};
+  return {reels,sourceSettings,nozzle,height,context,surface,target:state.target,bambuSetup:state.bambuSetup,subdivideMixLayer:subdivide};
 }
 calibrationPanel=mountCalibration($('blendcalibration'),{getSetup:calibrationSetup,onChange:()=>{
   clearReview();invalidateRecommendation();refresh();
