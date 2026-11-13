@@ -3,9 +3,11 @@
 // Blended colours are made by alternating whole layers of two filaments. Seen
 // edge-on, on a wall, the layers merge into one colour. Seen from above, on a
 // flat top or a shallow slope, each layer is a wide band. This rewrites the
-// paint on those faces: a blended colour becomes a fine chequer of its two
-// filaments in the XY plane, in proportion to the blend, so the mixing happens
-// within the surface instead of between layers.
+// paint on those faces: a blended colour becomes narrow stripes of its two or
+// three filaments in the XY plane, in proportion to the blend, so the mixing
+// happens within the surface instead of between layers. A blend that is nearly
+// all one filament prints as that filament alone there: one stray stripe in
+// eight shows more than the small shift in colour does.
 //
 // It works on a finished export and only changes paint. No vertex or triangle
 // is added, moved or reordered; the chequer is the slicer's own facet
@@ -29,6 +31,8 @@ const PAINT = /\s((?:slic3rpe:)?(?:mmu_segmentation|paint_color))="([0-9A-Fa-f]*
 // the reels alternate stripe by stripe.
 const ORDER = [0, 4, 2, 6, 1, 5, 3, 7];
 const MAX_TREE_DEPTH = 11, LARGE_FACE_LEAVES = 20000;
+// At or above this share, the leading filament prints the shallow face on its own.
+export const INTERWEAVE_SOLID_SHARE = 80;
 
 export function interweaveProblem({ target, cell }) {
   if (!INTERWEAVE_TARGETS.includes(target)) return 'Top surface interweave exports to Snapmaker Orca, Bambu Studio or OrcaSlicer.';
@@ -39,14 +43,24 @@ export function interweaveProblem({ target, cell }) {
 
 /** Which filament stripe number `i` prints in, for a blend with `percent` of filament b. */
 export function stripeFilament(i, recipe) {
-  const threshold = (ORDER[((i % 8) + 8) % 8] + 0.5) / 8;
-  return threshold < recipe.percent / 100 ? recipe.b : recipe.a;
+  const threshold = (ORDER[((i % 8) + 8) % 8] + 0.5) / 8, b = recipe.percent / 100;
+  if (threshold < b) return recipe.b;
+  // A third filament takes the next stripes in the same even order.
+  return recipe.c && threshold < b + recipe.percentC / 100 ? recipe.c : recipe.a;
+}
+/** The filament that prints a shallow face alone, or 0 when the blend should be striped. */
+export function solidFilament(recipe) {
+  const shares = [[recipe.a, 100 - recipe.percent - (recipe.c ? recipe.percentC : 0)], [recipe.b, recipe.percent], ...(recipe.c ? [[recipe.c, recipe.percentC]] : [])];
+  const lead = shares.reduce((best, part) => part[1] > best[1] ? part : best);
+  return lead[1] >= INTERWEAVE_SOLID_SHARE ? lead[0] : 0;
 }
 /** A point's distance across the stripes: they run diagonally in the bed plane. */
 const across = (x, y) => (x + y) * Math.SQRT1_2;
 
 /** Paint one triangle (world coordinates) as stripes of the recipe's two filaments. */
 export function weave(triangle, recipe, cell, depth, budget) {
+  const solid = solidFilament(recipe);
+  if (solid) { budget.solid = true; return { kind: 'leaf', state: solid }; }
   const us = triangle.map(p => across(p[0], p[1]));
   const i0 = Math.floor(Math.min(...us) / cell), i1 = Math.floor(Math.max(...us) / cell);
   const leaf = () => ({ kind: 'leaf', state: stripeFilament(Math.floor((us[0] + us[1] + us[2]) / 3 / cell), recipe) });
@@ -95,10 +109,16 @@ export function applyTopInterweave(entries, { target, cell = INTERWEAVE_CELL.sta
   const problem = interweaveProblem({ target, cell });
   if (problem) throw Error(problem);
   if (!entries.has(ROOT) || !entries.has(SETTINGS)) throw Error('Top surface interweave needs a native slicer project. Choose a printer project export.');
-  // Two-filament blends only; gradients change with height and are left to the slicer.
+  // Blends of two or three filaments; gradients change with height and are left to the slicer.
   const blends = new Map();
-  recipes.forEach((r, index) => { if (!r.c && !r.gradient && Number.isInteger(r.a) && Number.isInteger(r.b) && r.percent > 0 && r.percent < 100) blends.set(physical + index + 1, { a: r.a, b: r.b, percent: r.percent }); });
-  const report = { schema: 'yab3d-top-interweave', version: 1, target, cellMm: cell, maxSlopeDegrees: Math.round(Math.acos(minUp) * 180 / Math.PI), blends: blends.size, meshes: 0, faces: 0, facesInterwoven: 0, cells: 0, facesAtDetailLimit: 0, validation: { sliced: false, printed: false } };
+  recipes.forEach((r, index) => {
+    if (r.gradient || !Number.isInteger(r.a) || !Number.isInteger(r.b) || !(r.percent > 0)) return;
+    const third = r.c != null;
+    if (third && !(Number.isInteger(r.c) && r.percentC > 0)) return;
+    if (!(r.percent + (third ? r.percentC : 0) < 100)) return;
+    blends.set(physical + index + 1, third ? { a: r.a, b: r.b, percent: r.percent, c: r.c, percentC: r.percentC } : { a: r.a, b: r.b, percent: r.percent });
+  });
+  const report = { schema: 'yab3d-top-interweave', version: 2, target, cellMm: cell, solidAtSharePercent: INTERWEAVE_SOLID_SHARE, maxSlopeDegrees: Math.round(Math.acos(minUp) * 180 / Math.PI), blends: blends.size, threeFilamentBlends: [...blends.values()].filter(b => b.c).length, meshes: 0, faces: 0, facesInterwoven: 0, facesSolid: 0, cells: 0, facesAtDetailLimit: 0, validation: { sliced: false, printed: false } };
   if (!blends.size) { entries.set(INTERWEAVE_PATH, enc.encode(JSON.stringify(report, null, 2))); return report; }
 
   // Where each mesh sits in the world: its component transform, then its first build item's.
@@ -153,6 +173,7 @@ export function applyTopInterweave(entries, { target, cell = INTERWEAVE_CELL.sta
         const text = paint.encode(woven);
         paint.decode(text);                      // never write a tree the reader would refuse
         report.facesInterwoven += 1; report.cells += budget.leaves;
+        if (budget.solid && budget.leaves === 1) report.facesSolid += 1;
         if (budget.leaves >= LARGE_FACE_LEAVES) report.facesAtDetailLimit += 1;
         return found ? `<triangle${tri.replace(found[0], ` ${found[1]}="${text}"`)}/>` : `<triangle${tri} paint_color="${text}"/>`;
       })}</object>`;

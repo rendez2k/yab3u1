@@ -1,3 +1,12 @@
+## 2.7.6 — Shallow tops of three-reel blends
+
+A print of a domed model showed wide rings of single colours across every shallow surface, while the walls were smooth. Blends are made layer by layer, and on a shallow face each layer is a wide band.
+
+- **Top surface interweave now covers three-reel blends.** Flat tops and upward faces within about 30° of flat are painted as narrow stripes of all the blend's filaments, in proportion, instead of being left to the layers.
+- **Nearly solid blends print solid there.** Where a blend is at least 80% one filament, those faces print in that filament alone. One stray stripe in eight shows more than the small change in colour does.
+- **Test: three-reel blends** now turns the interweave on. The flat-top suggestion also counts three-reel blends.
+- Faces steeper than about 30° keep their layer blends, so a long three-reel pattern can still show faint rings on a mid slope. Walls and faces on the bed are unchanged. Stripes have not been confirmed by a print.
+
 ## 2.7.5 — Recorded TD values for the ELEGOO Rilievo pack
 
 - The four ELEGOO Rilievo reels now start with a transmission distance read with a TD meter from one set of reels: cyan 1.9, magenta 3.8, yellow 5.1, white 5.5 mm. Blends and pack match scores for that pack allow for the cyan being much more opaque than the rest.

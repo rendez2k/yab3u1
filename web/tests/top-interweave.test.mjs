@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as paint from '../shared/paint.js';
 import {leafTriangles} from '../shared/standard.js';
-import {applyTopInterweave,stripeFilament,weave,interweaveProblem,INTERWEAVE_PATH} from '../shared/topInterweave.js';
+import {applyTopInterweave,stripeFilament,solidFilament,weave,interweaveProblem,INTERWEAVE_PATH} from '../shared/topInterweave.js';
 
 const enc=new TextEncoder(),dec=new TextDecoder();
 const area=t=>{const u=t[1].map((v,i)=>v-t[0][i]),w=t[2].map((v,i)=>v-t[0][i]);return Math.hypot(u[1]*w[2]-u[2]*w[1],u[2]*w[0]-u[0]*w[2],u[0]*w[1]-u[1]*w[0])/2;};
@@ -74,4 +74,31 @@ test('gradients, solid colours and unsuitable requests are left alone',()=>{
   assert.match(interweaveProblem({target:'prusa',cell:1.2}),/Snapmaker Orca, Bambu Studio or OrcaSlicer/);
   assert.match(interweaveProblem({target:'snapmaker',cell:5}),/0.4 to 1.6 mm/);
   assert.throws(()=>applyTopInterweave(new Map(),{target:'snapmaker',cell:1.2,recipes,physical:4}),/native slicer project/);
+});
+
+test('three-filament blends are striped in proportion, each filament spread evenly',()=>{
+  const r={a:1,b:2,percent:25,c:3,percentC:25};
+  const counts={1:0,2:0,3:0};for(let i=0;i<8;i++)counts[stripeFilament(i,r)]++;
+  assert.deepEqual(counts,{1:4,2:2,3:2});
+  // No two neighbouring stripes of the same minority filament.
+  for(let i=0;i<8;i++){const here=stripeFilament(i,r),next=stripeFilament(i+1,r);if(here!==1)assert.notEqual(here,next);}
+  // A real face carries all three, close to the asked shares.
+  const face=[[0,0,0],[40,0,0],[0,40,0]],node=weave(face,r,0.5,0,{leaves:1}),states=new Set(paint.walkStates(node));
+  assert.deepEqual([...states].sort(),[1,2,3]);
+  // Through the export: the top of the cube, painted with a three-filament blend.
+  const entries=project(),three=[{a:1,b:2,percent:25,c:3,percentC:25},{a:2,b:3,percent:25}];
+  const report=applyTopInterweave(entries,{target:'snapmaker',cell:1.2,recipes:three,physical:4});
+  assert.equal(report.blends,2);assert.equal(report.threeFilamentBlends,1);assert.equal(report.facesInterwoven,2);
+  assert.equal(faces(entries).slice(0,4).filter(st=>st.length===3).length,2);
+});
+test('a blend that is nearly all one filament prints a shallow face in that filament alone',()=>{
+  assert.equal(solidFilament({a:1,b:2,percent:10}),1);assert.equal(solidFilament({a:1,b:2,percent:90}),2);
+  assert.equal(solidFilament({a:1,b:2,percent:20}),1);assert.equal(solidFilament({a:1,b:2,percent:25}),0);
+  assert.equal(solidFilament({a:1,b:2,percent:10,c:3,percentC:10}),1);assert.equal(solidFilament({a:1,b:2,percent:10,c:3,percentC:15}),0);
+  const entries=project(),report=applyTopInterweave(entries,{target:'snapmaker',cell:1.2,recipes:[{a:3,b:1,percent:10}],physical:4});
+  const tops=faces(entries).slice(0,4).filter(st=>st.length===1&&st[0]===3);
+  assert.equal(tops.length,2,'the upward pair is plain filament 3');
+  assert.equal(report.facesSolid,2);assert.equal(report.facesInterwoven,2);
+  // The wall painted with the same blend keeps it: layers mix it there.
+  assert.deepEqual(faces(entries).slice(4,6),[[5],[5]]);
 });

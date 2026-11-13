@@ -47,7 +47,7 @@ import { FINE_BLEND_TARGETS, FINE_BLEND } from './shared/fineBlend.js';
 import { INTERWEAVE_TARGETS, INTERWEAVE_MIN_UP, interweaveProblem } from './shared/topInterweave.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.7.5";
+const VERSION = "2.7.6";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -110,7 +110,7 @@ function bakedIssue(){
 }
 $('keephue').addEventListener('change',()=>{setHueFidelity($('keephue').checked);clearReview();invalidateRecommendation();refresh();});
 $('blendstrength').addEventListener('change',()=>{setBlendStrength($('blendstrength').value);clearReview();invalidateRecommendation();refresh();});
-// Top surface interweave: flat tops of blended colours become narrow stripes of the blend's two filaments.
+// Top surface interweave: flat tops of blended colours become narrow stripes of the blend's filaments.
 for(const id of ['interweaveon','interweavecell'])$(id).addEventListener('change',()=>{clearReview();refresh();});
 function interweaveChoice() {
   if(!INTERWEAVE_TARGETS.includes(state.target)||!$('interweaveon').checked)return null;
@@ -121,11 +121,11 @@ function interweaveIssue() {
   return choice?interweaveProblem({target:state.target,cell:choice.cell}).replace(/\.$/,''):'';
 }
 function renderInterweave(recipes) {
-  const blends=recipes.filter(r=>!r.c&&!r.gradient).length,available=INTERWEAVE_TARGETS.includes(state.target)&&Boolean(state.project)&&blends>0;
+  const blends=recipes.filter(r=>!r.gradient).length,available=INTERWEAVE_TARGETS.includes(state.target)&&Boolean(state.project)&&blends>0;
   $('interweaveoptions').hidden=!available;if(!available)return;
   $('interweavefields').hidden=!$('interweaveon').checked;
   const choice=interweaveChoice();
-  $('interweavenote').textContent=!choice?'':interweaveIssue()||`${blends} blended colour${blends===1?'':'s'} will be interwoven on upward faces within about 30° of flat, in stripes ${choice.cell} mm wide. Faces on the bed are left whole. Stripes have not been printed yet, so try it on one small part first. Unvalidated: not yet confirmed by a sliced or printed sample.`;
+  $('interweavenote').textContent=!choice?'':interweaveIssue()||`${blends} blended colour${blends===1?'':'s'} will be interwoven on upward faces within about 30° of flat, in stripes ${choice.cell} mm wide. A blend that is at least 80% one filament prints those faces in that filament alone. Steeper faces and faces on the bed keep their layer blends. Stripes have not been printed yet, so try it on one small part first. Unvalidated: not yet confirmed by a sliced or printed sample.`;
 }
 // Dual-wall mixing: painted colour in the outer wall only, one chosen filament behind it.
 for(const id of ['dualwallon','dualwallinner','dualwalldepth'])$(id).addEventListener('change',()=>{clearReview();refresh();});
@@ -1990,7 +1990,7 @@ export function workbenchFlatTops(){
   if(!state.project||!focusGeometry?.states||!focusGeometry.positions?.length)return null;
   let plan;try{plan=resultPlan();}catch{return null;}
   const physical=(plan.physical||[]).length,recipes=plan.recipes||[];
-  const blended=Object.entries(plan.mapping||{}).filter(([,slot])=>{const r=recipes[Number(slot)-physical-1];return r&&!r.c&&!r.gradient;}).map(([source])=>Number(source)).sort((a,b)=>a-b);
+  const blended=Object.entries(plan.mapping||{}).filter(([,slot])=>{const r=recipes[Number(slot)-physical-1];return r&&!r.gradient;}).map(([source])=>Number(source)).sort((a,b)=>a-b);
   const key=`${state.geometryId}|${focusGeometry.positions.length}|${blended.join()}`;
   if(key===flatTops.key)return flatTops.value;
   const p=focusGeometry.positions,states=focusGeometry.states,wanted=new Set(blended),count=Math.min(states.length,Math.floor(p.length/9));
@@ -2007,7 +2007,7 @@ export function workbenchFlatTops(){
 // Quick setups: one press sets every option a known combination needs, so a test is not a checklist.
 export const workbenchPresets=[
   {id:'standard',name:'Standard',summary:'Two-reel blends, the model\'s own layer height, Subdivide Mix Layer on. The settings of the first good print.',baked:false,fine:false,interweave:false},
-  {id:'baked',name:'Test: three-reel blends',summary:'Baked colours with the Fine blend profile: 0.12 mm layers, five thin walls, Subdivide on for two-reel blends. Print one object. Tops are left plain.',baked:true,fine:true,interweave:false},
+  {id:'baked',name:'Test: three-reel blends',summary:'Baked colours with the Fine blend profile: 0.12 mm layers, five thin walls, Subdivide on for two-reel blends. Flat and shallow tops are striped instead of banded. Print one object.',baked:true,fine:true,interweave:true},
   {id:'stripes',name:'Test: striped tops',summary:'Two-reel blends as Standard, with Top surface interweave in 0.5 mm stripes. Print one object.',baked:false,fine:false,interweave:true},
   {id:'dual',name:'Test: dual wall',summary:'Two-reel blends as Standard, with Dual-wall mixing: colour only in the outer 0.45 mm, the lightest loaded reel behind it. Print one object. Not yet confirmed by a print.',baked:false,fine:false,interweave:false,dual:true},
 ];

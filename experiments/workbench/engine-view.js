@@ -304,7 +304,7 @@ function syncSteps(loaded,busy,batch,report){
     const offered=Boolean(flat&&flat.blends&&flat.share>=0.1&&!$('interweaveoptions').hidden&&!$('interweaveon').checked&&!interweaveSkipped
       // The three-reel test leaves tops plain on purpose, also after a reload restores it.
       &&!$('bakedon').checked&&!$('fineblendon').checked);
-    if(tip.hidden===offered){tip.hidden=!offered;if(offered)tip.querySelector('p').textContent=`About ${Math.round(flat.share*100)}% of the blended surface is flat or nearly flat. Blends are made layer by layer, so those tops would print as bands of single colours. Top surface interweave paints them as narrow stripes of the two reels instead. It is experimental and the stripes have not been printed yet: try it on one small part first, and check the top layers in the slicer preview.`;}
+    if(tip.hidden===offered){tip.hidden=!offered;if(offered)tip.querySelector('p').textContent=`About ${Math.round(flat.share*100)}% of the blended surface is flat or nearly flat. Blends are made layer by layer, so those tops would print as bands of single colours. Top surface interweave paints them as narrow stripes of the blend's reels instead. It is experimental and the stripes have not been printed yet: try it on one small part first, and check the top layers in the slicer preview.`;}
   }
   if(kind==='spectrum'){
     let note=document.querySelector('[data-change-note]');
