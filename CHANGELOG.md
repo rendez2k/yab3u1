@@ -1,3 +1,13 @@
+## 2.7.1 — Swatch strips read from a photo
+
+Printed blend samples (step 2, Fine-tune · advanced) can now be made and read without a colour-measuring device.
+
+- **One strip per print.** A swatch strip is a row of small upright walls, five for each reel pair: pure A, three blends, pure B. The walls touch, so the strip comes off the bed in one piece and in order. Four reels need two strips of fifteen walls.
+- **Read from a phone photo.** Lay the strip on its back on white paper, photograph it, then mark its four corners and a patch of the paper. The paper is used to correct the light's colour and the exposure, and each wall's colour is read from its middle. Glare and overexposure are reported.
+- **More use from each reading.** A share that lies between two readings on a pair is now read off the line between them, with each reel's own pure wall as the reading at 0% and 100%. Nothing is carried beyond the readings, and a pair with no blend recorded stays an estimate.
+- **Fixed: recorded samples were not used when planning blends** with Subdivide Mix Layer on. Whether a calibration matched the current settings depended on the blends already being planned, so it never matched at the moment that mattered.
+- A photo corrected against paper is not a laboratory measurement. Readings apply to the named reels and the print settings they were made with, and stay off until you confirm them.
+
 ## 2.7.0 — Opacity (TD) in the blend estimates
 
 - Each reel can now carry an optional **TD** (transmission distance): the depth in millimetres at which the filament stops letting light through. It is entered in step 2 under Fine-tune · advanced, in **Reel opacity · TD**, for whichever reels are in use: a pack, a suggestion or your own. A value is remembered for that filament.

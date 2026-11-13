@@ -527,3 +527,11 @@ body[data-steps=on] #inspector #bundlepanel [data-use]{display:none!important}
 #inspector .print-presets button[aria-pressed=true]{background:var(--panel);box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent)}
 .print-preset-note{font-size:12px;line-height:1.5;color:var(--dim);margin:8px 0 0}
 #inspector .reel-td-row{display:grid;grid-template-columns:20px minmax(0,1fr) 96px;align-items:center;gap:10px;margin:8px 0;font-size:12px}#inspector .reel-td-row .swatch{width:20px;height:20px;border-radius:5px;border:1px solid #8886}#inspector .reel-td-row input{width:100%;min-height:36px}
+/* 2.7.1 — swatch strips and the photo reader. */
+.strip-row{display:grid;gap:6px;padding:12px;margin:8px 0;border:1px solid var(--line);border-radius:10px}.strip-row strong{font-size:13px}
+#inspector .strip-photo{display:inline-flex;align-items:center;min-height:36px;padding:8px 12px;border-radius:8px;background:var(--panel2);font-size:12px;cursor:pointer}
+.strip-photo input{position:absolute;opacity:0;width:1px;height:1px}.strip-photo:focus-within{outline:2px solid var(--focus);outline-offset:2px}
+[data-photo]{display:block;max-width:100%;height:auto;margin:10px 0;border-radius:8px;cursor:crosshair;touch-action:manipulation}
+.strip-reading{list-style:none;padding:0;margin:10px 0;display:grid;gap:4px}.strip-reading li{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:8px;align-items:center;font-size:12px}
+.strip-reading .swatch{width:22px;height:22px;border-radius:5px;border:1px solid #8886}.strip-reading code{font-size:11px}
+@media(max-width:760px){#inspector .strip-photo{min-height:44px}}

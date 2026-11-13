@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {opacity,effectiveShares,candidateRecipes,planBlends,setBakedColours,setBlendStrength,setHueFidelity} from '../shared/mix.js';
+import {opacity,effectiveShares,candidateRecipes,planBlends,RATIOS,setBakedColours,setBlendStrength,setHueFidelity} from '../shared/mix.js';
+import {calibratedPredictor} from '../shared/blendCalibration.js';
 
 const reset=()=>{setBakedColours(false);setBlendStrength('standard');setHueFidelity(false);};
 const near=(a,b,t=1e-9)=>Math.abs(a-b)<=t;
@@ -25,7 +26,8 @@ test('the planner predicts a different colour for the same recipe once opacity i
   reset();
   const plain=['#F7E400','#D9308A'].map(color=>({color,type:'PLA'}));
   const known=[{color:'#F7E400',type:'PLA',td:8},{color:'#D9308A',type:'PLA',td:1}];
-  const pick=reels=>candidateRecipes(reels).find(r=>r.percent===25);
+  // The interactive planner's predictor; the reference pair planner does not use opacity.
+  const pick=reels=>candidateRecipes(reels,RATIOS,calibratedPredictor(reels,null).predict).find(r=>r.percent===25);
   assert.equal(pick(plain).percent,25);assert.equal(pick(known).percent,25,'the recipe keeps its layer share');
   assert.notEqual(pick(known).color,pick(plain).color);
   // Only one TD given: nothing changes.
@@ -33,7 +35,7 @@ test('the planner predicts a different colour for the same recipe once opacity i
   // Three-reel blends are adjusted the same way.
   setBakedColours(true);setBlendStrength('strong');
   const three=[...known,{color:'#FFFFFF',type:'PLA',td:4}],bare=three.map(({td,...r})=>r);
-  const triple=reels=>candidateRecipes(reels).find(r=>r.c&&r.percent===25&&r.percentC===50);
+  const triple=reels=>candidateRecipes(reels,RATIOS,calibratedPredictor(reels,null).predict).find(r=>r.c&&r.percent===25&&r.percentC===50);
   assert.notEqual(triple(three).color,triple(bare).color);
   reset();
 });

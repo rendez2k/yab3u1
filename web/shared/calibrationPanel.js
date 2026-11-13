@@ -1,6 +1,8 @@
 import {CALIBRATION_KEY,validateCalibration,matchesCalibration} from './blendCalibration.js';
 import {reelIdentity} from './filamentIdentity.js';
 import {mountWallComparison} from './wallComparisonPanel.js';
+import {stripPlan,stripTiles} from './swatchStrip.js';
+import {readStrip} from './swatchReader.js';
 
 const esc = value => String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function mountCalibration(host,{getSetup,onChange}) {
@@ -20,6 +22,18 @@ export function mountCalibration(host,{getSetup,onChange}) {
     <label class="field">Import calibration JSON<input type="file" accept=".json,application/json" data-import></label>
     <div data-samples hidden>
       <p class="hint" data-description></p>
+      <div data-strip-block>
+        <h3>Swatch strips · read from a photo</h3>
+        <p class="hint">Each strip is one print: a row of small upright walls, five for each reel pair (pure A, three blends, pure B). Print it, lay it on its back on white paper, and photograph it straight on in even light with no flash. Then mark it here and the colours are read for you. A phone photo corrected against the paper is not a laboratory measurement, but it is your reels, your printer and your settings.</p>
+        <div data-strips></div>
+        <div data-reader hidden>
+          <p class="hint" role="status" aria-live="polite" data-reader-step></p>
+          <canvas data-photo tabindex="0" aria-label="Photo of the swatch strip. Click to mark the four corners of the strip, then a patch of white paper."></canvas>
+          <div class="row"><button type="button" data-reader-undo>Undo last mark</button><button type="button" data-reader-skip>No paper in the photo</button><button type="button" class="primary" data-reader-apply disabled>Use these colours</button><button type="button" data-reader-cancel>Cancel</button></div>
+          <ol class="strip-reading" data-reader-result></ol>
+        </div>
+      </div>
+      <h3>Or enter measurements by hand</h3>
       <label class="field">Reel pair<select data-pair></select></label>
       <button type="button" data-tiles>Download five test tiles (.3mf)</button>
       <p class="hint">Left to right: pure A, 75% A / 25% B, 50/50, 25% A / 75% B, pure B. Measure the selected surface with a colour measurement device; enter its sRGB hex values below. Leave unmeasured blends blank. Screen colours and ordinary photos are not measurements.</p>
@@ -70,7 +84,8 @@ export function mountCalibration(host,{getSetup,onChange}) {
     $('[data-enable]').checked=enabled;
     $('[data-enable]').disabled=(!valid&&!enabled)||!profile?.samples.length||profile?.surface!=='wall';
     $('[data-tiles]').disabled=busy||!valid||!$('[data-pair]').value;
-    $('[data-coverage]').textContent=profile && profile.surface!=='wall' ? 'Top-face measurements are saved for experiments. They are not applied to vertical model surfaces. Download a backup before starting a wall test.' : enabled ? `${profile.samples.length} recorded recipes enabled for the named reel set. ${valid ? '' : 'This palette uses different reels, so its blends remain estimates. '}Unrecorded recipes still use estimates; no values are extrapolated.`
+    renderStrips();
+    $('[data-coverage]').textContent=profile && profile.surface!=='wall' ? 'Top-face measurements are saved for experiments. They are not applied to vertical model surfaces. Download a backup before starting a wall test.' : enabled ? `${profile.samples.length} recorded recipes enabled for the named reel set. ${valid ? '' : 'This palette uses different reels, so its blends remain estimates. '}Shares between two readings on a pair are read off the line between them; anything outside the readings stays an estimate.`
       : profile && !valid ? 'Measurements are inactive: choose the recorded reel set, output and layer settings. Reconfirm actual reels and print conditions before enabling.'
       : 'Measurements are off. Saving or importing does not enable them automatically. Reconfirm your actual reels and print conditions each visit.';
   }
@@ -125,6 +140,95 @@ export function mountCalibration(host,{getSetup,onChange}) {
       download(bytes,`blend-${$('[data-surface]').value}-test-slots-${ordered.join('-')}.3mf`,'model/3mf');
       status('Test project downloaded. Slice it and check the five assignments and layer settings before printing.');
     }catch(error){status(error.message);}finally{busy=false;render();}
+  };
+  // ---- Swatch strips: one print per strip, read back from a photo ----
+  const reader={strip:-1,image:null,scale:1,marks:[],paper:undefined,result:null};
+  const marksNeeded=['the strip’s top-left corner','its top-right corner','its bottom-right corner','its bottom-left corner','a clean patch of the white paper'];
+  function strips(){return profile&&profile.surface==='wall'?stripPlan(profile.reels):[];}
+  function renderStrips(){
+    const list=strips(),box=$('[data-strips]');
+    $('[data-strip-block]').hidden=!profile;
+    if(!profile)return;
+    if(profile.surface!=='wall'){box.innerHTML='<p class="hint">Swatch strips sample vertical walls. Start a calibration with Test surface set to Vertical walls to use them.</p>';return;}
+    box.innerHTML=list.map((pairs,i)=>{
+      const done=pairs.filter(([a,b])=>[25,50,75].every(p=>profile.samples.some(s=>s.a===a&&s.b===b&&s.percent===p))).length;
+      return `<div class="strip-row"><strong>Strip ${i+1} of ${list.length}</strong><span class="hint">${pairs.map(([a,b])=>`${esc(profile.reels[a-1].name)} + ${esc(profile.reels[b-1].name)}`).join(' · ')}${done?` · ${done} of ${pairs.length} pair${pairs.length===1?'':'s'} read`:''}</span><div class="row"><button type="button" data-strip-download="${i}">Download strip ${i+1} (.3mf)</button><label class="strip-photo">Read a photo<input type="file" accept="image/*" data-strip-photo="${i}"></label></div></div>`;
+    }).join('')||'<p class="hint">These reels have no pair of the same material to blend.</p>';
+    box.querySelectorAll('[data-strip-download]').forEach(button=>{button.disabled=busy||!compatible();button.onclick=()=>downloadStrip(Number(button.dataset.stripDownload));});
+    box.querySelectorAll('[data-strip-photo]').forEach(input=>input.onchange=()=>openPhoto(Number(input.dataset.stripPhoto),input));
+  }
+  async function downloadStrip(index){
+    busy=true;render();status('Building the swatch strip…');
+    try{
+      const current=setup();if(!compatible())throw Error('Restore the recorded reel set and settings before generating a strip.');
+      const find=r=>current.reels.findIndex(c=>reelIdentity(c)===reelIdentity(r))+1,pairs=strips()[index].map(([a,b])=>[find(profile.reels[a-1]),find(profile.reels[b-1])]);
+      const {swatchStrip}=await import('./swatchStrip.js');
+      const bytes=await swatchStrip({...current,pairs,name:`Swatch strip ${index+1}`});
+      download(bytes,`swatch-strip-${index+1}-of-${strips().length}.3mf`,'model/3mf');
+      status(`Strip ${index+1} downloaded: ${pairs.length*5} walls in a row. Slice it and check the assignments before printing. The file lists the walls in order.`);
+    }catch(error){status(error.message);}finally{busy=false;render();}
+  }
+  function drawPhoto(){
+    const canvas=$('[data-photo]'),ctx=canvas.getContext('2d');if(!reader.image||!ctx)return;
+    ctx.drawImage(reader.image,0,0,canvas.width,canvas.height);
+    ctx.lineWidth=2;ctx.strokeStyle='#00E5FF';ctx.fillStyle='#00E5FF';ctx.font='bold 14px sans-serif';
+    const points=reader.marks.map(([x,y])=>[x*reader.scale,y*reader.scale]);
+    if(points.length>1){ctx.beginPath();points.slice(0,4).forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));if(points.length>=4)ctx.closePath();ctx.stroke();}
+    points.forEach(([x,y],i)=>{ctx.beginPath();ctx.arc(x,y,6,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#000';ctx.stroke();ctx.strokeStyle='#00E5FF';ctx.fillText(i<4?String(i+1):'paper',x+9,y-9);});
+  }
+  function readerStep(){
+    const step=reader.paper===null?5:reader.marks.length;
+    $('[data-reader-step]').textContent=step<4?`Click ${marksNeeded[step]} (mark ${step+1} of 4). Mark the outer corners of the whole row of walls.`
+      :step===4?`Now click ${marksNeeded[4]}, in the same light as the strip.`:'Check the colours below against the strip, then choose Use these colours.';
+    $('[data-reader-skip]').hidden=step!==4;$('[data-reader-undo]').disabled=!reader.marks.length&&reader.paper!==null;
+  }
+  function readNow(){
+    const pairs=strips()[reader.strip],tiles=stripTiles(pairs);
+    try{
+      const pixels=reader.pixels,out=readStrip(pixels,reader.marks.slice(0,4),tiles.length,reader.marks[4]||null);
+      reader.result={tiles,colours:out.tiles.map(t=>t.hex)};
+      $('[data-reader-result]').innerHTML=tiles.map((tile,i)=>`<li><i class="swatch" style="background:${out.tiles[i].hex}"></i><span>${esc(tile.percent===0?`Pure ${profile.reels[tile.a-1].name}`:tile.percent===100?`Pure ${profile.reels[tile.b-1].name}`:`${100-tile.percent}% ${profile.reels[tile.a-1].name} + ${tile.percent}% ${profile.reels[tile.b-1].name}`)}</span><code>${out.tiles[i].hex}</code></li>`).join('');
+      $('[data-reader-apply]').disabled=false;
+      status(out.warnings.join(' ')||'Colours read. Compare them with the strip before using them.');
+    }catch(error){reader.result=null;$('[data-reader-result]').innerHTML='';$('[data-reader-apply]').disabled=true;status(error.message);}
+  }
+  async function openPhoto(index,input){
+    const file=input.files[0];input.value='';if(!file)return;
+    try{
+      if(file.size>40*1048576)throw Error('Choose a photo smaller than 40 MB.');
+      const image=await createImageBitmap(file);
+      // Work on a copy no larger than 2400 px: plenty for tiles, and quick to read.
+      const fit=Math.min(1,2400/Math.max(image.width,image.height)),w=Math.round(image.width*fit),h=Math.round(image.height*fit);
+      const full=document.createElement('canvas');full.width=w;full.height=h;full.getContext('2d',{willReadFrequently:true}).drawImage(image,0,0,w,h);
+      reader.pixels=full.getContext('2d').getImageData(0,0,w,h);reader.image=full;reader.strip=index;reader.marks=[];reader.paper=undefined;reader.result=null;
+      $('[data-reader]').hidden=false;
+      const canvas=$('[data-photo]'),room=Math.max(240,canvas.parentElement.clientWidth||320);
+      reader.scale=Math.min(1,room/w);canvas.width=Math.round(w*reader.scale);canvas.height=Math.round(h*reader.scale);
+      $('[data-reader-result]').innerHTML='';$('[data-reader-apply]').disabled=true;drawPhoto();readerStep();
+      status(`Photo loaded for strip ${index+1}.`);canvas.scrollIntoView?.({block:'nearest'});
+    }catch(error){status(error.message||'That file could not be read as a photo.');}
+  }
+  $('[data-photo]').addEventListener('click',event=>{
+    if(!reader.image||reader.marks.length>=5||reader.paper===null)return;
+    const canvas=$('[data-photo]'),box=canvas.getBoundingClientRect();
+    reader.marks.push([(event.clientX-box.left)*(canvas.width/box.width)/reader.scale,(event.clientY-box.top)*(canvas.height/box.height)/reader.scale]);
+    drawPhoto();readerStep();if(reader.marks.length===5)readNow();
+  });
+  $('[data-reader-skip]').onclick=()=>{if(reader.marks.length===4){reader.paper=null;readerStep();readNow();}};
+  $('[data-reader-undo]').onclick=()=>{if(reader.paper===null)reader.paper=undefined;else reader.marks.pop();reader.result=null;$('[data-reader-result]').innerHTML='';$('[data-reader-apply]').disabled=true;drawPhoto();readerStep();};
+  $('[data-reader-cancel]').onclick=()=>{reader.image=null;reader.result=null;$('[data-reader]').hidden=true;status('Photo closed. Nothing was saved.');};
+  $('[data-reader-apply]').onclick=()=>{
+    try{
+      if(!reader.result)return;
+      const pairs=strips()[reader.strip],samples=profile.samples.filter(s=>!pairs.some(([a,b])=>s.a===a&&s.b===b)),pure=(profile.pure||profile.reels.map(()=>null)).slice();
+      reader.result.tiles.forEach((tile,i)=>{
+        const colour=reader.result.colours[i];
+        if(tile.percent===0)pure[tile.a-1]=colour;else if(tile.percent===100)pure[tile.b-1]=colour;else samples.push({a:tile.a,b:tile.b,percent:tile.percent,color:colour});
+      });
+      profile=validateCalibration({...profile,samples,pure,revision:(profile.revision||0)+1});
+      enabled=false;const saved=persist();reader.image=null;reader.result=null;$('[data-reader]').hidden=true;renderProfile();render();onChange();
+      if(saved)status(`Strip ${reader.strip+1} saved: ${pairs.length*3} blends and the reels' own colours. Tick "Use these measurements" below to apply them.`);
+    }catch(error){status(error.message);}
   };
   renderProfile();render();
   return {render,openWallComparison:bundleId=>{host.open=true;wallComparison.choosePack(bundleId);$('[data-wall-comparison]').scrollIntoView({block:'start'});},active:()=>enabled&&compatible()&&profile?.surface==='wall'?profile:null};
