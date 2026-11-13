@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { packMatch, matchShare, MATCH_ZERO_DISTANCE } from '../shared/packMatch.js';
-import { FILAMENT_BUNDLES } from '../shared/filamentBundles.js';
+import { FILAMENT_BUNDLES, MEASURED_TD } from '../shared/filamentBundles.js';
 
 const reel = (color, extra = {}) => ({ color, type: 'PLA', ...extra });
 assert.equal(matchShare(0), 1); assert.equal(matchShare(MATCH_ZERO_DISTANCE), 0); assert.equal(matchShare(999), 0);
@@ -41,4 +41,12 @@ for (const bundle of FILAMENT_BUNDLES) {
   assert.ok(m && m.percent >= 0 && m.percent <= 100 && m.reels.length <= 4, bundle.id);
 }
 assert.ok(Date.now() - started < 4000, `catalogue scoring took ${Date.now() - started} ms`);
+// Every recorded TD belongs to a catalogue reel and is a plausible reading.
+const ids = new Set(FILAMENT_BUNDLES.flatMap(b => b.reels.map(r => r.productId)));
+for (const [id, td] of Object.entries(MEASURED_TD)) { assert.ok(ids.has(id), id); assert.ok(td >= 0.1 && td <= 100, id); }
+assert.equal(Object.keys(MEASURED_TD).length, 4);
+// A more opaque reel takes over a blend: with the recorded values the pack scores differently.
+const rilievo = FILAMENT_BUNDLES.find(b => b.id === 'elegoo-rilievo').reels;
+const plain = packMatch(model, rilievo, 4), weighted = packMatch(model, rilievo.map(r => ({ ...r, td: MEASURED_TD[r.productId] })), 4);
+assert.ok(plain && weighted && JSON.stringify(plain.colours) !== JSON.stringify(weighted.colours), 'TD should change the predicted blends');
 console.log('PASS pack match: exact, blends, area weighting, reel selection, catalogue in', Date.now() - started, 'ms; largest pack', Math.max(...FILAMENT_BUNDLES.map(b => b.reels.length)), 'reels');

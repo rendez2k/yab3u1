@@ -34,6 +34,13 @@ export const FILAMENT_BUNDLES=Object.freeze([
   {...bundle('esun-pla-plus-cmyk','PLA+ CMYK · 4 × 1 kg','eSUN','Lithophane CMYK','retail',make('eSUN','PLA+','Lithophane CMYK',[...cm,'White'],[...nominal,'#FFFFFF'],esun),esun,'Cyan, magenta, yellow and white (no black). Sold for colour lithophanes; nominal display swatches, not measured model blends. Use the appropriate PLA+ filament profile in your slicer.','backlit'),checked:'2026-11-05'},
 ]);
 
+// Transmission distance (mm) read with a TD-1 meter from one set of reels. A starting value
+// for people without a meter: reels vary between batches, and a value the user enters wins.
+export const MEASURED_TD=Object.freeze({
+  'elegoo/pla-cmyk/rilievo/cyan':1.9,'elegoo/pla-cmyk/rilievo/magenta':3.8,
+  'elegoo/pla-cmyk/rilievo/yellow':5.1,'elegoo/pla-cmyk/rilievo/white':5.5,
+});
+
 export function validateBundle(value) {
   if(!value || typeof value.name!=='string' || !value.name.trim() || value.name.length>120 || !Array.isArray(value.reels) || value.reels.length<1 || value.reels.length>24)throw Error('A filament set needs a name and 1–24 reels.');
   const reels=value.reels.map(r=>{
