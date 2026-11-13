@@ -41,11 +41,12 @@ import { mountCalibration } from './shared/calibrationPanel.js';
 import { interfacePalette, validateInterfaceExport, interfaceSlot, modelSlots } from './shared/supportInterface.js';
 import { interfaceDemoFile } from './shared/supportInterfaceDemo.js';
 import { DUAL_WALL_TARGETS, dualWallProblem } from './shared/dualWall.js';
+import { collectSettings, readSettings, applySettings, describeSettings, SETTINGS_MAX_BYTES } from './shared/settingsFile.js';
 import { FINE_BLEND_TARGETS, FINE_BLEND } from './shared/fineBlend.js';
 import { INTERWEAVE_TARGETS, INTERWEAVE_MIN_UP, interweaveProblem } from './shared/topInterweave.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.7.2";
+const VERSION = "2.7.3";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -2021,6 +2022,36 @@ export function workbenchApplyPreset(id){
   $('bakedon').checked=preset.baked;setBakedColours(preset.baked);
   clearReview();invalidateRecommendation();refresh();
   return true;
+}
+// Back up my settings: a file copy of what this browser keeps, and a way to load one back.
+{
+  const say=text=>{$('settingsstatus').textContent=text;};let pending=null;
+  const close=()=>{pending=null;$('settingsconfirm').hidden=true;$('settingsload').value='';};
+  $('settingssave').addEventListener('click',()=>{
+    try{
+      saveReels();const {file,skipped}=collectSettings(localStorage);
+      if(!Object.keys(file.data).length){say('Nothing is saved in this browser yet.');return;}
+      const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([JSON.stringify(file,null,1)],{type:'application/json'}));
+      link.download=`yab3d-settings-${file.saved.slice(0,10)}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);
+      say(`Saved ${describeSettings(file.data)}.`+(skipped.length?` Left out because it could not be read: ${skipped.join(', ')}.`:''));
+    }catch(error){say(error.message||'The settings file could not be saved.');}
+  });
+  $('settingsload').addEventListener('change',async event=>{
+    const file=event.target.files[0];close();if(!file)return;
+    try{
+      if(file.size>SETTINGS_MAX_BYTES)throw Error('Settings file must be smaller than 2 MB.');
+      pending=readSettings(await file.text());
+      $('settingsfound').textContent=`This file holds ${describeSettings(pending)}. Loading it replaces those in this browser and reloads the page, so an open model will need opening again.`;
+      $('settingsconfirm').hidden=false;say('');
+    }catch(error){close();say(error.message||'This settings file could not be read.');}
+  });
+  $('settingscancel').addEventListener('click',()=>{close();say('Nothing was changed.');});
+  $('settingsapply').addEventListener('click',()=>{
+    if(!pending)return;
+    try{applySettings(localStorage,pending);}catch{close();say('Browser storage is unavailable, so nothing was loaded.');return;}
+    let page=window;try{if(window.top.location.origin===location.origin)page=window.top;}catch{}
+    page.location.reload();
+  });
 }
 export const workbenchSource = () => retainedModel?.file || null;
 export function workbenchPreview() {
