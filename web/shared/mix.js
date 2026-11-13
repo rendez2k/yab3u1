@@ -133,6 +133,27 @@ function mixThree(colours, counts) {
   return tripleCache.get(key);
 }
 
+// Opacity. A blend is not a plain average of its reels by layer count: an opaque reel
+// covers what is behind it, while a translucent one lets its neighbours show through,
+// so the opaque reel counts for more than its share of layers. TD (transmission
+// distance, in millimetres) is the usual hobby measure of this: the depth at which a
+// filament stops letting light through. When every reel of a blend has a TD, each
+// share is weighted by how opaque that reel is over the depth of one printed line.
+// This is a reasoned estimate, not a measured model, and it is only used when the TDs
+// are supplied: without them the plain shares stand.
+export const OPACITY_DEPTH = 0.45;
+export function opacity(td) {
+  const n = Number(td);
+  return Number.isFinite(n) && n > 0 ? 1 - Math.exp(-3 * OPACITY_DEPTH / n) : null;
+}
+/** Shares (any positive numbers) re-weighted by each reel's opacity; unchanged when a TD is missing. */
+export function effectiveShares(shares, tds) {
+  const weights = tds.map(opacity), total = shares.reduce((a, b) => a + b, 0);
+  if (weights.some(w => w === null) || !(total > 0)) return shares.map(v => v / (total || 1));
+  const seen = shares.map((v, i) => v * weights[i]), sum = seen.reduce((a, b) => a + b, 0);
+  return seen.map(v => v / sum);
+}
+
 const material = (reel) => String((reel || {}).type || "PLA").trim().toUpperCase();
 
 export function candidateRecipes(reels, ratios = RATIOS, predictor = mixHex) {
@@ -144,8 +165,10 @@ export function candidateRecipes(reels, ratios = RATIOS, predictor = mixHex) {
       if (!colors[a] || !colors[b]) continue;
       if (material(reels[a]) !== material(reels[b])) continue;
       for (const percent of ratios) {
+        // What the eye is expected to see once opacity is counted; the recipe keeps the layer share.
+        const seen = Math.min(99, Math.max(1, Math.round(100 * effectiveShares([100 - percent, percent], [reels[a]?.td, reels[b]?.td])[1])));
         out.push({ a: a + 1, b: b + 1, percent,
-                   color: predictor(colors[a], colors[b], percent, a+1, b+1),
+                   color: predictor(colors[a], colors[b], seen, a+1, b+1),
                    materials: material(reels[a]) });
       }
     }
@@ -159,7 +182,7 @@ export function candidateRecipes(reels, ratios = RATIOS, predictor = mixHex) {
     if (new Set([colors[a], colors[b], colors[c]]).size < 3) continue;
     for (const share of shares) {
       out.push({ a: a + 1, b: b + 1, percent: share.percent, c: c + 1, percentC: share.percentC,
-                 color: mixThree([colors[a], colors[b], colors[c]], share.counts), materials: material(reels[a]) });
+                 color: mixThree([colors[a], colors[b], colors[c]], effectiveShares(share.counts, [reels[a]?.td, reels[b]?.td, reels[c]?.td]).map(v => Math.max(1, Math.round(v * 1000)))), materials: material(reels[a]) });
     }
   }
   return out;
