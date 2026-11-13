@@ -1,7 +1,7 @@
 import {mountBundlePanel} from './shared/bundlePanel.js';
 import {mountFocusBrush} from './shared/focusBrush.js';
 import {focusWeights} from './shared/focusRegions.js';
-import {FILAMENT_BUNDLES} from './shared/filamentBundles.js';
+import {FILAMENT_BUNDLES,MEASURED_TD} from './shared/filamentBundles.js';
 import {substituteReel} from './shared/filamentIdentity.js';
 import {mountBambuPrinterPicker} from './shared/bambuPrinterPicker.js';
 import {resolveBambuLayerHeight} from './shared/bambuProfiles.js';
@@ -47,7 +47,7 @@ import { FINE_BLEND_TARGETS, FINE_BLEND } from './shared/fineBlend.js';
 import { INTERWEAVE_TARGETS, INTERWEAVE_MIN_UP, interweaveProblem } from './shared/topInterweave.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.7.4";
+const VERSION = "2.7.5";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -323,12 +323,14 @@ let recommendationWorker=null, recommendationKey='';
 const TD_KEY='yab3d-reel-td';
 let reelTd={};try{reelTd=JSON.parse(localStorage.getItem(TD_KEY)||'{}')||{};}catch{reelTd={};}
 const tdKey=reel=>String(reel?.productId||norm(reel?.color)||'');
-const withTd=reels=>reels.map(reel=>Number(reelTd[tdKey(reel)])>0?{...reel,td:Number(reelTd[tdKey(reel)])}:reel);
+// The user's own value wins; a pack reel with a recorded reading falls back to that.
+const tdOf=reel=>Number(reelTd[tdKey(reel)])>0?Number(reelTd[tdKey(reel)]):MEASURED_TD[reel?.productId]||0;
+const withTd=reels=>reels.map(reel=>tdOf(reel)>0?{...reel,td:tdOf(reel)}:reel);
 let reelTdShown='';
 function renderReelTd(){
   const reels=activeReels().filter(r=>r.role!=='support-interface'),shown=JSON.stringify(reels.map(r=>[tdKey(r),r.name,r.color]));
   if(shown===reelTdShown)return;reelTdShown=shown;
-  $('reeltd').innerHTML=reels.map((reel,index)=>`<label class="reel-td-row"><i class="swatch" style="background:${esc(reel.color)}" aria-hidden="true"></i><span>${esc(reel.name||colourName(reel.color))}</span><input type="number" data-td="${esc(tdKey(reel))}" min="0.1" max="100" step="0.1" inputmode="decimal" placeholder="not set" value="${Number(reelTd[tdKey(reel)])>0?esc(String(reelTd[tdKey(reel)])):''}" aria-label="Transmission distance in millimetres for ${esc(reel.name||colourName(reel.color))}"></label>`).join('');
+  $('reeltd').innerHTML=reels.map((reel,index)=>`<label class="reel-td-row"><i class="swatch" style="background:${esc(reel.color)}" aria-hidden="true"></i><span>${esc(reel.name||colourName(reel.color))}</span><input type="number" data-td="${esc(tdKey(reel))}" min="0.1" max="100" step="0.1" inputmode="decimal" placeholder="${MEASURED_TD[reel.productId]?esc(MEASURED_TD[reel.productId]+' · recorded'):'not set'}" value="${Number(reelTd[tdKey(reel)])>0?esc(String(reelTd[tdKey(reel)])):''}" aria-label="Transmission distance in millimetres for ${esc(reel.name||colourName(reel.color))}"></label>`).join('');
   $('reeltd').querySelectorAll('[data-td]').forEach(input=>input.addEventListener('change',()=>{
     const value=Number(input.value);
     if(input.value.trim()==='')delete reelTd[input.dataset.td];

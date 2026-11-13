@@ -1,3 +1,8 @@
+## 2.7.5 — Recorded TD values for the ELEGOO Rilievo pack
+
+- The four ELEGOO Rilievo reels now start with a transmission distance read with a TD meter from one set of reels: cyan 1.9, magenta 3.8, yellow 5.1, white 5.5 mm. Blends and pack match scores for that pack allow for the cyan being much more opaque than the rest.
+- Reel opacity · TD shows these as "recorded". A value you type replaces it, since reels vary between batches.
+
 ## 2.7.4 — Estimated colour match on every pack
 
 - In step 2, Packs, each pack now shows an **estimated colour match** for the model you have loaded, and the closest packs are listed first.
