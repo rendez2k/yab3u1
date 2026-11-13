@@ -1,3 +1,10 @@
+## 2.7.4 — Estimated colour match on every pack
+
+- In step 2, Packs, each pack now shows an **estimated colour match** for the model you have loaded, and the closest packs are listed first.
+- The score looks at every colour in the model, finds the nearest result the pack can give (one of its reels or a blend of them) and weights the misses by how much surface each colour covers.
+- When a pack has more reels than the printer has inputs, the best reels that fit are scored and the card names the ones left out. A saved set of five reels, for example cyan, magenta, yellow, white and black, therefore shows whether this model is better served by white or by black.
+- Reel TD values you have entered are used. The score is an estimate for ranking packs, from the same blend model as the preview. It is not a measurement of a print.
+
 ## 2.7.3 — Back up my settings
 
 - Step 2, Fine-tune · advanced has a new block, **Back up my settings**. It saves your loaded reels, reel TD values, printed blend samples and saved filament sets to one file, and loads such a file back.

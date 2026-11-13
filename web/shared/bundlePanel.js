@@ -1,7 +1,7 @@
 import {FILAMENT_BUNDLES,CATALOGUE_REVISION,BAMBU_PALETTE_SWATCH_SOURCE,bundleFit,validateBundle,selectBundleReels,smallerBundleOptions,compatibleBundleOptions} from './filamentBundles.js';
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const KEY='yab3d-filament-sets-v1';
-export function mountBundlePanel(host,{getState,compare,chooseSource,changeCapacity,changePriority,ownedChanged,printComparison}) {
+export function mountBundlePanel(host,{getState,compare,chooseSource,changeCapacity,changePriority,ownedChanged,printComparison,packScores}) {
   let custom=[],owned=[],selected=[];
   try{const saved=JSON.parse(localStorage.getItem(KEY)||'{}');custom=(saved.custom||[]).slice(0,40).map(validateBundle);owned=(saved.owned||[]).filter(x=>typeof x==='string').slice(0,100);}catch{/* Damaged saved data never applies. */}
   host.innerHTML=`<div class="palette-source" role="group" aria-label="Choose your filament colours"><button type="button" data-start="model" title="Suggest colours from the model">Suggest</button><button type="button" data-start="loaded" title="Use my own reels">My reels</button><button type="button" data-start="bundle" title="Choose a filament pack">Packs</button></div>
@@ -10,6 +10,7 @@ export function mountBundlePanel(host,{getState,compare,chooseSource,changeCapac
     <p class="hint" data-capacity-note></p>
     <div data-pack-controls hidden>
       <h3 class="bundle-step">1 · Pick a pack</h3>
+      <p class="hint" data-match-note hidden></p>
       <div class="bundle-cards" data-cards role="radiogroup" aria-label="Filament pack"></div>
       <label class="field" hidden>Filament set<select data-bundle><option value="">Choose a filament set…</option></select></label>
       <div data-set hidden>
@@ -46,15 +47,27 @@ export function mountBundlePanel(host,{getState,compare,chooseSource,changeCapac
   function options(){const value=$('[data-bundle]').value;$('[data-bundle]').innerHTML='<option value="">Choose a filament set…</option>'+sets().map(b=>`<option value="${esc(b.id)}">${esc(b.brand?b.brand+' · ':'')}${esc(b.name)} · ${b.reels.length} reels${b.application==='backlit'?' · backlit':''}</option>`).join('');$('[data-bundle]').value=value;cards();}
   const short=(reel,brand)=>brand&&reel.name.startsWith(brand+' ')?reel.name.slice(brand.length+1):reel.name;
   // Packs as a pick-list: the name is readable in full and the colours are visible before choosing.
+  // With a model loaded each pack carries an estimated colour match, and the closest packs come first.
+  let scores=null,scoreKey='';
   function cards(){
-    const value=$('[data-bundle]').value;
-    $('[data-cards]').innerHTML=sets().map(b=>`<button type="button" role="radio" aria-checked="${b.id===value}" data-card="${esc(b.id)}"><span class="bundle-card-copy"><small>${esc(b.brand||'My set')}${b.application==='backlit'?' · backlit':''}</small><strong>${esc(b.name)}</strong></span><span class="bundle-dots" aria-hidden="true">${b.reels.slice(0,8).map(r=>`<i style="background:${esc(r.color)}"></i>`).join('')}</span></button>`).join('');
+    const value=$('[data-bundle]').value,match=b=>scores?.get(b.id);
+    const order=scores?[...sets()].sort((x,y)=>(match(y)?.percent??-1)-(match(x)?.percent??-1)):sets();
+    $('[data-cards]').innerHTML=order.map(b=>{const m=match(b),left=m&&m.reels.length<b.reels.length?b.reels.filter((_,i)=>!m.reels.includes(i)).map(r=>short(r,b.brand)).join(', '):'';
+      return `<button type="button" role="radio" aria-checked="${b.id===value}" data-card="${esc(b.id)}"${m?` title="Estimated colour match for this model: ${m.percent}%${left?`, loading its best ${m.reels.length} reels (without ${esc(left)})`:''}"`:''}><span class="bundle-card-copy"><small>${esc(b.brand||'My set')}${b.application==='backlit'?' · backlit':''}</small><strong>${esc(b.name)}</strong>${left?`<small class="bundle-card-left">Best without ${esc(left)}</small>`:''}</span><span class="bundle-card-side">${m?`<b class="bundle-match" data-level="${m.percent>=70?'good':m.percent>=50?'fair':'poor'}">${m.percent}%<span class="sr-only"> estimated colour match</span></b>`:''}<span class="bundle-dots" aria-hidden="true">${b.reels.slice(0,8).map(r=>`<i style="background:${esc(r.color)}"></i>`).join('')}</span></span></button>`;}).join('');
     $('[data-cards]').querySelectorAll('[data-card]').forEach(card=>card.onclick=()=>{$('[data-bundle]').value=card.dataset.card;$('[data-bundle]').onchange();$(`[data-card="${CSS.escape(card.dataset.card)}"]`)?.focus();});
+    $('[data-match-note]').hidden=!scores;
+    if(scores)$('[data-match-note]').textContent='The percentage is an estimated colour match for this model, closest first: how near each pack\'s reels and blends come to the model\'s colours, weighted by surface area. An estimate for ranking packs, not a measurement.';
+  }
+  function rescore(){
+    let next=null;try{next=packScores?.(sets())||null;}catch{next=null;}
+    const key=next?JSON.stringify([...next].map(([id,m])=>[id,m.percent,m.reels])):'';
+    if(key===scoreKey)return;scoreKey=key;scores=next;cards();
   }
   // Choosing a pack or changing its reels previews straight away when the reels fit the printer.
   function autoPreview(){const s=getState(),bundle=currentBundle();if(!bundle||!selected.length)return;try{const chosen=selectBundleReels(bundle,selected);if(bundleFit(chosen,s.capacity,s.supportInterface).fits)preview([chosen]);}catch(e){status(e.message);}}
   function resetSelection(){selected=currentBundle()?.reels.map((_,i)=>i)||[];render();}
   function render(){
+    rescore();
     const s=getState(),max=s.target==='bambu'?24:s.target==='snapmaker'?4:16,source=s.paletteSource||s.workflow||'model';
     host.querySelectorAll('[data-start]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.start===source)));$('[data-pack-controls]').hidden=source!=='bundle';$('[data-collection]').hidden=source==='model';
     $('[data-capacity]').innerHTML=Array.from({length:max},(_,i)=>`<option value="${i+1}">${i+1} input${i?'s':''}</option>`).join('');
