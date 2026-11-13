@@ -45,7 +45,7 @@ import { FINE_BLEND_TARGETS, FINE_BLEND } from './shared/fineBlend.js';
 import { INTERWEAVE_TARGETS, INTERWEAVE_MIN_UP, interweaveProblem } from './shared/topInterweave.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.7.1";
+const VERSION = "2.7.2";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -1996,20 +1996,23 @@ export const workbenchPresets=[
   {id:'standard',name:'Standard',summary:'Two-reel blends, the model\'s own layer height, Subdivide Mix Layer on. The settings of the first good print.',baked:false,fine:false,interweave:false},
   {id:'baked',name:'Test: three-reel blends',summary:'Baked colours with the Fine blend profile: 0.12 mm layers, five thin walls, Subdivide on for two-reel blends. Print one object. Tops are left plain.',baked:true,fine:true,interweave:false},
   {id:'stripes',name:'Test: striped tops',summary:'Two-reel blends as Standard, with Top surface interweave in 0.5 mm stripes. Print one object.',baked:false,fine:false,interweave:true},
+  {id:'dual',name:'Test: dual wall',summary:'Two-reel blends as Standard, with Dual-wall mixing: colour only in the outer 0.45 mm, the lightest loaded reel behind it. Print one object. Not yet confirmed by a print.',baked:false,fine:false,interweave:false,dual:true},
 ];
 const presetAvailable=()=>Boolean(state.project)&&FINE_BLEND_TARGETS.includes(state.target)&&state.strategy!=='solid'&&state.strategy!=='source';
 export function workbenchPresetState(){
   if(!presetAvailable())return {available:false,current:''};
-  const now={baked:$('bakedon').checked,fine:$('fineblendon').checked,interweave:$('interweaveon').checked};
-  const extra=$('dualwallon').checked||$('blendstrength').value!=='strong'||!$('keephue').checked||(now.interweave&&Number($('interweavecell').value)!==0.5)||!$('subdividemix').checked;
-  const match=extra?null:workbenchPresets.find(p=>p.baked===now.baked&&p.fine===now.fine&&p.interweave===now.interweave);
+  const now={baked:$('bakedon').checked,fine:$('fineblendon').checked,interweave:$('interweaveon').checked,dual:$('dualwallon').checked};
+  const extra=(now.dual&&Number($('dualwalldepth').value)!==0.45)||$('blendstrength').value!=='strong'||!$('keephue').checked||(now.interweave&&Number($('interweavecell').value)!==0.5)||!$('subdividemix').checked;
+  const match=extra?null:workbenchPresets.find(p=>p.baked===now.baked&&p.fine===now.fine&&p.interweave===now.interweave&&Boolean(p.dual)===now.dual);
   return {available:true,current:match?.id||''};
 }
 export function workbenchApplyPreset(id){
   const preset=workbenchPresets.find(p=>p.id===id);if(!preset||!presetAvailable()||state.loading||state.exporting)return false;
   $('blendstrength').value='strong';setBlendStrength('strong');
   $('keephue').checked=true;setHueFidelity(true);
-  $('dualwallon').checked=false;
+  $('dualwallon').checked=Boolean(preset.dual);
+  // A fresh list makes the inner reel fall back to the lightest one loaded.
+  if(preset.dual){$('dualwalldepth').value='0.45';$('dualwallinner').value='';$('dualwallinner').dataset.list='';}
   $('interweaveon').checked=preset.interweave;$('interweavecell').value='0.5';
   if($('fineblendon').checked!==preset.fine){$('fineblendon').checked=preset.fine;applyFineBlendControls();}
   // Without the fine profile the proven pairing is the model's own layer height with Subdivide on.
