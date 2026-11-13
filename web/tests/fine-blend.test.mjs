@@ -32,23 +32,26 @@ test('a blend row carries one repeat, and a second for inner walls only when ask
   assert.deepEqual(tokens.slice(-2),['34','43']);
 });
 
-test('the fine blend profile rewrites the blend table and wall settings only',async()=>{
+test('the fine blend profile changes wall settings only and leaves the blend table alone',async()=>{
   const entries=await readZip(new Uint8Array(readFileSync(new URL('./five-colours.3mf',import.meta.url))));
   const project=readProject(entries),plate=project.plates[0].id;
   const reels=['#FFFFFF','#000000','#FF0000','#00FF00'].map(color=>({color,type:'PLA'}));
   const recipes=[{a:1,b:2,percent:50},{a:1,b:3,percent:25,c:4,percentC:25}];
-  const built=exportProject(project,plate,null,{target:'snapmaker',reels,mapping:{1:1,2:2,3:3,4:4,5:5,6:6},recipes});
+  const built=exportProject(project,plate,null,{target:'snapmaker',reels,mapping:{1:1,2:2,3:3,4:4,5:5,6:6},recipes,subdivideMixLayer:true});
   assert.deepEqual(built.problems,[]);
+  const read=()=>JSON.parse(new TextDecoder().decode(built.entries.get('Metadata/project_settings.config')));
+  const before=read();
   const models=[...built.entries].filter(([name])=>/\.model$/.test(name)).map(([name,data])=>[name,Buffer.from(data).toString('hex')]);
   const result=applyFineBlend(built.entries,{target:'snapmaker',recipes});
-  assert.equal(result.blends,2);assert.equal(result.walls,5);
-  const cfg=JSON.parse(new TextDecoder().decode(built.entries.get('Metadata/project_settings.config')));
-  const rows=cfg.mixed_filament_definitions.split(';');
-  assert.match(rows[0],/,cm1,12$/);assert.match(rows[1],/,g134,.*,cm1,[134]{4}$/);
-  assert.match(rows[2],/,d1,/,'the disabled automatic rows are untouched');
-  assert.equal(cfg.wall_loops,'5');assert.equal(cfg.outer_wall_line_width,'0.3');assert.equal(cfg.inner_wall_line_width,'0.3');assert.equal(cfg.dithering_local_z_mode,'0');
+  assert.equal(result.blends,2);assert.equal(result.threeReel,1);assert.equal(result.walls,5);
+  const cfg=read(),rows=cfg.mixed_filament_definitions.split(';');
+  // The two-reel blend stays a ratio row for the slicer to subdivide; the three-reel one keeps its layer pattern.
+  assert.equal(cfg.mixed_filament_definitions,before.mixed_filament_definitions);
+  assert.equal(rows[0],'1,2,1,1,50,0,g,w,m2,z0,xa0,xb0,d0,o0,u1');assert.match(rows[1],/,g134,.*,cm1,[134]{4}$/);
+  assert.equal(cfg.dithering_local_z_mode,before.dithering_local_z_mode);
+  assert.equal(cfg.wall_loops,'5');assert.equal(cfg.outer_wall_line_width,'0.3');assert.equal(cfg.inner_wall_line_width,'0.3');
   for(const [name,hex]of models)assert.equal(Buffer.from(built.entries.get(name)).toString('hex'),hex,`${name} is unchanged`);
   const manifest=JSON.parse(new TextDecoder().decode(built.entries.get(FINE_BLEND_PATH)));
-  assert.deepEqual(manifest.validation,{sliced:false,printed:false});assert.equal(manifest.patterns[0],'12');
+  assert.deepEqual(manifest.validation,{sliced:false,printed:false});
   assert.throws(()=>applyFineBlend(built.entries,{target:'bambu',recipes}),/Snapmaker Orca/);
 });

@@ -1,3 +1,13 @@
+## 2.6.98 — Fine blend profile keeps the slicer's mixing for two-reel blends
+
+A print with the three-reel setup at 0.10 mm showed three-reel blends working on steep surfaces, but two-reel blends came out pinstriped: the profile had written them as whole layers and turned Subdivide Mix Layer off.
+
+- **Two-reel blends are left to the slicer again**, with Subdivide Mix Layer on, as in a standard export. The profile no longer rewrites the blend table.
+- **Three-reel blends keep their layer patterns.**
+- **Layers are 0.12 mm**, the thinnest the slicer accepts together with Subdivide. Five walls 0.3 mm wide are unchanged.
+- The **Test: three-reel blends** quick setup applies all of this in one press.
+- This combination has not been printed yet.
+
 ## 2.6.97 — Printer connection through the browser extension; realistic pack colours
 
 - **The YAB3D Chrome extension (1.5.4.0) can now connect the online page to your printer.** With it installed, "Check U1 & review slots" on yab3d.uk works without the local launcher. The first time, the extension opens a page naming your printer's address and asks you to allow it; after that, Check and Send work from the page you already have open.

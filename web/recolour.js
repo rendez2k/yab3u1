@@ -45,7 +45,7 @@ import { FINE_BLEND_TARGETS, FINE_BLEND } from './shared/fineBlend.js';
 import { INTERWEAVE_TARGETS, INTERWEAVE_MIN_UP, interweaveProblem } from './shared/topInterweave.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.6.97";
+const VERSION = "2.6.98";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -88,8 +88,8 @@ function describeBlendStrength() {
   $('blendstrengthhint').textContent=`Up to ${Math.min(chosen.recipes,room)} blended colours from ${chosen.ratios.length} ratios. `
     +(chosen.name==='standard'?'Each blend repeats within 4 layers.':`Finer ratios repeat over up to ${chosen.period} layers, so they can show as faint bands: use thin layers, and Subdivide Mix Layer (step 3, Print options) where it is offered.`);
   const three=(state.recipes||[]).filter(r=>r.c).length;
-  $('bakedhint').textContent=`Mixes three reels where that comes closer, such as skin tones and browns. Each blend repeats every ${chosen.layers} whole layers at most, one reel per layer, so it turns on the Fine blend profile (0.10 mm layers). A first print at 0.16 mm came out as plain stripes. Even with thin layers, domes and gentle slopes will show rings of the separate reels; it suits upright walls best.`
-    +(three?` In use now: ${three} three-reel blend${three===1?'':'s'}.`:'')+' Thin-layer result not yet printed.';
+  $('bakedhint').textContent=`Mixes three reels where that comes closer, such as skin tones and browns. Each blend repeats every ${chosen.layers} whole layers at most, one reel per layer, so it turns on the Fine blend profile (0.12 mm layers). At 0.16 mm these printed as plain stripes; at 0.10 mm they blended on steep surfaces. Domes and gentle slopes still show rings of the separate reels.`
+    +(three?` In use now: ${three} three-reel blend${three===1?'':'s'}.`:'')+' Estimated colours.';
 }
 setBlendStrength($('blendstrength').value);
 setHueFidelity($('keephue').checked);
@@ -134,7 +134,7 @@ function fineBlendIssue(){return fineBlendChoice()&&dualWallChoice()?'use either
 function applyFineBlendControls(){
   if($('fineblendon').checked){
     fineBlendBefore={layer:$('spectrumlayermode').value,subdivide:$('subdividemix').checked};
-    $('spectrumlayermode').value='height:0.10';$('subdividemix').checked=false;
+    $('spectrumlayermode').value='height:0.12';$('subdividemix').checked=true;
   }else if(fineBlendBefore){$('spectrumlayermode').value=fineBlendBefore.layer;$('subdividemix').checked=fineBlendBefore.subdivide;fineBlendBefore=null;}
 }
 $('fineblendon').addEventListener('change',()=>{applyFineBlendControls();clearReview();refresh();});
@@ -142,8 +142,8 @@ function renderFineBlend(recipes){
   const blends=(recipes||[]).filter(r=>!r.gradient).length,available=FINE_BLEND_TARGETS.includes(state.target)&&Boolean(state.project)&&blends>0;
   $('fineblendoptions').hidden=!available;if(!available)return;
   $('fineblendnote').textContent=$('fineblendon').checked
-    ?`On: ${FINE_BLEND.layerHeight.toFixed(2)} mm layers, ${FINE_BLEND.walls} walls ${FINE_BLEND.lineWidth} mm wide, Subdivide Mix Layer off. ${blends} blend${blends===1?'':'s'} written as explicit layer patterns. Prints slower. Not yet confirmed by a print.`
-    :'Makes the stripes in blended colours finer: thin layers and five thin walls, with every blend written as an explicit layer pattern.';
+    ?`On: ${FINE_BLEND.layerHeight.toFixed(2)} mm layers, ${FINE_BLEND.walls} walls ${FINE_BLEND.lineWidth} mm wide, Subdivide Mix Layer on. Two-reel blends are mixed by the slicer within each layer; three-reel blends alternate whole layers. Prints slower. This combination has not been printed yet.`
+    :'Makes the stripes in blended colours finer: 0.12 mm layers and five thin walls, with Subdivide Mix Layer kept on for two-reel blends.';
 }
 function dualWallChoice() {
   if(!DUAL_WALL_TARGETS.includes(state.target)||!$('dualwallon').checked)return null;
@@ -1972,14 +1972,14 @@ export function workbenchFlatTops(){
 // Quick setups: one press sets every option a known combination needs, so a test is not a checklist.
 export const workbenchPresets=[
   {id:'standard',name:'Standard',summary:'Two-reel blends, the model\'s own layer height, Subdivide Mix Layer on. The settings of the first good print.',baked:false,fine:false,interweave:false},
-  {id:'baked',name:'Test: three-reel blends',summary:'Baked colours with the Fine blend profile: 0.10 mm layers, five thin walls. Print one object. Tops are left plain.',baked:true,fine:true,interweave:false},
+  {id:'baked',name:'Test: three-reel blends',summary:'Baked colours with the Fine blend profile: 0.12 mm layers, five thin walls, Subdivide on for two-reel blends. Print one object. Tops are left plain.',baked:true,fine:true,interweave:false},
   {id:'stripes',name:'Test: striped tops',summary:'Two-reel blends as Standard, with Top surface interweave in 0.5 mm stripes. Print one object.',baked:false,fine:false,interweave:true},
 ];
 const presetAvailable=()=>Boolean(state.project)&&FINE_BLEND_TARGETS.includes(state.target)&&state.strategy!=='solid'&&state.strategy!=='source';
 export function workbenchPresetState(){
   if(!presetAvailable())return {available:false,current:''};
   const now={baked:$('bakedon').checked,fine:$('fineblendon').checked,interweave:$('interweaveon').checked};
-  const extra=$('dualwallon').checked||$('blendstrength').value!=='strong'||!$('keephue').checked||(now.interweave&&Number($('interweavecell').value)!==0.5)||(!now.fine&&!$('subdividemix').checked);
+  const extra=$('dualwallon').checked||$('blendstrength').value!=='strong'||!$('keephue').checked||(now.interweave&&Number($('interweavecell').value)!==0.5)||!$('subdividemix').checked;
   const match=extra?null:workbenchPresets.find(p=>p.baked===now.baked&&p.fine===now.fine&&p.interweave===now.interweave);
   return {available:true,current:match?.id||''};
 }
@@ -1991,7 +1991,8 @@ export function workbenchApplyPreset(id){
   $('interweaveon').checked=preset.interweave;$('interweavecell').value='0.5';
   if($('fineblendon').checked!==preset.fine){$('fineblendon').checked=preset.fine;applyFineBlendControls();}
   // Without the fine profile the proven pairing is the model's own layer height with Subdivide on.
-  if(!preset.fine){$('spectrumlayermode').value='preserve';$('subdividemix').checked=true;}
+  if(!preset.fine)$('spectrumlayermode').value='preserve';
+  $('subdividemix').checked=true;
   $('bakedon').checked=preset.baked;setBakedColours(preset.baked);
   clearReview();invalidateRecommendation();refresh();
   return true;
