@@ -1,3 +1,13 @@
+## 2.7.7 — Inner-wall mixing test
+
+A layer blend changes reel from one layer to the next, and that change is what shows as stripes on a wall and rings on a slope. This release adds a test of mixing in the depth of the wall instead.
+
+- **New Quick setup, Test: inner-wall mixing.** Each blend is written as two 40-layer cycles, one for the outer wall and one for the walls behind it. The outer wall keeps to a single reel wherever the blend allows, and the other reels go into the inner walls, where they are seen through it.
+- It prints at 0.10 mm layers with five 0.3 mm walls, inner walls first, and Subdivide Mix Layer off. Shallow tops are still striped by Top surface interweave.
+- How much of the colour the outer wall carries is estimated from each reel's TD. It is not measured.
+- **Slice it before anything else.** An earlier form of an inner-wall cycle stopped Snapmaker Orca on a painted model. If the slicer closes, use Test: three-reel blends instead. Not yet sliced or printed.
+- The same option is under Print options · advanced, Fine blend profile, as "Mix in the inner walls".
+
 ## 2.7.6 — Shallow tops of three-reel blends
 
 A print of a domed model showed wide rings of single colours across every shallow surface, while the walls were smooth. Blends are made layer by layer, and on a shallow face each layer is a wide band.

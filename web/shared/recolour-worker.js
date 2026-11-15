@@ -17,6 +17,7 @@ import { downscale, renderIso } from "./raster.js";
 import { applyDualWall } from "./dualWall.js";
 import { applyTopInterweave } from "./topInterweave.js";
 import { applyFineBlend } from "./fineBlend.js";
+import { applyInnerWallMix } from "./innerWallMix.js";
 import { layoutOffsets, planLayout } from "./layout.js";
 import { surfaceAreas } from './surfaceWeights.js';
 import {exportComparisonJob} from './comparisonExport.js';
@@ -475,6 +476,10 @@ self.onmessage = async (event) => {
       const fineBlend = message.options.fineBlend
         ? applyFineBlend(built.entries, { target: message.options.target, recipes: message.options.recipes || [] })
         : null;
+      // Inner-wall mixing replaces the blend rows the fine profile left alone.
+      if (fineBlend && message.options.fineBlend.innerWall)
+        fineBlend.innerWall = applyInnerWallMix(built.entries, { target: message.options.target, recipes: message.options.recipes || [],
+          reels: (message.options.reelTds || []).map(td => ({ td })) });
       const bytes = await writeZip([...built.entries].map(([name, data]) =>
         ({ name, data })));
       post({ type: "exported", id, bytes, ms: Date.now() - started,

@@ -44,10 +44,11 @@ import { DUAL_WALL_TARGETS, dualWallProblem } from './shared/dualWall.js';
 import { packMatch } from './shared/packMatch.js';
 import { collectSettings, readSettings, applySettings, describeSettings, SETTINGS_MAX_BYTES } from './shared/settingsFile.js';
 import { FINE_BLEND_TARGETS, FINE_BLEND } from './shared/fineBlend.js';
+import { INNER_WALL } from './shared/innerWallMix.js';
 import { INTERWEAVE_TARGETS, INTERWEAVE_MIN_UP, interweaveProblem } from './shared/topInterweave.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.7.6";
+const VERSION = "2.7.7";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -131,19 +132,27 @@ function renderInterweave(recipes) {
 for(const id of ['dualwallon','dualwallinner','dualwalldepth'])$(id).addEventListener('change',()=>{clearReview();refresh();});
 // Fine blend profile: thin layers, five thin walls, and blends written with an offset pattern for the inner walls.
 let fineBlendBefore=null;
-function fineBlendChoice(){return FINE_BLEND_TARGETS.includes(state.target)&&$('fineblendon').checked;}
+// Inner-wall mixing is a variant of the fine profile: steady outer wall, the mix in the walls behind it.
+const innerWallOn=()=>$('fineblendon').checked&&$('innerwallon').checked;
+function fineBlendChoice(){return FINE_BLEND_TARGETS.includes(state.target)&&$('fineblendon').checked?{innerWall:innerWallOn()}:false;}
 function fineBlendIssue(){return fineBlendChoice()&&dualWallChoice()?'use either the fine blend profile or dual-wall mixing, not both':'';}
+// Whole-layer cycles need Subdivide off, which also allows the 0.10 mm colour-mixing layer.
+function setFineBlendLayers(){const inner=$('innerwallon').checked;$('spectrumlayermode').value=inner?`height:${INNER_WALL.layerHeight.toFixed(2)}`:'height:0.12';$('subdividemix').checked=!inner;}
 function applyFineBlendControls(){
   if($('fineblendon').checked){
     fineBlendBefore={layer:$('spectrumlayermode').value,subdivide:$('subdividemix').checked};
-    $('spectrumlayermode').value='height:0.12';$('subdividemix').checked=true;
-  }else if(fineBlendBefore){$('spectrumlayermode').value=fineBlendBefore.layer;$('subdividemix').checked=fineBlendBefore.subdivide;fineBlendBefore=null;}
+    setFineBlendLayers();
+  }else if(fineBlendBefore){$('innerwallon').checked=false;$('spectrumlayermode').value=fineBlendBefore.layer;$('subdividemix').checked=fineBlendBefore.subdivide;fineBlendBefore=null;}
 }
 $('fineblendon').addEventListener('change',()=>{applyFineBlendControls();clearReview();refresh();});
+$('innerwallon').addEventListener('change',()=>{if($('fineblendon').checked)setFineBlendLayers();clearReview();invalidateRecommendation();refresh();});
 function renderFineBlend(recipes){
   const blends=(recipes||[]).filter(r=>!r.gradient).length,available=FINE_BLEND_TARGETS.includes(state.target)&&Boolean(state.project)&&blends>0;
   $('fineblendoptions').hidden=!available;if(!available)return;
-  $('fineblendnote').textContent=$('fineblendon').checked
+  $('innerwallrow').hidden=!$('fineblendon').checked;
+  $('fineblendnote').textContent=innerWallOn()
+    ?`On, with inner-wall mixing: ${INNER_WALL.layerHeight.toFixed(2)} mm layers, ${INNER_WALL.walls} walls ${INNER_WALL.lineWidth} mm wide, inner walls printed first, Subdivide Mix Layer off. Each blend keeps one reel on the outer wall where it can and puts the others in the walls behind it. An earlier form of this stopped the slicer on a painted model: slice it before anything else, and if the slicer closes, turn this off. Not yet sliced or printed.`
+    :$('fineblendon').checked
     ?`On: ${FINE_BLEND.layerHeight.toFixed(2)} mm layers, ${FINE_BLEND.walls} walls ${FINE_BLEND.lineWidth} mm wide, Subdivide Mix Layer on. Two-reel blends are mixed by the slicer within each layer; three-reel blends alternate whole layers. Prints slower. This combination has not been printed yet.`
     :'Makes the stripes in blended colours finer: 0.12 mm layers and five thin walls, with Subdivide Mix Layer kept on for two-reel blends.';
 }
@@ -1619,7 +1628,7 @@ function renderExport() {
   if(state.supportInterface && !blocking) $('exportnote').textContent=`Experimental PETG interface: three PLA model reels, ${mixtures} blend recipe(s), and PETG interfaces in slot ${interfaceSlot(payload.physical)}. Supports enabled; three dense contact layers at 0 mm Z gap; PLA prime-tower shell. Check the sliced result and test a small print first.`;
   if(!blocking && subdivideChoice()) $('exportnote').textContent+=' Subdivide Mix Layer is enabled for this export.';
   if(!blocking && interweaveChoice()) $('exportnote').textContent+=' Top surface interweave is on.';
-  if(!blocking && fineBlendChoice()) $('exportnote').textContent+=' Fine blend profile is on.';
+  if(!blocking && fineBlendChoice()) $('exportnote').textContent+=innerWallOn()?' Fine blend profile is on, with inner-wall mixing.':' Fine blend profile is on.';
   if(!blocking && dualWallChoice()) $('exportnote').textContent+=` Dual-wall mixing is on: inner walls use slot ${dualWallChoice().slot}.`;
   if (!blocking && target === "prusa") {
     $("exportnote").textContent += " Open the file as a project in PrusaSlicer with a "
@@ -1676,7 +1685,7 @@ $("export").addEventListener("click", async () => {
       mapping: payload.mapping, recipes: payload.recipes,
       title: state.project.title, u1Nozzle:state.u1Nozzle, layout:state.layout,
       bambuSetup:state.bambuSetup,preserveSourceSettings:true,calibration:calibrationPanel?.active() || null,
-      layerHeight:layerChoice(),supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice(),dualWall:dualWallChoice(),interweave:interweaveChoice(),fineBlend:fineBlendChoice(),
+      layerHeight:layerChoice(),supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice(),dualWall:dualWallChoice(),interweave:interweaveChoice(),fineBlend:fineBlendChoice(),reelTds:(payload.physical||[]).map(tdOf),
       thumbnails: { main: rendered.main, small: rendered.small || null },
     });
     if (exportRevision() !== revision) return;
@@ -1968,7 +1977,7 @@ blendEditor=mountBlendEditor($('blendeditor'),{read:()=>{
 export const workbenchFocus={stop:()=>focusBrush?.stop(),key:event=>focusBrush?.key(event)};
 export {state, load, refresh, renderObjects, renderQuantityFields, layoutChanged, textureImporter};
 const workbenchSettingKeys=['capacity','capacityChosen','priority','paletteSource','importantColours','focusMarks','compareBundles','bambuSetup','bambuRequired','bambuError','target','u1Nozzle','supportInterface','interfacePosition','reels','strategy','overrides','manualBlends','workflow','modelType','keepExact','useOwned','modelApplied','modeReels','locked','appliedSlotOrder','loadedTuning','reelView'];
-export function workbenchCaptureSettings(){return {state:structuredClone(Object.fromEntries(workbenchSettingKeys.filter(k=>state[k]!==undefined).map(k=>[k,state[k]]))),controls:Object.fromEntries(['spectrumlayermode','spectrumlayerheight','subdividemix','dualwallon','dualwalldepth','blendstrength','keephue','bakedon','fineblendon','interweaveon','interweavecell'].map(id=>[id,$(id).type==='checkbox'?$(id).checked:$(id).value]))};}
+export function workbenchCaptureSettings(){return {state:structuredClone(Object.fromEntries(workbenchSettingKeys.filter(k=>state[k]!==undefined).map(k=>[k,state[k]]))),controls:Object.fromEntries(['spectrumlayermode','spectrumlayerheight','subdividemix','dualwallon','dualwalldepth','blendstrength','keephue','bakedon','fineblendon','innerwallon','interweaveon','interweavecell'].map(id=>[id,$(id).type==='checkbox'?$(id).checked:$(id).value]))};}
 export function workbenchRestoreSettings(saved){if(!saved||!state.project)return;Object.assign(state,saved.state);state.reviewed=false;for(const [id,value]of Object.entries(saved.controls))if($(id).type==='checkbox')$(id).checked=value;else $(id).value=value;if(saved.controls.blendstrength)setBlendStrength($('blendstrength').value);setHueFidelity($('keephue').checked);setBakedColours($('bakedon').checked);renderReels();renderWorkflow();return refresh();}
 export async function workbenchSourceColours(){if(!state.project)return null;return (await background().preview(state.plateId,state.objects,'original',paletteOf(null,'original'),null,state.geometryId,state.assessed?.counts.triangles||0,state.layout)).colors;}
 export function workbenchObjects() {
@@ -2010,13 +2019,14 @@ export const workbenchPresets=[
   {id:'baked',name:'Test: three-reel blends',summary:'Baked colours with the Fine blend profile: 0.12 mm layers, five thin walls, Subdivide on for two-reel blends. Flat and shallow tops are striped instead of banded. Print one object.',baked:true,fine:true,interweave:true},
   {id:'stripes',name:'Test: striped tops',summary:'Two-reel blends as Standard, with Top surface interweave in 0.5 mm stripes. Print one object.',baked:false,fine:false,interweave:true},
   {id:'dual',name:'Test: dual wall',summary:'Two-reel blends as Standard, with Dual-wall mixing: colour only in the outer 0.45 mm, the lightest loaded reel behind it. Print one object. Not yet confirmed by a print.',baked:false,fine:false,interweave:false,dual:true},
+  {id:'inner',name:'Test: inner-wall mixing',summary:'Three-reel blends with the Fine blend profile, but each blend keeps one reel on the outer wall and mixes in the walls behind it: 0.10 mm layers, five thin walls, Subdivide off. Slice it first: if the slicer closes, use Test: three-reel blends instead. Print one object.',baked:true,fine:true,interweave:true,inner:true},
 ];
 const presetAvailable=()=>Boolean(state.project)&&FINE_BLEND_TARGETS.includes(state.target)&&state.strategy!=='solid'&&state.strategy!=='source';
 export function workbenchPresetState(){
   if(!presetAvailable())return {available:false,current:''};
-  const now={baked:$('bakedon').checked,fine:$('fineblendon').checked,interweave:$('interweaveon').checked,dual:$('dualwallon').checked};
-  const extra=(now.dual&&Number($('dualwalldepth').value)!==0.45)||$('blendstrength').value!=='strong'||!$('keephue').checked||(now.interweave&&Number($('interweavecell').value)!==0.5)||!$('subdividemix').checked;
-  const match=extra?null:workbenchPresets.find(p=>p.baked===now.baked&&p.fine===now.fine&&p.interweave===now.interweave&&Boolean(p.dual)===now.dual);
+  const now={baked:$('bakedon').checked,fine:$('fineblendon').checked,interweave:$('interweaveon').checked,dual:$('dualwallon').checked,inner:innerWallOn()};
+  const extra=(now.dual&&Number($('dualwalldepth').value)!==0.45)||$('blendstrength').value!=='strong'||!$('keephue').checked||(now.interweave&&Number($('interweavecell').value)!==0.5)||$('subdividemix').checked===now.inner;
+  const match=extra?null:workbenchPresets.find(p=>p.baked===now.baked&&p.fine===now.fine&&p.interweave===now.interweave&&Boolean(p.dual)===now.dual&&Boolean(p.inner)===now.inner);
   return {available:true,current:match?.id||''};
 }
 export function workbenchApplyPreset(id){
@@ -2028,9 +2038,10 @@ export function workbenchApplyPreset(id){
   if(preset.dual){$('dualwalldepth').value='0.45';$('dualwallinner').value='';$('dualwallinner').dataset.list='';}
   $('interweaveon').checked=preset.interweave;$('interweavecell').value='0.5';
   if($('fineblendon').checked!==preset.fine){$('fineblendon').checked=preset.fine;applyFineBlendControls();}
+  $('innerwallon').checked=Boolean(preset.inner)&&preset.fine;if(preset.fine)setFineBlendLayers();
   // Without the fine profile the proven pairing is the model's own layer height with Subdivide on.
   if(!preset.fine)$('spectrumlayermode').value='preserve';
-  $('subdividemix').checked=true;
+  $('subdividemix').checked=!preset.inner;
   $('bakedon').checked=preset.baked;setBakedColours(preset.baked);
   clearReview();invalidateRecommendation();refresh();
   return true;
