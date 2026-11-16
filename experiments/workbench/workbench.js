@@ -158,6 +158,26 @@ exportMenu.addEventListener('keydown',event=>{
   else if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();items[(at+(event.key==='ArrowDown'?1:items.length-1))%items.length]?.focus();}
 });
 $('help').addEventListener('click',()=>$('help-dialog').showModal());
+// What's new: the version number opens the latest release notes, and carries a dot until they have been seen.
+{
+  const button=$('whats-new'),version=button.textContent.trim(),SEEN='yab3d-seen-version';
+  let seen=null;try{seen=localStorage.getItem(SEEN);}catch{}
+  // Someone opening the app for the first time has nothing to catch up on.
+  if(seen===null){try{localStorage.setItem(SEEN,version);}catch{}}
+  else if(seen!==version){button.dataset.fresh='';button.title="What's new: updated since your last visit";}
+  let loaded=false;
+  button.addEventListener('click',async()=>{
+    $('news-dialog').showModal();delete button.dataset.fresh;button.title="What's new in this version";
+    try{localStorage.setItem(SEEN,version);}catch{}
+    if(loaded)return;
+    $('news-status').textContent='Loading…';
+    try{
+      const [{renderNews},response]=await Promise.all([import('./whats-new.mjs'),fetch('whats-new.json')]);
+      if(!response.ok)throw Error('missing');
+      renderNews($('news-list'),await response.json());$('news-status').textContent='The ten most recent releases, newest first.';loaded=true;
+    }catch{$('news-status').textContent='The release notes could not be loaded. Try again in a moment.';}
+  });
+}
 $('keep-session').checked=session.enabled();
 $('keep-session').addEventListener('change',async()=>{await session.setEnabled($('keep-session').checked);if(!$('keep-session').checked){savedMeta=null;resume.hidden=true;}else if(file)rememberSource(file);});
 $('integrations').addEventListener('click',()=>{$('help-dialog').close();frames.get(active)?.api?.setPanel('help');});

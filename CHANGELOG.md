@@ -1,3 +1,15 @@
+## 2.7.8 — What's new, and a clear warning on backlit packs
+
+Packs sold for backlit lithophanes, such as ELEGOO Rilievo and eSUN Lithophane CMYK, are a poor fit for ordinary models: their reels are very translucent and uneven, and they have no black.
+
+- Each such pack now says so on its card, in plain words, before you choose it.
+- They are listed below every other pack, whatever their match score.
+- Choosing one shows why it is not recommended. It can still be used.
+
+**Test: inner-wall mixing is withdrawn.** Snapmaker Orca stopped with an access violation when slicing it, the same fault an earlier inner-wall cycle caused. The Quick setup and its option are gone. Use Test: three-reel blends.
+
+**What's new.** The version number at the top is now a button. It opens the notes for the ten most recent releases, and shows a dot when the app has been updated since your last visit.
+
 ## 2.7.7 — Inner-wall mixing test
 
 A layer blend changes reel from one layer to the next, and that change is what shows as stripes on a wall and rings on a slope. This release adds a test of mixing in the depth of the wall instead.

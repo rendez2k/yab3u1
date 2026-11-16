@@ -33,6 +33,10 @@ await cp(path.join(here,'vendor'),path.join(out,'vendor'),{recursive:true});
 await mkdir(path.join(out,'fonts'),{recursive:true});
 await cp(path.join(here,'node_modules/@fontsource-variable/ibm-plex-sans/files/ibm-plex-sans-latin-wght-normal.woff2'),path.join(out,'fonts/plex-sans.woff2'));
 await cp(path.join(here,'node_modules/@fontsource-variable/ibm-plex-sans/LICENSE'),path.join(out,'fonts/OFL.txt'));
+// Release notes for the version button: the ten newest changelog entries.
+const {parseChangelog}=await import('./whats-new.mjs');
+await writeFile(path.join(out,'whats-new.json'),JSON.stringify(parseChangelog(await readFile(path.join(root,'CHANGELOG.md'),'utf8'),10)));
+await cp(path.join(here,'whats-new.mjs'),path.join(out,'whats-new.mjs'));
 const shell=(await readFile(path.join(here,'index.html'),'utf8')).replace('href="studio.css"',`href="${studioStyle}"`);
 await writeFile(path.join(out,'index.html'),shell);
 await writeFile(path.join(out,'recolour.html'),shell.replace('data-initial="converter"','data-initial="spectrum"'));
@@ -42,4 +46,4 @@ const assets=(await readdir(out,{recursive:true})).filter(name=>/\.(js|html)$/.t
 const contents=await Promise.all(assets.map(name=>readFile(path.join(out,name),'utf8')));
 const revision=createHash('sha256').update(contents.join('\n')).digest('hex').slice(0,12);
 await Promise.all(assets.map((name,i)=>writeFile(path.join(out,name),contents[i].replace(/(['"])(\.{1,2}\/[^'"\s]+\.js)\1/g,(_,quote,url)=>`${quote}${url}?v=${revision}${quote}`))));
-console.log(`Workbench 2.7.7: ${out}`);
+console.log(`Workbench 2.7.8: ${out}`);
