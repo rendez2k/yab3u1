@@ -48,7 +48,7 @@ import { INNER_WALL } from './shared/innerWallMix.js';
 import { INTERWEAVE_TARGETS, INTERWEAVE_MIN_UP, interweaveProblem } from './shared/topInterweave.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.7.7";
+const VERSION = "2.7.8";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -133,11 +133,14 @@ for(const id of ['dualwallon','dualwallinner','dualwalldepth'])$(id).addEventLis
 // Fine blend profile: thin layers, five thin walls, and blends written with an offset pattern for the inner walls.
 let fineBlendBefore=null;
 // Inner-wall mixing is a variant of the fine profile: steady outer wall, the mix in the walls behind it.
-const innerWallOn=()=>$('fineblendon').checked&&$('innerwallon').checked;
+// Withdrawn: Snapmaker Orca stops with an access violation when it slices a project whose blend rows carry an
+// inner-wall cycle (seen twice, on the same model). The code stays for a slicer that accepts it.
+const INNER_WALL_OFFERED=false;
+const innerWallOn=()=>INNER_WALL_OFFERED&&$('fineblendon').checked&&$('innerwallon').checked;
 function fineBlendChoice(){return FINE_BLEND_TARGETS.includes(state.target)&&$('fineblendon').checked?{innerWall:innerWallOn()}:false;}
 function fineBlendIssue(){return fineBlendChoice()&&dualWallChoice()?'use either the fine blend profile or dual-wall mixing, not both':'';}
 // Whole-layer cycles need Subdivide off, which also allows the 0.10 mm colour-mixing layer.
-function setFineBlendLayers(){const inner=$('innerwallon').checked;$('spectrumlayermode').value=inner?`height:${INNER_WALL.layerHeight.toFixed(2)}`:'height:0.12';$('subdividemix').checked=!inner;}
+function setFineBlendLayers(){const inner=INNER_WALL_OFFERED&&$('innerwallon').checked;$('spectrumlayermode').value=inner?`height:${INNER_WALL.layerHeight.toFixed(2)}`:'height:0.12';$('subdividemix').checked=!inner;}
 function applyFineBlendControls(){
   if($('fineblendon').checked){
     fineBlendBefore={layer:$('spectrumlayermode').value,subdivide:$('subdividemix').checked};
@@ -149,7 +152,7 @@ $('innerwallon').addEventListener('change',()=>{if($('fineblendon').checked)setF
 function renderFineBlend(recipes){
   const blends=(recipes||[]).filter(r=>!r.gradient).length,available=FINE_BLEND_TARGETS.includes(state.target)&&Boolean(state.project)&&blends>0;
   $('fineblendoptions').hidden=!available;if(!available)return;
-  $('innerwallrow').hidden=!$('fineblendon').checked;
+  $('innerwallrow').hidden=!INNER_WALL_OFFERED||!$('fineblendon').checked;
   $('fineblendnote').textContent=innerWallOn()
     ?`On, with inner-wall mixing: ${INNER_WALL.layerHeight.toFixed(2)} mm layers, ${INNER_WALL.walls} walls ${INNER_WALL.lineWidth} mm wide, inner walls printed first, Subdivide Mix Layer off. Each blend keeps one reel on the outer wall where it can and puts the others in the walls behind it. An earlier form of this stopped the slicer on a painted model: slice it before anything else, and if the slicer closes, turn this off. Not yet sliced or printed.`
     :$('fineblendon').checked
@@ -2014,13 +2017,14 @@ export function workbenchFlatTops(){
   return flatTops.value;
 }
 // Quick setups: one press sets every option a known combination needs, so a test is not a checklist.
-export const workbenchPresets=[
+const allPresets=[
   {id:'standard',name:'Standard',summary:'Two-reel blends, the model\'s own layer height, Subdivide Mix Layer on. The settings of the first good print.',baked:false,fine:false,interweave:false},
   {id:'baked',name:'Test: three-reel blends',summary:'Baked colours with the Fine blend profile: 0.12 mm layers, five thin walls, Subdivide on for two-reel blends. Flat and shallow tops are striped instead of banded. Print one object.',baked:true,fine:true,interweave:true},
   {id:'stripes',name:'Test: striped tops',summary:'Two-reel blends as Standard, with Top surface interweave in 0.5 mm stripes. Print one object.',baked:false,fine:false,interweave:true},
   {id:'dual',name:'Test: dual wall',summary:'Two-reel blends as Standard, with Dual-wall mixing: colour only in the outer 0.45 mm, the lightest loaded reel behind it. Print one object. Not yet confirmed by a print.',baked:false,fine:false,interweave:false,dual:true},
   {id:'inner',name:'Test: inner-wall mixing',summary:'Three-reel blends with the Fine blend profile, but each blend keeps one reel on the outer wall and mixes in the walls behind it: 0.10 mm layers, five thin walls, Subdivide off. Slice it first: if the slicer closes, use Test: three-reel blends instead. Print one object.',baked:true,fine:true,interweave:true,inner:true},
 ];
+export const workbenchPresets=allPresets.filter(p=>INNER_WALL_OFFERED||!p.inner);
 const presetAvailable=()=>Boolean(state.project)&&FINE_BLEND_TARGETS.includes(state.target)&&state.strategy!=='solid'&&state.strategy!=='source';
 export function workbenchPresetState(){
   if(!presetAvailable())return {available:false,current:''};
@@ -2038,7 +2042,7 @@ export function workbenchApplyPreset(id){
   if(preset.dual){$('dualwalldepth').value='0.45';$('dualwallinner').value='';$('dualwallinner').dataset.list='';}
   $('interweaveon').checked=preset.interweave;$('interweavecell').value='0.5';
   if($('fineblendon').checked!==preset.fine){$('fineblendon').checked=preset.fine;applyFineBlendControls();}
-  $('innerwallon').checked=Boolean(preset.inner)&&preset.fine;if(preset.fine)setFineBlendLayers();
+  $('innerwallon').checked=INNER_WALL_OFFERED&&Boolean(preset.inner)&&preset.fine;if(preset.fine)setFineBlendLayers();
   // Without the fine profile the proven pairing is the model's own layer height with Subdivide on.
   if(!preset.fine)$('spectrumlayermode').value='preserve';
   $('subdividemix').checked=!preset.inner;
