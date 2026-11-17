@@ -12,7 +12,9 @@ import {writeZip} from '../zip.js';
 import {mixFdmHex,FDM_MODEL} from './fdmMix.js';
 
 export const STRIP_SHARES=[25,50,75];
-export const STRIP_TILE={width:12,depth:4,height:16,overlap:0.1};
+// Six millimetres is fifty layers at 0.12 mm: many repeats of every blend, and a third of the
+// filament changes of the first, 16 mm strip, which the slicer put at over seven hours.
+export const STRIP_TILE={width:12,depth:4,height:6,overlap:0.1};
 const TILES_PER_PAIR=STRIP_SHARES.length+2;
 const material=r=>String(r?.type||'PLA').trim().toUpperCase();
 

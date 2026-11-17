@@ -36,6 +36,7 @@ import { buildU1Profile, conservativeSpeeds, constrainLayers, resolveLayerHeight
 import { applyInterfaceSettings, validateInterfaceExport, interfaceSlot } from './supportInterface.js';
 import { BASE_SETTINGS } from "../base_settings.js";
 import {selectionUsage} from './selectionUsage.js';
+import { placePrimeTower } from './primeTower.js';
 
 export const SNAPMAKER_SPECTRUM_APPLICATION = "BambuStudio-2.3.5";
 // The agnostic colour model is written by this tool and says so: no Bambu Studio
@@ -2598,6 +2599,15 @@ export function exportProject(project, plateId, objectIds, options) {
       cfg.layer_height=String(layer.height); carried.push('layer_height'); layerNotes.push(layer.text);
     }
     const filamentReport=applyFilamentProfiles(cfg,reels,{u1:true});
+    // Start the prime tower where it has room to grow, clear of the model where its place is known.
+    // Copies and rearranged layouts move the model, so only a plain export uses its bounds.
+    let towerModel=null;
+    try{
+      const moved=Number(options.layout?.copies)>1||Boolean(options.layout?.positions)||Boolean(options.layout?.arranged);
+      const box=moved?null:selectionBounds(project,plateId,objectIds);
+      if(box&&[...box.min,...box.max].every(Number.isFinite))towerModel={x0:box.min[0],x1:box.max[0],y0:box.min[1],y1:box.max[1]};
+    }catch{towerModel=null;}
+    placePrimeTower(cfg,towerModel);
     u1Profile.filamentKeys.push(...filamentReport.keys);
     const interfaceKeys=options.supportInterface ? applyInterfaceSettings(cfg,{global:true,reels}) : [];
     const overrides = setProcessOverrides(cfg, carried, recipes.length > 0);
