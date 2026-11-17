@@ -1,3 +1,11 @@
+## 2.7.11 — Swatch strips that stay on the bed
+
+The first printed swatch strip came off the bed ten minutes in. It was fifteen small walls, each standing on a footprint of 12 x 4 mm, with a 0.1 mm first layer.
+
+- **Each wall now stands on a wide foot.** The feet are 14 mm deep and join into one long first layer, about three and a half times the contact area. The foot is part of the wall, so nothing has to be placed or dropped onto the bed.
+- **A normal first layer:** 0.2 mm at 30 mm/s.
+- When photographing a strip, mark the corners of the walls, not the feet.
+
 ## 2.7.10 — The prime tower stays on the bed, and shorter swatch strips
 
 - **The prime tower no longer runs off the bed.** The printer profile starts the tower near the back of the bed, and the tower gets deeper with every filament change, so a print with many changes pushed it over the edge and the slicer refused the G-code. Snapmaker exports now start the tower at the front, on whichever side is clear of the model, with the depth of the bed to grow into. You can still drag it in the slicer.

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readZip} from '../zip.js';
-import {stripPlan,stripTiles,swatchStrip,STRIP_TILE} from '../shared/swatchStrip.js';
+import {stripPlan,stripTiles,swatchStrip,STRIP_TILE,STRIP_BASE} from '../shared/swatchStrip.js';
 
 const reels=['#0086D6','#D9308A','#F7E400','#FFFFFF'].map((color,i)=>({color,type:'PLA',name:`Reel ${i+1}`}));
 const dec=new TextDecoder();
@@ -34,6 +34,23 @@ test('a strip is a native project of touching walls with its blends in the slice
   const models=[...zip].filter(([name])=>/^3D\/.*\.model$/.test(name)).map(([,data])=>dec.decode(data)).join('');
   const xs=[...models.matchAll(/<vertex x="([^"]+)"/g)].map(m=>Number(m[1]));
   assert.ok(Math.abs((Math.max(...xs)-Math.min(...xs))-(15*STRIP_TILE.width+STRIP_TILE.overlap))<0.01);
+  // Each wall has a wide foot on the bed, and the wall rises from it.
+  const ys=[...models.matchAll(/<vertex [^>]*y="([^"]+)"/g)].map(m=>Number(m[1])),zs=[...models.matchAll(/<vertex [^>]*z="([^"]+)"/g)].map(m=>Number(m[1]));
+  assert.ok(Math.abs((Math.max(...ys)-Math.min(...ys))-(STRIP_TILE.depth+2*STRIP_BASE.margin))<1e-9);
+  assert.equal(Math.min(...zs),0);assert.ok(Math.abs(Math.max(...zs)-(STRIP_BASE.thickness+STRIP_TILE.height))<1e-9);
+  assert.equal(zs.filter(z=>z===0).length,15*4,'every piece rests on the bed');
+  // Each piece is a closed solid: every edge is shared by exactly two faces, in opposite directions.
+  const first=[...models.matchAll(/<object\b[\s\S]*?<\/object>/g)].map(m=>m[0]).find(text=>text.includes('<vertex')),edges=new Map();
+  assert.ok(edges.size===0&&first.includes('<triangle'));
+  for(const t of first.matchAll(/<triangle v1="(\d+)" v2="(\d+)" v3="(\d+)"/g)){const v=[1,2,3].map(k=>Number(t[k]));for(let k=0;k<3;k+=1){const a=v[k],b=v[(k+1)%3];edges.set(`${a}>${b}`,(edges.get(`${a}>${b}`)||0)+1);}}
+  for(const [edge,count] of edges){const [a,b]=edge.split('>');assert.equal(count,1,edge);assert.equal(edges.get(`${b}>${a}`),1,`${edge} has its opposite`);}
+  // Outward facing: the solid's volume comes out positive, and equals foot plus wall.
+  const vs=[...first.matchAll(/<vertex x="([^"]+)" y="([^"]+)" z="([^"]+)"/g)].map(m=>[1,2,3].map(k=>Number(m[k])));let volume=0;
+  for(const t of first.matchAll(/<triangle v1="(\d+)" v2="(\d+)" v3="(\d+)"/g)){const [p,q,r]=[1,2,3].map(k=>vs[Number(t[k])]);volume+=(p[0]*(q[1]*r[2]-q[2]*r[1])-p[1]*(q[0]*r[2]-q[2]*r[0])+p[2]*(q[0]*r[1]-q[1]*r[0]))/6;}
+  const w=STRIP_TILE.width+STRIP_TILE.overlap,expected=w*((STRIP_TILE.depth+2*STRIP_BASE.margin)*STRIP_BASE.thickness+STRIP_TILE.depth*STRIP_TILE.height);
+  assert.equal(edges.size,84,'twenty-eight faces, three edges each');
+  assert.ok(Math.abs(volume-expected)<1e-6,`volume ${volume} against ${expected}`);
+  assert.deepEqual(manifest.foot,STRIP_BASE);
   await assert.rejects(swatchStrip({reels,pairs:[[1,2],[1,3],[1,4],[2,3],[2,4]]}),/one to four/);
   await assert.rejects(swatchStrip({reels:[reels[0],{...reels[1],type:'PETG'}],pairs:[[1,2]]}),/same material/);
 });
