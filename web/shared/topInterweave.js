@@ -33,6 +33,39 @@ const ORDER = [0, 4, 2, 6, 1, 5, 3, 7];
 const MAX_TREE_DEPTH = 11, LARGE_FACE_LEAVES = 20000;
 // At or above this share, the leading filament prints the shallow face on its own.
 export const INTERWEAVE_SOLID_SHARE = 80;
+// A patch of one blend narrower than this is left to the layers: it cannot hold enough
+// stripes to read as a colour, and a first print showed such patches as a muddle.
+export const INTERWEAVE_MIN_WIDTH = 3;
+
+/**
+ * Which faces belong to a patch too small or too narrow to stripe. `faces` are
+ * {index, points, state}: shallow upward faces painted whole in one blend. Faces that
+ * touch and share a blend form a patch; its width is taken as twice its area over its
+ * outline, which is the radius of a disc and the width of a long band.
+ */
+export function smallPatches(faces, minWidth = INTERWEAVE_MIN_WIDTH) {
+  const ids = new Map(), key = p => `${Math.round(p[0] * 1e4)},${Math.round(p[1] * 1e4)},${Math.round(p[2] * 1e4)}`;
+  const id = p => { const k = key(p); if (!ids.has(k)) ids.set(k, ids.size); return ids.get(k); };
+  const parent = faces.map((_, i) => i), find = i => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+  const edges = new Map(), corners = faces.map(f => f.points.map(id));
+  faces.forEach((face, i) => {
+    for (let k = 0; k < 3; k += 1) {
+      const a = corners[i][k], b = corners[i][(k + 1) % 3], name = `${face.state}|${Math.min(a, b)}|${Math.max(a, b)}`;
+      const seen = edges.get(name);
+      if (seen) { seen.count += 1; parent[find(i)] = find(seen.face); } else edges.set(name, { count: 1, face: i, length: Math.hypot(...face.points[k].map((v, d) => v - face.points[(k + 1) % 3][d])) });
+    }
+  });
+  const area = new Map(), outline = new Map();
+  faces.forEach((face, i) => {
+    const [p, q, r] = face.points, u = q.map((v, d) => v - p[d]), w = r.map((v, d) => v - p[d]);
+    const n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+    area.set(find(i), (area.get(find(i)) || 0) + Math.hypot(...n) / 2);
+  });
+  for (const edge of edges.values()) if (edge.count === 1) outline.set(find(edge.face), (outline.get(find(edge.face)) || 0) + edge.length);
+  const small = new Set();
+  faces.forEach((face, i) => { const root = find(i), around = outline.get(root) || 0; if (!(around > 0) || 2 * area.get(root) / around < minWidth) small.add(face.index); });
+  return small;
+}
 
 export function interweaveProblem({ target, cell }) {
   if (!INTERWEAVE_TARGETS.includes(target)) return 'Top surface interweave exports to Snapmaker Orca, Bambu Studio or OrcaSlicer.';
@@ -105,7 +138,7 @@ const apply = (m, p) => [p[0] * m[0] + p[1] * m[3] + p[2] * m[6] + m[9], p[0] * 
 const transformOf = attrs => { const m = /\btransform="([^"]+)"/.exec(attrs); const values = m ? numbers(m[1]) : IDENTITY; return values.length === 12 && values.every(Number.isFinite) ? values : IDENTITY; };
 
 /** Rewrite exported entries in place. `recipes` are the export's blends, numbered after the physical filaments. */
-export function applyTopInterweave(entries, { target, cell = INTERWEAVE_CELL.standard, recipes = [], physical = 0, minUp = INTERWEAVE_MIN_UP }) {
+export function applyTopInterweave(entries, { target, cell = INTERWEAVE_CELL.standard, recipes = [], physical = 0, minUp = INTERWEAVE_MIN_UP, minWidth = INTERWEAVE_MIN_WIDTH }) {
   const problem = interweaveProblem({ target, cell });
   if (problem) throw Error(problem);
   if (!entries.has(ROOT) || !entries.has(SETTINGS)) throw Error('Top surface interweave needs a native slicer project. Choose a printer project export.');
@@ -118,7 +151,7 @@ export function applyTopInterweave(entries, { target, cell = INTERWEAVE_CELL.sta
     if (!(r.percent + (third ? r.percentC : 0) < 100)) return;
     blends.set(physical + index + 1, third ? { a: r.a, b: r.b, percent: r.percent, c: r.c, percentC: r.percentC } : { a: r.a, b: r.b, percent: r.percent });
   });
-  const report = { schema: 'yab3d-top-interweave', version: 2, target, cellMm: cell, solidAtSharePercent: INTERWEAVE_SOLID_SHARE, maxSlopeDegrees: Math.round(Math.acos(minUp) * 180 / Math.PI), blends: blends.size, threeFilamentBlends: [...blends.values()].filter(b => b.c).length, meshes: 0, faces: 0, facesInterwoven: 0, facesSolid: 0, cells: 0, facesAtDetailLimit: 0, validation: { sliced: false, printed: false } };
+  const report = { schema: 'yab3d-top-interweave', version: 3, target, cellMm: cell, minPatchWidthMm: minWidth, solidAtSharePercent: INTERWEAVE_SOLID_SHARE, maxSlopeDegrees: Math.round(Math.acos(minUp) * 180 / Math.PI), blends: blends.size, threeFilamentBlends: [...blends.values()].filter(b => b.c).length, meshes: 0, faces: 0, facesInterwoven: 0, facesSolid: 0, facesLeftSmall: 0, cells: 0, facesAtDetailLimit: 0, validation: { sliced: false, printed: false } };
   if (!blends.size) { entries.set(INTERWEAVE_PATH, enc.encode(JSON.stringify(report, null, 2))); return report; }
 
   // Where each mesh sits in the world: its component transform, then its first build item's.
@@ -154,9 +187,28 @@ export function applyTopInterweave(entries, { target, cell = INTERWEAVE_CELL.sta
       }
       report.meshes += 1;
       const base = own.get(id);
+      const cornerOf = (tri, key) => vertices[Number(new RegExp(`\\b${key}="(\\d+)"`).exec(tri)?.[1])];
+      const upward = points => {
+        if (points.some(p => !p || !p.every(Number.isFinite))) return false;
+        const u = points[1].map((v, i) => v - points[0][i]), w = points[2].map((v, i) => v - points[0][i]);
+        const n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]], length = Math.hypot(...n);
+        return length > 1e-12 && n[2] / length >= minUp;
+      };
+      // First the patches: faces painted whole in one blend, grouped where they touch.
+      const patchFaces = []; let at = -1;
+      for (const m of body.matchAll(/<triangle\b([^>]*?)\/>/g)) {
+        at += 1;
+        const points = [cornerOf(m[1], 'v1'), cornerOf(m[1], 'v2'), cornerOf(m[1], 'v3')];
+        if (!upward(points)) continue;
+        const found = PAINT.exec(m[1]), node = found && found[2] ? paint.decode(found[2]) : { kind: 'leaf', state: 0 };
+        const state = node.kind === 'leaf' ? (node.state === 0 ? base : node.state) : null;
+        if (state !== null && blends.has(state)) patchFaces.push({ index: at, points, state });
+      }
+      const small = smallPatches(patchFaces, minWidth);
+      let index = -1;
       return `<object${attrs}>${body.replace(/<triangle\b([^>]*?)\/>/g, (triangle, tri) => {
-        report.faces += 1;
-        const corner = key => vertices[Number(new RegExp(`\\b${key}="(\\d+)"`).exec(tri)?.[1])];
+        report.faces += 1; index += 1;
+        const corner = key => cornerOf(tri, key);
         const points = [corner('v1'), corner('v2'), corner('v3')];
         if (points.some(p => !p || !p.every(Number.isFinite))) return triangle;
         const u = points[1].map((v, i) => v - points[0][i]), w = points[2].map((v, i) => v - points[0][i]);
@@ -168,6 +220,11 @@ export function applyTopInterweave(entries, { target, cell = INTERWEAVE_CELL.sta
         const found = PAINT.exec(tri);
         const node = found && found[2] ? paint.decode(found[2]) : { kind: 'leaf', state: 0 };
         const filled = node.kind === 'leaf' && node.state === 0 ? { kind: 'leaf', state: base } : node;
+        // A small patch keeps its layer blend, unless the blend is nearly one filament anyway.
+        if (small.has(index)) {
+          const lone = solidFilament(blends.get(filled.state));
+          if (!lone) { report.facesLeftSmall += 1; return triangle; }
+        }
         const budget = { leaves: 1 }, woven = interweaveNode(points, filled, blends, cell, 0, budget);
         if (!woven) return triangle;
         const text = paint.encode(woven);

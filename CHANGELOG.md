@@ -1,3 +1,11 @@
+## 2.7.9 — Small patches are no longer striped
+
+A print with striped shallow tops showed even domes, but small details came out as a muddle: the emblem between the buttons and the rims of the collar were too small to hold stripes.
+
+- **Top surface interweave now leaves small patches alone.** Faces of one blend that touch are treated as a patch. A patch narrower than about 3 mm keeps its layer blend, so its colour stays right on average and the nozzle is not asked to draw stripes it cannot fit.
+- A blend that is at least 80% one filament still prints such a patch in that filament alone.
+- Large shallow areas are striped exactly as before.
+
 ## 2.7.8 — What's new, and a clear warning on backlit packs
 
 Packs sold for backlit lithophanes, such as ELEGOO Rilievo and eSUN Lithophane CMYK, are a poor fit for ordinary models: their reels are very translucent and uneven, and they have no black.

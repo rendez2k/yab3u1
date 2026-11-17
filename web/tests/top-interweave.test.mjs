@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as paint from '../shared/paint.js';
 import {leafTriangles} from '../shared/standard.js';
-import {applyTopInterweave,stripeFilament,solidFilament,weave,interweaveProblem,INTERWEAVE_PATH} from '../shared/topInterweave.js';
+import {applyTopInterweave,stripeFilament,solidFilament,smallPatches,weave,interweaveProblem,INTERWEAVE_PATH} from '../shared/topInterweave.js';
 
 const enc=new TextEncoder(),dec=new TextDecoder();
 const area=t=>{const u=t[1].map((v,i)=>v-t[0][i]),w=t[2].map((v,i)=>v-t[0][i]);return Math.hypot(u[1]*w[2]-u[2]*w[1],u[2]*w[0]-u[0]*w[2],u[0]*w[1]-u[1]*w[0])/2;};
@@ -101,4 +101,26 @@ test('a blend that is nearly all one filament prints a shallow face in that fila
   assert.equal(report.facesSolid,2);assert.equal(report.facesInterwoven,2);
   // The wall painted with the same blend keeps it: layers mix it there.
   assert.deepEqual(faces(entries).slice(4,6),[[5],[5]]);
+});
+
+test('a patch too narrow to hold stripes is left to its layer blend',()=>{
+  const quad=(x0,y0,x1,y1,state,from)=>[{index:from,points:[[x0,y0,0],[x1,y0,0],[x1,y1,0]],state},{index:from+1,points:[[x0,y0,0],[x1,y1,0],[x0,y1,0]],state}];
+  // A 20 mm square is wide; a 20 x 1 mm band and a 2 mm square are not.
+  assert.equal(smallPatches(quad(0,0,20,20,5,0)).size,0);
+  assert.deepEqual([...smallPatches(quad(0,0,20,1,5,0))],[0,1]);
+  assert.deepEqual([...smallPatches(quad(0,0,2,2,5,0))],[0,1]);
+  // Touching faces of the same blend are one patch, even when their vertices are stored twice.
+  const strip=[...quad(0,0,10,10,5,0),...quad(10,0,20,10,5,2)];
+  assert.equal(smallPatches(strip,4).size,0,'two 10 mm squares side by side are 20 x 10');
+  // A different blend next door does not widen the patch.
+  assert.deepEqual([...smallPatches([...quad(0,0,20,20,5,0),...quad(20,0,21,20,6,2)])].sort(),[2,3]);
+  // Through the export: the 20 mm top is striped, but not when patches must be wider than it can be.
+  const wide=project(),a=applyTopInterweave(wide,{target:'snapmaker',cell:1.2,recipes,physical:4});
+  assert.equal(a.facesInterwoven,2);assert.equal(a.facesLeftSmall,0);
+  const narrow=project(),before=dec.decode(narrow.get('3D/Objects/cube.model'));
+  const b=applyTopInterweave(narrow,{target:'snapmaker',cell:1.2,recipes,physical:4,minWidth:30});
+  assert.equal(b.facesInterwoven,0);assert.equal(b.facesLeftSmall,2);assert.equal(dec.decode(narrow.get('3D/Objects/cube.model')),before);
+  // A nearly solid blend still prints a small patch in its main filament.
+  const lone=project(),c=applyTopInterweave(lone,{target:'snapmaker',cell:1.2,recipes:[{a:3,b:1,percent:10}],physical:4,minWidth:30});
+  assert.equal(c.facesSolid,2);assert.equal(c.facesLeftSmall,0);
 });
