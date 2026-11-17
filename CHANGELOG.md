@@ -1,3 +1,8 @@
+## 2.7.10 — The prime tower stays on the bed, and shorter swatch strips
+
+- **The prime tower no longer runs off the bed.** The printer profile starts the tower near the back of the bed, and the tower gets deeper with every filament change, so a print with many changes pushed it over the edge and the slicer refused the G-code. Snapmaker exports now start the tower at the front, on whichever side is clear of the model, with the depth of the bed to grow into. You can still drag it in the slicer.
+- **Swatch strips are 6 mm tall instead of 16 mm.** That is still fifty layers of every blend, and about a third of the filament changes and print time.
+
 ## 2.7.9 — Small patches are no longer striped
 
 A print with striped shallow tops showed even domes, but small details came out as a muddle: the emblem between the buttons and the rims of the collar were too small to hold stripes.
