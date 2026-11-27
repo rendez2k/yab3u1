@@ -54,6 +54,23 @@ test('H3C defaults to nine inputs and retains its AMS choice across nozzle and p
   s.setBambuSetup(null,false);assert.equal(s.inputCapacity(),null);assert.equal(s.bambuCapacityLimit,64);
 });
 
+test('P3C defaults to its five supplied PrintTools and allows up to 22 with external AMS',async()=>{
+  const {session:s}=await fixture({count:5});s.setTarget('bambu');
+  const setup=nozzle=>({machine:{name:`Bambu Lab P3C ${nozzle} nozzle`,printer_model:'Bambu Lab P3C'},bed:{width:256,depth:256,maxHeight:260}});
+  s.setBambuSetup(setup('0.4'));
+  assert.equal(s.inputCapacity(),5);assert.equal(s.capacityStatus().blocked,false);
+  assert.equal(s.layout.width,256);assert.equal(s.layout.maxHeight,260);assert.equal(s.bambuCapacityLimit,22);
+  // All seven slots fitted, then external AMS; the choice survives a nozzle change.
+  assert.notEqual(s.setInputCapacity(7),false);assert.equal(s.inputCapacity(),7);
+  s.setInputCapacity(22);s.setBambuSetup(null,true);s.setBambuSetup(setup('0.6'));assert.equal(s.inputCapacity(),22);
+  assert.equal(s.setInputCapacity(23),false);assert.match(s.capacityError,/1 to 22/);
+  // Each tool changer remembers its own count.
+  s.setInputCapacity(22);
+  s.setBambuSetup({machine:{name:'Bambu Lab H3C 0.4 nozzle',printer_model:'Bambu Lab H3C'},bed:{width:330,depth:320,maxHeight:325}});
+  assert.equal(s.inputCapacity(),9);assert.equal(s.bambuCapacityLimit,24);
+  s.setBambuSetup(setup('0.4'));assert.equal(s.inputCapacity(),22);
+});
+
 test('invalid custom capacities block export even after keep-all acknowledgement',async()=>{
   const {session:s,calls}=await fixture();s.setTarget('orca');
   for (const invalid of [0,-1,1.5,65,NaN,Infinity,'']) {

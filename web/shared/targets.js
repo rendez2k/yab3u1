@@ -36,8 +36,8 @@ export const LABELS = {
 
 export const APPLICATION = {
   snapmaker: "Snapmaker Orca",
-  // Matches the pinned official profiles, including the H3C presets.
-  bambu: "BambuStudio-02.09.01.70",
+  // Matches the pinned official profiles, including the H3C and P3C presets.
+  bambu: "BambuStudio-02.09.02.62",
   // OrcaSlicer shares Bambu Studio's project schema but has its own identity; the
   // app name is written without inventing a build number.
   orca: "OrcaSlicer-2.5.0",

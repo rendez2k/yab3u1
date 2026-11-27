@@ -1,3 +1,10 @@
+## 2.7.12 — Bambu Lab P3C
+
+- **The P3C is now a Bambu Studio export option**, with its 0.2, 0.4, 0.6 and 0.8 mm nozzle presets, alongside the H3C. Both come from Bambu's own published profiles, now updated to Bambu Studio 2.9.2.
+- Choosing the P3C sets five filament inputs, the PrintTools it ships with. You can change that to 7 with both spare slots fitted, or up to 22 with external AMS units feeding PrintTool 1. Build volume is 256 x 256 x 260 mm.
+- The H3C is unchanged: nine PrintTools as standard, up to 24 with external AMS.
+- Checked against the official profiles; not yet opened in Bambu Studio or printed on a P3C.
+
 ## 2.7.11 — Swatch strips that stay on the bed
 
 The first printed swatch strip came off the bed ten minutes in. It was fifteen small walls, each standing on a footprint of 12 x 4 mm, with a 0.1 mm first layer.

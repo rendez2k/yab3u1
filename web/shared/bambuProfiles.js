@@ -3,12 +3,20 @@ import {transferSettings} from './printSettings.js';
 import {applyFilamentProfiles, FILAMENT_FIELDS} from './filamentProfiles.js';
 
 // Public profiles only. No model, filename or printer address is sent to GitHub.
-// Bambu Studio 2.9.1: includes the H3C and its four nozzle presets.
-export const BAMBU_REVISION = '56a57d00a591360cf41bf21383915ee5bf357be5';
+// Bambu Studio 2.9.2: includes the H3C and the P3C, each with four nozzle presets.
+export const BAMBU_REVISION = '23a33758933e712c6041e1f8f135f7d6b50004aa';
 export const BAMBU_PROFILE_URL = `https://raw.githubusercontent.com/bambulab/BambuStudio/${BAMBU_REVISION}/resources/profiles/`;
 export const isH3C = machine => machine?.printer_model === 'Bambu Lab H3C';
-export const bambuInputLimit = machine => isH3C(machine) ? 24 : 64;
-export const bambuDefaultInputs = machine => isH3C(machine) ? 9 : null;
+// Tool changers. `tools` is what ships fitted, `slots` what the changer can hold, and
+// `limit` the most filaments once external AMS units feed PrintTool 1 (maker's figures).
+export const TOOL_CHANGERS = Object.freeze({
+  'Bambu Lab H3C': Object.freeze({ short: 'H3C', tools: 9, slots: 9, limit: 24 }),
+  'Bambu Lab P3C': Object.freeze({ short: 'P3C', tools: 5, slots: 7, limit: 22 }),
+});
+export const toolChangerModel = model => TOOL_CHANGERS[model] || null;
+export const toolChanger = machine => toolChangerModel(machine?.printer_model);
+export const bambuInputLimit = machine => toolChanger(machine)?.limit ?? 64;
+export const bambuDefaultInputs = machine => toolChanger(machine)?.tools ?? null;
 const metadata = new Set(['type','name','inherits','include','from','setting_id','filament_id',
   'instantiation','version','description','compatible_printers','compatible_printers_condition',
   'compatible_prints','compatible_prints_condition','renamed_from','alias']);
