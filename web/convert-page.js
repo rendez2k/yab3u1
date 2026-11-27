@@ -2,6 +2,7 @@ import {quantityRows, bindQuantityButtons, syncQuantityButtons} from './shared/o
 import {mountSequential} from './shared/sequentialPanel.js';
 import {mountObjectActions} from './shared/objectActions.js';
 import {mountBambuPrinterPicker} from './shared/bambuPrinterPicker.js';
+import {toolChangerModel} from './shared/bambuProfiles.js';
 import {mountPrinter} from './shared/printerPanel.js';
 import {bambuImportGuide} from './shared/bambuImportGuide.js';
 import {receiveModel, sendModel} from './shared/modelHandoff.js';
@@ -25,7 +26,7 @@ import { buildU1Profile, profileDescription, constrainLayers } from './shared/u1
 import { initBatch } from "./batch-page.js";
 import {createTextureImport} from './shared/textureImport.js';
 
-const VERSION = "2.7.11";
+const VERSION = "2.7.12";
 const LABELS = {snapmaker:"Snapmaker Orca (U1)", bambu:"Bambu Studio", orca:"OrcaSlicer", prusa:"PrusaSlicer"};
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g,
@@ -717,12 +718,13 @@ function syncCapacity() {
   select.dataset.printer = session.bambuCapacityModel;
   select.disabled = u1;
   if (changedTarget || changedPrinter || select.value !== 'custom') {
-    select.value = check.capacity == null ? 'unknown' : [4,8,9,16,24].includes(check.capacity) ? String(check.capacity) : 'custom';
+    select.value = check.capacity == null ? 'unknown' : [4,5,7,8,9,16,22,24].includes(check.capacity) ? String(check.capacity) : 'custom';
     if (select.value === 'custom') $('custominputs').value = check.capacity;
   }
   $('custominputfield').hidden = select.value !== 'custom';
-  const h3c = session.target === 'bambu' && session.bambuCapacityModel === 'Bambu Lab H3C';
-  for (const value of ['9','24']) select.querySelector(`option[value="${value}"]`).hidden = !h3c && select.value !== value;
+  // Counts that belong to one tool changer are offered only for that printer.
+  const changer = session.target === 'bambu' ? toolChangerModel(session.bambuCapacityModel) : null;
+  for (const option of select.querySelectorAll('option[data-printer]')) option.hidden = option.dataset.printer !== changer?.short && select.value !== option.value;
   $('custominputs').max = session.target === 'bambu' ? session.bambuCapacityLimit : 64;
   $('custominputs').setAttribute('aria-invalid', String(Boolean(session.capacityError)));
   $('capacitystatus').textContent = check.problem || session.capacityError || `${check.needed} project filaments · `
@@ -734,7 +736,8 @@ function syncCapacity() {
       : check.unresolved ? 'Choose a colour solution below, or explicitly keep the project for further setup.'
       : 'The filament count fits. This checks input capacity; it does not validate a sliced print.')
     + (check.reserved ? ` ${check.reserved} numbered entries are retained for source settings.` : '')
-    + (h3c ? ' H3C has nine PrintTools; external AMS can extend the filament count to 24. Bambu exports support up to 24 colour IDs. Assign AMS filaments to PrintTool 1 in Bambu Studio.' : '');
+    + (changer?.short === 'H3C' ? ' H3C has nine PrintTools; external AMS can extend the filament count to 24. Bambu exports support up to 24 colour IDs. Assign AMS filaments to PrintTool 1 in Bambu Studio.'
+      : changer?.short === 'P3C' ? ' P3C ships with five PrintTools and has seven slots; external AMS on PrintTool 1 can extend the filament count to 22. Assign AMS filaments to PrintTool 1 in Bambu Studio.' : '');
   $('capacityoptions').hidden = !check.unresolved || session.supportInterface;
   if (check.unresolved && !session._capacityWasUnresolved) $('capacityoptions').open = true;
   session._capacityWasUnresolved = check.unresolved;

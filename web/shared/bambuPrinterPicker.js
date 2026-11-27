@@ -1,4 +1,4 @@
-import {BambuProfiles,isH3C} from './bambuProfiles.js';
+import {BambuProfiles,toolChanger} from './bambuProfiles.js';
 
 export function mountBambuPrinterPicker(root, session, changed) {
   const profiles = new BambuProfiles();
@@ -52,9 +52,9 @@ export function mountBambuPrinterPicker(root, session, changed) {
       if(ticket !== sequence || session.target !== 'bambu') return;
       session.setBambuSetup(setup,true);
       status.textContent = `${setup.machine.name} · ${setup.bed.width} × ${setup.bed.depth} × ${setup.bed.maxHeight} mm build volume. `
-        + (isH3C(setup.machine)
-          ? 'Open as a project in Bambu Studio 2.9.1 or later. Nine PrintTools as standard; choose your filament capacity below. This preset uses one nozzle size; configure mixed nozzle sizes in Bambu Studio.'
-          : 'Native project; open as a project in Bambu Studio. Set filament capacity below for your AMS setup.');
+        + (changer => changer
+          ? `Open as a project in a Bambu Studio that lists the ${changer.short}. ${changer.tools===changer.slots?`${changer.tools} PrintTools as standard`:`${changer.tools} PrintTools as standard, ${changer.slots} slots`}; choose your filament capacity below. This preset uses one nozzle size; configure mixed nozzle sizes in Bambu Studio.`
+          : 'Native project; open as a project in Bambu Studio. Set filament capacity below for your AMS setup.')(toolChanger(setup.machine));
       changed();
     } catch(error) {
       if(ticket !== sequence) return;

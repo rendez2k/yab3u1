@@ -4,7 +4,7 @@ import {focusWeights} from './shared/focusRegions.js';
 import {FILAMENT_BUNDLES,MEASURED_TD} from './shared/filamentBundles.js';
 import {substituteReel} from './shared/filamentIdentity.js';
 import {mountBambuPrinterPicker} from './shared/bambuPrinterPicker.js';
-import {resolveBambuLayerHeight} from './shared/bambuProfiles.js';
+import {resolveBambuLayerHeight,bambuDefaultInputs} from './shared/bambuProfiles.js';
 import {receiveModel} from './shared/modelHandoff.js';
 import {mountSequential} from './shared/sequentialPanel.js';
 import {mountObjectActions} from './shared/objectActions.js';
@@ -48,7 +48,7 @@ import { INNER_WALL } from './shared/innerWallMix.js';
 import { INTERWEAVE_TARGETS, INTERWEAVE_MIN_UP, interweaveProblem } from './shared/topInterweave.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.7.11";
+const VERSION = "2.7.12";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -1948,7 +1948,7 @@ const bambuSession={
   get state(){return {types:activeReels().map(r=>r.type),negativeVolumes:false};},
   activeColourIds:()=>activeReels().map((_,i)=>i+1),get filamentProfiles(){return activeReels().map(r=>r.profile);},
   setBambuSetup:(setup,required,error='')=>{state.bambuSetup=setup;state.bambuRequired=required;state.bambuError=error;
-    if(setup){if(!state.capacityChosen)state.capacity=setup.machine.printer_model==='Bambu Lab H3C'?9:4;$('spectrumwidth').value=setup.bed.width;$('spectrumdepth').value=setup.bed.depth;}
+    if(setup){if(!state.capacityChosen)state.capacity=bambuDefaultInputs(setup.machine)??4;$('spectrumwidth').value=setup.bed.width;$('spectrumdepth').value=setup.bed.depth;}
   },
 };
 bambuPicker=mountBambuPrinterPicker($('spectrumbambu'),bambuSession,()=>{clearReview();if(state.project)renderExport();});

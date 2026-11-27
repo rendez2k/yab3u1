@@ -565,9 +565,14 @@
           <label for="printerinputs">Available filament inputs</label>
           <select id="printerinputs">
             <option value="unknown">Not specified — assign in slicer</option>
-            <option value="4">4 inputs</option><option value="8">8 inputs</option>
-            <option value="9">9 inputs · H3C PrintTools</option>
-            <option value="16">16 inputs</option><option value="24">24 inputs · H3C with external AMS</option><option value="custom">Custom</option>
+            <option value="4">4 inputs</option>
+            <option value="5" data-printer="P3C">5 inputs · P3C PrintTools as supplied</option>
+            <option value="7" data-printer="P3C">7 inputs · P3C with all seven slots fitted</option>
+            <option value="8">8 inputs</option>
+            <option value="9" data-printer="H3C">9 inputs · H3C PrintTools</option>
+            <option value="16">16 inputs</option>
+            <option value="22" data-printer="P3C">22 inputs · P3C with external AMS</option>
+            <option value="24" data-printer="H3C">24 inputs · H3C with external AMS</option><option value="custom">Custom</option>
           </select>
         </div>
         <div class="field" id="custominputfield" hidden>
