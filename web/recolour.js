@@ -45,10 +45,11 @@ import { packMatch } from './shared/packMatch.js';
 import { collectSettings, readSettings, applySettings, describeSettings, SETTINGS_MAX_BYTES } from './shared/settingsFile.js';
 import { FINE_BLEND_TARGETS, FINE_BLEND } from './shared/fineBlend.js';
 import { INNER_WALL } from './shared/innerWallMix.js';
+import { speckProblem } from './shared/paintSpecks.js';
 import { INTERWEAVE_TARGETS, INTERWEAVE_MIN_UP, interweaveProblem } from './shared/topInterweave.js';
 import { setHueFidelity, hueFidelity } from './shared/mix.js';
 
-const VERSION = "2.7.12";
+const VERSION = "2.7.13";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({
@@ -111,6 +112,18 @@ function bakedIssue(){
 }
 $('keephue').addEventListener('change',()=>{setHueFidelity($('keephue').checked);clearReview();invalidateRecommendation();refresh();});
 $('blendstrength').addEventListener('change',()=>{setBlendStrength($('blendstrength').value);clearReview();invalidateRecommendation();refresh();});
+// Stray specks: tiny patches of colour are repainted to match what surrounds them.
+const SPECK_TARGETS=['snapmaker','bambu','orca'];
+for(const id of ['speckon','speckwidth'])$(id).addEventListener('change',()=>{clearReview();refresh();});
+function speckChoice(){return SPECK_TARGETS.includes(state.target)&&$('speckon').checked?{width:Number($('speckwidth').value)}:null;}
+function speckIssue(){const choice=speckChoice();return choice?speckProblem(choice).replace(/\.$/,''):'';}
+function renderSpecks(){
+  const available=SPECK_TARGETS.includes(state.target)&&Boolean(state.project);
+  $('speckoptions').hidden=!available;if(!available)return;
+  $('speckfields').hidden=!$('speckon').checked;
+  const choice=speckChoice();
+  $('specknote').textContent=!choice?'':speckIssue()||`Patches of one colour narrower than ${choice.width} mm, wholly inside another colour, will be repainted to match it. The download reports how many were found. Not yet confirmed by a sliced or printed sample.`;
+}
 // Top surface interweave: flat tops of blended colours become narrow stripes of the blend's filaments.
 for(const id of ['interweaveon','interweavecell'])$(id).addEventListener('change',()=>{clearReview();refresh();});
 function interweaveChoice() {
@@ -1566,6 +1579,7 @@ function renderExport() {
   }
   try{renderDualWall(resultPlan().physical||[]);}catch{$('dualwalloptions').hidden=true;}
   try{renderFineBlend(resultPlan().recipes||[]);}catch{$('fineblendoptions').hidden=true;}
+  try{renderSpecks();}catch{$('speckoptions').hidden=true;}
   try{renderInterweave(resultPlan().recipes||[]);}catch{$('interweaveoptions').hidden=true;}
   $('spectrumcustomlayer').hidden=$('spectrumlayermode').value!=='custom';
   $('layersummary').textContent='Layer height · '+($('spectrumlayermode').value.startsWith('height:') ? $('spectrumlayermode').selectedOptions[0].textContent : ({preserve:'preserve designer settings',preset:'printer preset',custom:`${$('spectrumlayerheight').value || '—'} mm custom`})[$('spectrumlayermode').value]);
@@ -1609,7 +1623,7 @@ function renderExport() {
   const reviewBox = $("review");
   const blocking = (activeReels().length>state.capacity && state.strategy!=="source" ? `Choose at most ${state.capacity} reels or increase capacity` : "") || (state.target==="bambu" && state.bambuRequired && !state.bambuSetup ? state.bambuError || "Choose a Bambu printer and wait for its profiles" : "") || state.layoutError || profileError || (negative && target === 'prusa' ? 'negative cutouts require Snapmaker Orca or Bambu Studio output' : '') || (!state.objects.length ? "tick at least one object"
     : state.strategy!=='source' && state.workflow==='model' && !state.modelApplied && state.reelView!=='recommended' ? "choose and apply a model palette"
-    : payload.blocked || (state.reelView==='recommended' ? 'apply the selected palette or blend settings' : null)) || dualWallIssue() || fineBlendIssue() || bakedIssue() || interweaveIssue() || null;
+    : payload.blocked || (state.reelView==='recommended' ? 'apply the selected palette or blend settings' : null)) || dualWallIssue() || fineBlendIssue() || bakedIssue() || interweaveIssue() || speckIssue() || null;
   const needsReview = state.strategy !== "source" && !blocking;
   renderActionBar(blocking,needsReview);
   reviewBox.parentElement.classList.toggle("hidden", !needsReview);
@@ -1631,6 +1645,7 @@ function renderExport() {
   if(state.supportInterface && !blocking) $('exportnote').textContent=`Experimental PETG interface: three PLA model reels, ${mixtures} blend recipe(s), and PETG interfaces in slot ${interfaceSlot(payload.physical)}. Supports enabled; three dense contact layers at 0 mm Z gap; PLA prime-tower shell. Check the sliced result and test a small print first.`;
   if(!blocking && subdivideChoice()) $('exportnote').textContent+=' Subdivide Mix Layer is enabled for this export.';
   if(!blocking && interweaveChoice()) $('exportnote').textContent+=' Top surface interweave is on.';
+  if(!blocking && speckChoice()) $('exportnote').textContent+=' Stray specks will be removed.';
   if(!blocking && fineBlendChoice()) $('exportnote').textContent+=innerWallOn()?' Fine blend profile is on, with inner-wall mixing.':' Fine blend profile is on.';
   if(!blocking && dualWallChoice()) $('exportnote').textContent+=` Dual-wall mixing is on: inner walls use slot ${dualWallChoice().slot}.`;
   if (!blocking && target === "prusa") {
@@ -1645,7 +1660,7 @@ function exportRevision() {
   return JSON.stringify({epoch: state.epoch, plate: state.plateId,
     objects: state.objects, layout:state.layout, layoutError:state.layoutError, target: state.target, reels: state.reels, u1Nozzle:state.u1Nozzle,
     physical: payload.physical, mapping: payload.mapping, recipes: payload.recipes,
-    bambuSetup:state.bambuSetup,capacity:state.capacity,strategy: state.strategy, reviewed: state.reviewed, reelView:state.reelView,layerHeight:layerChoice(),supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice(),dualWall:dualWallChoice(),interweave:interweaveChoice()});
+    bambuSetup:state.bambuSetup,capacity:state.capacity,strategy: state.strategy, reviewed: state.reviewed, reelView:state.reelView,layerHeight:layerChoice(),supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice(),dualWall:dualWallChoice(),interweave:interweaveChoice(),specks:speckChoice()});
 }
 
 $("export").addEventListener("click", async () => {
@@ -1688,7 +1703,7 @@ $("export").addEventListener("click", async () => {
       mapping: payload.mapping, recipes: payload.recipes,
       title: state.project.title, u1Nozzle:state.u1Nozzle, layout:state.layout,
       bambuSetup:state.bambuSetup,preserveSourceSettings:true,calibration:calibrationPanel?.active() || null,
-      layerHeight:layerChoice(),supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice(),dualWall:dualWallChoice(),interweave:interweaveChoice(),fineBlend:fineBlendChoice(),reelTds:(payload.physical||[]).map(tdOf),
+      layerHeight:layerChoice(),supportInterface:state.supportInterface,subdivideMixLayer:subdivideChoice(),dualWall:dualWallChoice(),interweave:interweaveChoice(),specks:speckChoice(),fineBlend:fineBlendChoice(),reelTds:(payload.physical||[]).map(tdOf),
       thumbnails: { main: rendered.main, small: rendered.small || null },
     });
     if (exportRevision() !== revision) return;
@@ -1980,7 +1995,7 @@ blendEditor=mountBlendEditor($('blendeditor'),{read:()=>{
 export const workbenchFocus={stop:()=>focusBrush?.stop(),key:event=>focusBrush?.key(event)};
 export {state, load, refresh, renderObjects, renderQuantityFields, layoutChanged, textureImporter};
 const workbenchSettingKeys=['capacity','capacityChosen','priority','paletteSource','importantColours','focusMarks','compareBundles','bambuSetup','bambuRequired','bambuError','target','u1Nozzle','supportInterface','interfacePosition','reels','strategy','overrides','manualBlends','workflow','modelType','keepExact','useOwned','modelApplied','modeReels','locked','appliedSlotOrder','loadedTuning','reelView'];
-export function workbenchCaptureSettings(){return {state:structuredClone(Object.fromEntries(workbenchSettingKeys.filter(k=>state[k]!==undefined).map(k=>[k,state[k]]))),controls:Object.fromEntries(['spectrumlayermode','spectrumlayerheight','subdividemix','dualwallon','dualwalldepth','blendstrength','keephue','bakedon','fineblendon','innerwallon','interweaveon','interweavecell'].map(id=>[id,$(id).type==='checkbox'?$(id).checked:$(id).value]))};}
+export function workbenchCaptureSettings(){return {state:structuredClone(Object.fromEntries(workbenchSettingKeys.filter(k=>state[k]!==undefined).map(k=>[k,state[k]]))),controls:Object.fromEntries(['spectrumlayermode','spectrumlayerheight','subdividemix','dualwallon','dualwalldepth','blendstrength','keephue','bakedon','fineblendon','innerwallon','interweaveon','interweavecell','speckon','speckwidth'].map(id=>[id,$(id).type==='checkbox'?$(id).checked:$(id).value]))};}
 export function workbenchRestoreSettings(saved){if(!saved||!state.project)return;Object.assign(state,saved.state);state.reviewed=false;for(const [id,value]of Object.entries(saved.controls))if($(id).type==='checkbox')$(id).checked=value;else $(id).value=value;if(saved.controls.blendstrength)setBlendStrength($('blendstrength').value);setHueFidelity($('keephue').checked);setBakedColours($('bakedon').checked);renderReels();renderWorkflow();return refresh();}
 export async function workbenchSourceColours(){if(!state.project)return null;return (await background().preview(state.plateId,state.objects,'original',paletteOf(null,'original'),null,state.geometryId,state.assessed?.counts.triangles||0,state.layout)).colors;}
 export function workbenchObjects() {
