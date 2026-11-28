@@ -18,6 +18,7 @@ import { applyDualWall } from "./dualWall.js";
 import { applyTopInterweave } from "./topInterweave.js";
 import { applyFineBlend } from "./fineBlend.js";
 import { applyInnerWallMix } from "./innerWallMix.js";
+import { applySpeckCleanup } from "./paintSpecks.js";
 import { layoutOffsets, planLayout } from "./layout.js";
 import { surfaceAreas } from './surfaceWeights.js';
 import {exportComparisonJob} from './comparisonExport.js';
@@ -463,6 +464,8 @@ self.onmessage = async (event) => {
         post({ type: "error", id, message: built.problems[0] });
         return;
       }
+      // Stray specks go before anything reads the paint, so later steps see the cleaned surface.
+      const specks = message.options.specks ? applySpeckCleanup(built.entries, { width: message.options.specks.width }) : null;
       // Top surface interweave first: it reads the blends the export assigned, before dual-wall fills in bases.
       const interweave = message.options.interweave
         ? applyTopInterweave(built.entries, { target: message.options.target, cell: message.options.interweave.cell,
@@ -483,7 +486,7 @@ self.onmessage = async (event) => {
       const bytes = await writeZip([...built.entries].map(([name, data]) =>
         ({ name, data })));
       post({ type: "exported", id, bytes, ms: Date.now() - started,
-             recipes: built.recipes.length, thumbnails: built.thumbnails, dualWall, interweave, fineBlend },
+             recipes: built.recipes.length, thumbnails: built.thumbnails, dualWall, interweave, fineBlend, specks },
            [bytes.buffer]);
       return;
     }

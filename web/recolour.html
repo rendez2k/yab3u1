@@ -713,6 +713,14 @@
       <div id="printoptimiser"></div>
     </details>
     <h2 id="exportsettingsheading">Export settings</h2>
+    <div id="speckoptions" hidden>
+      <label class="check"><input type="checkbox" id="speckon">Remove stray specks of colour <span class="hint">· experimental</span></label>
+      <div id="speckfields" hidden>
+        <label class="field">Widest speck to remove (mm)<input id="speckwidth" type="number" min="0.2" max="2" step="0.1" value="0.5"></label>
+        <p class="hint">Painted models often carry tiny patches of colour left behind by a fill, narrower than the nozzle can draw. Each one still costs a filament change on every layer it touches. This repaints a patch narrower than the width above to match the single colour around it. Patches beside finely painted detail, or with more than one colour around them, are left alone. Only paint changes. The 3D preview does not show it: check the result in the slicer.</p>
+      </div>
+      <p id="specknote" class="hint" role="status"></p>
+    </div>
     <div id="interweaveoptions" hidden>
       <label class="check"><input type="checkbox" id="interweaveon">Top surface interweave <span class="hint">· experimental</span></label>
       <div id="interweavefields" hidden>

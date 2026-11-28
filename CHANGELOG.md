@@ -1,3 +1,9 @@
+## 2.7.13 — Remove stray specks of colour
+
+- **New export option under Print options · advanced: Remove stray specks of colour.** Painted models often carry tiny patches of a colour left behind by a fill, narrower than the nozzle can draw. Each one still costs a filament change on every layer it touches. This repaints a patch narrower than 0.5 mm (adjustable) to match the single colour around it.
+- It is cautious: a patch beside finely painted detail, on an open edge, or with more than one colour around it is left alone. Only paint changes; geometry is untouched. The download records how many faces were repainted.
+- It is off unless you turn it on, and it applies to Full Spectrum exports for Snapmaker Orca, Bambu Studio and OrcaSlicer. Not yet confirmed by a sliced or printed sample.
+
 ## 2.7.12 — Bambu Lab P3C
 
 - **The P3C is now a Bambu Studio export option**, with its 0.2, 0.4, 0.6 and 0.8 mm nozzle presets, alongside the H3C. Both come from Bambu's own published profiles, now updated to Bambu Studio 2.9.2.
